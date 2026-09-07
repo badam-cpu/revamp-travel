@@ -25,6 +25,9 @@ export function SiteHeader() {
     if (profile?.role === "operator") {
       return [...baseLinks, { href: "/dashboard", label: "Dashboard" }];
     }
+    if (profile?.role === "admin") {
+      return [...baseLinks, { href: "/admin", label: "Review queue" }];
+    }
     return baseLinks;
   }, [profile?.role]);
 

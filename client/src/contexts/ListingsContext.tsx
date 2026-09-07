@@ -19,8 +19,13 @@ import { supabase } from "@/lib/supabase";
 import { slugify } from "@/lib/slug";
 import { useAuth } from "@/contexts/AuthContext";
 
-/** The live catalog carries a couple of fields the static seed type never needed: who owns a row, and whether it's published. Every existing consumer only reads the base `Listing` fields, so this is a superset, not a breaking change. */
-export type LiveListing = Listing & { operatorId: string; status: "draft" | "published" };
+/** The live catalog carries a couple of fields the static seed type never needed: who owns a row, whether it's published, and (once submitted) any admin review feedback. Every existing consumer only reads the base `Listing` fields, so this is a superset, not a breaking change. */
+export type LiveListing = Listing & {
+  operatorId: string;
+  status: "draft" | "pending" | "published";
+  reviewNote: string | null;
+  reviewedAt: string | null;
+};
 
 interface ListingsContextType {
   listings: LiveListing[];
@@ -36,7 +41,7 @@ interface ListingsContextType {
 const ListingsContext = createContext<ListingsContextType | undefined>(undefined);
 
 const ROW_COLUMNS =
-  "id, operator_id, type, slug, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, amenities, facts, featured, accent, status";
+  "id, operator_id, type, slug, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, amenities, facts, featured, accent, status, review_note, reviewed_at";
 
 interface ListingRow {
   id: string;
@@ -60,7 +65,9 @@ interface ListingRow {
   facts: { label: string; value: string }[];
   featured: boolean;
   accent: "apricot" | "sevan" | "tuff";
-  status: "draft" | "published";
+  status: "draft" | "pending" | "published";
+  review_note: string | null;
+  reviewed_at: string | null;
 }
 
 function mapListingRow(row: ListingRow): LiveListing {
@@ -88,6 +95,8 @@ function mapListingRow(row: ListingRow): LiveListing {
     accent: row.accent,
     operatorId: row.operator_id,
     status: row.status,
+    reviewNote: row.review_note,
+    reviewedAt: row.reviewed_at,
   };
 }
 
@@ -116,7 +125,7 @@ function toRow(input: ListingInput) {
 }
 
 function fallbackListings(): LiveListing[] {
-  return seedListings.map((listing) => ({ ...listing, operatorId: "seed", status: "published" as const }));
+  return seedListings.map((listing) => ({ ...listing, operatorId: "seed", status: "published" as const, reviewNote: null, reviewedAt: null }));
 }
 
 export function ListingsProvider({ children }: { children: React.ReactNode }) {
@@ -158,7 +167,10 @@ export function ListingsProvider({ children }: { children: React.ReactNode }) {
       for (let attempt = 1; attempt <= 6; attempt++) {
         const { data, error } = await supabase
           .from("listings")
-          .insert({ ...toRow(input), slug, operator_id: user.id })
+          // Every new listing starts in review — RLS requires status:
+          // "pending" on insert (supabase/migrations/0002_review_gate_and_admin.sql),
+          // this just makes that requirement visible here too.
+          .insert({ ...toRow(input), slug, operator_id: user.id, status: "pending" })
           .select(ROW_COLUMNS)
           .single();
         if (!error) {
@@ -177,13 +189,25 @@ export function ListingsProvider({ children }: { children: React.ReactNode }) {
     [user],
   );
 
-  const updateListing = useCallback(async (id: string, input: ListingInput): Promise<LiveListing> => {
-    const { data, error } = await supabase.from("listings").update(toRow(input)).eq("id", id).select(ROW_COLUMNS).single();
-    if (error) throw new Error(error.message);
-    const listing = mapListingRow(data);
-    setListings((prev) => prev.map((item) => (item.id === id ? listing : item)));
-    return listing;
-  }, []);
+  const updateListing = useCallback(
+    async (id: string, input: ListingInput): Promise<LiveListing> => {
+      // A listing sitting at "draft" is one an admin sent back with
+      // feedback (see review_note) — saving it is what resubmits it, so
+      // this is the one case that also touches status. Editing a
+      // "pending" or already-"published" listing's content leaves its
+      // status untouched (a live listing doesn't get pulled for a typo
+      // fix); the review-gate trigger enforces this server-side too, this
+      // is just what makes the intent visible client-side.
+      const current = listings.find((item) => item.id === id);
+      const patch = current?.status === "draft" ? { ...toRow(input), status: "pending" as const } : toRow(input);
+      const { data, error } = await supabase.from("listings").update(patch).eq("id", id).select(ROW_COLUMNS).single();
+      if (error) throw new Error(error.message);
+      const listing = mapListingRow(data);
+      setListings((prev) => prev.map((item) => (item.id === id ? listing : item)));
+      return listing;
+    },
+    [listings],
+  );
 
   const deleteListing = useCallback(async (id: string) => {
     const { error } = await supabase.from("listings").delete().eq("id", id);

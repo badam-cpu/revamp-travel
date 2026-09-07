@@ -13,6 +13,7 @@ import Tours from "./pages/Tours";
 import MapPage from "./pages/MapPage";
 import ListingPage from "./pages/ListingPage";
 import Dashboard from "./pages/Dashboard";
+import AdminReview from "./pages/AdminReview";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Plan from "./pages/Plan";
@@ -27,6 +28,7 @@ function Router() {
       <Route path="/map" component={MapPage} />
       <Route path="/plan" component={Plan} />
       <Route path="/dashboard" component={Dashboard} />
+      <Route path="/admin" component={AdminReview} />
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
       <Route path="/listing/:slug">{(params) => <ListingPage params={params} />}</Route>

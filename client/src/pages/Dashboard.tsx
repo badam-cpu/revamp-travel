@@ -5,9 +5,17 @@
  * sees and edits their own listings: Row-Level Security enforces this at the
  * database layer (supabase/migrations/0001_init.sql), the `.filter()` below
  * is just what makes the UI show the right subset, not what makes it safe.
+ *
+ * New listings go through review before they're publicly visible
+ * (supabase/migrations/0002_review_gate_and_admin.sql — see AdminReview.tsx
+ * for the approve/reject side). An operator can optionally paste a link to
+ * an existing listing (Airbnb or otherwise) to pre-fill the form's title
+ * and description from that page's own public OpenGraph tags — a starting
+ * draft, not a scrape, and it never auto-fills the image field (see the
+ * reference-photo note in ListingFormDialog below).
  */
 import { FormEvent, useState } from "react";
-import { AlertTriangle, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import { AlertTriangle, Link2, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { RequireRole } from "@/components/RequireRole";
@@ -20,10 +28,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useListings, LiveListing } from "@/contexts/ListingsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import type { ListingInput, ListingType } from "@shared/listings";
-import { ApiError } from "@/lib/api";
+import { ApiError, importListingPrefill } from "@/lib/api";
 import { toast } from "sonner";
 
-type DraftListing = Partial<LiveListing> & { type: ListingType };
+// `prefillImageUrl` is display-only — it's carried on the draft purely so
+// ListingFormDialog can show a reference thumbnail; toInputPayload() never
+// reads it, so it's never written to the listing itself.
+type DraftListing = Partial<LiveListing> & { type: ListingType; prefillImageUrl?: string };
 
 function emptyDraft(type: ListingType): DraftListing {
   return {
@@ -74,6 +85,14 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement): ListingInpu
   };
 }
 
+/** What saving this draft will actually do — differs by whether it's new, awaiting review, or already live. */
+function dialogDescription(draft: DraftListing, isEdit: boolean): string {
+  if (!isEdit) return "Submitted for review — it'll go live once an admin approves it.";
+  if (draft.status === "draft") return "An admin sent this back with feedback — saving resubmits it for review.";
+  if (draft.status === "pending") return "Still awaiting review — your changes are saved as part of that same submission.";
+  return "This listing is already live — changes save immediately, no re-review needed.";
+}
+
 function ListingFormDialog({
   draft,
   open,
@@ -117,9 +136,17 @@ function ListingFormDialog({
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="font-display text-2xl">{isEdit ? `Edit ${draft.title}` : `Add a ${draft.type}`}</DialogTitle>
-          <DialogDescription>Saved to your catalog immediately — it appears on the marketplace right away.</DialogDescription>
+          <DialogDescription>{dialogDescription(draft, isEdit)}</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="grid gap-4">
+          {draft.prefillImageUrl && (
+            <div className="flex items-start gap-3 border border-basalt/10 bg-chalk p-3">
+              <img src={draft.prefillImageUrl} alt="" className="h-16 w-16 shrink-0 rounded object-cover" />
+              <p className="text-xs leading-5 text-basalt/55">
+                Reference photo from the link you pasted — shown for reference only, it won't be saved. Paste your own hosted photo URL in the Image field below (or leave it blank for a brand illustration).
+              </p>
+            </div>
+          )}
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-1.5"><Label htmlFor="title">Title</Label><Input id="title" name="title" defaultValue={draft.title} required /></div>
             <div className="grid gap-1.5"><Label htmlFor="eyebrow">Eyebrow label</Label><Input id="eyebrow" name="eyebrow" placeholder="e.g. Timber hideaway" defaultValue={draft.eyebrow} required /></div>
@@ -192,6 +219,16 @@ function ListingFormDialog({
   );
 }
 
+function StatusBadge({ status }: { status: LiveListing["status"] }) {
+  if (status === "published") {
+    return <span className="border border-sevan/30 bg-sevan/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-sevan">Published</span>;
+  }
+  if (status === "pending") {
+    return <span className="border border-tuff/30 bg-tuff/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-tuff">Pending review</span>;
+  }
+  return <span className="border border-destructive/30 bg-destructive/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-destructive">Needs changes</span>;
+}
+
 function DashboardSection({ type, title, description }: { type: ListingType; title: string; description: string }) {
   const { user } = useAuth();
   const { listings, deleteListing } = useListings();
@@ -199,9 +236,30 @@ function DashboardSection({ type, title, description }: { type: ListingType; tit
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draft, setDraft] = useState<DraftListing | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [importUrl, setImportUrl] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
 
   const openAdd = () => { setDraft(emptyDraft(type)); setDialogOpen(true); };
   const openEdit = (listing: LiveListing) => { setDraft(listing); setDialogOpen(true); };
+
+  const handleImport = async (event: FormEvent) => {
+    event.preventDefault();
+    const url = importUrl.trim();
+    if (!url) return;
+    setImporting(true);
+    setImportError(null);
+    try {
+      const prefill = await importListingPrefill(url);
+      setDraft({ ...emptyDraft(type), title: prefill.title ?? "", shortDescription: prefill.description ?? "", prefillImageUrl: prefill.imageUrl });
+      setDialogOpen(true);
+      setImportUrl("");
+    } catch (err) {
+      setImportError(err instanceof ApiError || err instanceof Error ? err.message : "Couldn't fetch that link.");
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const confirmDelete = async (listing: LiveListing) => {
     if (!window.confirm(`Remove "${listing.title}" from your catalog? This can't be undone.`)) return;
@@ -224,10 +282,25 @@ function DashboardSection({ type, title, description }: { type: ListingType; tit
           <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">{items.length} listed</h2>
           <p className="mt-2 max-w-md text-sm text-basalt/55">{description}</p>
         </div>
-        <Button onClick={openAdd} className="rounded-none bg-apricot text-white hover:bg-apricot/90">
-          <Plus className="mr-2 h-4 w-4" /> Add {type}
-        </Button>
+        <div className="flex flex-col items-end gap-2">
+          <Button onClick={openAdd} className="rounded-none bg-apricot text-white hover:bg-apricot/90">
+            <Plus className="mr-2 h-4 w-4" /> Add {type}
+          </Button>
+          <form onSubmit={handleImport} className="flex items-center gap-2">
+            <Input
+              type="url"
+              value={importUrl}
+              onChange={(e) => setImportUrl(e.target.value)}
+              placeholder="Or paste a listing link to prefill"
+              className="h-9 w-64 rounded-none text-xs"
+            />
+            <Button type="submit" variant="outline" size="sm" className="h-9 shrink-0 rounded-none border-basalt/15 text-xs" disabled={importing || !importUrl.trim()}>
+              <Link2 className="mr-1.5 h-3.5 w-3.5" /> {importing ? "Fetching…" : "Prefill"}
+            </Button>
+          </form>
+        </div>
       </div>
+      {importError && <p className="mt-2 text-right text-xs text-destructive">{importError}</p>}
 
       {items.length === 0 ? (
         <p className="mt-8 border border-dashed border-basalt/20 bg-chalk px-6 py-10 text-center text-sm text-basalt/55">Nothing here yet — add your first one above.</p>
@@ -236,8 +309,16 @@ function DashboardSection({ type, title, description }: { type: ListingType; tit
           {items.map((listing) => (
             <div key={listing.id} className="flex flex-wrap items-center justify-between gap-4 border border-basalt/10 bg-paper p-4">
               <div className="min-w-0 flex-1">
-                <p className="truncate font-display text-xl leading-tight">{listing.title}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="truncate font-display text-xl leading-tight">{listing.title}</p>
+                  <StatusBadge status={listing.status} />
+                </div>
                 <p className="mt-1 text-xs text-basalt/50">{listing.city}, {listing.region} · {listing.priceLabel} / {listing.priceUnit}</p>
+                {listing.status === "draft" && listing.reviewNote && (
+                  <p className="mt-2 max-w-md border-l-2 border-destructive/40 pl-2 text-xs leading-5 text-basalt/60">
+                    <span className="font-semibold text-destructive">Admin feedback:</span> {listing.reviewNote}
+                  </p>
+                )}
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" className="rounded-none border-basalt/15" onClick={() => openEdit(listing)}><Pencil className="mr-2 h-3.5 w-3.5" /> Edit</Button>
@@ -268,7 +349,7 @@ function DashboardContent() {
           {profile?.businessName || profile?.displayName || "Your listings"}.
         </h1>
         <p className="mt-4 max-w-xl text-base leading-7 text-basalt/60">
-          Add, edit, or remove your own stays and tours. Changes save immediately and appear across the marketplace — nobody else can see or edit them but you.
+          Add, edit, or remove your own stays and tours — nobody else can see or edit them but you. A new listing goes through a quick review before it's visible to travelers; edits to an already-live listing save immediately.
         </p>
         {offline && (
           <div className="mt-6 flex items-start gap-2 border border-tuff/40 bg-tuff/10 p-4 text-sm text-basalt">

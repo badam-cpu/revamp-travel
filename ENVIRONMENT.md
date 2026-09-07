@@ -6,14 +6,18 @@ Browsing, search, filtering, and the SVG atlas work with no secrets at all (they
 
 | Variable | Purpose | Required | Default |
 | --- | --- | --- | --- |
-| `VITE_SUPABASE_URL` | Your Supabase project's API URL. Read by the browser client (`client/src/lib/supabase.ts`) and the read-only server client (`server/supabase.ts`). Safe to expose — it's just an endpoint. | Only to enable real accounts/listings — without it the app runs read-only against the static seed (`ListingsContext`'s `offline` fallback), and sign-up/sign-in fail. | none |
-| `VITE_SUPABASE_ANON_KEY` | Your Supabase project's anon/public API key. Ships to the browser by design — Row-Level Security (`supabase/migrations/0001_init.sql`), not this key, is what limits what it can do. | Same as above. | none |
-| `SUPABASE_SERVICE_ROLE_KEY` | Bypasses Row-Level Security entirely. Used **only** by `scripts/seed-catalog.ts`, run locally by hand, for the one case RLS deliberately blocks every operator from doing themselves (seeding `type: "eat"` restaurant rows — see that script's header comment). Never read by any app code, client or server, and never deployed anywhere. | Only to run `pnpm seed:catalog`. | none |
+| `VITE_SUPABASE_URL` | Your Supabase project's API URL. Read by the browser client (`client/src/lib/supabase.ts`) and the server clients (`server/supabase.ts`). Safe to expose — it's just an endpoint. | Only to enable real accounts/listings — without it the app runs read-only against the static seed (`ListingsContext`'s `offline` fallback), and sign-up/sign-in fail. | none |
+| `VITE_SUPABASE_ANON_KEY` | Your Supabase project's anon/public API key. Ships to the browser by design — Row-Level Security plus the `enforce_listing_review_gate` trigger (`supabase/migrations/0001_init.sql`, `0002_review_gate_and_admin.sql`), not this key, is what limits what it can do. Also used server-side by `server/supabase.ts`'s `verifyUser()` to check the bearer token on `POST /api/import-listing` — no separate key needed for that. | Same as above. | none |
+| `SUPABASE_SERVICE_ROLE_KEY` | Bypasses Row-Level Security entirely. Used **only** by `scripts/seed-catalog.ts`, run locally by hand, for restaurant rows (`type: "eat"`, which RLS blocks every operator from inserting) and for auto-approving the seeded stay/tour rows straight to `published` so a one-time bulk import doesn't clutter the admin's review queue — see that script's header comment. Never read by any app code, client or server, and never deployed anywhere. | Only to run `pnpm seed:catalog`. | none |
 | `SEED_OPERATOR_EMAIL` / `SEED_OPERATOR_PASSWORD` | Credentials for the house "Revamp" operator account (created by hand at `/signup` first) that `pnpm seed:catalog` signs in as to import the seed catalog. Local/one-time use only. | Only to run `pnpm seed:catalog`. | none |
 | `ANTHROPIC_API_KEY` | Server-side key used by `server/planner.ts` to call the Anthropic Messages API for `/plan` (`POST /api/plan-trip`). Never sent to the browser. | Only to use `/plan` — the rest of the site works without it, and the endpoint returns a clear 503 instead of crashing if it's missing. | none |
 | `ANTHROPIC_MODEL` | Overrides the model used for trip planning. | No | `claude-sonnet-4-5` |
 | `API_PORT` | Port the Express API listens on **in development**, proxied to by Vite. Not used in production (see `PORT`). | No | `3001` |
 | `PORT` | Port the single Express process listens on **in production** (`pnpm start`), serving both the built SPA and `/api/plan-trip`. | No | `3000` |
+
+`POST /api/import-listing` — the link-prefill assist on `/dashboard` (`server/urlPrefill.ts`) — needs **no new environment variable at all**. It reuses `VITE_SUPABASE_ANON_KEY`/`VITE_SUPABASE_URL` (already required for accounts) to verify the caller is signed in, then fetches the operator-pasted URL directly with no external API key involved.
+
+Promoting an account to `admin` (so it can review pending listings at `/admin`) is a one-time SQL statement run by hand in the Supabase dashboard, not an environment variable — see `README.md`'s Supabase Setup, step 5.
 
 Copy `.env.example` to `.env` and fill in what you need:
 
@@ -25,7 +29,7 @@ Do not commit `.env` or any real key — `SUPABASE_SERVICE_ROLE_KEY` especially,
 
 ## Data Storage
 
-Accounts and listings live in Supabase Postgres (`supabase/migrations/0001_init.sql`), not in this repository or its runtime filesystem — there is no `server/data/` directory or JSON file anymore. Row-Level Security policies defined in that migration are what actually enforce who can read or write which rows; the app's own code never re-implements those checks. To reset a project's data, use the Supabase dashboard (or `truncate`/drop-and-re-run-the-migration) rather than deleting a local file — there isn't one.
+Accounts and listings live in Supabase Postgres (`supabase/migrations/0001_init.sql`, `0002_review_gate_and_admin.sql`), not in this repository or its runtime filesystem — there is no `server/data/` directory or JSON file anymore. Row-Level Security policies and the review-gate trigger defined in those migrations are what actually enforce who can read or write which rows, and when a status change is allowed to stick; the app's own code never re-implements those checks. To reset a project's data, use the Supabase dashboard (or `truncate`/drop-and-re-run-the-migrations) rather than deleting a local file — there isn't one.
 
 ## Asset Hosting
 

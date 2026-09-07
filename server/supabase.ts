@@ -1,12 +1,13 @@
 /**
- * Read-only Supabase access for the trip planner. Uses the anon key
- * deliberately — the planner only ever needs published listings, which
- * Row-Level Security already makes publicly readable (see
- * "published listings are publicly readable" in
- * supabase/migrations/0001_init.sql), so there's no reason for this to hold
- * a more privileged key. Listing CRUD itself no longer goes through the
- * server at all — the client talks to Supabase directly under RLS
- * (see client/src/contexts/ListingsContext.tsx).
+ * Read-only Supabase access for the server's two remaining jobs: the trip
+ * planner's catalog digest, and verifying who's calling
+ * POST /api/import-listing. Uses the anon key deliberately in both cases —
+ * the planner only ever needs published listings, which Row-Level Security
+ * already makes publicly readable (see "published listings are publicly
+ * readable" in supabase/migrations/0001_init.sql), and verifying a token
+ * doesn't need elevated privilege either. Listing CRUD itself no longer
+ * goes through the server at all — the client talks to Supabase directly
+ * under RLS (see client/src/contexts/ListingsContext.tsx).
  */
 import { createClient } from "@supabase/supabase-js";
 import type { Listing } from "../shared/listings.js";
@@ -44,4 +45,21 @@ export async function listPublishedForPlanner(): Promise<CatalogEntry[]> {
     priceUnit: row.price_unit,
     shortDescription: row.short_description,
   }));
+}
+
+/**
+ * Verifies a client-supplied Supabase access token (the Authorization
+ * header on POST /api/import-listing) and returns the signed-in user's id,
+ * or null if it's missing/invalid. This endpoint fetches an arbitrary
+ * caller-supplied URL server-side, so it must not be callable anonymously
+ * — this is the check that enforces that. It doesn't check role
+ * (traveler vs. operator): any signed-in account may use the prefill
+ * assist, same as anyone can look at /dashboard's form; Row-Level Security
+ * is still what actually gates whether a listing write succeeds.
+ */
+export async function verifyUser(accessToken: string): Promise<string | null> {
+  if (!client) return null;
+  const { data, error } = await client.auth.getUser(accessToken);
+  if (error || !data.user) return null;
+  return data.user.id;
 }

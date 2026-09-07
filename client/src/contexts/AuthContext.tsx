@@ -11,7 +11,10 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
-export type UserRole = "traveler" | "operator";
+// "admin" has no self-serve signup path (Signup.tsx only offers traveler/
+// operator) — it's granted by hand via SQL, see
+// supabase/migrations/0002_review_gate_and_admin.sql's header comment.
+export type UserRole = "traveler" | "operator" | "admin";
 
 export interface Profile {
   id: string;
@@ -50,7 +53,7 @@ function mapProfile(row: {
 }): Profile {
   return {
     id: row.id,
-    role: row.role === "operator" ? "operator" : "traveler",
+    role: row.role === "operator" ? "operator" : row.role === "admin" ? "admin" : "traveler",
     displayName: row.display_name,
     businessName: row.business_name,
     bio: row.bio,

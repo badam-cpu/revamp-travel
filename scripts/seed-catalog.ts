@@ -21,7 +21,13 @@
  *     does — the same "operators can create their own stay/tour listings"
  *     Row-Level Security policy every real operator's inserts go through
  *     (supabase/migrations/0001_init.sql), so this exercises the real path
- *     rather than a privileged shortcut.
+ *     rather than a privileged shortcut. Since 0002_review_gate_and_admin.sql,
+ *     that policy requires every new row to start status='pending' — so
+ *     each stay/tour insert here is immediately followed by one
+ *     service-role update setting it to 'published'. That's a deliberate,
+ *     narrow bypass of the review gate: this is a one-time bulk import of
+ *     already-vetted content, not something that should sit in the admin's
+ *     review queue the same way a stranger's new submission should.
  *   - eat (restaurant) rows are different: RLS deliberately has NO insert
  *     policy for type='eat' at all — restaurants are editorial-only, not
  *     operator-authored (EDITABLE_LISTING_TYPES in shared/listings.ts,
@@ -93,7 +99,6 @@ function toRow(listing: Listing) {
     facts: listing.facts,
     featured: listing.featured ?? false,
     accent: listing.accent,
-    status: "published" as const,
   };
 }
 
@@ -144,13 +149,30 @@ async function main() {
       continue;
     }
 
-    const client = listing.type === "eat" ? serviceClient : anonClient;
-    const { error } = await client.from("listings").insert({ ...toRow(listing), operator_id: operatorId });
+    const isEat = listing.type === "eat";
+    const client = isEat ? serviceClient : anonClient;
+    // eat rows publish straight away (service-role insert, no review-gate
+    // policy applies to them at all); stay/tour rows must start 'pending'
+    // to satisfy the operator insert policy, then get auto-approved below.
+    const { error } = await client.from("listings").insert({ ...toRow(listing), operator_id: operatorId, status: isEat ? "published" : "pending" });
     if (error) {
       console.error(`  ✗ ${listing.slug}: ${error.message}`);
       failed++;
       continue;
     }
+
+    if (!isEat) {
+      const { error: approveError } = await serviceClient
+        .from("listings")
+        .update({ status: "published", reviewed_at: new Date().toISOString() })
+        .eq("slug", listing.slug);
+      if (approveError) {
+        console.error(`  ✗ ${listing.slug}: inserted but couldn't auto-approve (${approveError.message})`);
+        failed++;
+        continue;
+      }
+    }
+
     console.log(`  ✓ ${listing.slug} (${listing.type})`);
     created++;
   }

@@ -1,9 +1,12 @@
 /**
- * Thin fetch wrapper around the one remaining server route — the AI trip
- * planner (server/routes.ts). Listings CRUD used to live here too; it's
- * gone now that listings read/write straight from Supabase under
- * Row-Level Security (see client/src/contexts/ListingsContext.tsx).
+ * Thin fetch wrapper around the two remaining server routes — the AI trip
+ * planner and the dashboard's link-import prefill assist
+ * (server/routes.ts). Listings CRUD used to live here too; it's gone now
+ * that listings read/write straight from Supabase under Row-Level Security
+ * (see client/src/contexts/ListingsContext.tsx).
  */
+import { supabase } from "@/lib/supabase";
+
 export class ApiError extends Error {}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -50,4 +53,29 @@ export function planTrip(params: PlanTripParams): Promise<Itinerary> {
     method: "POST",
     body: JSON.stringify(params),
   }).then((d) => d.itinerary);
+}
+
+export interface ListingPrefill {
+  title?: string;
+  description?: string;
+  imageUrl?: string;
+  sourceUrl: string;
+}
+
+/**
+ * Asks the server to pull a starting draft (title/description/hero image
+ * URL) from a listing link's own public OpenGraph/meta tags — a
+ * best-effort assist, not a scraper (see server/urlPrefill.ts). Requires a
+ * signed-in session: the server checks the bearer token before fetching
+ * anything, since this endpoint fetches an arbitrary caller-supplied URL.
+ */
+export async function importListingPrefill(url: string): Promise<ListingPrefill> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in to use the link-import assist.");
+  return request<ListingPrefill>("/api/import-listing", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ url }),
+  });
 }
