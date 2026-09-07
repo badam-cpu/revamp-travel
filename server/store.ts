@@ -29,9 +29,23 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { seedListings, type Listing } from "../shared/listings.js";
 
-// Netlify sets NETLIFY=true in the Functions runtime. Anything else (local
-// dev, `pnpm start`, tests) uses the file backend.
-const useBlobs = Boolean(process.env.NETLIFY);
+// Decide the storage backend at load. We must use Blobs whenever we're running
+// inside a Netlify Function (its filesystem is read-only/ephemeral — the file
+// backend throws `ENOENT: mkdir '/var/task/data'` there).
+//
+// NOTE: `process.env.NETLIFY` is set during Netlify *builds* but is NOT reliably
+// present in the *Functions runtime*, so it can't be the detector on its own.
+// The runtime signals below are what's actually available inside the function:
+//   - NETLIFY_BLOBS_CONTEXT: injected by the Functions runtime specifically so
+//     @netlify/blobs can auto-configure — its presence means Blobs is ready.
+//   - AWS_LAMBDA_FUNCTION_NAME / LAMBDA_TASK_ROOT: Netlify Functions execute on
+//     AWS Lambda, where the filesystem is read-only, so Blobs is the only option.
+const useBlobs = Boolean(
+  process.env.NETLIFY_BLOBS_CONTEXT ||
+    process.env.NETLIFY ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME ||
+    process.env.LAMBDA_TASK_ROOT,
+);
 
 /* ------------------------------------------------------------------ */
 /* Backend interface                                                   */
