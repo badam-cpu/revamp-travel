@@ -39,8 +39,12 @@ interface PendingListing {
   profiles: { display_name: string; business_name: string | null } | null;
 }
 
+// `profiles!operator_id(...)` disambiguates the embed: since 0002 added a
+// second FK from listings to profiles (reviewed_by), a bare `profiles(...)`
+// is ambiguous ("more than one relationship was found"). Pin it to the
+// operator_id foreign key so we get the listing's operator, not its reviewer.
 const PENDING_COLUMNS =
-  "id, type, title, eyebrow, city, region, image, short_description, price_cents, price_unit, tags, profiles(display_name, business_name)";
+  "id, type, title, eyebrow, city, region, image, short_description, price_cents, price_unit, tags, profiles!operator_id(display_name, business_name)";
 
 function ReviewCard({ listing, onDecided }: { listing: PendingListing; onDecided: () => void }) {
   const [rejecting, setRejecting] = useState(false);
