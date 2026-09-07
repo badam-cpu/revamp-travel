@@ -14,7 +14,7 @@
  * draft, not a scrape, and it never auto-fills the image field (see the
  * reference-photo note in ListingFormDialog below).
  */
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { AlertTriangle, Link2, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -29,6 +29,8 @@ import { useListings, LiveListing } from "@/contexts/ListingsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import type { ListingInput, ListingType } from "@shared/listings";
 import { ApiError, importListingPrefill } from "@/lib/api";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { isGoogleMapsConfigured } from "@/lib/googleMaps";
 import { toast } from "sonner";
 
 // `prefillImageUrl` is display-only — it's carried on the draft purely so
@@ -107,8 +109,15 @@ function ListingFormDialog({
   const { createListing, updateListing } = useListings();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   if (!draft) return null;
   const isEdit = Boolean(draft.id);
+
+  // Google Places autocomplete fills the uncontrolled fields imperatively.
+  const setField = (name: string, value: string) => {
+    const el = formRef.current?.elements.namedItem(name) as HTMLInputElement | null;
+    if (el) el.value = value;
+  };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -138,7 +147,7 @@ function ListingFormDialog({
           <DialogTitle className="font-display text-2xl">{isEdit ? `Edit ${draft.title}` : `Add a ${draft.type}`}</DialogTitle>
           <DialogDescription>{dialogDescription(draft, isEdit)}</DialogDescription>
         </DialogHeader>
-        <form onSubmit={submit} className="grid gap-4">
+        <form ref={formRef} onSubmit={submit} className="grid gap-4">
           {draft.prefillImageUrl && (
             <div className="flex items-start gap-3 border border-basalt/10 bg-chalk p-3">
               <img src={draft.prefillImageUrl} alt="" className="h-16 w-16 shrink-0 rounded object-cover" />
@@ -151,6 +160,16 @@ function ListingFormDialog({
             <div className="grid gap-1.5"><Label htmlFor="title">Title</Label><Input id="title" name="title" defaultValue={draft.title} required /></div>
             <div className="grid gap-1.5"><Label htmlFor="eyebrow">Eyebrow label</Label><Input id="eyebrow" name="eyebrow" placeholder="e.g. Timber hideaway" defaultValue={draft.eyebrow} required /></div>
           </div>
+          {isGoogleMapsConfigured && (
+            <AddressAutocomplete
+              onSelect={(s) => {
+                setField("lat", String(s.lat));
+                setField("lng", String(s.lng));
+                if (s.city) setField("city", s.city);
+                if (s.region) setField("region", s.region);
+              }}
+            />
+          )}
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-1.5"><Label htmlFor="city">City</Label><Input id="city" name="city" defaultValue={draft.city} required /></div>
             <div className="grid gap-1.5"><Label htmlFor="region">Region</Label><Input id="region" name="region" defaultValue={draft.region} required /></div>

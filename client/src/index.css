@@ -151,3 +151,15 @@
   .hero-enter:nth-child(4) { animation-delay: 190ms; }
   @keyframes hero-in { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
 }
+
+/* Google Places Autocomplete dropdown (operator dashboard address search).
+   Radix dialogs use a high z-index, so lift the .pac-container above them and
+   ensure it stays clickable when rendered over the modal. */
+.pac-container {
+  z-index: 100000 !important;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(33, 33, 33, 0.12);
+  box-shadow: 0 10px 30px rgba(33, 33, 33, 0.12);
+  font-family: inherit;
+  pointer-events: auto;
+}
