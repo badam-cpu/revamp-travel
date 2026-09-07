@@ -59,6 +59,9 @@ export interface ListingPrefill {
   title?: string;
   description?: string;
   imageUrl?: string;
+  city?: string;
+  region?: string;
+  price?: number;
   sourceUrl: string;
 }
 

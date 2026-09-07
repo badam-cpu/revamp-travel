@@ -25,6 +25,9 @@ export interface PrefillResult {
   title?: string;
   description?: string;
   imageUrl?: string;
+  city?: string;
+  region?: string;
+  price?: number;
   sourceUrl: string;
 }
 
@@ -101,6 +104,97 @@ function decodeHtmlEntities(text: string): string {
     .replace(/&gt;/g, ">");
 }
 
+/**
+ * Strip star ratings / review counts out of imported text. Revamp's content
+ * rules forbid scraped or fabricated ratings (see CLAUDE.md), and many sites'
+ * OG titles bake them in (Airbnb: "Condo in Yerevan · ★4.9 · 1 bedroom …").
+ * We drop any "·"-delimited segment that's a rating, plus any stray star/rating
+ * tokens, so a listing never inherits someone else's star score.
+ */
+function stripRatings(text: string): string {
+  const isRatingSegment = (s: string) => /[★☆]/.test(s) || /\b\d+(\.\d+)?\s*(stars?|reviews?|ratings?)\b/i.test(s) || /^\(\s*\d+\s*(reviews?|ratings?)\s*\)$/i.test(s.trim());
+  const parts = text
+    .split(/\s*[·|•]\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  // Drop rating-only segments only when the title is genuinely segmented —
+  // otherwise a single-segment title that merely ends in a rating (e.g.
+  // "Cozy loft ★ 4.85") would be deleted entirely instead of trimmed.
+  const kept = parts.length > 1 ? parts.filter((s) => !isRatingSegment(s)) : parts;
+  return kept
+    .join(" · ")
+    .replace(/[★☆]\s*\d+(\.\d+)?/g, "") // "★4.9"
+    .replace(/\d+(\.\d+)?\s*[★☆]/g, "") // "4.9★"
+    .replace(/[★☆]/g, "")
+    .replace(/\(\s*\d+[\d,]*\s*(reviews?|ratings?)\s*\)/gi, "")
+    .replace(/\b\d+(\.\d+)?\s*(stars?|reviews?|ratings?)\b/gi, "") // "4.9 stars", "231 reviews"
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s*·\s*$/, "")
+    .replace(/^\s*·\s*/, "")
+    .trim();
+}
+
+interface JsonLdBits {
+  name?: string;
+  description?: string;
+  image?: string;
+  city?: string;
+  region?: string;
+  price?: number;
+  lat?: number;
+  lng?: number;
+}
+
+/** Best-effort read of a page's own schema.org JSON-LD (the structured data it publishes for search engines). Missing/oddly-shaped data just yields nothing. */
+function extractJsonLd(html: string): JsonLdBits {
+  const out: JsonLdBits = {};
+  const blocks = Array.from(html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi));
+  const nodes: Record<string, unknown>[] = [];
+  for (const block of blocks) {
+    try {
+      const parsed = JSON.parse(block[1].trim());
+      const list = Array.isArray(parsed) ? parsed : [parsed];
+      for (const item of list) {
+        if (item && typeof item === "object") {
+          nodes.push(item as Record<string, unknown>);
+          const graph = (item as Record<string, unknown>)["@graph"];
+          if (Array.isArray(graph)) nodes.push(...(graph.filter((g) => g && typeof g === "object") as Record<string, unknown>[]));
+        }
+      }
+    } catch {
+      // ignore malformed JSON-LD
+    }
+  }
+  const str = (v: unknown): string | undefined => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+  const num = (v: unknown): number | undefined => {
+    const n = typeof v === "number" ? v : typeof v === "string" ? parseFloat(v.replace(/[^0-9.]/g, "")) : NaN;
+    return Number.isFinite(n) ? n : undefined;
+  };
+  for (const node of nodes) {
+    out.name = out.name || str(node.name);
+    out.description = out.description || str(node.description);
+    if (!out.image) {
+      const img = node.image as unknown;
+      out.image = str(img) || (Array.isArray(img) ? str(img[0]) || str((img[0] as Record<string, unknown>)?.url) : str((img as Record<string, unknown>)?.url));
+    }
+    const address = node.address as Record<string, unknown> | undefined;
+    if (address && typeof address === "object") {
+      out.city = out.city || str(address.addressLocality);
+      out.region = out.region || str(address.addressRegion);
+    }
+    const geo = node.geo as Record<string, unknown> | undefined;
+    if (geo && typeof geo === "object") {
+      out.lat = out.lat ?? num(geo.latitude);
+      out.lng = out.lng ?? num(geo.longitude);
+    }
+    const offers = (Array.isArray(node.offers) ? node.offers[0] : node.offers) as Record<string, unknown> | undefined;
+    if (offers && typeof offers === "object") {
+      out.price = out.price ?? num(offers.price) ?? num(offers.lowPrice) ?? num((offers.priceSpecification as Record<string, unknown>)?.price);
+    }
+  }
+  return out;
+}
+
 export async function fetchPrefill(rawUrl: string): Promise<PrefillResult> {
   const url = await assertSafeUrl(rawUrl);
 
@@ -142,14 +236,31 @@ export async function fetchPrefill(rawUrl: string): Promise<PrefillResult> {
     clearTimeout(timeout);
   }
 
-  const title = extractMeta(html, "property", "og:title") || extractMeta(html, "name", "twitter:title") || html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim();
-  const description = extractMeta(html, "property", "og:description") || extractMeta(html, "name", "description");
-  const imageUrl = extractMeta(html, "property", "og:image") || extractMeta(html, "name", "twitter:image");
+  const jsonLd = extractJsonLd(html);
+
+  const rawTitle =
+    extractMeta(html, "property", "og:title") ||
+    extractMeta(html, "name", "twitter:title") ||
+    jsonLd.name ||
+    html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim();
+  const rawDescription = extractMeta(html, "property", "og:description") || extractMeta(html, "name", "description") || jsonLd.description;
+  const imageUrl = extractMeta(html, "property", "og:image") || extractMeta(html, "name", "twitter:image") || jsonLd.image;
+
+  // Strip star ratings / review counts from imported title + description so a
+  // listing never inherits someone else's rating (CLAUDE.md content rule).
+  const title = rawTitle ? stripRatings(rawTitle) : undefined;
+  const description = rawDescription ? stripRatings(rawDescription) : undefined;
+
+  const metaPrice = extractMeta(html, "property", "og:price:amount") || extractMeta(html, "property", "product:price:amount");
+  const price = jsonLd.price ?? (metaPrice ? parseFloat(metaPrice.replace(/[^0-9.]/g, "")) : undefined);
 
   return {
     title: title || undefined,
     description: description || undefined,
     imageUrl: imageUrl || undefined,
+    city: jsonLd.city || undefined,
+    region: jsonLd.region || undefined,
+    price: Number.isFinite(price) && (price as number) >= 0 ? price : undefined,
     sourceUrl: url.toString(),
   };
 }

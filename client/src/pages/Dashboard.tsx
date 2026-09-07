@@ -251,7 +251,15 @@ function DashboardSection({ type, title, description }: { type: ListingType; tit
     setImportError(null);
     try {
       const prefill = await importListingPrefill(url);
-      setDraft({ ...emptyDraft(type), title: prefill.title ?? "", shortDescription: prefill.description ?? "", prefillImageUrl: prefill.imageUrl });
+      setDraft({
+        ...emptyDraft(type),
+        title: prefill.title ?? "",
+        shortDescription: prefill.description ?? "",
+        city: prefill.city ?? "",
+        region: prefill.region ?? "",
+        price: prefill.price ?? 0,
+        prefillImageUrl: prefill.imageUrl,
+      });
       setDialogOpen(true);
       setImportUrl("");
     } catch (err) {
