@@ -166,15 +166,6 @@ export function TourDetail({ listing }: { listing: Listing }) {
             <ArmeniaMap listings={[listing]} single className="mt-6 h-[360px]" />
           </div>
 
-          {blockedRanges.length > 0 && (
-            <div className="mt-10 border-t border-basalt/10 pt-8">
-              <p className="eyebrow">Availability</p>
-              <h2 className="mt-3 font-display text-3xl tracking-[-0.03em]">When you can go.</h2>
-              <div className="mt-6 max-w-sm">
-                <AvailabilityCalendar blockedRanges={blockedRanges} />
-              </div>
-            </div>
-          )}
         </div>
 
         <aside>
@@ -187,10 +178,17 @@ export function TourDetail({ listing }: { listing: Listing }) {
               <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-tuff">Illustrative rate</span>
             </div>
 
-            <label className="mt-5 block">
-              <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">Preferred date</span>
-              <input type="date" className="h-11 w-full border border-basalt/15 bg-paper px-3 text-sm outline-none focus:border-apricot" />
-            </label>
+            {blockedRanges.length > 0 ? (
+              <div className="mt-5">
+                <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">Availability</span>
+                <AvailabilityCalendar blockedRanges={blockedRanges} />
+              </div>
+            ) : (
+              <label className="mt-5 block">
+                <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">Preferred date</span>
+                <input type="date" className="h-11 w-full border border-basalt/15 bg-paper px-3 text-sm outline-none focus:border-apricot" />
+              </label>
+            )}
 
             <div className="mt-4">
               <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">Travelers</span>

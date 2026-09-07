@@ -100,19 +100,20 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
                 <p><strong className="font-display text-4xl font-normal">{listing.priceLabel}</strong> {listing.price > 0 && <span className="text-sm text-basalt/50">/ {listing.priceUnit}</span>}</p>
                 <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-tuff">Illustrative rate</span>
               </div>
-              <label className="mt-5 block"><span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">Preferred date</span><div className="relative"><CalendarDays className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-apricot" /><input type="date" className="h-11 w-full border border-basalt/15 bg-paper pl-10 pr-3 text-sm outline-none focus:border-apricot" /></div></label>
+              {blockedRanges.length > 0 ? (
+                <div className="mt-5">
+                  <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">Availability</span>
+                  <AvailabilityCalendar blockedRanges={blockedRanges} />
+                </div>
+              ) : (
+                <label className="mt-5 block"><span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">Preferred date</span><div className="relative"><CalendarDays className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-apricot" /><input type="date" className="h-11 w-full border border-basalt/15 bg-paper pl-10 pr-3 text-sm outline-none focus:border-apricot" /></div></label>
+              )}
               <div className="mt-4 grid grid-cols-2 gap-3 text-xs text-basalt/55">
                 <div className="border border-basalt/10 bg-paper p-3"><Clock3 className="mb-2 h-4 w-4 text-sevan" /> Flexible timing</div>
                 <div className="border border-basalt/10 bg-paper p-3"><Users className="mb-2 h-4 w-4 text-tuff" /> Small scale</div>
               </div>
             <BookingCta slug={listing.slug} className="mt-5" />
               <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">Online booking and payment are launching soon.</p>
-              {blockedRanges.length > 0 && (
-                <div className="mt-5 border-t border-basalt/10 pt-5">
-                  <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">Availability</p>
-                  <AvailabilityCalendar blockedRanges={blockedRanges} />
-                </div>
-              )}
             </div>
           </aside>
         </section>
