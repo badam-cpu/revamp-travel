@@ -17,8 +17,12 @@ export function SearchBar({ compact = false, initialQuery = "", initialType = "a
     event.preventDefault();
     const params = new URLSearchParams();
     if (query.trim()) params.set("query", query.trim());
-    if (type !== "all") params.set("type", type);
     if (date) params.set("date", date);
+    if (type === "tour") {
+      navigate(`/explore/tour${params.toString() ? `?${params}` : ""}`);
+      return;
+    }
+    if (type !== "all") params.set("type", type);
     navigate(`/explore${params.toString() ? `?${params}` : ""}`);
   };
 

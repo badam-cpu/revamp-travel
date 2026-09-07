@@ -54,6 +54,8 @@ pnpm start     # real production run: one process, built SPA + /api/*
 | `client/src/pages/MapPage.tsx` | Map-led discovery view with synchronized listing rail. Reads live listings via `useListings()`. |
 | `client/src/pages/ListingPage.tsx` | Shared detail-page template for stays, restaurants, and tours. Reads live listings via `useListings()`. |
 | `client/src/pages/Manage.tsx` | Add/edit/delete UI for stay and tour listings. Calls the CRUD API through `client/src/lib/api.ts`; restaurants are shown read-only. |
+| `client/src/pages/Tours.tsx` | Dedicated GetYourGuide-style browser for `/explore/tour` specifically (hero band + search, real-tag category pills, duration buckets, sort, map sheet, boxed card grid). Kept separate from `Explore.tsx` so stay/eat/all keep the original editorial layout. All filters/pills are derived from the live catalog's own tags and facts — never hardcoded categories. |
+| `client/src/components/TourCard.tsx` | Boxed activity card used only on `/explore/tour`: hoverable photo carousel from the listing's `gallery`, and a duration/group/level facts row in the slot where a card like this would normally show star ratings — deliberate, since fabricated ratings/reviews are banned (see Non-Negotiable Rules). |
 | `client/src/pages/Plan.tsx` | AI trip planner UI: trip-parameter form plus itinerary result panel (loading/error/empty/success). Calls `POST /api/plan-trip`. |
 | `client/src/pages/NotFound.tsx` | Branded fallback route. |
 | `client/src/contexts/ListingsContext.tsx` | Fetches `/api/listings` on mount, exposes `listings`, `create`/`update`/`remove`, `refresh()`, and an `offline` flag (falls back to `shared/listings.ts` seed data if the API is unreachable). |
@@ -87,7 +89,8 @@ pnpm start     # real production run: one process, built SPA + /api/*
 | --- | --- | --- |
 | `/` | `Home` | Primary discovery landing page. |
 | `/explore` | `Explore` | Reads `query`, `type`, and `date` query parameters. |
-| `/explore/:category` | `Explore` | Preselects `stay`, `eat`, or `tour`. |
+| `/explore/tour` | `Tours` | Dedicated GetYourGuide-style tours browser. Matched before the generic `:category` route below. |
+| `/explore/:category` | `Explore` | Preselects `stay` or `eat` (tour is intercepted by the route above). |
 | `/map` | `MapPage` | Full map-first catalog. |
 | `/listing/:slug` | `ListingPage` | Resolves records through `findListing`/`findListingIn` against live listings. |
 | `/plan` | `Plan` | AI trip planner form + generated itinerary. Requires `ANTHROPIC_API_KEY` server-side. |

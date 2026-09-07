@@ -8,6 +8,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { ListingsProvider } from "./contexts/ListingsContext";
 import Home from "./pages/Home";
 import Explore from "./pages/Explore";
+import Tours from "./pages/Tours";
 import MapPage from "./pages/MapPage";
 import ListingPage from "./pages/ListingPage";
 import Manage from "./pages/Manage";
@@ -17,6 +18,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/explore/tour" component={Tours} />
       <Route path="/explore/:category">{(params) => <Explore initialType={params.category} />}</Route>
       <Route path="/explore">{() => <Explore />}</Route>
       <Route path="/map" component={MapPage} />

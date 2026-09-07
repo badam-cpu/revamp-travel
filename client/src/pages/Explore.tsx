@@ -1,5 +1,6 @@
 /** Revamp brandbook: marketplace utility uses bold sans hierarchy, white surfaces, orange filters, rounded cards, and a synchronized atlas. */
 import { useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import { Filter, Map as MapIcon, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -15,6 +16,7 @@ import { cn } from "@/lib/utils";
 const validTypes = new Set(["all", "stay", "eat", "tour"]);
 
 export default function Explore({ initialType = "" }: { initialType?: string }) {
+  const [, navigate] = useLocation();
   const { listings } = useListings();
   const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
   const urlType = params.get("type") || initialType;
@@ -65,7 +67,13 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
             </div>
             <div className="flex flex-wrap gap-x-2 gap-y-3">
               {["all", "stay", "eat", "tour"].map((value) => (
-                <button key={value} onClick={() => setType(value)} className={cn("filter-chip", type === value && "active")}>{value === "all" ? "All places" : typeLabels[value as ListingType]}</button>
+                <button
+                  key={value}
+                  onClick={() => (value === "tour" ? navigate(`/explore/tour${query.trim() ? `?query=${encodeURIComponent(query.trim())}` : ""}`) : setType(value))}
+                  className={cn("filter-chip", type === value && "active")}
+                >
+                  {value === "all" ? "All places" : typeLabels[value as ListingType]}
+                </button>
               ))}
               <span className="mx-1 hidden h-9 w-px bg-basalt/10 sm:block" />
               <select value={region} onChange={(event) => setRegion(event.target.value)} className="h-10 border border-basalt/15 bg-paper px-3 text-xs font-bold uppercase tracking-[0.12em] outline-none focus:border-apricot">

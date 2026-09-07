@@ -27,10 +27,17 @@ Coordinates connect each card to its map marker. The same shared record powers h
 | `/explore/:category` | Category-filtered catalog | Stay, restaurant, or tour preselection |
 | `/map` | Full map-led discovery | Marker-card synchronization and category filtering |
 | `/listing/:slug` | Individual listing page | Gallery, facts, description, location map, contextual action card |
+| `/explore/tour` | Dedicated tours browser (GetYourGuide-inspired) | Hero band with search, real-tag category pills, duration buckets, sort, map sheet, and a boxed activity-card grid — see "Tours Browsing (`/explore/tour`)" below |
 | `/plan` | AI trip planner | Trip-parameter form (days, start city, travelers, pace, budget, interests) generates a day-by-day itinerary via the Anthropic API, grounded in the live stay/eat/tour catalog |
 | `/manage` | Inventory management | Add, edit, and delete stay and tour listings; restaurants are shown read-only |
 
 The persistent header contains the symbol/wordmark, Stay, Eat, Tours, Map, AI Planner, Manage, a saved-items control, and an “Explore Armenia” action. The footer provides region links, marketplace categories, travel context, links to the planner and manager, and an explicit note that displayed availability and rates are illustrative.
+
+## Tours Browsing (`/explore/tour`)
+
+Tours get their own browsing UI, modeled on GetYourGuide's activity grid, rather than sharing the generic `/explore` layout used by stays/restaurants/all. It opens with a full-width hero (search included), then category pills built from the *actual* tags present on current tour listings (not a fixed taxonomy — as more tours are added via `/manage`, the pill list reflects them), duration buckets (half-day / full-day / multi-day, computed from each listing's own "Duration" fact), a sort control (recommended / price / duration), and an optional map sheet. Cards show a hoverable photo carousel across the listing's `gallery`, then duration/group-size/difficulty in the visual slot a marketplace like this would normally spend on star ratings.
+
+That substitution is deliberate: GetYourGuide's density comes partly from ratings, review counts, and urgency badges ("likely to sell out", "booked X times today"), and this product's own content rules forbid fabricating any of that. So the tours page borrows the layout and information density of that pattern — boxed cards, hover carousel, pill filters, sort control — without inventing customer sentiment or urgency it can't back up. `/explore` (stays, restaurants, "all") keeps its original editorial list/map layout unchanged.
 
 ## Inventory Management (`/manage`)
 
