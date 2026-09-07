@@ -12,7 +12,9 @@ import { createClient } from "@supabase/supabase-js";
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!url || !anonKey) {
+export const isSupabaseConfigured = Boolean(url && anonKey);
+
+if (!isSupabaseConfigured) {
   // Fails loudly at build/dev time rather than silently breaking auth and
   // listings everywhere — mirrors how the AI planner fails clearly when
   // ANTHROPIC_API_KEY is missing, instead of degrading quietly.
@@ -21,4 +23,15 @@ if (!url || !anonKey) {
   );
 }
 
-export const supabase = createClient(url ?? "", anonKey ?? "");
+// When the env vars are absent we still construct a client, but with a
+// placeholder URL/key so `createClient` doesn't THROW at import time —
+// @supabase/supabase-js rejects an empty URL with "supabaseUrl is required",
+// which would crash the whole SPA to a blank page before React even mounts.
+// With the placeholder the app renders normally and every Supabase call simply
+// fails and is caught: ListingsContext falls back to the static seed
+// (`offline: true`) and Auth stays signed-out. This is the documented
+// "read-only seed fallback" behavior; real credentials make it live.
+const PLACEHOLDER_URL = "https://placeholder.invalid";
+const PLACEHOLDER_KEY = "placeholder-anon-key";
+
+export const supabase = createClient(url || PLACEHOLDER_URL, anonKey || PLACEHOLDER_KEY);
