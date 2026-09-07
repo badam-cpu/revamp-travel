@@ -45,8 +45,14 @@ interface Backend {
 }
 
 /* ------------------------- File backend --------------------------- */
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.resolve(__dirname, "data");
+// Resolve this module's directory. In ESM (local dev, `pnpm start`, the
+// esbuild server bundle) `import.meta.url` is a file URL. When this module is
+// bundled into a CommonJS Netlify Function, esbuild replaces `import.meta.url`
+// with `undefined`, so guard it and fall back — the file backend is never used
+// on Netlify (Blobs is), so the fallback path is only a safe placeholder.
+const metaUrl: string | undefined = import.meta.url;
+const moduleDir = metaUrl ? path.dirname(fileURLToPath(metaUrl)) : process.cwd();
+const DATA_DIR = path.resolve(moduleDir, "data");
 const DATA_FILE = path.join(DATA_DIR, "listings.json");
 
 const fileBackend: Backend = {
