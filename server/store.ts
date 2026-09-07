@@ -1,0 +1,200 @@
+/**
+ * Deliberate architecture upgrade (see CLAUDE.md "Add backend-dependent
+ * behavior"): a small store gives the marketplace real, shared persistence
+ * for listings without pulling in an external database. It seeds itself once
+ * from `shared/listings.ts` and is then the sole source of truth — editing
+ * the seed file after that has no effect on a running deployment.
+ *
+ * Two interchangeable backends sit behind one small interface. Which one is
+ * used is decided once at module load:
+ *
+ *   - FILE backend (default): a single JSON file (`server/data/listings.json`)
+ *     with an in-memory cache and a write queue. Used for local development
+ *     (`pnpm dev`) and single-process production (`pnpm start`), where the
+ *     process is long-lived and the filesystem is writable and persistent.
+ *
+ *   - NETLIFY BLOBS backend: used when running as a Netlify Function, detected
+ *     via `process.env.NETLIFY` (Netlify sets this in the Functions runtime).
+ *     A Netlify Function's filesystem is ephemeral (`/tmp` is wiped between
+ *     invocations), so file persistence would silently lose data; Netlify
+ *     Blobs is a durable, site-scoped key/value store that needs no separate
+ *     credentials from inside a Function. We keep the whole catalog as one
+ *     JSON blob, mirroring the single-file model.
+ *
+ * Both backends expose the exact same read/create/update/remove/slugify
+ * contract, so `server/routes.ts` doesn't know or care which is active.
+ */
+import { promises as fs } from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { seedListings, type Listing } from "../shared/listings.js";
+
+// Netlify sets NETLIFY=true in the Functions runtime. Anything else (local
+// dev, `pnpm start`, tests) uses the file backend.
+const useBlobs = Boolean(process.env.NETLIFY);
+
+/* ------------------------------------------------------------------ */
+/* Backend interface                                                   */
+/* A backend just loads the whole catalog or persists the whole catalog.*/
+/* `read()` returns null when the store has never been initialized      */
+/* (mirrors the file backend's ENOENT-means-seed-fresh behavior).       */
+/* ------------------------------------------------------------------ */
+interface Backend {
+  read(): Promise<Listing[] | null>;
+  write(data: Listing[]): Promise<void>;
+}
+
+/* ------------------------- File backend --------------------------- */
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DATA_DIR = path.resolve(__dirname, "data");
+const DATA_FILE = path.join(DATA_DIR, "listings.json");
+
+const fileBackend: Backend = {
+  async read() {
+    try {
+      const raw = await fs.readFile(DATA_FILE, "utf-8");
+      return JSON.parse(raw) as Listing[];
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw err;
+    }
+  },
+  async write(data) {
+    await fs.mkdir(DATA_DIR, { recursive: true });
+    const tmp = `${DATA_FILE}.${process.pid}.tmp`;
+    await fs.writeFile(tmp, JSON.stringify(data, null, 2), "utf-8");
+    await fs.rename(tmp, DATA_FILE);
+  },
+};
+
+/* ------------------------ Netlify Blobs backend -------------------- */
+// A single store holding one JSON blob is the source of truth. Inside a
+// Netlify Function `getStore(name)` is automatically scoped to the site and
+// needs no explicit credentials. The `@netlify/blobs` import is dynamic and
+// gated behind `useBlobs` so it is never loaded (and never demands a Netlify
+// environment) during local dev, `pnpm start`, or the build.
+const BLOB_STORE_NAME = "listings";
+const BLOB_KEY = "listings.json";
+
+// Minimal structural type so this module type-checks (`pnpm check`) without
+// coupling to the package's exported types; the real object is cast in.
+interface BlobStore {
+  get(key: string, options: { type: "json" }): Promise<unknown>;
+  setJSON(key: string, value: unknown): Promise<void>;
+}
+
+let blobStore: BlobStore | null = null;
+
+async function getBlobStore(): Promise<BlobStore> {
+  if (!blobStore) {
+    const { getStore } = await import("@netlify/blobs");
+    blobStore = getStore(BLOB_STORE_NAME) as unknown as BlobStore;
+  }
+  return blobStore;
+}
+
+const blobBackend: Backend = {
+  async read() {
+    const store = await getBlobStore();
+    const data = (await store.get(BLOB_KEY, { type: "json" })) as Listing[] | null;
+    return data ?? null;
+  },
+  async write(data) {
+    const store = await getBlobStore();
+    await store.setJSON(BLOB_KEY, data);
+  },
+};
+
+const backend: Backend = useBlobs ? blobBackend : fileBackend;
+
+/* ------------------------------------------------------------------ */
+/* Shared logic (identical for both backends)                          */
+/* ------------------------------------------------------------------ */
+let cache: Listing[] | null = null;
+// Serializes writes so two near-simultaneous requests can't clobber each other.
+let writeQueue: Promise<void> = Promise.resolve();
+
+async function ensureLoaded(): Promise<Listing[]> {
+  if (cache) return cache;
+  const existing = await backend.read();
+  if (existing) {
+    cache = existing;
+  } else {
+    // First run: seed from shared/listings.ts and persist, then it's the
+    // source of truth (mirrors the old ENOENT-seeds-fresh-file behavior).
+    cache = seedListings.map((listing) => ({ ...listing }));
+    await backend.write(cache);
+  }
+  return cache!;
+}
+
+async function persist(data: Listing[]): Promise<void> {
+  await backend.write(data);
+}
+
+function slugify(title: string): string {
+  return (
+    title
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "listing"
+  );
+}
+
+export async function listAll(): Promise<Listing[]> {
+  const data = await ensureLoaded();
+  return data;
+}
+
+export async function getById(id: string): Promise<Listing | undefined> {
+  const data = await ensureLoaded();
+  return data.find((listing) => listing.id === id);
+}
+
+/** Runs `mutate` against the current data under the write queue and persists the result. */
+async function withStore<T>(mutate: (data: Listing[]) => T): Promise<T> {
+  let result!: T;
+  writeQueue = writeQueue.then(async () => {
+    const data = await ensureLoaded();
+    result = mutate(data);
+    await persist(data);
+  });
+  await writeQueue;
+  return result;
+}
+
+export async function create(input: Omit<Listing, "id" | "slug">): Promise<Listing> {
+  return withStore((data) => {
+    const base = slugify(input.title);
+    const existingSlugs = new Set(data.map((l) => l.slug));
+    let slug = base;
+    let n = 2;
+    while (existingSlugs.has(slug)) {
+      slug = `${base}-${n++}`;
+    }
+    const id = `${input.type}-${slug}`;
+    const listing: Listing = { ...input, id, slug };
+    data.push(listing);
+    return listing;
+  });
+}
+
+export async function update(id: string, patch: Partial<Omit<Listing, "id" | "slug">>): Promise<Listing | undefined> {
+  return withStore((data) => {
+    const idx = data.findIndex((l) => l.id === id);
+    if (idx === -1) return undefined;
+    data[idx] = { ...data[idx], ...patch };
+    return data[idx];
+  });
+}
+
+export async function remove(id: string): Promise<boolean> {
+  return withStore((data) => {
+    const idx = data.findIndex((l) => l.id === id);
+    if (idx === -1) return false;
+    data.splice(idx, 1);
+    return true;
+  });
+}

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" preserveAspectRatio="xMidYMid slice">
+  <rect width="1200" height="900" fill="#F3EEE3"/>
+  <rect x="260" y="260" width="680" height="560" rx="18" fill="#212121" opacity="0.88"/>
+  <g fill="#F3EEE3">
+    <rect x="310" y="310" width="70" height="70" rx="8"/><rect x="410" y="310" width="70" height="70" rx="8"/><rect x="510" y="310" width="70" height="70" rx="8"/><rect x="610" y="310" width="70" height="70" rx="8"/><rect x="710" y="310" width="70" height="70" rx="8"/><rect x="810" y="310" width="70" height="70" rx="8"/>
+    <rect x="310" y="410" width="70" height="70" rx="8"/><rect x="410" y="410" width="70" height="70" rx="8"/><rect x="510" y="410" width="70" height="70" rx="8"/><rect x="610" y="410" width="70" height="70" rx="8"/><rect x="710" y="410" width="70" height="70" rx="8"/><rect x="810" y="410" width="70" height="70" rx="8"/>
+    <rect x="310" y="510" width="70" height="70" rx="8"/><rect x="410" y="510" width="70" height="70" rx="8"/><rect x="510" y="510" width="70" height="70" rx="8"/><rect x="610" y="510" width="70" height="70" rx="8"/><rect x="710" y="510" width="70" height="70" rx="8"/><rect x="810" y="510" width="70" height="70" rx="8"/>
+  </g>
+  <rect x="540" y="660" width="120" height="160" rx="12" fill="#F15822"/>
+</svg>

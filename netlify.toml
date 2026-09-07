@@ -1,0 +1,40 @@
+# Netlify deployment configuration for Revamp Travel.
+#
+# The client is a Vite SPA built to dist/public; the Express API runs as a
+# single Netlify Function (netlify/functions/api.ts) that wraps the same
+# Express app used locally. Listings persist to Netlify Blobs at runtime
+# (see server/store.ts), so no external database is provisioned.
+
+[build]
+  # Client build only. `vite build` emits the SPA to dist/public, which is all
+  # Netlify serves statically. The standalone dist/index.js server bundle that
+  # this command also produces is unused on Netlify (harmless) — the API is the
+  # Function, not that bundle.
+  command = "pnpm build"
+  publish = "dist/public"
+
+[build.environment]
+  # Match the project's Node requirement (CLAUDE.md: Node 22+). pnpm is picked
+  # up automatically from the "packageManager" field in package.json.
+  NODE_VERSION = "22"
+
+[functions]
+  directory = "netlify/functions"
+  # TypeScript functions are bundled with esbuild.
+  node_bundler = "esbuild"
+
+# All /api/* traffic is handled by the Express app inside the api Function.
+# force = true so it wins over any static asset resolution.
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = true
+
+# SPA fallback: client-side routing is done by wouter, so every non-file,
+# non-API path must return the app shell. Not forced, so real static assets in
+# dist/public (JS, CSS, images) are served directly before this catch-all.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
