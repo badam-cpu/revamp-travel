@@ -15,7 +15,7 @@
  * reference-photo note in ListingFormDialog below).
  */
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Link2, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import { AlertTriangle, CalendarClock, Link2, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { RequireRole } from "@/components/RequireRole";
@@ -28,7 +28,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useListings, LiveListing } from "@/contexts/ListingsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import type { ListingInput, ListingType } from "@shared/listings";
-import { ApiError, importListingPrefill } from "@/lib/api";
+import { ApiError, importListingPrefill, syncIcal } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { isGoogleMapsConfigured } from "@/lib/googleMaps";
@@ -335,6 +335,68 @@ function StatusBadge({ status }: { status: LiveListing["status"] }) {
   return <span className="border border-destructive/30 bg-destructive/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-destructive">Needs changes</span>;
 }
 
+/** Per-listing Airbnb calendar (iCal) connect + sync control. One-way import: shows unavailable dates on Revamp, no prices. */
+function AvailabilityRow({ listing }: { listing: LiveListing }) {
+  const { setIcalUrl, refresh } = useListings();
+  const [url, setUrl] = useState(listing.icalUrl ?? "");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const save = async () => {
+    setBusy(true);
+    setMsg(null);
+    setErr(null);
+    try {
+      await setIcalUrl(listing.id, url.trim() || null);
+      if (url.trim()) {
+        const res = await syncIcal(listing.id);
+        setMsg(`Synced — ${res.count} blocked date ${res.count === 1 ? "range" : "ranges"}.`);
+      } else {
+        setMsg("Calendar disconnected.");
+      }
+      await refresh();
+    } catch (e) {
+      setErr(e instanceof ApiError || e instanceof Error ? e.message : "Couldn't sync that calendar.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const status = err ? (
+    <span className="text-destructive">{err}</span>
+  ) : msg ? (
+    msg
+  ) : listing.icalError ? (
+    <span className="text-destructive">Last sync failed: {listing.icalError}</span>
+  ) : listing.icalSyncedAt ? (
+    `${listing.blockedRanges.length} blocked date ${listing.blockedRanges.length === 1 ? "range" : "ranges"} · last synced ${new Date(listing.icalSyncedAt).toLocaleString()}`
+  ) : (
+    "Paste your Airbnb listing's calendar-export link to show its unavailable dates on Revamp. One-way, availability only — no prices."
+  );
+
+  return (
+    <div className="mt-3 border-t border-basalt/10 pt-3">
+      <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-basalt/45">
+        <CalendarClock className="h-3.5 w-3.5" /> Availability sync
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          type="url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://www.airbnb.com/calendar/ical/….ics"
+          className="h-9 min-w-0 flex-1 rounded-none text-xs"
+        />
+        <Button type="button" variant="outline" size="sm" className="h-9 shrink-0 rounded-none border-basalt/15 text-xs" disabled={busy} onClick={save}>
+          {busy ? "Syncing…" : url.trim() ? "Save & sync" : "Save"}
+        </Button>
+      </div>
+      <p className="mt-1.5 text-xs text-basalt/45">{status}</p>
+    </div>
+  );
+}
+
 function DashboardSection({ type, title, description }: { type: ListingType; title: string; description: string }) {
   const { user } = useAuth();
   const { listings, deleteListing } = useListings();
@@ -421,25 +483,28 @@ function DashboardSection({ type, title, description }: { type: ListingType; tit
       ) : (
         <div className="mt-8 grid gap-3">
           {items.map((listing) => (
-            <div key={listing.id} className="flex flex-wrap items-center justify-between gap-4 border border-basalt/10 bg-paper p-4">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="truncate font-display text-xl leading-tight">{listing.title}</p>
-                  <StatusBadge status={listing.status} />
+            <div key={listing.id} className="border border-basalt/10 bg-paper p-4">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate font-display text-xl leading-tight">{listing.title}</p>
+                    <StatusBadge status={listing.status} />
+                  </div>
+                  <p className="mt-1 text-xs text-basalt/50">{listing.city}, {listing.region} · {listing.priceLabel} / {listing.priceUnit}</p>
+                  {listing.status === "draft" && listing.reviewNote && (
+                    <p className="mt-2 max-w-md border-l-2 border-destructive/40 pl-2 text-xs leading-5 text-basalt/60">
+                      <span className="font-semibold text-destructive">Admin feedback:</span> {listing.reviewNote}
+                    </p>
+                  )}
                 </div>
-                <p className="mt-1 text-xs text-basalt/50">{listing.city}, {listing.region} · {listing.priceLabel} / {listing.priceUnit}</p>
-                {listing.status === "draft" && listing.reviewNote && (
-                  <p className="mt-2 max-w-md border-l-2 border-destructive/40 pl-2 text-xs leading-5 text-basalt/60">
-                    <span className="font-semibold text-destructive">Admin feedback:</span> {listing.reviewNote}
-                  </p>
-                )}
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="rounded-none border-basalt/15" onClick={() => openEdit(listing)}><Pencil className="mr-2 h-3.5 w-3.5" /> Edit</Button>
+                  <Button variant="outline" size="sm" className="rounded-none border-destructive/30 text-destructive hover:bg-destructive/5" disabled={deletingId === listing.id} onClick={() => confirmDelete(listing)}>
+                    <Trash2 className="mr-2 h-3.5 w-3.5" /> {deletingId === listing.id ? "Removing…" : "Delete"}
+                  </Button>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="rounded-none border-basalt/15" onClick={() => openEdit(listing)}><Pencil className="mr-2 h-3.5 w-3.5" /> Edit</Button>
-                <Button variant="outline" size="sm" className="rounded-none border-destructive/30 text-destructive hover:bg-destructive/5" disabled={deletingId === listing.id} onClick={() => confirmDelete(listing)}>
-                  <Trash2 className="mr-2 h-3.5 w-3.5" /> {deletingId === listing.id ? "Removing…" : "Delete"}
-                </Button>
-              </div>
+              <AvailabilityRow listing={listing} />
             </div>
           ))}
         </div>

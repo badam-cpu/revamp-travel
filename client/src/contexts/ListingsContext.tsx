@@ -20,11 +20,28 @@ import { slugify } from "@/lib/slug";
 import { useAuth } from "@/contexts/AuthContext";
 
 /** The live catalog carries a couple of fields the static seed type never needed: who owns a row, whether it's published, and (once submitted) any admin review feedback. Every existing consumer only reads the base `Listing` fields, so this is a superset, not a breaking change. */
+export interface BlockedRange {
+  start: string; // inclusive, YYYY-MM-DD
+  end: string; // exclusive, YYYY-MM-DD
+}
+export interface SeasonalRate {
+  start: string;
+  end: string;
+  priceCents: number;
+  label?: string;
+}
+
 export type LiveListing = Listing & {
   operatorId: string;
   status: "draft" | "pending" | "published";
   reviewNote: string | null;
   reviewedAt: string | null;
+  /** Airbnb (or other) calendar export URL, availability sync state, and the cached busy ranges. */
+  icalUrl: string | null;
+  icalSyncedAt: string | null;
+  icalError: string | null;
+  blockedRanges: BlockedRange[];
+  seasonalRates: SeasonalRate[];
 };
 
 interface ListingsContextType {
@@ -36,12 +53,14 @@ interface ListingsContextType {
   createListing: (input: ListingInput) => Promise<LiveListing>;
   updateListing: (id: string, input: ListingInput) => Promise<LiveListing>;
   deleteListing: (id: string) => Promise<void>;
+  /** Save the calendar export URL on a listing (the actual sync is POST /api/sync-ical). */
+  setIcalUrl: (id: string, icalUrl: string | null) => Promise<LiveListing>;
 }
 
 const ListingsContext = createContext<ListingsContextType | undefined>(undefined);
 
 const ROW_COLUMNS =
-  "id, operator_id, type, slug, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, amenities, facts, featured, accent, status, review_note, reviewed_at";
+  "id, operator_id, type, slug, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, amenities, facts, featured, accent, status, review_note, reviewed_at, ical_url, ical_synced_at, ical_error, blocked_ranges, seasonal_rates";
 
 interface ListingRow {
   id: string;
@@ -68,6 +87,11 @@ interface ListingRow {
   status: "draft" | "pending" | "published";
   review_note: string | null;
   reviewed_at: string | null;
+  ical_url: string | null;
+  ical_synced_at: string | null;
+  ical_error: string | null;
+  blocked_ranges: BlockedRange[] | null;
+  seasonal_rates: SeasonalRate[] | null;
 }
 
 function mapListingRow(row: ListingRow): LiveListing {
@@ -97,6 +121,11 @@ function mapListingRow(row: ListingRow): LiveListing {
     status: row.status,
     reviewNote: row.review_note,
     reviewedAt: row.reviewed_at,
+    icalUrl: row.ical_url,
+    icalSyncedAt: row.ical_synced_at,
+    icalError: row.ical_error,
+    blockedRanges: Array.isArray(row.blocked_ranges) ? row.blocked_ranges : [],
+    seasonalRates: Array.isArray(row.seasonal_rates) ? row.seasonal_rates : [],
   };
 }
 
@@ -125,7 +154,18 @@ function toRow(input: ListingInput) {
 }
 
 function fallbackListings(): LiveListing[] {
-  return seedListings.map((listing) => ({ ...listing, operatorId: "seed", status: "published" as const, reviewNote: null, reviewedAt: null }));
+  return seedListings.map((listing) => ({
+    ...listing,
+    operatorId: "seed",
+    status: "published" as const,
+    reviewNote: null,
+    reviewedAt: null,
+    icalUrl: null,
+    icalSyncedAt: null,
+    icalError: null,
+    blockedRanges: [],
+    seasonalRates: [],
+  }));
 }
 
 export function ListingsProvider({ children }: { children: React.ReactNode }) {
@@ -215,8 +255,21 @@ export function ListingsProvider({ children }: { children: React.ReactNode }) {
     setListings((prev) => prev.filter((item) => item.id !== id));
   }, []);
 
+  const setIcalUrl = useCallback(async (id: string, icalUrl: string | null): Promise<LiveListing> => {
+    const { data, error } = await supabase
+      .from("listings")
+      .update({ ical_url: icalUrl?.trim() || null })
+      .eq("id", id)
+      .select(ROW_COLUMNS)
+      .single();
+    if (error) throw new Error(error.message);
+    const listing = mapListingRow(data);
+    setListings((prev) => prev.map((item) => (item.id === id ? listing : item)));
+    return listing;
+  }, []);
+
   return (
-    <ListingsContext.Provider value={{ listings, loading, offline, refresh, createListing, updateListing, deleteListing }}>
+    <ListingsContext.Provider value={{ listings, loading, offline, refresh, createListing, updateListing, deleteListing, setIcalUrl }}>
       {children}
     </ListingsContext.Provider>
   );

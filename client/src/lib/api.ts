@@ -82,3 +82,24 @@ export async function importListingPrefill(url: string): Promise<ListingPrefill>
     body: JSON.stringify({ url }),
   });
 }
+
+export interface IcalSyncResult {
+  count: number;
+  syncedAt: string;
+}
+
+/**
+ * Refreshes a listing's availability from its saved Airbnb (or other) calendar
+ * export URL. The server fetches + parses the .ics under the operator's own RLS
+ * and caches the busy ranges; this returns how many ranges were found.
+ */
+export async function syncIcal(listingId: string): Promise<IcalSyncResult> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in to sync a calendar.");
+  return request<IcalSyncResult>("/api/sync-ical", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ listingId }),
+  });
+}

@@ -63,3 +63,20 @@ export async function verifyUser(accessToken: string): Promise<string | null> {
   if (error || !data.user) return null;
   return data.user.id;
 }
+
+/**
+ * A Supabase client scoped to a specific signed-in user by passing their
+ * access token as the Authorization header, so every query runs under that
+ * user's Row-Level Security — the same rules as if they'd made the call from
+ * the browser. Used by POST /api/sync-ical to update the operator's OWN
+ * listing (their iCal-derived availability) without any elevated/service-role
+ * privilege: the operator update policy already allows it, and RLS blocks
+ * touching anyone else's listing.
+ */
+export function userClient(accessToken: string) {
+  if (!url || !anonKey) return null;
+  return createClient(url, anonKey, {
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+    auth: { persistSession: false },
+  });
+}

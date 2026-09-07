@@ -7,6 +7,7 @@ import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { ListingCard } from "@/components/ListingCard";
 import { TourDetail } from "@/components/TourDetail";
 import { BookingCta } from "@/components/BookingCta";
+import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
 import { Button } from "@/components/ui/button";
 import { findListing, typeLabels } from "@/data/listings";
 import { useListings } from "@/contexts/ListingsContext";
@@ -20,6 +21,8 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
       <div className="min-h-screen bg-paper"><SiteHeader /><div className="container py-24 text-center"><p className="eyebrow">Place not found</p><h1 className="mt-4 font-display text-6xl">This path ends here.</h1><Button asChild className="mt-7 rounded-none bg-apricot text-white"><Link href="/explore">Return to the marketplace</Link></Button></div></div>
     );
   }
+
+  const blockedRanges = listings.find((l) => l.id === listing.id)?.blockedRanges ?? [];
 
   // Tours get a dedicated GetYourGuide-style detail layout; stays and
   // restaurants keep the original shared template below.
@@ -104,6 +107,12 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
               </div>
             <BookingCta slug={listing.slug} className="mt-5" />
               <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">Online booking and payment are launching soon.</p>
+              {blockedRanges.length > 0 && (
+                <div className="mt-5 border-t border-basalt/10 pt-5">
+                  <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">Availability</p>
+                  <AvailabilityCalendar blockedRanges={blockedRanges} />
+                </div>
+              )}
             </div>
           </aside>
         </section>

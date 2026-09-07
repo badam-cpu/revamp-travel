@@ -19,6 +19,7 @@ import { useListings } from "@/contexts/ListingsContext";
 import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { TourCard } from "@/components/TourCard";
 import { BookingCta } from "@/components/BookingCta";
+import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
 import { Button } from "@/components/ui/button";
 import { factValue, otherFacts } from "@/lib/tourFacts";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,7 @@ export function TourDetail({ listing }: { listing: Listing }) {
   const { listings } = useListings();
   const [activeImage, setActiveImage] = useState(0);
   const [travelers, setTravelers] = useState(2);
+  const blockedRanges = listings.find((l) => l.id === listing.id)?.blockedRanges ?? [];
 
   const images = listing.gallery.length ? listing.gallery : [listing.image];
   const duration = factValue(listing, "Duration");
@@ -163,6 +165,16 @@ export function TourDetail({ listing }: { listing: Listing }) {
             <p className="mt-3 max-w-md text-sm leading-6 text-basalt/55">Use the map as a starting reference — exact meeting details are shared once a date is confirmed.</p>
             <ArmeniaMap listings={[listing]} single className="mt-6 h-[360px]" />
           </div>
+
+          {blockedRanges.length > 0 && (
+            <div className="mt-10 border-t border-basalt/10 pt-8">
+              <p className="eyebrow">Availability</p>
+              <h2 className="mt-3 font-display text-3xl tracking-[-0.03em]">When you can go.</h2>
+              <div className="mt-6 max-w-sm">
+                <AvailabilityCalendar blockedRanges={blockedRanges} />
+              </div>
+            </div>
+          )}
         </div>
 
         <aside>
