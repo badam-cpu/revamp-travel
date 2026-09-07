@@ -23,15 +23,32 @@ if (!isSupabaseConfigured) {
   );
 }
 
-// When the env vars are absent we still construct a client, but with a
-// placeholder URL/key so `createClient` doesn't THROW at import time —
-// @supabase/supabase-js rejects an empty URL with "supabaseUrl is required",
-// which would crash the whole SPA to a blank page before React even mounts.
-// With the placeholder the app renders normally and every Supabase call simply
-// fails and is caught: ListingsContext falls back to the static seed
-// (`offline: true`) and Auth stays signed-out. This is the documented
-// "read-only seed fallback" behavior; real credentials make it live.
+// `createClient` throws at import time if the URL is missing ("supabaseUrl is
+// required") OR malformed ("Invalid supabaseUrl: Must be a valid HTTP or HTTPS
+// URL" — e.g. a value set without the https:// prefix). Either throw would
+// crash the whole SPA to a blank page before React even mounts. So build the
+// client defensively: try the real config, and on ANY failure fall back to a
+// harmless placeholder client. With the placeholder the app still renders and
+// every Supabase call simply fails and is caught — ListingsContext falls back
+// to the static seed (`offline: true`) and Auth stays signed-out (the
+// documented read-only fallback). A misconfigured env var thus degrades the
+// site instead of taking it down; correct credentials make it live.
 const PLACEHOLDER_URL = "https://placeholder.invalid";
 const PLACEHOLDER_KEY = "placeholder-anon-key";
 
-export const supabase = createClient(url || PLACEHOLDER_URL, anonKey || PLACEHOLDER_KEY);
+function makeClient() {
+  if (isSupabaseConfigured) {
+    try {
+      return createClient(url as string, anonKey as string);
+    } catch (err) {
+      console.error(
+        "Invalid VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY — falling back to the read-only seed. " +
+          "The URL must be the full https://<project-ref>.supabase.co from Settings → API.",
+        err,
+      );
+    }
+  }
+  return createClient(PLACEHOLDER_URL, PLACEHOLDER_KEY);
+}
+
+export const supabase = makeClient();
