@@ -45,7 +45,7 @@ export function ListingCard({ listing, large = false, active = false, onHover }:
         </div>
         <div className="mt-4 flex items-center justify-between border-t border-basalt/10 pt-3 text-xs text-basalt/50">
           <span>{listing.tags.slice(0, 2).join(" · ")}</span>
-          <span><strong className="text-sm text-basalt">{listing.priceLabel}</strong> / {listing.priceUnit}</span>
+          <span><strong className="text-sm text-basalt">{listing.priceLabel}</strong>{listing.price > 0 ? ` / ${listing.priceUnit}` : ""}</span>
         </div>
       </Link>
     </article>

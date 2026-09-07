@@ -38,7 +38,7 @@ export default function MapPage() {
                 <div>
                   <p className="flex items-center gap-1 text-[10px] uppercase tracking-[0.14em] text-paper/45"><MapPin className="h-3 w-3 text-apricot" /> {listing.city}</p>
                   <h2 className="mt-1 font-display text-xl leading-tight group-hover:text-apricot">{listing.title}</h2>
-                  <div className="mt-2 flex items-center justify-between text-xs text-paper/45"><span>{typeLabels[listing.type]}</span><span>{listing.priceLabel} / {listing.priceUnit} <ArrowRight className="ml-1 inline h-3 w-3" /></span></div>
+                  <div className="mt-2 flex items-center justify-between text-xs text-paper/45"><span>{typeLabels[listing.type]}</span><span>{listing.priceLabel}{listing.price > 0 ? ` / ${listing.priceUnit}` : ""} <ArrowRight className="ml-1 inline h-3 w-3" /></span></div>
                 </div>
               </Link>
             ))}

@@ -151,7 +151,10 @@ function ListingFormDialog({
       if (!fieldValue("lat") || !fieldValue("lng") || Number.isNaN(lat) || Number.isNaN(lng)) return fail("Add the latitude and longitude.");
       if (lat < 38 || lat > 42 || lng < 43 || lng > 47) return fail("Coordinates must be inside Armenia (lat 38–42, lng 43–47).");
     }
-    if (s === 2 && (!fieldValue("shortDescription") || !fieldValue("longDescription"))) return fail("Add a short and a full description.");
+    if (s === 2) {
+      if (!fieldValue("shortDescription") || !fieldValue("longDescription")) return fail("Add a short and a full description.");
+      if (!(Number(fieldValue("price")) > 0)) return fail("Set a price greater than $0.");
+    }
     setStepError(null);
     return true;
   };
@@ -261,7 +264,7 @@ function ListingFormDialog({
             <div className="grid gap-1.5"><Label htmlFor="longDescription">Full description</Label><Textarea id="longDescription" name="longDescription" rows={4} placeholder="The full write-up shown on the listing page." defaultValue={draft.longDescription} /></div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-1.5"><Label htmlFor="price">Price ({draft.type === "stay" ? "per night" : "per person"})</Label><Input id="price" name="price" type="number" min={0} defaultValue={draft.price} /></div>
+              <div className="grid gap-1.5"><Label htmlFor="price">Price ({draft.type === "stay" ? "per night" : "per person"})</Label><Input id="price" name="price" type="number" min={1} placeholder="e.g. 120" defaultValue={draft.price || ""} /></div>
               <div className="grid gap-1.5"><Label htmlFor="priceUnit">Price unit label</Label><Input id="priceUnit" name="priceUnit" placeholder={draft.type === "stay" ? "night" : "person"} defaultValue={draft.priceUnit} /></div>
             </div>
 
@@ -490,7 +493,7 @@ function DashboardSection({ type, title, description }: { type: ListingType; tit
                     <p className="truncate font-display text-xl leading-tight">{listing.title}</p>
                     <StatusBadge status={listing.status} />
                   </div>
-                  <p className="mt-1 text-xs text-basalt/50">{listing.city}, {listing.region} · {listing.priceLabel} / {listing.priceUnit}</p>
+                  <p className="mt-1 text-xs text-basalt/50">{listing.city}, {listing.region} · {listing.priceLabel}{listing.price > 0 ? ` / ${listing.priceUnit}` : ""}</p>
                   {listing.status === "draft" && listing.reviewNote && (
                     <p className="mt-2 max-w-md border-l-2 border-destructive/40 pl-2 text-xs leading-5 text-basalt/60">
                       <span className="font-semibold text-destructive">Admin feedback:</span> {listing.reviewNote}
