@@ -1,6 +1,9 @@
-/** Thin fetch wrappers around the Express API in `server/routes.ts`. */
-import type { Listing, ListingInput } from "@shared/listings";
-
+/**
+ * Thin fetch wrapper around the one remaining server route — the AI trip
+ * planner (server/routes.ts). Listings CRUD used to live here too; it's
+ * gone now that listings read/write straight from Supabase under
+ * Row-Level Security (see client/src/contexts/ListingsContext.tsx).
+ */
 export class ApiError extends Error {}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -14,28 +17,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(body?.error || `Request failed (${res.status}).`);
   }
   return body as T;
-}
-
-export function getListings(): Promise<Listing[]> {
-  return request<{ listings: Listing[] }>("/api/listings").then((d) => d.listings);
-}
-
-export function createListing(input: ListingInput): Promise<Listing> {
-  return request<{ listing: Listing }>("/api/listings", {
-    method: "POST",
-    body: JSON.stringify(input),
-  }).then((d) => d.listing);
-}
-
-export function updateListing(id: string, input: ListingInput): Promise<Listing> {
-  return request<{ listing: Listing }>(`/api/listings/${encodeURIComponent(id)}`, {
-    method: "PUT",
-    body: JSON.stringify(input),
-  }).then((d) => d.listing);
-}
-
-export function deleteListing(id: string): Promise<void> {
-  return request<void>(`/api/listings/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 export interface PlanTripParams {

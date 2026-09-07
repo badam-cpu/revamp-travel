@@ -7,6 +7,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Listing } from "../shared/listings.js";
 
+/** Only what catalogDigest() actually reads — lets the caller pass a lightweight Supabase projection instead of a full Listing. */
+export type CatalogEntry = Pick<Listing, "type" | "title" | "city" | "region" | "priceLabel" | "priceUnit" | "shortDescription">;
+
 export class PlannerError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -57,7 +60,7 @@ function getClient(): Anthropic {
   return client;
 }
 
-function catalogDigest(listings: Listing[]): string {
+function catalogDigest(listings: CatalogEntry[]): string {
   const byType = (type: Listing["type"]) =>
     listings
       .filter((l) => l.type === type)
@@ -76,7 +79,7 @@ function catalogDigest(listings: Listing[]): string {
   ].join("\n");
 }
 
-function buildPrompt(params: PlanTripParams, listings: Listing[]): string {
+function buildPrompt(params: PlanTripParams, listings: CatalogEntry[]): string {
   return `You are the trip-planning assistant for Revamp Travel, an Armenia-focused travel marketplace. Build a ${params.days}-day Armenia itinerary starting from ${params.startCity}, for ${params.travelers} traveler(s), at a "${params.pace}" pace and "${params.budget}" budget level. Focus on these interests: ${params.interests.length ? params.interests.join(", ") : "a good general mix"}.
 
 Ground the plan in Revamp Travel's real catalog below — mention specific stays, restaurants, and tours by name where they genuinely fit the route (you don't need to use all of them, and you may add small logistics like driving time or a market stop even if it's not in the catalog). Do not invent star ratings, review counts, or "verified" claims — none of these listings have them.
@@ -141,7 +144,7 @@ function validateItinerary(value: unknown): Itinerary {
   };
 }
 
-export async function planTrip(params: PlanTripParams, listings: Listing[]): Promise<Itinerary> {
+export async function planTrip(params: PlanTripParams, listings: CatalogEntry[]): Promise<Itinerary> {
   const anthropic = getClient();
   const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5";
 

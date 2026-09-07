@@ -6,16 +6,19 @@
  * SPA is served by Netlify's CDN from `dist/public`, so this function carries
  * only the API — no static-file serving.
  *
+ * Since Milestone A the Express API serves exactly one route, `POST
+ * /api/plan-trip` (the AI planner); accounts and listings go straight from the
+ * browser to Supabase under RLS, not through this function.
+ *
  * Routing: `netlify.toml` rewrites `/api/*` to `/.netlify/functions/api/:splat`
- * (status 200). The Express routes are all declared under `/api/*`, so the path
+ * (status 200). The Express routes are declared under `/api/*`, so the path
  * Express sees must start with `/api`. Depending on the Netlify runtime, the
- * event path can arrive as the original request path (`/api/listings`), the
- * rewritten function path (`/.netlify/functions/api/listings`), or just the
- * splat (`/listings`). We normalize all three back to `/api/...` before handing
+ * event path can arrive as the original request path (`/api/plan-trip`), the
+ * rewritten function path (`/.netlify/functions/api/plan-trip`), or just the
+ * splat (`/plan-trip`). We normalize all three back to `/api/...` before handing
  * the event to Express so route matching is deterministic.
  */
 import serverless from "serverless-http";
-import { connectLambda } from "@netlify/blobs";
 import { app } from "../../server/app.js";
 
 const FUNCTION_PREFIX = "/.netlify/functions/api";
@@ -44,14 +47,6 @@ function normalizeApiPath(rawPath: string | undefined): string {
 // Loosely typed: this file is bundled by Netlify's esbuild and is intentionally
 // outside tsconfig's `include`, so it isn't part of `pnpm check`.
 export const handler = async (event: any, context: any) => {
-  // This is a classic Lambda-signature function (serverless-http). Netlify's
-  // automatic Blobs configuration only applies to v2 functions, so classic
-  // functions must hand the Blobs runtime context from the event to
-  // @netlify/blobs explicitly. Without this, getStore() in server/store.ts
-  // throws MissingBlobsEnvironmentError. This shares module state with the
-  // dynamic import in store.ts (same bundled @netlify/blobs instance).
-  connectLambda(event);
-
   const normalized = normalizeApiPath(event?.path);
   event.path = normalized;
   if (typeof event?.rawPath === "string") event.rawPath = normalized;

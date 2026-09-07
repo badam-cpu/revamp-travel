@@ -6,6 +6,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { ListingCard } from "@/components/ListingCard";
 import { TourDetail } from "@/components/TourDetail";
+import { BookingCta } from "@/components/BookingCta";
 import { Button } from "@/components/ui/button";
 import { findListing, typeLabels } from "@/data/listings";
 import { useListings } from "@/contexts/ListingsContext";
@@ -35,7 +36,6 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   }
 
   const related = listings.filter((item) => item.id !== listing.id && (item.type === listing.type || item.region === listing.region)).slice(0, 3);
-  const action = listing.type === "stay" ? "Check dates" : "Reserve a table";
 
   return (
     <div className="min-h-screen bg-paper text-basalt">
@@ -102,8 +102,8 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
                 <div className="border border-basalt/10 bg-paper p-3"><Clock3 className="mb-2 h-4 w-4 text-sevan" /> Flexible timing</div>
                 <div className="border border-basalt/10 bg-paper p-3"><Users className="mb-2 h-4 w-4 text-tuff" /> Small scale</div>
               </div>
-            <Button className="mt-5 h-12 w-full rounded-none bg-apricot text-white hover:bg-apricot/90" onClick={() => toast("Your date has been noted. Live availability would connect here.")}>{action}</Button>
-              <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">No payment is taken in this marketplace concept.</p>
+            <BookingCta slug={listing.slug} className="mt-5" />
+              <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">Online booking and payment are launching soon.</p>
             </div>
           </aside>
         </section>
@@ -131,7 +131,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
 
       <div className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between border-t border-basalt/10 bg-paper/95 px-4 py-3 shadow-[0_-10px_30px_rgba(35,35,33,0.08)] backdrop-blur lg:hidden">
         <p><strong className="font-display text-2xl font-normal">{listing.priceLabel}</strong> <span className="text-xs text-basalt/45">/ {listing.priceUnit}</span></p>
-        <Button className="rounded-none bg-apricot text-white" onClick={() => toast("Live availability would connect here.")}>{action}</Button>
+        <BookingCta slug={listing.slug} variant="compact" />
       </div>
       <SiteFooter />
     </div>

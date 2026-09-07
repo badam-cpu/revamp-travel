@@ -5,13 +5,16 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { AuthProvider } from "./contexts/AuthContext";
 import { ListingsProvider } from "./contexts/ListingsContext";
 import Home from "./pages/Home";
 import Explore from "./pages/Explore";
 import Tours from "./pages/Tours";
 import MapPage from "./pages/MapPage";
 import ListingPage from "./pages/ListingPage";
-import Manage from "./pages/Manage";
+import Dashboard from "./pages/Dashboard";
+import Login from "./pages/Login";
+import Signup from "./pages/Signup";
 import Plan from "./pages/Plan";
 
 function Router() {
@@ -23,7 +26,9 @@ function Router() {
       <Route path="/explore">{() => <Explore />}</Route>
       <Route path="/map" component={MapPage} />
       <Route path="/plan" component={Plan} />
-      <Route path="/manage" component={Manage} />
+      <Route path="/dashboard" component={Dashboard} />
+      <Route path="/login" component={Login} />
+      <Route path="/signup" component={Signup} />
       <Route path="/listing/:slug">{(params) => <ListingPage params={params} />}</Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
@@ -35,12 +40,14 @@ function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">
-        <ListingsProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Router />
-          </TooltipProvider>
-        </ListingsProvider>
+        <AuthProvider>
+          <ListingsProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Router />
+            </TooltipProvider>
+          </ListingsProvider>
+        </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

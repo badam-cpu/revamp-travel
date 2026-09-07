@@ -1,28 +1,29 @@
 # Revamp Travel Marketplace
 
-Revamp Travel is a polished Armenian travel-discovery marketplace for browsing places to stay, restaurants, tours, and regional experiences. It combines editorial storytelling with client-side search, category and region filters, a responsive interactive Armenia atlas, shared detail pages, an editable stay/tour catalog, and an AI trip planner.
+Revamp Travel is a two-sided Armenian travel marketplace. Travelers browse places to stay, restaurants, tours, and regional experiences through editorial content, search, and an interactive Armenia atlas. Operators sign up for their own account and publish their own stay/tour listings, which appear everywhere immediately alongside everyone else's. An AI trip planner generates itineraries grounded in the live, published catalog.
 
 ## Current Status
 
-The repository is a **full-stack application**: a React SPA in front of a small Express API with file-backed persistence. It demonstrates the full discovery journey and now supports a real, shared, editable inventory for stays and tours plus AI-generated itineraries — but it still has no reservation processing, accounts, payments, or real booking availability. Displayed rates remain illustrative.
+The repository is a **full-stack application**: a React SPA talking directly to **Supabase** (Postgres + Auth + Row-Level Security) for accounts and listings, in front of a small Express API that does one remaining job — the Anthropic-backed trip planner. This is **Milestone A**: real accounts, real operator-owned listings, real RLS-enforced ownership — but **no real payments yet**. Booking CTAs are honest about that: signed out shows "Sign in to book"; signed in shows a disabled "Payments coming soon" state. Displayed rates are real (`price_cents` on each listing) but nothing is charged yet — that's Milestone B (Stripe), scoped in `CLAUDE.md` but not built.
 
 | Area | Included |
 | --- | --- |
 | Home discovery | Hero, unified search, category gateways, featured listings, regions, atlas preview, and closing CTA. |
 | Marketplace catalog | Text search, category filters, region filter, empty state, responsive cards, and desktop/mobile map presentation. |
-| Listings | Shared stay, restaurant, and tour detail page with gallery, facts, amenities, date input, location atlas, and related records. |
-| **Manage (`/manage`)** | **Add, edit, and delete stay and tour listings** through a form UI. Changes persist server-side and appear everywhere (cards, filters, map, detail pages) immediately for every visitor. Restaurants stay editorial/static. |
-| **AI Trip Planner (`/plan`)** | **A day-by-day itinerary generator** that calls the Anthropic API server-side, grounded in the site's *live* stay/tour/restaurant catalog. Requires `ANTHROPIC_API_KEY` (see Environment below). |
+| Listings | Shared stay/restaurant detail template plus a dedicated GetYourGuide-style tour detail layout, both with gallery, facts, amenities, an auth-aware booking CTA, location atlas, and related records. |
+| **Accounts (`/login`, `/signup`)** | Self-serve sign-up as a **traveler** or an **operator**, backed by Supabase Auth. |
+| **Operator dashboard (`/dashboard`)** | **Add, edit, and delete your own stay and tour listings** through a form UI. Writes go straight to Supabase, scoped to the signed-in operator by Row-Level Security — not by anything the client enforces. Restaurants stay editorial/seed-only. |
+| **AI Trip Planner (`/plan`)** | **A day-by-day itinerary generator** that calls the Anthropic API server-side, grounded in the site's *live, published* stay/tour/restaurant catalog. Requires `ANTHROPIC_API_KEY` (see Environment below). |
 | Maps | Deterministic SVG-based Armenia atlas with price markers and synchronized selection. No external map key is required. |
 | Brand | Revamp brandbook implementation with lowercase `revamp.` wordmark, `re.` compact mark, #F15822 orange, #212121 charcoal, white, rounded geometry, and sans typography. |
 
 ## Technology
 
-React 19, TypeScript, Vite 7, Tailwind CSS 4, Wouter, Radix UI/shadcn components, Lucide icons, and Sonner on the client. Express, Zod, and the official `@anthropic-ai/sdk` on the server. Listings persist to a JSON file (`server/data/listings.json`, created and seeded automatically); there is no external database to provision.
+React 19, TypeScript, Vite 7, Tailwind CSS 4, Wouter, Radix UI/shadcn components, Lucide icons, and Sonner on the client, talking directly to Supabase (`@supabase/supabase-js`) for auth and listings. Express, Zod, and the official `@anthropic-ai/sdk` remain server-side for the one route that needs a secret the browser can't hold — the AI trip planner. No JSON file or in-process store is used for listings anymore.
 
 ## Requirements
 
-Use Node.js 22 or newer and pnpm 10 or newer.
+Use Node.js 22 or newer and pnpm 10 or newer, and a Supabase project (free tier is fine).
 
 ```bash
 node --version
@@ -33,11 +34,28 @@ pnpm --version
 
 ```bash
 pnpm install
-cp .env.example .env   # then fill in ANTHROPIC_API_KEY to enable /plan
+cp .env.example .env
+# fill in VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY to run against real accounts + listings
+# fill in ANTHROPIC_API_KEY to enable /plan
 pnpm dev
 ```
 
-`pnpm dev` runs two processes together (via `concurrently`): Vite (the client, with HMR) and the Express API (`server/index.ts` via `tsx watch`, on `API_PORT`, default `3001`). Vite proxies `/api/*` requests to it, so open the URL Vite prints — there's nothing to visit on the API's own port directly.
+Without the Supabase vars set, the app still runs and browses using the static `shared/listings.ts` seed as a read-only fallback (`ListingsContext` reports `offline: true`) — enough to look at the UI, but sign-up, sign-in, and any write will fail. See "Supabase Setup" below to get real data flowing.
+
+`pnpm dev` runs two processes together (via `concurrently`): Vite (the client, with HMR) and the Express API (`server/index.ts` via `tsx watch`, on `API_PORT`, default `3001`) — the API process only serves `/api/plan-trip` now. Vite proxies `/api/*` requests to it, so open the URL Vite prints — there's nothing to visit on the API's own port directly.
+
+## Supabase Setup
+
+1. Create a project at supabase.com. From its API settings, copy the **Project URL** and **anon/public key** into `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` in your `.env`.
+2. Run `supabase/migrations/0001_init.sql` once against that project — paste it into the SQL Editor, or use `supabase db push`/`psql` with the CLI. This creates `profiles`, `listings`, their triggers, and every Row-Level Security policy the app depends on.
+3. Start the app (`pnpm dev`, or deploy it) and sign up for a real account at `/signup`, choosing **Operator**. This becomes the house "Revamp" account that will own the seed catalog.
+4. Locally only, add `SUPABASE_SERVICE_ROLE_KEY` (from the same API settings page — keep this one secret), `SEED_OPERATOR_EMAIL`, and `SEED_OPERATOR_PASSWORD` (the account from step 3) to your `.env`, then run:
+
+   ```bash
+   pnpm seed:catalog
+   ```
+
+   This imports `shared/listings.ts`'s seed stays/tours/restaurants into the real `listings` table under that operator account. It's safe to re-run — existing rows are matched by slug and skipped. See `scripts/seed-catalog.ts`'s header comment for exactly why it needs the service-role key for restaurants specifically.
 
 ## Validation and Production Build
 
@@ -53,7 +71,7 @@ pnpm preview
 pnpm start
 ```
 
-This single process serves the built SPA **and** the `/api/*` routes on one `PORT` (default `3000`).
+This single process serves the built SPA **and** the `/api/plan-trip` route on one `PORT` (default `3000`).
 
 ## Project Structure
 
@@ -67,41 +85,51 @@ client/
     components/
       ui/
       ArmeniaMap.tsx
+      BookingCta.tsx         # auth-aware booking CTA, shared by every listing detail layout
       BrandMark.tsx
       ListingCard.tsx
+      RequireRole.tsx        # route guard for /dashboard
       SearchBar.tsx
       SiteFooter.tsx
-      SiteHeader.tsx
+      SiteHeader.tsx          # includes the auth-aware account menu
+      TourCard.tsx
+      TourDetail.tsx
     contexts/
       ThemeContext.tsx
-      ListingsContext.tsx   # live catalog: fetches /api/listings, exposes create/update/delete
+      AuthContext.tsx         # Supabase Auth session/profile state
+      ListingsContext.tsx     # live catalog: reads/writes the Supabase `listings` table directly
     data/
-      listings.ts           # thin compatibility barrel over shared/listings.ts
+      listings.ts             # thin compatibility barrel over shared/listings.ts
     lib/
-      api.ts                 # fetch wrappers for the Express API
+      api.ts                   # fetch wrapper for the one remaining server route, /api/plan-trip
+      supabase.ts               # browser Supabase client
+      slug.ts                   # slugify() for new listing titles
+      tourFacts.ts
     pages/
       Explore.tsx
       Home.tsx
       ListingPage.tsx
-      Manage.tsx             # add/edit/delete stays & tours
+      Dashboard.tsx            # operator-only: add/edit/delete own stay & tour listings
+      Login.tsx
+      Signup.tsx
       MapPage.tsx
-      Plan.tsx               # AI trip planner
+      Plan.tsx                 # AI trip planner
+      Tours.tsx
       NotFound.tsx
     App.tsx
     index.css
     main.tsx
 server/
-  app.ts                     # the Express app (routes + JSON parsing), exported for reuse
-  index.ts                   # Node entrypoint: imports app, adds static SPA serving + listen()
-  routes.ts                  # /api/listings CRUD + /api/plan-trip, with Zod validation
-  store.ts                   # persistence: JSON file locally, Netlify Blobs on Netlify (same contract)
-  planner.ts                 # Anthropic API call + prompt/response handling for the trip planner
-netlify/
-  functions/
-    api.ts                   # wraps server/app.ts with serverless-http (Netlify Function)
-netlify.toml                 # build, functions dir, /api rewrite, SPA fallback
+  index.ts                   # Express app: JSON body parsing, API routes, static SPA serving
+  routes.ts                  # POST /api/plan-trip only — listings CRUD is gone (Supabase + RLS replaced it)
+  supabase.ts                 # read-only, anon-key-only server client for the planner's catalog digest
+  planner.ts                  # Anthropic API call + prompt/response handling for the trip planner
+supabase/
+  migrations/0001_init.sql    # profiles + listings schema, triggers, and every RLS policy
+scripts/
+  seed-catalog.ts              # one-time import of shared/listings.ts into the live `listings` table
 shared/
-  listings.ts                # canonical Listing type, seed data, and constants (client + server)
+  listings.ts                # canonical Listing type, seed data, and constants (client + server + scripts)
   const.ts
 CLAUDE.md
 brandbook-implementation.md
@@ -117,20 +145,22 @@ ENVIRONMENT.md
 | `/explore` | All listings with search and filters. |
 | `/explore/stay` | Stay category. |
 | `/explore/eat` | Restaurant category. |
-| `/explore/tour` | Tour category. |
+| `/explore/tour` | Tour category (dedicated GetYourGuide-style browser). |
 | `/map` | Full map-led discovery. |
 | `/listing/:slug` | Individual listing detail. |
 | `/plan` | AI trip planner. |
-| `/manage` | Add, edit, and delete stay and tour listings. |
+| `/dashboard` | Operator-only: add, edit, and delete your own stay and tour listings. |
+| `/login` | Sign in. |
+| `/signup` | Sign up as a traveler or an operator. |
 
 ## Editing Inventory
 
 Two ways, depending on what you're doing:
 
-- **Day to day / for real users:** open `/manage` and use the form UI. Writes go through `POST`/`PUT`/`DELETE /api/listings/:id` (validated with Zod in `server/routes.ts`) and persist to `server/data/listings.json`. Every page reads the live catalog through `ListingsContext` (`client/src/contexts/ListingsContext.tsx`), so changes show up everywhere immediately — cards, filters, map markers, related content, and slug-based detail pages.
-- **Seeding a fresh install:** `shared/listings.ts` is the one-time seed `server/store.ts` writes to `server/data/listings.json` the first time it runs. Editing it after that file already exists has no effect on a running deployment — delete `server/data/listings.json` (or use a fresh environment) to reseed. Restaurants (`type: "eat"`) are seed/editorial-only; the API refuses to create, edit, or delete them (`EDITABLE_LISTING_TYPES` in `shared/listings.ts` covers `stay` and `tour` only) so the curated table content can't be edited away by mistake.
+- **Day to day / for real operators:** sign up at `/signup` as an operator, then open `/dashboard` and use the form UI. Writes go straight to the Supabase `listings` table and are scoped to your own account by Row-Level Security (`supabase/migrations/0001_init.sql`) — the client doesn't (and can't) enforce that on its own. Every page reads the live catalog through `ListingsContext` (`client/src/contexts/ListingsContext.tsx`), so published changes show up everywhere immediately — cards, filters, map markers, related content, and slug-based detail pages.
+- **Seeding a fresh install:** `shared/listings.ts` is the one-time source `pnpm seed:catalog` (`scripts/seed-catalog.ts`) imports into the Supabase `listings` table under a house "Revamp" operator account — see Supabase Setup above. Editing `shared/listings.ts` after that only affects a future `pnpm seed:catalog` run (it's safe to re-run; existing rows are matched by slug and skipped), never already-live rows. Restaurants (`type: "eat"`) are seed/editorial-only; RLS has no insert policy for `type = 'eat'` at all, so no operator — including the house account — can create, edit, or delete one through the normal app (`EDITABLE_LISTING_TYPES` in `shared/listings.ts` covers `stay` and `tour` only).
 
-Either way: keep coordinates within Armenia (lat 38–42, lng 43–47 — enforced server-side) and don't add invented customer ratings, reviews, testimonials, booking counts, or verification claims.
+Either way: keep coordinates within Armenia (lat 38–42, lng 43–47 — enforced by a database check constraint) and don't add invented customer ratings, reviews, testimonials, booking counts, or verification claims.
 
 ## Brand Guidance
 
@@ -138,43 +168,30 @@ Read `brandbook-implementation.md` before visual changes. The formal brand syste
 
 ## Assets and Portability
 
-Image URLs are defined in `shared/listings.ts`. This fork replaced the original Manus-managed `/manus-storage/...` paths — and the previous build's hardcoded `images.unsplash.com` photo IDs, which this environment had no way to verify were still live — with self-hosted brand illustrations under `client/public/images/` (plain SVG, no external requests). The marketplace now has **zero external image dependencies** and works fully offline/air-gapped for images. Swap in real photography whenever it's available: update the `assets` map at the top of `shared/listings.ts`, or set an `image` URL per listing through `/manage`.
+Image URLs are defined in `shared/listings.ts`. All shipped imagery is self-hosted brand illustration under `client/public/images/` (plain SVG, no external requests) — the marketplace has **zero external image dependencies** and works fully offline/air-gapped for images. Swap in real photography whenever it's available: update the `assets` map at the top of `shared/listings.ts` and re-seed, or set an `image` URL per listing through `/dashboard` (stay/tour only).
 
 ## Environment
 
-The **catalog and browsing experience need no secrets.** The **AI trip planner needs `ANTHROPIC_API_KEY`** (server-side only — it's never sent to the browser). See `ENVIRONMENT.md` for the full list of variables, including the optional `ANTHROPIC_MODEL` override and the dev-only `API_PORT`.
+The catalog and browsing experience work read-only without any secrets (using the static seed as a fallback), but **need `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` for accounts and real writes**. The **AI trip planner needs `ANTHROPIC_API_KEY`** (server-side only — it's never sent to the browser). See `ENVIRONMENT.md` for the full list of variables, including the seed-script-only Supabase service-role key and the optional `ANTHROPIC_MODEL`/`API_PORT` overrides.
 
 ## Claude Code
 
-Claude Code should read `CLAUDE.md` first. That file documents the architecture, non-negotiable content and brand constraints, route behavior, component conventions, asset model, quality gates, and common change recipes.
+Claude Code should read `CLAUDE.md` first. That file documents the architecture, non-negotiable content/brand/payment-honesty constraints, the Supabase data model and RLS design, route behavior, component conventions, asset model, quality gates, and common change recipes.
 
-## Deployment
+## Deployment Note
 
-The server does real, deliberate backend work (see CLAUDE.md): it persists listings and calls the Anthropic API for trip planning. There's still no authentication, real reservations, payments, or private user accounts — adding those would be its own deliberate upgrade, the same way this one was.
+The server still does one deliberate job (see `CLAUDE.md`): it calls the Anthropic API for trip planning. Everything else — accounts, listings, ownership — is Supabase, protected by Row-Level Security instead of application code. There's still no real payment processing or reservation confirmation; that's Milestone B, a deliberate upgrade the same way this one was, not something to bolt onto `BookingCta.tsx` ad hoc.
 
-### Option A — single Node process (VPS, container, etc.)
+**Single Node process** (VPS/container): run the Supabase migration and seed script once (see Supabase Setup above), build with `pnpm build`, and run `pnpm start` with `PORT`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `ANTHROPIC_API_KEY` set.
 
-Build with `pnpm build`, then run `pnpm start` with `PORT` and `ANTHROPIC_API_KEY` set. This serves the built SPA **and** `/api/*` from one process and persists listings to a JSON file at `server/data/listings.json`, so the process needs a **writable, persistent filesystem**. Good for a single long-running instance.
+### Netlify (serverless)
 
-### Option B — Netlify (serverless)
+This repo is set up to deploy to Netlify, where the API runs as a serverless function rather than a persistent process:
 
-Netlify runs the API as a **serverless function**, not a persistent process, so the listings store switches from the JSON file to **Netlify Blobs** automatically (detected via `process.env.NETLIFY` in `server/store.ts`). Nothing else about the app changes — same routes, same Zod validation, same planner.
-
-Moving parts:
-
-- **`netlify.toml`** — build command `pnpm build` (client → `dist/public`), functions directory `netlify/functions`, an `/api/* → /.netlify/functions/api/:splat` rewrite, and a SPA fallback (`/* → /index.html`) for wouter's client-side routing.
-- **`netlify/functions/api.ts`** — wraps the shared Express `app` (`server/app.ts`) with [`serverless-http`](https://github.com/dougmoscrop/serverless-http). Netlify's CDN serves the static SPA; the function serves only the API.
-- **`server/app.ts`** — the Express `app` (routes + JSON parsing) exported on its own, so both the Node entrypoint (`server/index.ts`) and the Netlify function can import it. `server/index.ts` keeps the static-serving + `listen()` code that only the persistent process needs.
-- **Storage** — `server/store.ts` keeps the file backend for local dev/`pnpm start` and uses a single Netlify Blobs store (`getStore("listings")`, one JSON blob) when running as a function. It seeds from `shared/listings.ts` on first read if the store is empty, mirroring the old fresh-file behavior. Blobs needs no extra credentials from inside a function.
-
-Deploy with the [Netlify CLI](https://docs.netlify.com/cli/get-started/):
-
-```bash
-npm install -g netlify-cli      # if not already installed
-netlify login                   # if not already authenticated
-netlify init                    # first time: create/link a site
-netlify env:set ANTHROPIC_API_KEY <your-key>   # required for /plan
-netlify deploy --build --prod   # build (runs pnpm build + bundles functions) and deploy
-```
-
-Set `ANTHROPIC_API_KEY` (and optionally `ANTHROPIC_MODEL`) in the Netlify site environment — never commit it. If `/plan` returns a 503, confirm the key is set for the context you deployed to (production vs. deploy previews).
+- **`netlify.toml`** — build command `pnpm build` → publish `dist/public`; functions directory `netlify/functions`; an `/api/* → /.netlify/functions/api/:splat` rewrite; and a SPA fallback (`/* → /index.html`) for wouter's client-side routing.
+- **`netlify/functions/api.ts`** — wraps the shared Express `app` (`server/app.ts`) with [`serverless-http`](https://github.com/dougmoscrop/serverless-http). Since Milestone A the API is just `POST /api/plan-trip`; accounts and listings go straight from the browser to Supabase under RLS, so the function no longer touches any storage backend.
+- **Environment variables** (Site configuration → Environment variables):
+  - `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` — needed at **build time** (Vite inlines them into the client) *and* at function runtime (the planner reads the published catalog with the anon key). Set them before the first build or the deployed client falls back to the read-only `shared/listings.ts` seed.
+  - `ANTHROPIC_API_KEY` (and optionally `ANTHROPIC_MODEL`) — runtime only, for `/api/plan-trip`.
+  - Never set `SUPABASE_SERVICE_ROLE_KEY` on Netlify — it's for the local one-time `pnpm seed:catalog` only.
+- Connecting the GitHub repo to Netlify gives continuous deploys on every push to `main`. The Supabase migration and `pnpm seed:catalog` are separate one-time steps (see Supabase Setup).

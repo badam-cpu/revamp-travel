@@ -2,8 +2,10 @@
 import { ArrowUpRight, Instagram, Mail } from "lucide-react";
 import { Link } from "wouter";
 import { BrandMark } from "./BrandMark";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function SiteFooter() {
+  const { profile } = useAuth();
   return (
     <footer className="relative overflow-hidden bg-basalt text-paper">
       <div className="pointer-events-none absolute -bottom-24 right-0 text-[19rem] font-bold leading-none tracking-[-0.12em] text-white/[0.035]">revamp.</div>
@@ -21,7 +23,11 @@ export function SiteFooter() {
             <Link href="/explore/tour" className="hover:text-white">Tours & experiences</Link>
             <Link href="/map" className="hover:text-white">Open the map</Link>
             <Link href="/plan" className="hover:text-white">AI trip planner</Link>
-            <Link href="/manage" className="hover:text-white">Manage listings</Link>
+            {profile?.role === "operator" ? (
+              <Link href="/dashboard" className="hover:text-white">Your dashboard</Link>
+            ) : (
+              <Link href="/signup" className="hover:text-white">Become an operator</Link>
+            )}
           </div>
         </div>
         <div>
@@ -35,7 +41,7 @@ export function SiteFooter() {
       <div className="border-t border-white/10">
         <div className="container flex flex-col gap-2 py-5 text-[11px] text-paper/40 sm:flex-row sm:items-center sm:justify-between">
           <span>© 2026 Revamp Travel.</span>
-          <span>Curated marketplace concept · availability and prices shown are illustrative.</span>
+          <span>Two-sided marketplace · online booking and payment are launching soon.</span>
         </div>
       </div>
     </footer>

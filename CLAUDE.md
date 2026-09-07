@@ -1,10 +1,12 @@
 # Revamp Travel: Claude Code Guide
 
-This file is the primary operating guide for Claude Code. Read it before changing the repository. The application is a **full-stack Armenian travel marketplace**: a React/TypeScript/Vite/Tailwind CSS 4/Wouter/Radix-shadcn/Sonner client in front of a small **Express + Zod** API with file-backed persistence, plus a server-side **Anthropic API** integration for AI trip planning.
+This file is the primary operating guide for Claude Code. Read it before changing the repository. The application is a **full-stack, two-sided Armenian travel marketplace**: a React/TypeScript/Vite/Tailwind CSS 4/Wouter/Radix-shadcn/Sonner client talking directly to **Supabase** (Postgres + Auth + Row-Level Security) for accounts and listings, plus a small **Express + Zod** API that does exactly one remaining job — the server-side **Anthropic API** integration for AI trip planning.
 
 ## Product Intent
 
-Revamp Travel helps visitors discover Armenian places to stay, restaurants, tours, and regions through editorial content, search, filtering, listing cards, an interactive SVG atlas, and individual listing pages. Stay and tour listings are now a **real, shared, editable inventory** (add/edit/delete via `/manage`, persisted server-side and visible to every visitor); restaurants remain curated/editorial content. An **AI trip planner** (`/plan`) generates day-by-day itineraries grounded in the live catalog via the Anthropic API. The product still does not claim live pricing sync, real booking/payment processing, or verified customer feedback.
+Revamp Travel connects two kinds of users. **Travelers** (front-end users) discover Armenian places to stay, restaurants, and tours through editorial content, search, filtering, listing cards, an interactive SVG atlas, and individual listing pages, and can sign up for an account. **Operators** (back-end users — owners, guides, hosts) sign up for their own account and build and publish their own stay/tour listings from `/dashboard`; their listings appear everywhere alongside everyone else's the moment they're published. An **AI trip planner** (`/plan`) generates day-by-day itineraries grounded in the live, published catalog via the Anthropic API.
+
+This is **Milestone A** of the marketplace build: real accounts, real operator-owned listings, real Row-Level Security — but **no real payments yet**. A signed-in traveler sees a plainly-labeled "Payments coming soon" state on every booking CTA instead of a fake confirmation; a signed-out visitor is sent to sign in first. Real Stripe-backed booking and payment collection is **Milestone B**, a deliberate follow-up, not something to bolt on ad hoc — see "Milestone B (not yet built)" near the end of this file.
 
 ## Non-Negotiable Rules
 
@@ -12,13 +14,13 @@ Revamp Travel helps visitors discover Armenian places to stay, restaurants, tour
 | --- | --- |
 | Brandbook | Preserve the lowercase **`revamp.`** wordmark, compact **`re.`** mark, **#F15822** orange, **#212121** charcoal, **#FFFFFF** white, Circular-like sans typography, rounded containers, and large cropped logo patterns. Read `brandbook-implementation.md` before visual work. |
 | Customer content | Never invent customer reviews, ratings, testimonials, booking counts, "verified" claims, or social proof — including inside AI-generated itinerary text. Curatorial labels are acceptable only when clearly editorial. |
-| Inventory claims | Rates and availability are illustrative. Do not imply that payment, reservation, or real-time inventory sync is live. The **listings themselves** are genuinely persisted (stay/tour), which is different from claiming live booking. |
-| Source boundaries | The server does two, and only two, deliberate jobs: (1) CRUD persistence for stay/tour listings (`server/store.ts`, `server/routes.ts`) and (2) the Anthropic-backed trip planner (`server/planner.ts`). Do not add authentication, payments, or other backend surface area without a deliberate upgrade discussion the same way this one happened. |
-| Editable inventory | Only `type: "stay"` and `type: "tour"` listings are editable (`EDITABLE_LISTING_TYPES` in `shared/listings.ts`). Restaurants (`type: "eat"`) must stay creation/edit/delete-proof at the API layer, not just hidden in the UI. |
+| Payments and booking | No booking CTA may claim a payment or reservation succeeded — Milestone A collects no money. Signed-out visitors get "Sign in to book" (`client/src/components/BookingCta.tsx`); signed-in visitors get a disabled "Payments coming soon" state. Don't reintroduce a silent "noted" toast in its place. |
+| Trust boundary | Every trust decision — who owns a listing, who may publish a `stay`/`tour`, that `eat` listings can't be created or edited by any operator — is enforced by Postgres Row-Level Security in `supabase/migrations/0001_init.sql`, never by client-side checks alone. A client-supplied `operatorId` or role must never be trusted; RLS policies key off `auth.uid()` and the `profiles.role` column instead. |
+| Editable inventory | Only `type: "stay"` and `type: "tour"` listings are operator-writable (`EDITABLE_LISTING_TYPES` in `shared/listings.ts`, mirrored by the `type in ('stay','tour')` check in every write policy on `public.listings`). Restaurants (`type: "eat"`) have **no insert policy at all** — not even the seed script's house operator account can create one through the normal client path; `scripts/seed-catalog.ts` uses the service-role key for that one narrow case (see its header comment). |
+| Secrets | `ANTHROPIC_API_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are server-side/local-script only. Never read either from client code, log them, echo them in an API response, or hardcode a fallback. `VITE_SUPABASE_ANON_KEY` is the one Supabase key that's meant to ship to the browser — it's safe specifically because RLS, not the key, is what limits what it can do. |
 | Assets | Site imagery is self-hosted SVG under `client/public/images/` and `client/public/brand/` — no external image hosts (this environment cannot reach arbitrary remote hosts, and it removes a fragile dependency). New imagery should follow the same pattern, or be a real photo the deployer hosts themselves and points `image`/`gallery` at. |
 | Maps | The current map is a deterministic SVG-based Armenia atlas in `client/src/components/ArmeniaMap.tsx`. It requires no API key. Do not replace it with a third-party map unless explicitly requested. |
-| Secrets | `ANTHROPIC_API_KEY` is server-side only. Never read it from client code, log it, echo it in an API response, or hardcode a fallback value. |
-| Routing | Every detail page must retain an escape route. Preserve the global header and back links. |
+| Routing | Every detail page must retain an escape route. Preserve the global header and back links. `/dashboard` must redirect a signed-out visitor to `/login` and a signed-in traveler back to `/` (see `client/src/components/RequireRole.tsx`) — never render the operator form to someone who isn't an operator. |
 | Accessibility | Keep semantic labels, visible focus treatment, keyboard-reachable controls, `SheetDescription` values, image alt text, and reduced-motion behavior. |
 
 ## Fast Start
@@ -27,11 +29,13 @@ Use **Node.js 22+** and **pnpm 10+**.
 
 ```bash
 pnpm install
-cp .env.example .env   # fill in ANTHROPIC_API_KEY to exercise /plan
+cp .env.example .env   # fill in the Supabase vars to run against real data; ANTHROPIC_API_KEY to exercise /plan
 pnpm dev
 ```
 
-`pnpm dev` runs two processes concurrently: Vite (client, HMR, port 3000) and the Express API (`server/index.ts` via `tsx watch`, `API_PORT`, default 3001). Vite proxies `/api/*` to the API process — open the URL Vite prints; there's nothing to visit on the API port directly.
+`pnpm dev` runs two processes concurrently: Vite (client, HMR, port 3000) and the Express API (`server/index.ts` via `tsx watch`, `API_PORT`, default 3001). Vite proxies `/api/*` to the API process — open the URL Vite prints; there's nothing to visit on the API port directly. The API process today only serves `/api/plan-trip`; everything else the client does (auth, listings CRUD) talks to Supabase directly from the browser.
+
+Without `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` set, `ListingsContext` catches the failed request and falls back to the static `shared/listings.ts` seed as a read-only preview (`offline: true`) — enough to look at the UI, but sign-up/sign-in and any write will fail until real Supabase credentials are set.
 
 For validation, run:
 
@@ -42,48 +46,52 @@ pnpm preview   # client-only static preview
 pnpm start     # real production run: one process, built SPA + /api/*
 ```
 
-`pnpm check` runs TypeScript without emitting files. `pnpm build` builds the browser application into `dist/public` and bundles the Express server into `dist/index.js`.
+`pnpm check` runs TypeScript without emitting files (covers `client/`, `server/`, `shared/`, and `scripts/`). `pnpm build` builds the browser application into `dist/public` and bundles the Express server into `dist/index.js`.
 
 ## Repository Map
 
 | Path | Responsibility |
 | --- | --- |
-| `client/src/App.tsx` | Top-level providers (`ThemeProvider`, `ListingsProvider`) and route declarations, including `/plan` and `/manage`. |
+| `client/src/App.tsx` | Top-level providers (`ThemeProvider`, `AuthProvider`, `ListingsProvider`) and route declarations, including `/plan`, `/dashboard`, `/login`, `/signup`. |
 | `client/src/pages/Home.tsx` | Editorial home experience, categories, featured listings, regions, map preview, and main search entry. Reads live listings via `useListings()`. |
 | `client/src/pages/Explore.tsx` | Searchable and filterable marketplace results with desktop list/map split and mobile map sheet. Reads live listings via `useListings()`. |
+| `client/src/pages/Tours.tsx` | Dedicated GetYourGuide-style browser for `/explore/tour` (hero band + search, real-tag category pills, duration buckets, sort, map sheet, boxed card grid). All filters/pills derive from the live catalog's own tags and facts. |
 | `client/src/pages/MapPage.tsx` | Map-led discovery view with synchronized listing rail. Reads live listings via `useListings()`. |
 | `client/src/pages/ListingPage.tsx` | Dispatcher + shared detail-page template. For `type: "tour"` it renders `TourDetail`; for stays and restaurants it renders the original shared layout below. Reads live listings via `useListings()`. |
-| `client/src/pages/Manage.tsx` | Add/edit/delete UI for stay and tour listings. Calls the CRUD API through `client/src/lib/api.ts`; restaurants are shown read-only. |
-| `client/src/pages/Tours.tsx` | Dedicated GetYourGuide-style browser for `/explore/tour` specifically (hero band + search, real-tag category pills, duration buckets, sort, map sheet, boxed card grid). Kept separate from `Explore.tsx` so stay/eat/all keep the original editorial layout. All filters/pills are derived from the live catalog's own tags and facts — never hardcoded categories. |
-| `client/src/components/TourCard.tsx` | Boxed activity card used on `/explore/tour` and in the "more tours like this" strip on a tour detail page: hoverable photo carousel from the listing's `gallery`, and a duration/group/level facts row in the slot where a card like this would normally show star ratings — deliberate, since fabricated ratings/reviews are banned (see Non-Negotiable Rules). |
-| `client/src/components/TourDetail.tsx` | GetYourGuide-style detail layout for `type: "tour"` listings only, rendered by `ListingPage.tsx`. Hero + thumbnail filmstrip (any gallery length, not a hardcoded slice), a quick-facts row, overview, "what's included", a starting-point map, a sticky price/travelers-count/date booking card, and related tours as `TourCard`s. |
-| `client/src/lib/tourFacts.ts` | `factValue()`/`otherFacts()` — reads a listing's loosely-typed `facts` array by label with fallbacks (e.g. "Group" or "Format"), since `/manage` lets hosts type any label. Used by both `TourCard` and `TourDetail` so they read host-added tours the same way. |
-| `client/src/pages/Plan.tsx` | AI trip planner UI: trip-parameter form plus itinerary result panel (loading/error/empty/success). Calls `POST /api/plan-trip`. |
-| `client/src/pages/NotFound.tsx` | Branded fallback route. |
-| `client/src/contexts/ListingsContext.tsx` | Fetches `/api/listings` on mount, exposes `listings`, `create`/`update`/`remove`, `refresh()`, and an `offline` flag (falls back to `shared/listings.ts` seed data if the API is unreachable). |
-| `client/src/lib/api.ts` | Typed fetch wrappers for `/api/listings` CRUD and `/api/plan-trip`; `ApiError` for structured error handling. |
-| `client/src/data/listings.ts` | Thin compatibility barrel re-exporting types/constants/seed data from `shared/listings.ts` (kept so existing type-only importers didn't need to change). |
-| `shared/listings.ts` | **Canonical** `Listing`/`ListingInput` types, `EDITABLE_LISTING_TYPES`, seed data, regions, labels, and image asset map. Imported by the client via the `@shared/*` alias and by the server via relative `../shared/*.js` paths. |
+| `client/src/components/TourCard.tsx` / `TourDetail.tsx` | Boxed activity card and GetYourGuide-style tour detail layout; read facts via `client/src/lib/tourFacts.ts`'s `factValue()`/`otherFacts()` so a host-added tour with sparser data still renders cleanly. |
+| `client/src/components/BookingCta.tsx` | The one place booking-CTA auth logic lives — signed out: "Sign in to book" (links to `/login?redirect=/listing/:slug`); signed in: disabled "Payments coming soon". Used by both `TourDetail.tsx` and `ListingPage.tsx`'s stay/eat sidebar, in both their sticky desktop and mobile-bar forms. Extend *this* component for Milestone B rather than re-forking the CTA per page. |
+| `client/src/pages/Dashboard.tsx` | Operator-only add/edit/delete UI for the signed-in operator's own stay/tour listings (replaces the old open `/manage` panel). Wrapped in `<RequireRole role="operator">`. Listings write straight to Supabase; RLS — not this component — is what actually scopes writes to the signed-in operator's own rows. |
+| `client/src/pages/Login.tsx` / `Signup.tsx` | Email/password auth forms. Signup includes a traveler/operator role toggle (operator reveals a business-name field) and handles Supabase's optional "confirm your email" flow. Login honors a `?redirect=` query param so `BookingCta` can send a visitor back to the listing they were trying to book. |
+| `client/src/components/RequireRole.tsx` | Route guard: redirects signed-out visitors to `/login`, wrong-role visitors to `/` with a toast, and shows a "Checking access" fallback while auth is still loading. |
+| `client/src/contexts/AuthContext.tsx` | Session/user/profile state via Supabase Auth (`onAuthStateChange`). Exposes `user`, `profile` (`role`, `displayName`, `businessName`, `bio`), `loading`, `signUp`, `signIn`, `signOut`. `profile` is populated server-side by the `handle_new_user` trigger — never something the client assembles or can forge. |
+| `client/src/contexts/ListingsContext.tsx` | Live catalog, read/written straight from the Supabase `listings` table (no more Express round-trip). Public interface (`listings`, `refresh`, `createListing`, `updateListing`, `deleteListing`, `offline`) is unchanged from the old version so every consumer keeps working. Re-fetches whenever the signed-in user changes, since RLS returns a different row set for a signed-in operator (their own drafts included) than for a signed-out visitor. |
+| `client/src/lib/supabase.ts` | Browser Supabase client (`VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`). |
+| `client/src/lib/slug.ts` | `slugify()` — used by `createListing` to derive a URL slug from a title, retried with a numeric suffix on a unique-constraint collision (`error.code === "23505"`) rather than pre-checked, which stays correct under concurrent writers. |
+| `client/src/lib/api.ts` | Typed fetch wrapper for the one remaining server route, `POST /api/plan-trip`. Listings CRUD used to live here; it's gone (see `ListingsContext.tsx`). |
+| `client/src/data/listings.ts` | Thin compatibility barrel re-exporting types/constants/seed data from `shared/listings.ts`. |
+| `shared/listings.ts` | **Canonical** `Listing`/`ListingInput` types, `EDITABLE_LISTING_TYPES`, seed data, regions, labels, and image asset map. Imported by the client via the `@shared/*` alias and by the server/scripts via relative `../shared/listings.js` paths. No longer the runtime source of truth for live inventory — the Supabase `listings` table is; this file is now the TypeScript type source, the one-time seed (`scripts/seed-catalog.ts`), and the offline-fallback data. |
 | `client/src/components/ArmeniaMap.tsx` | Interactive SVG atlas, coordinate projection, markers, and selected-listing summary. |
 | `client/src/components/BrandMark.tsx` | Approved full and compact Revamp marks. |
 | `client/src/components/SearchBar.tsx` | Home and compact catalog search forms. |
 | `client/src/components/ListingCard.tsx` | Shared marketplace card and saved-place interaction. |
-| `client/src/components/SiteHeader.tsx` | Desktop navigation, mobile navigation sheet, and global discovery action. Includes `/plan` and `/manage` links. |
-| `client/src/components/SiteFooter.tsx` | Footer navigation, brand statement, and illustrative-marketplace disclosure. Includes `/plan` and `/manage` links. |
+| `client/src/components/SiteHeader.tsx` | Desktop nav, mobile nav sheet, and the auth-aware account menu — "Sign in"/"Sign up" when signed out; display name + "Sign out" when signed in; a "Dashboard" link appended only for `profile.role === "operator"`. |
+| `client/src/components/SiteFooter.tsx` | Footer navigation, brand statement, and illustrative-marketplace disclosure. |
 | `client/src/index.css` | Tailwind import, design tokens, brand colors, typography, component geometry, atlas styling, and motion rules. |
 | `client/src/components/ui/` | Reusable shadcn/Radix primitives. Prefer these before creating new controls. |
 | `client/index.html` | Document metadata, fonts, favicon, and application mount. |
 | `server/app.ts` | The Express `app` itself — JSON body parsing + `registerApiRoutes(app)` — exported with no `listen()`/static-serving. Shared by `server/index.ts` and the Netlify function so the API is defined once. |
-| `server/index.ts` | Node entrypoint (`pnpm dev:server`, `pnpm start`): imports `app`, adds static SPA serving + the catch-all + `listen()`. These are the parts a persistent process needs and a serverless function doesn't. |
-| `netlify/functions/api.ts` | Netlify Function: wraps `server/app.ts` with `serverless-http`. Normalizes the incoming path back to `/api/*` (Netlify rewrite) before handing off to Express. Netlify's CDN serves the SPA; this serves only the API. |
-| `netlify.toml` | Netlify config: `pnpm build` → `dist/public`, functions dir, `/api/* → /.netlify/functions/api/:splat` rewrite (force), and `/* → /index.html` SPA fallback. |
-| `server/routes.ts` | `registerApiRoutes(app)` — `/api/listings` CRUD (Zod-validated, enforces `EDITABLE_LISTING_TYPES`) and `POST /api/plan-trip`. |
-| `server/store.ts` | Persistence for listings behind one read/create/update/remove/slugify contract, with two backends chosen at load: a JSON file (`server/data/listings.json`, gitignored, local dev/`pnpm start`) or **Netlify Blobs** (`getStore("listings")`, one JSON blob) when `process.env.NETLIFY` is set. Both seed once from `shared/listings.ts` and serialize writes through a queue. |
-| `server/planner.ts` | Anthropic API call for the trip planner: prompt construction grounded in the live catalog, tolerant JSON extraction/validation of the model's response, mapped error codes. |
+| `server/index.ts` | Node entrypoint (`pnpm dev:server`, `pnpm start`): imports `app`, adds static SPA serving + the catch-all + `listen()`. |
+| `netlify/functions/api.ts` | Netlify Function: wraps `server/app.ts` with `serverless-http` and normalizes the incoming path back to `/api/*` (Netlify rewrite). Serves only the API (`/api/plan-trip`); the CDN serves the SPA. No storage backend since Milestone A. |
+| `netlify.toml` | Netlify config: `pnpm build` → `dist/public`, functions dir, `/api/* → /.netlify/functions/api/:splat` rewrite (force), `/* → /index.html` SPA fallback. `VITE_SUPABASE_*` must be set in the Netlify env at build time (see README → Netlify). |
+| `server/routes.ts` | `registerApiRoutes(app)` — just `POST /api/plan-trip` now. Listings CRUD used to live here; it's gone (RLS-protected direct-to-Supabase writes replaced it). |
+| `server/supabase.ts` | Read-only server-side Supabase client, **anon key only, deliberately** — the planner only ever needs published listings, which RLS already makes publicly readable, so there's no reason for this to hold a more privileged key. Exports `listPublishedForPlanner()`. |
+| `server/planner.ts` | Anthropic API call for the trip planner: prompt construction grounded in the live published catalog (via a lightweight `CatalogEntry` projection, not the full `Listing` shape), tolerant JSON extraction/validation of the model's response, mapped error codes. |
+| `supabase/migrations/0001_init.sql` | The full schema: `profiles` (+ RLS + `handle_new_user` trigger), `listings` (+ indexes + `set_updated_at` trigger + RLS). Run once per Supabase project — see "Supabase Setup" below. |
+| `scripts/seed-catalog.ts` | One-time script that imports `shared/listings.ts`'s seed rows into the `listings` table under a house "Revamp" operator account. Run with `pnpm seed:catalog`; see its header comment for the full explanation of why it needs both the anon key (for stay/tour, via real RLS) and the service-role key (for eat, which RLS blocks for everyone). |
 | `brandbook-implementation.md` | Formal translation of the supplied brandbook into web rules. |
 | `marketplace-spec.md` | Product model, route behavior, search logic, page composition, and responsive expectations. |
 | `ENVIRONMENT.md` | Environment variable reference. |
-| `.env.example` | Template for local `.env` (`ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `API_PORT`). |
+| `.env.example` | Template for local `.env`. |
 
 ## Routes
 
@@ -94,22 +102,68 @@ pnpm start     # real production run: one process, built SPA + /api/*
 | `/explore/tour` | `Tours` | Dedicated GetYourGuide-style tours browser. Matched before the generic `:category` route below. |
 | `/explore/:category` | `Explore` | Preselects `stay` or `eat` (tour is intercepted by the route above). |
 | `/map` | `MapPage` | Full map-first catalog. |
-| `/listing/:slug` | `ListingPage` | Resolves records through `findListing`/`findListingIn` against live listings. |
+| `/listing/:slug` | `ListingPage` | Resolves records through `findListing`/`findListingIn` against live listings. Tours render via `TourDetail`. |
 | `/plan` | `Plan` | AI trip planner form + generated itinerary. Requires `ANTHROPIC_API_KEY` server-side. |
-| `/manage` | `Manage` | Add/edit/delete stay and tour listings. Restaurants shown read-only. |
+| `/dashboard` | `Dashboard` | Operator-only: add/edit/delete the signed-in operator's own stay/tour listings. `RequireRole role="operator"` redirects anyone else. |
+| `/login` | `Login` | Email/password sign-in. Honors `?redirect=` to return to a listing after `BookingCta` sends someone here. |
+| `/signup` | `Signup` | Email/password sign-up with a traveler/operator role toggle. |
 | `/404` and fallback | `NotFound` | Branded error state. |
 
 ## Data Model
 
-The canonical `Listing` interface lives in `shared/listings.ts` (re-exported through `client/src/data/listings.ts` for existing importers). Every listing has a stable `id` and URL-safe `slug`; one of three `type` values (`stay`, `eat`, `tour`); city, region, and coordinates (must stay inside Armenia: lat 38–42, lng 43–47); image and gallery URLs; short and long descriptions; numeric and formatted price data; tags, facts, and amenities; optional featured placement; and a marker accent token.
+Two Supabase Postgres tables, defined in `supabase/migrations/0001_init.sql` and protected end-to-end by Row-Level Security — application code never needs to (and must never) re-implement an ownership or role check that RLS already does.
 
-`ListingInput` (also in `shared/listings.ts`) is the create/update payload shape (everything but `id`/`slug`, which the server derives/keeps stable). `EDITABLE_LISTING_TYPES = ["stay", "tour"]` gates which types the API will create, update, or delete — restaurants are seed/editorial-only and the API returns 403 for write attempts against them.
+**`profiles`** — one row per `auth.users` row, created automatically by the `handle_new_user` trigger from the `role`/`display_name`/`business_name` passed in `AuthContext.signUp()`'s `options.data`. `role` is `'traveler'` or `'operator'`, chosen once at signup and never client-editable after (the update policy lets a user edit their own `display_name`/`bio`/`business_name`, not `role`). Publicly readable (needed to show an operator's name on their listings).
 
-Listings are no longer a static import consumed directly by pages — they flow through `ListingsContext` (`GET /api/listings` on mount, live thereafter). `shared/listings.ts`'s `seedListings` is now only: (a) the one-time seed written to `server/data/listings.json` on first run, and (b) the client's offline fallback if the API can't be reached. Do not add star ratings or testimonials to any listing, seed or user-created.
+**`listings`** — operator-owned, replaces the old `server/store.ts` JSON file entirely. Canonical shape:
+
+```sql
+create table public.listings (
+  id uuid primary key default gen_random_uuid(),
+  operator_id uuid not null references public.profiles(id),
+  type text not null check (type in ('stay','tour','eat')),
+  slug text not null unique,
+  title text not null, eyebrow text not null,
+  city text not null, region text not null,
+  lat double precision not null check (lat between 38 and 42),
+  lng double precision not null check (lng between 43 and 47),
+  image text not null, gallery text[] not null default '{}',
+  short_description text not null, long_description text not null,
+  price_cents integer not null check (price_cents >= 0),
+  price_unit text not null,
+  tags text[] not null default '{}',
+  amenities text[] not null default '{}',
+  facts jsonb not null default '[]',
+  featured boolean not null default false,
+  accent text not null default 'apricot',
+  status text not null check (status in ('draft','published')) default 'published',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+```
+
+RLS on `listings` (see the migration for the exact policies): anyone (including signed-out visitors) can `select` where `status = 'published'`; an operator can additionally `select` their own rows regardless of status; an operator can `insert`/`update`/`delete` only where `operator_id = auth.uid()` **and** `type in ('stay','tour')` **and** their `profiles.role = 'operator'`. There is deliberately no insert policy for `type = 'eat'` at all — see `scripts/seed-catalog.ts`'s header comment for how the seed restaurants get in regardless.
+
+The client-side `LiveListing` type (`client/src/contexts/ListingsContext.tsx`) is `Listing & { operatorId: string; status: "draft" | "published" }` — a superset of the original `Listing` type from `shared/listings.ts`, so every existing UI consumer (`TourCard`, `Explore`, `Home`, etc.) keeps compiling and rendering unchanged.
+
+`price_cents` (an integer) is the single source of truth for price at the DB layer, replacing the old hand-maintained `priceLabel` string. `mapListingRow()` in `ListingsContext.tsx` derives the display `priceLabel` (`$78`, `$42.50`, …) from it — nothing stores a formatted price string anymore.
+
+*(Milestone B adds a `bookings` table with a `daterange` exclusion constraint to prevent double-booking a listing, plus Stripe fields; not built yet, but `price_cents` and `operator_id` above are already shaped so that addition won't require touching `listings` again.)*
 
 ## State and Navigation
 
-Listings persistence is now real: `POST/PUT/DELETE /api/listings/:id` write through `server/store.ts` to `server/data/listings.json`, and every client page reads the same live catalog via `useListings()` (`ListingsContext`), so changes appear everywhere immediately (cards, filters, map, detail pages) for every visitor of that server instance — this supersedes the old "do not simulate persistence" framing, since persistence is now genuinely implemented, not simulated. Search submission still writes query parameters and navigates to `/explore`; catalog filtering is still client-side; list/map selection still shares listing IDs through component state. Saved/share actions still use Sonner feedback or clipboard behavior only and do not persist — extending those, or adding accounts/auth/payments, is a new deliberate upgrade, not something to bolt onto the existing endpoints.
+Auth state (`AuthContext`) and listings (`ListingsContext`) both read live from Supabase and both react to sign-in/out — `ListingsContext.refresh()` re-runs whenever `user?.id` changes, since RLS returns a different row set for a signed-in operator than for a signed-out visitor. `RequireRole` gates `/dashboard` the same way on the client (for UX — redirect before rendering the form), while RLS is what actually prevents a non-operator or the wrong operator from writing, regardless of what the client renders.
+
+Booking CTAs (`BookingCta.tsx`) are auth-aware, not simulated: signed out → "Sign in to book" (redirects to `/login?redirect=<current listing>` and back); signed in → a disabled "Payments coming soon" control. This supersedes the old "book" toast entirely — do not reintroduce a toast that implies a booking was noted or confirmed; that's exactly the false claim Milestone A is designed to avoid until Milestone B's real payment flow exists.
+
+Search submission still writes query parameters and navigates to `/explore`; catalog filtering is still client-side; list/map selection still shares listing IDs through component state. Saved/share actions still use Sonner feedback or clipboard behavior only and do not persist.
+
+## Supabase Setup (for whoever deploys this)
+
+1. Create a Supabase project. Copy its URL and anon key into `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` (see `ENVIRONMENT.md`).
+2. Run `supabase/migrations/0001_init.sql` once against that project (SQL Editor, or `supabase db push`/`psql` with the CLI).
+3. Deploy (or run locally with those two vars set) and sign up for a real account at `/signup`, choosing "Operator" — this becomes the house "Revamp" account that owns the seed catalog.
+4. Fill in `SUPABASE_SERVICE_ROLE_KEY`, `SEED_OPERATOR_EMAIL`, `SEED_OPERATOR_PASSWORD` locally (never commit these) and run `pnpm seed:catalog` once. See `scripts/seed-catalog.ts`'s header comment for exactly what it does and why.
 
 ## Styling and Brand Rules
 
@@ -119,21 +173,19 @@ The full wordmark must remain **`revamp.`** in lowercase with its terminal perio
 
 ## Component Conventions
 
-Use TypeScript function components and named exports for reusable components. Page files use default exports. Keep shared UI in `client/src/components`; keep route-level composition in `client/src/pages`; keep canonical types/seed content in `shared/listings.ts` (not duplicated into `client/src/data`). Prefer existing shadcn/Radix primitives from `client/src/components/ui` rather than rebuilding dialogs, sheets, selects, buttons, or tooltips — `Manage.tsx`'s form dialog and `Plan.tsx`'s selects already show the pattern.
+Use TypeScript function components and named exports for reusable components. Page files use default exports. Keep shared UI in `client/src/components`; keep route-level composition in `client/src/pages`; keep canonical types/seed content in `shared/listings.ts` (not duplicated into `client/src/data`). Prefer existing shadcn/Radix primitives from `client/src/components/ui` rather than rebuilding dialogs, sheets, selects, buttons, or tooltips — `Dashboard.tsx`'s form dialog and `Plan.tsx`'s selects already show the pattern.
 
-Use `cn()` from `client/src/lib/utils.ts` for conditional class composition. Use Lucide icons and Sonner toasts already included in the package. Avoid adding dependencies for functionality already present. Use `client/src/lib/api.ts` for any new server call rather than calling `fetch` directly from a component.
+Use `cn()` from `client/src/lib/utils.ts` for conditional class composition. Use Lucide icons and Sonner toasts already included in the package. Avoid adding dependencies for functionality already present. Use `client/src/lib/api.ts` for any new *server* call (there's only `planTrip` today); use `client/src/lib/supabase.ts` directly, inside the relevant context, for anything that's really a database read/write.
 
 ## Assets
 
-Marketplace imagery is self-hosted SVG illustration under `client/public/images/` (11 files: hero, per-region, per-category) and `client/public/brand/revamp-mark.svg` for the logo/favicon, referenced from the `assets` map at the top of `shared/listings.ts`. This replaced the original Manus-managed `/manus-storage/...` paths and the previous build's `images.unsplash.com` URLs — this sandbox has no outbound network access to arbitrary external hosts, so any external image dependency was unverifiable and a real deployment risk. The marketplace has zero external image dependencies as shipped.
+Marketplace imagery is self-hosted SVG illustration under `client/public/images/` (11 files: hero, per-region, per-category) and `client/public/brand/revamp-mark.svg` for the logo/favicon, referenced from the `assets` map at the top of `shared/listings.ts`. The marketplace has zero external image dependencies as shipped.
 
-To use real photography: host the images yourself (object storage, CDN, or a `public/` path in this repo if the deployer's build pipeline supports it) and either update the `assets` map in `shared/listings.ts`, or set `image`/`gallery` per listing through `/manage` (stay/tour only — restaurant imagery is still edited by hand in `shared/listings.ts`).
+To use real photography: host the images yourself (object storage, CDN, or a `public/` path in this repo if the deployer's build pipeline supports it) and either update the `assets` map in `shared/listings.ts`, or set `image`/`gallery` per listing through `/dashboard` (stay/tour only — restaurant imagery is still edited by hand in `shared/listings.ts` and re-seeded).
 
 ## Environment Contract
 
-The catalog and browsing experience need no secrets. The AI trip planner (`/plan`, `POST /api/plan-trip`) requires `ANTHROPIC_API_KEY` on the server; without it, the endpoint returns a 503 with a clear message instead of crashing. `ANTHROPIC_MODEL` optionally overrides the model (defaults to `claude-sonnet-4-5`). `API_PORT` sets the dev-only Express port (default `3001`); `PORT` sets the production port (default `3000`). See `ENVIRONMENT.md` and `.env.example`.
-
-On Netlify, set `ANTHROPIC_API_KEY` (and optionally `ANTHROPIC_MODEL`) in the site environment (`netlify env:set …` or the dashboard) — never commit it. `NETLIFY` is set automatically by the Functions runtime and switches `server/store.ts` to the Netlify Blobs backend; you never set it yourself, and Blobs needs no separate credentials from inside a function. See the README's "Deployment → Option B — Netlify" section for the full flow.
+The catalog and browsing experience need `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` to be genuinely live (accounts, real writes); without them the app still renders using the static seed as a read-only fallback. The AI trip planner (`/plan`, `POST /api/plan-trip`) requires `ANTHROPIC_API_KEY` on the server; without it, the endpoint returns a 503 with a clear message instead of crashing. `ANTHROPIC_MODEL` optionally overrides the model (defaults to `claude-sonnet-4-5`). `API_PORT` sets the dev-only Express port (default `3001`); `PORT` sets the production port (default `3000`). `SUPABASE_SERVICE_ROLE_KEY`, `SEED_OPERATOR_EMAIL`, `SEED_OPERATOR_PASSWORD` are for `scripts/seed-catalog.ts` only — never referenced by any app code, client or server. See `ENVIRONMENT.md` and `.env.example`.
 
 ## Quality Gate
 
@@ -144,22 +196,28 @@ pnpm check
 pnpm build
 ```
 
-For visual/behavioral changes, inspect at least `/`, `/explore`, `/map`, one `/listing/:slug` route, `/manage`, and `/plan` at desktop and mobile widths. For `/manage`, verify create/edit/delete round-trip through the UI and that changes show up on `/`, `/explore`, and the listing detail page. For `/plan`, verify the request/response wiring and error states (missing API key, validation errors) even if a live `ANTHROPIC_API_KEY` isn't available in the current environment. Confirm there are no console errors, overflow issues, unreadable image overlays, or dead navigation paths.
+For visual/behavioral changes, inspect at least `/`, `/explore`, `/map`, one `/listing/:slug` route (a stay/eat and a tour), `/dashboard`, `/login`, `/signup`, and `/plan` at desktop and mobile widths. For auth, verify: signing up as a traveler and as an operator; a signed-out visitor is redirected off `/dashboard` to `/login`; a signed-in traveler is redirected off `/dashboard` to `/` with a toast; `SiteHeader`'s account menu and mobile sheet reflect signed-out/traveler/operator state correctly. For `/dashboard`, verify create/edit/delete round-trip through the UI, that changes show up on `/`, `/explore`, and the listing detail page, and that an operator only ever sees/edits their **own** listings (not another operator's, not the house "Revamp" catalog unless it's theirs). For booking CTAs, verify: signed-out shows "Sign in to book" and returns to the same listing after signing in; signed-in shows the disabled "Payments coming soon" state, never a toast implying success. For `/plan`, verify the request/response wiring and error states (missing API key, validation errors) even if a live `ANTHROPIC_API_KEY` isn't available in the current environment. Confirm there are no console errors, overflow issues, unreadable image overlays, or dead navigation paths.
 
 ## Common Change Recipes
 
 | Change | Preferred edit |
 | --- | --- |
-| Add or modify seed inventory | Edit `shared/listings.ts` (`seedListings`). Only affects fresh installs — see Data Model. |
-| Change what's editable via `/manage` | Edit `EDITABLE_LISTING_TYPES` in `shared/listings.ts` and the corresponding checks in `server/routes.ts`. |
+| Add or modify seed inventory | Edit `shared/listings.ts` (`seedListings`), then re-run `pnpm seed:catalog` against a project that already ran the migration (it skips rows that already exist by slug). Only affects what the seed script inserts — not already-live rows. |
+| Change what's operator-writable | Edit `EDITABLE_LISTING_TYPES` in `shared/listings.ts` **and** the matching `type in (...)` checks in every write policy on `public.listings` in `supabase/migrations/0001_init.sql` — the client constant alone changes nothing without the RLS update, and vice versa. |
 | Change route behavior | Edit `client/src/App.tsx` and the relevant page. |
-| Update brand tokens | Edit `client/src/index.css` and verify all four representative routes plus `/manage` and `/plan`. |
-| Modify global navigation | Edit `SiteHeader.tsx` and `SiteFooter.tsx` together. |
+| Update brand tokens | Edit `client/src/index.css` and verify all four representative routes plus `/dashboard`, `/login`/`/signup`, and `/plan`. |
+| Modify global navigation | Edit `SiteHeader.tsx` and `SiteFooter.tsx` together; keep the auth-aware account menu logic in `SiteHeader.tsx` in sync with `AuthContext`'s `profile.role`. |
 | Change map selection or marker layout | Edit `ArmeniaMap.tsx`; preserve ID-based synchronization. |
-| Change the CRUD API or validation | Edit `server/routes.ts` (Zod schemas) and `server/store.ts` (persistence) together; update `client/src/lib/api.ts` types to match. |
+| Change what a listing stores, or an RLS policy | Edit `supabase/migrations/0001_init.sql` (add a new migration file for changes to an already-deployed project — don't edit `0001_init.sql` in place once it's been run anywhere real) and the matching `ListingRow`/`toRow`/`mapListingRow` in `client/src/contexts/ListingsContext.tsx`. |
+| Change auth/profile fields | Edit `supabase/migrations/*.sql` (the `profiles` table + `handle_new_user`) and `client/src/contexts/AuthContext.tsx` (`Profile` type, `mapProfile`, `signUp`) together. |
+| Change the booking CTA | Edit `client/src/components/BookingCta.tsx` — it's shared by every call site; don't re-fork the auth-state logic per page. |
 | Change the trip-planner prompt or response shape | Edit `server/planner.ts` (`buildPrompt`, `validateItinerary`) and the matching types in `client/src/lib/api.ts`/`client/src/pages/Plan.tsx`. |
-| Add genuinely new backend surface area (auth, payments, bookings) | Stop and design a deliberate upgrade — new schema, error states, and a Non-Negotiable Rules update — rather than extending `routes.ts`/`store.ts` ad hoc. |
+| Add real payments/bookings (Milestone B) | Stop and design a deliberate upgrade — new schema (`bookings` with an overlap-exclusion constraint), new Netlify Functions for Stripe Checkout + webhook, and an update to this file's Non-Negotiable Rules — rather than wiring Stripe into `BookingCta.tsx` ad hoc. |
+
+## Milestone B (not yet built)
+
+Scoped here for continuity, not implemented: a `bookings` table with a `daterange` exclusion constraint (`EXCLUDE USING gist`, needs the `btree_gist` extension) to make double-booking structurally impossible; two new Netlify Functions (`create-checkout-session`, `stripe-webhook` — the webhook needs to bypass Express's JSON body parser to verify Stripe's signature against the raw request body); a real date/traveler-count booking UI in `BookingCta.tsx` replacing the "Payments coming soon" state; `/trips` for travelers; a "Bookings" tab on `/dashboard` for operators; `/booking/success`/`/booking/cancelled` return pages. Needs `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in addition to this milestone's Supabase keys.
 
 ## Definition of Done
 
-A change is complete when the requested behavior works on relevant routes, TypeScript and production builds pass, responsive states remain usable, the brandbook is respected, no false customer or inventory claims were introduced (including in AI-generated text), restaurant listings remain non-editable via the API, and any new architectural decision is reflected in this file or the README.
+A change is complete when the requested behavior works on relevant routes, TypeScript and production builds pass, responsive states remain usable, the brandbook is respected, no false customer, inventory, or payment claims were introduced (including in AI-generated text or a booking CTA's label), restaurant listings remain non-writable at the RLS layer (not just hidden in the UI), operator-owned data stays scoped to its owner under RLS, and any new architectural decision is reflected in this file or the README.

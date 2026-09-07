@@ -1,20 +1,29 @@
-/** Revamp brandbook: manage uses the same white/orange/charcoal surfaces and rounded geometry as the rest of the marketplace. */
+/**
+ * Operator dashboard — replaces the old open, unauthenticated /manage panel.
+ * Same add/edit/delete listing UX as before (ListingFormDialog/ManageSection
+ * carried over from the old Manage.tsx), but now every operator only ever
+ * sees and edits their own listings: Row-Level Security enforces this at the
+ * database layer (supabase/migrations/0001_init.sql), the `.filter()` below
+ * is just what makes the UI show the right subset, not what makes it safe.
+ */
 import { FormEvent, useState } from "react";
-import { AlertTriangle, Pencil, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
+import { RequireRole } from "@/components/RequireRole";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useListings } from "@/contexts/ListingsContext";
-import type { Listing, ListingInput, ListingType } from "@shared/listings";
+import { useListings, LiveListing } from "@/contexts/ListingsContext";
+import { useAuth } from "@/contexts/AuthContext";
+import type { ListingInput, ListingType } from "@shared/listings";
 import { ApiError } from "@/lib/api";
 import { toast } from "sonner";
 
-type DraftListing = Partial<Listing> & { type: ListingType };
+type DraftListing = Partial<LiveListing> & { type: ListingType };
 
 function emptyDraft(type: ListingType): DraftListing {
   return {
@@ -97,7 +106,7 @@ function ListingFormDialog({
       }
       onSaved();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't save this listing. Please try again.");
+      setError(err instanceof ApiError || err instanceof Error ? err.message : "Couldn't save this listing. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -108,7 +117,7 @@ function ListingFormDialog({
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="font-display text-2xl">{isEdit ? `Edit ${draft.title}` : `Add a ${draft.type}`}</DialogTitle>
-          <DialogDescription>Saved to the shared catalog immediately — every page (cards, map, search) picks it up right away.</DialogDescription>
+          <DialogDescription>Saved to your catalog immediately — it appears on the marketplace right away.</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="grid gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -183,24 +192,25 @@ function ListingFormDialog({
   );
 }
 
-function ManageSection({ type, title, description }: { type: ListingType; title: string; description: string }) {
+function DashboardSection({ type, title, description }: { type: ListingType; title: string; description: string }) {
+  const { user } = useAuth();
   const { listings, deleteListing } = useListings();
-  const items = listings.filter((l) => l.type === type);
+  const items = listings.filter((l) => l.type === type && l.operatorId === user?.id);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draft, setDraft] = useState<DraftListing | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const openAdd = () => { setDraft(emptyDraft(type)); setDialogOpen(true); };
-  const openEdit = (listing: Listing) => { setDraft(listing); setDialogOpen(true); };
+  const openEdit = (listing: LiveListing) => { setDraft(listing); setDialogOpen(true); };
 
-  const confirmDelete = async (listing: Listing) => {
-    if (!window.confirm(`Remove "${listing.title}" from the catalog? This can't be undone.`)) return;
+  const confirmDelete = async (listing: LiveListing) => {
+    if (!window.confirm(`Remove "${listing.title}" from your catalog? This can't be undone.`)) return;
     setDeletingId(listing.id);
     try {
       await deleteListing(listing.id);
       toast(`${listing.title} removed.`);
     } catch (err) {
-      toast(err instanceof ApiError ? err.message : "Couldn't delete this listing.");
+      toast(err instanceof ApiError || err instanceof Error ? err.message : "Couldn't delete this listing.");
     } finally {
       setDeletingId(null);
     }
@@ -220,7 +230,7 @@ function ManageSection({ type, title, description }: { type: ListingType; title:
       </div>
 
       {items.length === 0 ? (
-        <p className="mt-8 border border-dashed border-basalt/20 bg-chalk px-6 py-10 text-center text-sm text-basalt/55">Nothing here yet — add the first one above.</p>
+        <p className="mt-8 border border-dashed border-basalt/20 bg-chalk px-6 py-10 text-center text-sm text-basalt/55">Nothing here yet — add your first one above.</p>
       ) : (
         <div className="mt-8 grid gap-3">
           {items.map((listing) => (
@@ -245,30 +255,46 @@ function ManageSection({ type, title, description }: { type: ListingType; title:
   );
 }
 
-export default function Manage() {
+function DashboardContent() {
+  const { profile } = useAuth();
   const { offline } = useListings();
 
   return (
     <div className="min-h-screen bg-paper text-basalt">
       <SiteHeader />
       <main className="container py-12 lg:py-16">
-        <p className="eyebrow">Inventory</p>
-        <h1 className="mt-3 font-display text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl">Manage stays &amp; tours.</h1>
+        <p className="eyebrow">Operator dashboard</p>
+        <h1 className="mt-3 font-display text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl">
+          {profile?.businessName || profile?.displayName || "Your listings"}.
+        </h1>
         <p className="mt-4 max-w-xl text-base leading-7 text-basalt/60">
-          Add, edit, or remove the stays and tours shown across the marketplace. Restaurants stay editorial and aren't managed here.
-          Changes save to the shared catalog immediately for everyone browsing the site.
+          Add, edit, or remove your own stays and tours. Changes save immediately and appear across the marketplace — nobody else can see or edit them but you.
         </p>
         {offline && (
           <div className="mt-6 flex items-start gap-2 border border-tuff/40 bg-tuff/10 p-4 text-sm text-basalt">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-tuff" />
-            Can't reach the catalog API right now — showing the built-in sample listings read-only. Adding, editing, and deleting will resume once the server is reachable.
+            Can't reach the catalog right now — showing the built-in sample listings read-only. Adding, editing, and deleting will resume once the connection is back.
           </div>
         )}
 
-        <ManageSection type="stay" title="Stays" description="Guesthouses, cabins, and small hotels shown on /explore/stay and the home page." />
-        <ManageSection type="tour" title="Tours" description="Guided routes and experiences shown on /explore/tour and the home page." />
+        <DashboardSection type="stay" title="Stays" description="Guesthouses, cabins, and small hotels shown on /explore/stay and the home page." />
+        <DashboardSection type="tour" title="Tours" description="Guided routes and experiences shown on /explore/tour and the home page." />
+
+        <section className="border-t border-basalt/10 py-12">
+          <div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-apricot" /><p className="eyebrow">Coming soon</p></div>
+          <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">Bookings & payouts.</h2>
+          <p className="mt-2 max-w-md text-sm text-basalt/55">Once real payments are live, confirmed bookings for your listings will show up here.</p>
+        </section>
       </main>
       <SiteFooter />
     </div>
+  );
+}
+
+export default function Dashboard() {
+  return (
+    <RequireRole role="operator">
+      <DashboardContent />
+    </RequireRole>
   );
 }

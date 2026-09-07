@@ -18,6 +18,7 @@ import { Listing } from "@/data/listings";
 import { useListings } from "@/contexts/ListingsContext";
 import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { TourCard } from "@/components/TourCard";
+import { BookingCta } from "@/components/BookingCta";
 import { Button } from "@/components/ui/button";
 import { factValue, otherFacts } from "@/lib/tourFacts";
 import { cn } from "@/lib/utils";
@@ -37,8 +38,6 @@ export function TourDetail({ listing }: { listing: Listing }) {
     () => listings.filter((item) => item.type === "tour" && item.id !== listing.id).slice(0, 3),
     [listings, listing.id],
   );
-
-  const bookNote = () => toast("Your date and traveler count have been noted. Live availability would connect here.");
 
   return (
     <>
@@ -211,10 +210,8 @@ export function TourDetail({ listing }: { listing: Listing }) {
               <strong className="font-display text-xl font-normal">${listing.price * travelers}</strong>
             </div>
 
-            <Button className="mt-5 h-12 w-full rounded-none bg-apricot text-white hover:bg-apricot/90" onClick={bookNote}>
-              Choose a date
-            </Button>
-            <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">No payment is taken in this marketplace concept.</p>
+            <BookingCta slug={listing.slug} className="mt-5" />
+            <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">Online booking and payment are launching soon.</p>
           </div>
         </aside>
       </section>
@@ -243,9 +240,7 @@ export function TourDetail({ listing }: { listing: Listing }) {
           <span className="block text-[9px] font-bold uppercase tracking-[0.14em] text-basalt/40">From</span>
           <strong className="font-display text-2xl font-normal">{listing.priceLabel}</strong> <span className="text-xs text-basalt/45">/ {listing.priceUnit}</span>
         </p>
-        <Button className="rounded-none bg-apricot text-white" onClick={bookNote}>
-          Choose a date
-        </Button>
+        <BookingCta slug={listing.slug} variant="compact" />
       </div>
     </>
   );
