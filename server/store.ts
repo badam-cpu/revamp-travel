@@ -128,24 +128,34 @@ const blobBackend: Backend = {
 const backend: Backend = useBlobs ? blobBackend : fileBackend;
 
 /* ------------------------------------------------------------------ */
-/* Shared logic (identical for both backends)                          */
+/* Shared logic                                                        */
 /* ------------------------------------------------------------------ */
+// In-memory cache is used ONLY for the file backend (a single long-lived
+// process where the file is the private source of truth). It is deliberately
+// NOT used for Blobs: on Netlify the API runs across many short-lived function
+// instances, so a per-instance cache would serve stale data (a create on one
+// instance would be invisible to reads on another) and risk lost updates.
+// With Blobs we always read the shared store fresh, so every instance sees the
+// same catalog and read-modify-write mutations act on current data.
 let cache: Listing[] | null = null;
-// Serializes writes so two near-simultaneous requests can't clobber each other.
+// Serializes writes so two near-simultaneous requests on the same instance
+// can't clobber each other.
 let writeQueue: Promise<void> = Promise.resolve();
 
 async function ensureLoaded(): Promise<Listing[]> {
-  if (cache) return cache;
+  if (!useBlobs && cache) return cache;
   const existing = await backend.read();
+  let data: Listing[];
   if (existing) {
-    cache = existing;
+    data = existing;
   } else {
     // First run: seed from shared/listings.ts and persist, then it's the
     // source of truth (mirrors the old ENOENT-seeds-fresh-file behavior).
-    cache = seedListings.map((listing) => ({ ...listing }));
-    await backend.write(cache);
+    data = seedListings.map((listing) => ({ ...listing }));
+    await backend.write(data);
   }
-  return cache!;
+  if (!useBlobs) cache = data;
+  return data;
 }
 
 async function persist(data: Listing[]): Promise<void> {
