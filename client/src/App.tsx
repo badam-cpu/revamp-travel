@@ -16,6 +16,7 @@ import Dashboard from "./pages/Dashboard";
 import AdminReview from "./pages/AdminReview";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import ResetPassword from "./pages/ResetPassword";
 import Plan from "./pages/Plan";
 
 function Router() {
@@ -31,6 +32,7 @@ function Router() {
       <Route path="/admin" component={AdminReview} />
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
+      <Route path="/reset-password" component={ResetPassword} />
       <Route path="/listing/:slug">{(params) => <ListingPage params={params} />}</Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

@@ -13,6 +13,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/PasswordInput";
 import { useAuth, UserRole } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
@@ -122,7 +123,7 @@ export default function Signup() {
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" autoComplete="new-password" minLength={6} required value={password} onChange={(e) => setPassword(e.target.value)} />
+              <PasswordInput id="password" autoComplete="new-password" minLength={6} required value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
 
             {error && (
