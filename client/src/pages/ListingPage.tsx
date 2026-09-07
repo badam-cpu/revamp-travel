@@ -5,6 +5,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { ListingCard } from "@/components/ListingCard";
+import { TourDetail } from "@/components/TourDetail";
 import { Button } from "@/components/ui/button";
 import { findListing, typeLabels } from "@/data/listings";
 import { useListings } from "@/contexts/ListingsContext";
@@ -19,8 +20,22 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
     );
   }
 
+  // Tours get a dedicated GetYourGuide-style detail layout; stays and
+  // restaurants keep the original shared template below.
+  if (listing.type === "tour") {
+    return (
+      <div className="min-h-screen bg-paper text-basalt">
+        <SiteHeader />
+        <main>
+          <TourDetail listing={listing} />
+        </main>
+        <SiteFooter />
+      </div>
+    );
+  }
+
   const related = listings.filter((item) => item.id !== listing.id && (item.type === listing.type || item.region === listing.region)).slice(0, 3);
-  const action = listing.type === "stay" ? "Check dates" : listing.type === "eat" ? "Reserve a table" : "Choose a date";
+  const action = listing.type === "stay" ? "Check dates" : "Reserve a table";
 
   return (
     <div className="min-h-screen bg-paper text-basalt">

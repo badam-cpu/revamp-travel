@@ -11,19 +11,16 @@ import { Bookmark, ChevronLeft, ChevronRight, Clock, Gauge, MapPin, Users } from
 import { Link } from "wouter";
 import { toast } from "sonner";
 import { Listing } from "@/data/listings";
+import { factValue } from "@/lib/tourFacts";
 import { cn } from "@/lib/utils";
-
-function factValue(listing: Listing, label: string) {
-  return listing.facts.find((fact) => fact.label.toLowerCase() === label.toLowerCase())?.value;
-}
 
 export function TourCard({ listing }: { listing: Listing }) {
   const images = listing.gallery.length ? listing.gallery : [listing.image];
   const [index, setIndex] = useState(0);
 
   const duration = factValue(listing, "Duration");
-  const group = factValue(listing, "Group");
-  const level = factValue(listing, "Level") ?? factValue(listing, "Start");
+  const group = factValue(listing, "Group", "Format");
+  const level = factValue(listing, "Level", "Start");
 
   const step = (delta: number, event: React.MouseEvent) => {
     event.preventDefault();
