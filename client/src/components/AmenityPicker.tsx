@@ -32,8 +32,18 @@
  * it owns its own selection state (seeded from `defaultValue`) and exposes
  * the current value imperatively via `ref.getValue()`, read once at submit
  * time — see Dashboard.tsx's `toInputPayload`.
+ *
+ * Incoming values are matched against the curated list loosely (case- and
+ * punctuation-insensitive — "wifi"/"Wi Fi"/"WI-FI" all match "Wi-Fi") and,
+ * on a match, rewritten to the curated item's exact spelling. This matters
+ * for two real sources of messy casing: legacy free-text amenities typed
+ * before this component existed, and amenities pulled in by the "prefill
+ * from a link" import (server/urlPrefill.ts's JSON-LD reading) — a source
+ * page's own wording rarely matches this catalog's casing exactly, and
+ * without this, most imported amenities would land as "custom" chips
+ * instead of pre-checking the matching box.
  */
-import { forwardRef, useImperativeHandle, useMemo, useState, type KeyboardEvent } from "react";
+import { forwardRef, useImperativeHandle, useState, type KeyboardEvent } from "react";
 import { X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
@@ -67,15 +77,26 @@ const CATALOGS: Partial<Record<ListingType, AmenityGroup[]>> = {
 
 export type AmenityPickerHandle = { getValue: () => string[] };
 
+/** Case/punctuation-insensitive key for loose matching against the curated list — "Wi-Fi" and "wifi" both normalize to "wifi". */
+function normalizeAmenity(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
 export const AmenityPicker = forwardRef<AmenityPickerHandle, { type: ListingType; defaultValue: string[] }>(
   function AmenityPicker({ type, defaultValue }, ref) {
-    const [value, setValue] = useState<string[]>(defaultValue);
+    const groups = CATALOGS[type] ?? [];
+    const curatedItems = groups.flatMap((g) => g.items);
+    const curatedSet = new Set(curatedItems);
+    const curatedByNorm = new Map<string, string>();
+    for (const item of curatedItems) curatedByNorm.set(normalizeAmenity(item), item);
+    /** Rewrites a loose match to the curated item's exact spelling; leaves anything else untouched. */
+    const canonicalize = (raw: string) => curatedByNorm.get(normalizeAmenity(raw)) ?? raw;
+
+    const [value, setValue] = useState<string[]>(() => defaultValue.map(canonicalize));
     const [customText, setCustomText] = useState("");
 
     useImperativeHandle(ref, () => ({ getValue: () => value }), [value]);
 
-    const groups = CATALOGS[type] ?? [];
-    const curatedSet = useMemo(() => new Set(groups.flatMap((g) => g.items)), [groups]);
     const legacy = value.filter((v) => !curatedSet.has(v));
 
     const toggle = (item: string, checked: boolean) => {
@@ -90,7 +111,8 @@ export const AmenityPicker = forwardRef<AmenityPickerHandle, { type: ListingType
       const additions = customText
         .split(",")
         .map((t) => t.trim())
-        .filter(Boolean);
+        .filter(Boolean)
+        .map(canonicalize);
       if (additions.length === 0) return;
       setValue((prev) => {
         const next = [...prev];

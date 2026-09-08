@@ -430,6 +430,7 @@ function DashboardSection({ type, title, description }: { type: ListingType; tit
         ...emptyDraft(type),
         title: prefill.title ?? "",
         shortDescription: prefill.description ?? "",
+        amenities: prefill.amenities ?? [],
         city: prefill.city ?? "",
         region: prefill.region ?? "",
         price: prefill.price ?? 0,
@@ -437,6 +438,14 @@ function DashboardSection({ type, title, description }: { type: ListingType; tit
       });
       setDialogOpen(true);
       setImportUrl("");
+      // Amenities/price/city/region only come through when the source page
+      // publishes its own JSON-LD (see server/urlPrefill.ts) — most sites
+      // only expose title/description, so flag what actually came in.
+      const found: string[] = [];
+      if (prefill.amenities?.length) found.push(`${prefill.amenities.length} amenities`);
+      if (prefill.price) found.push("a price");
+      if (prefill.city || prefill.region) found.push("a location");
+      if (found.length > 0) toast(`Also pulled in ${found.join(", ")} from that page — review before saving.`);
     } catch (err) {
       setImportError(err instanceof ApiError || err instanceof Error ? err.message : "Couldn't fetch that link.");
     } finally {

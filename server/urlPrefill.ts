@@ -3,13 +3,23 @@
  * assist (Dashboard.tsx's "Prefill from a link" control). This is
  * deliberately NOT a scraper: it reads a page's own public OpenGraph/meta
  * tags — the same data a site already exposes for link-preview cards in
- * iMessage/Slack/etc — and returns whatever it finds. Sites that block
- * server-side fetches (Airbnb and most booking platforms actively resist
- * scraping, and a full clone would be against their ToS) just come back
- * with empty fields; the operator fills in the rest by hand on the same
- * form they'd use anyway. Never throws for "nothing found" — only for a
- * genuinely bad/unsafe URL or a network failure, both handled by the
- * caller (server/routes.ts) as clear error responses.
+ * iMessage/Slack/etc — plus, when a page embeds schema.org structured data
+ * (`<script type="application/ld+json">`, published for its own search-engine
+ * crawlers), its `amenityFeature` (→ amenities), `offers.price` (→ price),
+ * and `address.addressLocality`/`addressRegion` (→ city/region). That's data
+ * the page already publishes for machines, read from the one plain fetch
+ * already being made — never a second request, never anything that renders JS
+ * or defeats bot detection. Sites that block server-side fetches, or simply
+ * don't embed structured data (Airbnb and most booking platforms actively
+ * resist scraping, and a full clone would be against their ToS), just come
+ * back with empty/partial fields; the operator reviews and fills in the rest
+ * by hand on the same form they'd use anyway — every prefilled field here is a
+ * starting draft, never written anywhere until they hit save. Never throws for
+ * "nothing found" — only for a genuinely bad/unsafe URL or a network failure,
+ * both handled by the caller (server/routes.ts) as clear error responses.
+ *
+ * Imported title/description are also run through stripRatings() so a listing
+ * never inherits someone else's star score (CLAUDE.md content rule).
  */
 import { lookup } from "dns/promises";
 
@@ -25,11 +35,16 @@ export interface PrefillResult {
   title?: string;
   description?: string;
   imageUrl?: string;
+  /** From the source page's own JSON-LD `amenityFeature`, when present — a starting checklist, not exhaustive. */
+  amenities?: string[];
   city?: string;
   region?: string;
   price?: number;
   sourceUrl: string;
 }
+
+const MAX_AMENITIES = 30;
+const MAX_AMENITY_LENGTH = 60;
 
 const FETCH_TIMEOUT_MS = 8000;
 const MAX_BYTES = 2 * 1024 * 1024; // 2MB — a listing page's <head> is tiny; this is a generous ceiling, not a target.
@@ -138,6 +153,7 @@ interface JsonLdBits {
   name?: string;
   description?: string;
   image?: string;
+  amenities?: string[];
   city?: string;
   region?: string;
   price?: number;
@@ -190,6 +206,30 @@ function extractJsonLd(html: string): JsonLdBits {
     const offers = (Array.isArray(node.offers) ? node.offers[0] : node.offers) as Record<string, unknown> | undefined;
     if (offers && typeof offers === "object") {
       out.price = out.price ?? num(offers.price) ?? num(offers.lowPrice) ?? num((offers.priceSpecification as Record<string, unknown>)?.price);
+    }
+    // schema.org amenityFeature is usually LocationFeatureSpecification[]
+    // ({name, value}) but some sites use plain strings — both accepted. An
+    // explicit `value: false` (site says it does NOT have this) is excluded.
+    if (!out.amenities) {
+      const raw = node.amenityFeature;
+      if (Array.isArray(raw) && raw.length > 0) {
+        const names: string[] = [];
+        for (const entry of raw) {
+          let name: string | undefined;
+          if (typeof entry === "string") {
+            name = entry;
+          } else if (entry && typeof entry === "object") {
+            const e = entry as Record<string, unknown>;
+            if (e.value === false) continue;
+            if (typeof e.name === "string") name = e.name;
+          }
+          if (!name) continue;
+          const cleaned = decodeHtmlEntities(name.trim()).slice(0, MAX_AMENITY_LENGTH);
+          if (cleaned && !names.includes(cleaned)) names.push(cleaned);
+          if (names.length >= MAX_AMENITIES) break;
+        }
+        if (names.length > 0) out.amenities = names;
+      }
     }
   }
   return out;
@@ -258,6 +298,7 @@ export async function fetchPrefill(rawUrl: string): Promise<PrefillResult> {
     title: title || undefined,
     description: description || undefined,
     imageUrl: imageUrl || undefined,
+    amenities: jsonLd.amenities && jsonLd.amenities.length > 0 ? jsonLd.amenities : undefined,
     city: jsonLd.city || undefined,
     region: jsonLd.region || undefined,
     price: Number.isFinite(price) && (price as number) >= 0 ? price : undefined,

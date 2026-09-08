@@ -59,6 +59,7 @@ export interface ListingPrefill {
   title?: string;
   description?: string;
   imageUrl?: string;
+  amenities?: string[];
   city?: string;
   region?: string;
   price?: number;
@@ -66,9 +67,12 @@ export interface ListingPrefill {
 }
 
 /**
- * Asks the server to pull a starting draft (title/description/hero image
- * URL) from a listing link's own public OpenGraph/meta tags — a
- * best-effort assist, not a scraper (see server/urlPrefill.ts). Requires a
+ * Asks the server to pull a starting draft (title/description/hero image,
+ * plus amenities/price/city/region when the source page's own JSON-LD
+ * structured data has them) from a listing link's own public OpenGraph/meta
+ * tags and schema.org markup — a best-effort assist, not a scraper (see
+ * server/urlPrefill.ts). Every field is just a starting point: nothing here
+ * is saved until the operator reviews the form and hits save. Requires a
  * signed-in session: the server checks the bearer token before fetching
  * anything, since this endpoint fetches an arbitrary caller-supplied URL.
  */
