@@ -12,12 +12,36 @@ import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
 import { Button } from "@/components/ui/button";
 import { findListing, typeLabels } from "@/data/listings";
 import { useListings } from "@/contexts/ListingsContext";
+import { useDocumentMeta } from "@/hooks/useDocumentMeta";
+import { buildBreadcrumbJsonLd, buildListingJsonLd } from "@shared/seo";
 import { toast } from "sonner";
 
 export default function ListingPage({ params }: { params: { slug: string } }) {
   const { listings } = useListings();
   const [guests, setGuests] = useState(1);
   const listing = findListing(params.slug, listings);
+
+  // Hook call must come before any early return (rules of hooks) — this
+  // covers both the not-found and found cases with one call.
+  useDocumentMeta({
+    title: listing ? `${listing.title} — ${typeLabels[listing.type]} in ${listing.city} | Revamp Travel` : "Place not found | Revamp Travel",
+    description: listing?.shortDescription ?? "This listing could not be found.",
+    canonicalPath: `/listing/${params.slug}`,
+    ogImage: listing?.image,
+    noindex: !listing,
+    jsonLd: listing
+      ? [
+          buildListingJsonLd(listing, window.location.origin),
+          buildBreadcrumbJsonLd(window.location.origin, [
+            { name: "Home", path: "/" },
+            { name: "Explore", path: "/explore" },
+            { name: typeLabels[listing.type], path: listing.type === "stay" ? "/explore/stay" : listing.type === "eat" ? "/explore/eat" : "/explore/tour" },
+            { name: listing.title, path: `/listing/${listing.slug}` },
+          ]),
+        ]
+      : undefined,
+  });
+
   if (!listing) {
     return (
       <div className="min-h-screen bg-paper"><SiteHeader /><div className="container py-24 text-center"><p className="eyebrow">Place not found</p><h1 className="mt-4 font-display text-6xl">This path ends here.</h1><Button asChild className="mt-7 rounded-none bg-apricot text-white"><Link href="/explore">Return to the marketplace</Link></Button></div></div>

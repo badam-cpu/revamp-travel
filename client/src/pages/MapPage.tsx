@@ -6,6 +6,8 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { ListingType, typeLabels } from "@/data/listings";
 import { useListings } from "@/contexts/ListingsContext";
+import { useDocumentMeta } from "@/hooks/useDocumentMeta";
+import { buildCollectionPageJsonLd } from "@shared/seo";
 import { cn } from "@/lib/utils";
 
 export default function MapPage() {
@@ -13,6 +15,13 @@ export default function MapPage() {
   const [type, setType] = useState("all");
   const [selectedId, setSelectedId] = useState(listings[0]?.id);
   const filtered = useMemo(() => listings.filter((listing) => type === "all" || listing.type === type), [type, listings]);
+
+  useDocumentMeta({
+    title: "Map — Revamp Travel",
+    description: "Every published Revamp Travel listing across Armenia, browsable on an interactive map.",
+    canonicalPath: "/map",
+    jsonLd: buildCollectionPageJsonLd(window.location.origin, "/map", "Map — Revamp Travel", listings),
+  });
 
   return (
     <div className="min-h-screen bg-basalt text-paper">

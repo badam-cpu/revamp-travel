@@ -32,6 +32,7 @@ import { ApiError, importListingPrefill, syncIcal } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { AmenityPicker, AmenityPickerHandle } from "@/components/AmenityPicker";
+import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { isGoogleMapsConfigured } from "@/lib/googleMaps";
 import { toast } from "sonner";
 
@@ -534,6 +535,13 @@ function DashboardSection({ type, title, description }: { type: ListingType; tit
 function DashboardContent() {
   const { profile } = useAuth();
   const { offline } = useListings();
+
+  useDocumentMeta({
+    title: "Dashboard | Revamp Travel",
+    description: "Manage your own stay and tour listings on Revamp Travel.",
+    canonicalPath: "/dashboard",
+    noindex: true,
+  });
 
   return (
     <div className="min-h-screen bg-paper text-basalt">

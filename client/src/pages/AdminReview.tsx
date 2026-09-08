@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/lib/supabase";
 import { typeLabels, ListingType } from "@shared/listings";
+import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { toast } from "sonner";
 
 interface PendingListing {
@@ -143,6 +144,13 @@ function ReviewCard({ listing, onDecided }: { listing: PendingListing; onDecided
 function AdminReviewContent() {
   const [items, setItems] = useState<PendingListing[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useDocumentMeta({
+    title: "Review queue | Revamp Travel",
+    description: "Approve or send back pending operator listings.",
+    canonicalPath: "/admin",
+    noindex: true,
+  });
 
   const load = useCallback(async () => {
     const { data, error } = await supabase

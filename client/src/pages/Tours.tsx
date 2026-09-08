@@ -17,6 +17,8 @@ import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useListings } from "@/contexts/ListingsContext";
+import { useDocumentMeta } from "@/hooks/useDocumentMeta";
+import { buildCollectionPageJsonLd } from "@shared/seo";
 import { cn } from "@/lib/utils";
 
 type SortKey = "recommended" | "price-asc" | "price-desc" | "duration-asc";
@@ -93,6 +95,13 @@ export default function Tours() {
     setDuration("all");
     setSort("recommended");
   };
+
+  useDocumentMeta({
+    title: "Tours in Armenia | Revamp Travel",
+    description: "Browse guided tours across Armenia — hikes, culture walks, and small-group day trips.",
+    canonicalPath: "/explore/tour",
+    jsonLd: buildCollectionPageJsonLd(window.location.origin, "/explore/tour", "Tours in Armenia", filtered),
+  });
 
   return (
     <div className="min-h-screen bg-paper text-basalt">

@@ -16,11 +16,17 @@ import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/PasswordInput";
 import { useAuth, UserRole } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { cn } from "@/lib/utils";
 
 export default function Signup() {
   const { signUp } = useAuth();
   const [, navigate] = useLocation();
+  useDocumentMeta({
+    title: "Sign up | Revamp Travel",
+    description: "Create a Revamp Travel account as a traveler or an operator.",
+    canonicalPath: "/signup",
+  });
   const [role, setRole] = useState<UserRole>("traveler");
   const [displayName, setDisplayName] = useState("");
   const [businessName, setBusinessName] = useState("");

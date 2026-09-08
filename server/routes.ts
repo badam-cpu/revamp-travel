@@ -16,6 +16,9 @@ import { planTrip, PlannerError } from "./planner.js";
 import { fetchPrefill, PrefillError } from "./urlPrefill.js";
 import { fetchIcalBlockedRanges } from "./ical.js";
 import { SafeFetchError } from "./safeFetch.js";
+import { robotsTxtHandler } from "./robots.js";
+import { sitemapHandler } from "./sitemap.js";
+import { renderForBot } from "./prerender.js";
 
 const planTripSchema = z.object({
   days: z.number().int().min(1).max(21),
@@ -39,6 +42,40 @@ function issuesToMessage(err: z.ZodError): string {
 }
 
 export function registerApiRoutes(app: Express) {
+  // Dynamic robots.txt / sitemap.xml. Registered at both the public path (for
+  // the long-running server in server/index.ts, and local `pnpm start`) and
+  // an /api-prefixed alias — on Netlify the CDN serves the SPA, so these are
+  // reached only via the function, whose path normalizer forces everything
+  // under /api (see netlify/functions/api.ts + the /robots.txt, /sitemap.xml
+  // redirects in netlify.toml).
+  app.get("/robots.txt", robotsTxtHandler);
+  app.get("/api/robots.txt", robotsTxtHandler);
+  app.get("/sitemap.xml", sitemapHandler);
+  app.get("/api/sitemap.xml", sitemapHandler);
+
+  // Bot-facing prerendered HTML for a given SPA route. Called by the Netlify
+  // Edge Function (netlify/edge-functions/prerender.ts), which does the UA
+  // sniffing at the edge and, for a known crawler, fetches this and returns
+  // its HTML instead of the empty SPA shell. `path` is the SPA pathname to
+  // render; `origin` is the real public origin (passed by the edge function
+  // so canonical/OG/JSON-LD URLs are correct behind the proxy).
+  app.get("/api/prerender", async (req: Request, res: Response) => {
+    const rawPath = typeof req.query.path === "string" ? req.query.path : "/";
+    const path = rawPath.startsWith("/") && rawPath.length <= 512 ? rawPath : "/";
+    const origin =
+      typeof req.query.origin === "string" && /^https?:\/\/[^\s/]+$/.test(req.query.origin)
+        ? req.query.origin
+        : `${req.protocol}://${req.get("host")}`;
+    try {
+      const { status, body } = await renderForBot(path, origin);
+      res.status(status).set("Content-Type", "text/html; charset=utf-8").send(body);
+    } catch (err) {
+      console.error("prerender failed", err);
+      // 500 (not 200) so the edge function knows to fall back to the SPA shell.
+      res.status(500).set("Content-Type", "text/plain").send("prerender error");
+    }
+  });
+
   app.post("/api/plan-trip", async (req: Request, res: Response) => {
     const parsed = planTripSchema.safeParse(req.body);
     if (!parsed.success) {

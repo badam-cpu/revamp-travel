@@ -10,6 +10,8 @@ import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { Button } from "@/components/ui/button";
 import { brandAssets, regions } from "@/data/listings";
 import { useListings } from "@/contexts/ListingsContext";
+import { useDocumentMeta } from "@/hooks/useDocumentMeta";
+import { buildWebsiteJsonLd } from "@shared/seo";
 
 const categories = [
   { type: "stay", number: "01", title: "Stay with a sense of place", label: "Homes, cabins & small hotels", image: brandAssets.categories.stay },
@@ -21,6 +23,14 @@ export default function Home() {
   const { listings } = useListings();
   const featured = (listings.filter((listing) => listing.featured).length ? listings.filter((listing) => listing.featured) : listings).slice(0, 6);
   const [selectedId, setSelectedId] = useState(featured[0]?.id);
+
+  useDocumentMeta({
+    title: "Revamp Travel — Discover Armenia",
+    description: "Curated places to stay, Armenian restaurants, local tours, and memorable routes across Armenia.",
+    canonicalPath: "/",
+    ogImage: brandAssets.hero,
+    jsonLd: buildWebsiteJsonLd(window.location.origin),
+  });
 
   return (
     <div className="min-h-screen bg-paper text-basalt">

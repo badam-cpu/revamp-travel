@@ -2,8 +2,11 @@
 #
 # The client is a Vite SPA built to dist/public; the Express API runs as a
 # single Netlify Function (netlify/functions/api.ts) that wraps the same
-# Express app used locally. Listings persist to Netlify Blobs at runtime
-# (see server/store.ts), so no external database is provisioned.
+# Express app used locally. Accounts and listings live in Supabase (Postgres +
+# RLS), read/written straight from the browser — no external DB is provisioned
+# by Netlify. A Netlify Edge Function (netlify/edge-functions/prerender.ts)
+# hands non-JS crawlers server-rendered HTML; see the SEO/prerender wiring in
+# server/prerender.ts and CLAUDE.md's "Bot prerendering" rule.
 
 [build]
   # Client build only. `vite build` emits the SPA to dist/public, which is all
@@ -23,11 +26,35 @@
   # TypeScript functions are bundled with esbuild.
   node_bundler = "esbuild"
 
+# Bot-prerender edge function: runs on every page route, but returns real
+# HTML only for a recognized crawler UA (see the file's header). excludedPath
+# keeps it off the API and static assets so real-visitor latency is untouched.
+[[edge_functions]]
+  path = "/*"
+  function = "prerender"
+  excludedPath = ["/api/*", "/assets/*", "/images/*", "/brand/*"]
+
 # All /api/* traffic is handled by the Express app inside the api Function.
 # force = true so it wins over any static asset resolution.
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = true
+
+# Dynamic robots.txt / sitemap.xml are served by the same Express app inside
+# the Function (there is no static file for them). force = true so they win
+# over the SPA catch-all below. The function's path normalizer maps these to
+# the app's /api/robots.txt and /api/sitemap.xml routes.
+[[redirects]]
+  from = "/robots.txt"
+  to = "/.netlify/functions/api/robots.txt"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/sitemap.xml"
+  to = "/.netlify/functions/api/sitemap.xml"
   status = 200
   force = true
 
@@ -38,3 +65,16 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Belt-and-suspenders noindex on the auth-gated routes. robots.txt Disallow
+# alone doesn't de-index an already-linked page; these headers do. The bodies
+# are still the untouched SPA shell (the edge function never prerenders them).
+[[headers]]
+  for = "/dashboard"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/admin"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"

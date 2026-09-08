@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { planTrip, ApiError, type Itinerary, type PlanTripParams } from "@/lib/api";
+import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { cn } from "@/lib/utils";
 
 const INTEREST_OPTIONS = ["History & monasteries", "Nature & hiking", "Food & wine", "Adventure", "Relaxation", "Photography"];
@@ -24,6 +25,12 @@ export default function Plan() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
+
+  useDocumentMeta({
+    title: "AI Trip Planner | Revamp Travel",
+    description: "Generate a day-by-day Armenia itinerary grounded in Revamp Travel's live, published catalog.",
+    canonicalPath: "/plan",
+  });
 
   const toggleInterest = (value: string) => {
     setInterests((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));

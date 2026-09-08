@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ListingType, typeLabels } from "@/data/listings";
 import { useListings } from "@/contexts/ListingsContext";
+import { useDocumentMeta } from "@/hooks/useDocumentMeta";
+import { buildCollectionPageJsonLd } from "@shared/seo";
 import { cn } from "@/lib/utils";
 
 const validTypes = new Set(["all", "stay", "eat", "tour"]);
@@ -41,6 +43,18 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
     setType("all");
     setRegion("all");
   };
+
+  const pageLabel = type === "all" ? "All listings" : typeLabels[type as ListingType];
+  const canonicalPath = type === "all" ? "/explore" : `/explore/${type}`;
+  useDocumentMeta({
+    title: type === "all" ? "Explore Armenia | Revamp Travel" : `${pageLabel} in Armenia | Revamp Travel`,
+    description:
+      type === "all"
+        ? "Browse places to stay, restaurants, and tours across Armenia on Revamp Travel."
+        : `Browse ${pageLabel.toLowerCase()} across Armenia on Revamp Travel.`,
+    canonicalPath,
+    jsonLd: buildCollectionPageJsonLd(window.location.origin, canonicalPath, pageLabel, filtered),
+  });
 
   return (
     <div className="min-h-screen bg-paper text-basalt">

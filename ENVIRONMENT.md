@@ -17,6 +17,8 @@ Browsing, search, filtering, and the SVG atlas work with no secrets at all (they
 
 `POST /api/import-listing` — the link-prefill assist on `/dashboard` (`server/urlPrefill.ts`) — needs **no new environment variable at all**. It reuses `VITE_SUPABASE_ANON_KEY`/`VITE_SUPABASE_URL` (already required for accounts) to verify the caller is signed in, then fetches the operator-pasted URL directly with no external API key involved.
 
+The SEO/crawler layer — dynamic `robots.txt`/`sitemap.xml`, per-page metadata, and the bot prerenderer (`server/prerender.ts` + the `netlify/edge-functions/prerender.ts` edge function) — also needs **no new environment variable**. The prerenderer/sitemap read the published catalog with the same anon `VITE_SUPABASE_*` key (published listings are publicly readable under RLS), and every public URL is derived from the incoming request's own host, so nothing has to be told the deployment's domain.
+
 Promoting an account to `admin` (so it can review pending listings at `/admin`) is a one-time SQL statement run by hand in the Supabase dashboard, not an environment variable — see `README.md`'s Supabase Setup, step 5.
 
 Copy `.env.example` to `.env` and fill in what you need:

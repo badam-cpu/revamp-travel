@@ -16,6 +16,12 @@ import { registerApiRoutes } from "./routes.js";
 
 export const app = express();
 
+// Behind Netlify's proxy (and any reverse proxy in `pnpm start`), trust the
+// X-Forwarded-* headers so req.protocol/req.get("host") reflect the real
+// public https origin — robots.txt's Sitemap line, the sitemap <loc>s, and
+// the prerenderer's canonical/OG/JSON-LD URLs all derive from that.
+app.set("trust proxy", true);
+
 app.use(express.json({ limit: "1mb" }));
 
 // API routes only. Static/catch-all SPA serving lives in server/index.ts and

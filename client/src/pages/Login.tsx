@@ -9,10 +9,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/PasswordInput";
 import { useAuth } from "@/contexts/AuthContext";
+import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 
 export default function Login() {
   const { signIn, resetPassword } = useAuth();
   const [, navigate] = useLocation();
+  useDocumentMeta({
+    title: "Sign in | Revamp Travel",
+    description: "Sign in to your Revamp Travel account to book, save places, or manage your listings.",
+    canonicalPath: "/login",
+  });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
