@@ -85,6 +85,7 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement): ListingInpu
     amenities,
     featured: (form.elements.namedItem("featured") as HTMLInputElement | null)?.checked || false,
     accent: (get("accent") as ListingInput["accent"]) || "apricot",
+    maxGuests: Number(get("maxGuests")) > 0 ? Number(get("maxGuests")) : undefined,
   };
 }
 
@@ -263,9 +264,10 @@ function ListingFormDialog({
             <div className="grid gap-1.5"><Label htmlFor="shortDescription">Short description</Label><Textarea id="shortDescription" name="shortDescription" rows={2} placeholder="One or two lines shown on cards." defaultValue={draft.shortDescription} /></div>
             <div className="grid gap-1.5"><Label htmlFor="longDescription">Full description</Label><Textarea id="longDescription" name="longDescription" rows={4} placeholder="The full write-up shown on the listing page." defaultValue={draft.longDescription} /></div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
               <div className="grid gap-1.5"><Label htmlFor="price">Price ({draft.type === "stay" ? "per night" : "per person"})</Label><Input id="price" name="price" type="number" min={1} placeholder="e.g. 120" defaultValue={draft.price || ""} /></div>
               <div className="grid gap-1.5"><Label htmlFor="priceUnit">Price unit label</Label><Input id="priceUnit" name="priceUnit" placeholder={draft.type === "stay" ? "night" : "person"} defaultValue={draft.priceUnit} /></div>
+              <div className="grid gap-1.5"><Label htmlFor="maxGuests">Max guests</Label><Input id="maxGuests" name="maxGuests" type="number" min={1} max={50} placeholder={draft.type === "stay" ? "e.g. 4" : "e.g. 8"} defaultValue={draft.maxGuests || ""} /></div>
             </div>
 
             <div className="grid gap-1.5"><Label htmlFor="tags">Tags (comma separated)</Label><Input id="tags" name="tags" placeholder="Forest, Breakfast, Design stay" defaultValue={draft.tags?.join(", ")} /></div>

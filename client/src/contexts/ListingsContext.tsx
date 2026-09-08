@@ -60,7 +60,7 @@ interface ListingsContextType {
 const ListingsContext = createContext<ListingsContextType | undefined>(undefined);
 
 const ROW_COLUMNS =
-  "id, operator_id, type, slug, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, amenities, facts, featured, accent, status, review_note, reviewed_at, ical_url, ical_synced_at, ical_error, blocked_ranges, seasonal_rates";
+  "id, operator_id, type, slug, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, amenities, facts, featured, accent, status, review_note, reviewed_at, ical_url, ical_synced_at, ical_error, blocked_ranges, seasonal_rates, max_guests";
 
 interface ListingRow {
   id: string;
@@ -92,6 +92,7 @@ interface ListingRow {
   ical_error: string | null;
   blocked_ranges: BlockedRange[] | null;
   seasonal_rates: SeasonalRate[] | null;
+  max_guests: number | null;
 }
 
 function mapListingRow(row: ListingRow): LiveListing {
@@ -127,6 +128,7 @@ function mapListingRow(row: ListingRow): LiveListing {
     icalError: row.ical_error,
     blockedRanges: Array.isArray(row.blocked_ranges) ? row.blocked_ranges : [],
     seasonalRates: Array.isArray(row.seasonal_rates) ? row.seasonal_rates : [],
+    maxGuests: row.max_guests ?? undefined,
   };
 }
 
@@ -151,6 +153,7 @@ function toRow(input: ListingInput) {
     facts: input.facts,
     featured: input.featured ?? false,
     accent: input.accent,
+    max_guests: input.maxGuests ?? null,
   };
 }
 

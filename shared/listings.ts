@@ -37,6 +37,8 @@ export interface Listing {
   amenities: string[];
   featured?: boolean;
   accent: "apricot" | "sevan" | "tuff";
+  /** Maximum number of guests the listing sleeps/hosts; caps the guest selector. */
+  maxGuests?: number;
 }
 
 // Deployment note: this fork replaces the Manus-managed `/manus-storage/...`
@@ -536,4 +538,6 @@ export interface ListingInput {
   amenities: string[];
   featured?: boolean;
   accent: "apricot" | "sevan" | "tuff";
+  /** Maximum number of guests the listing sleeps/hosts; caps the guest selector. */
+  maxGuests?: number;
 }

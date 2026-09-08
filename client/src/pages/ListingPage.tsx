@@ -1,5 +1,6 @@
 /** Revamp brandbook: detail pages combine rounded imagery, bold sans hierarchy, concise facts, white space, and orange actions. */
-import { ArrowLeft, Bookmark, CalendarDays, Check, Clock3, MapPin, Share2, Users } from "lucide-react";
+import { useState } from "react";
+import { ArrowLeft, Bookmark, CalendarDays, Check, MapPin, Minus, Plus, Share2, Users } from "lucide-react";
 import { Link } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -15,6 +16,7 @@ import { toast } from "sonner";
 
 export default function ListingPage({ params }: { params: { slug: string } }) {
   const { listings } = useListings();
+  const [guests, setGuests] = useState(1);
   const listing = findListing(params.slug, listings);
   if (!listing) {
     return (
@@ -22,7 +24,9 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
     );
   }
 
-  const blockedRanges = listings.find((l) => l.id === listing.id)?.blockedRanges ?? [];
+  const live = listings.find((l) => l.id === listing.id);
+  const blockedRanges = live?.blockedRanges ?? [];
+  const maxGuests = live?.maxGuests ?? 8;
 
   // Tours get a dedicated GetYourGuide-style detail layout; stays and
   // restaurants keep the original shared template below.
@@ -108,9 +112,32 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
               ) : (
                 <label className="mt-5 block"><span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">Preferred date</span><div className="relative"><CalendarDays className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-apricot" /><input type="date" className="h-11 w-full border border-basalt/15 bg-paper pl-10 pr-3 text-sm outline-none focus:border-apricot" /></div></label>
               )}
-              <div className="mt-4 grid grid-cols-2 gap-3 text-xs text-basalt/55">
-                <div className="border border-basalt/10 bg-paper p-3"><Clock3 className="mb-2 h-4 w-4 text-sevan" /> Flexible timing</div>
-                <div className="border border-basalt/10 bg-paper p-3"><Users className="mb-2 h-4 w-4 text-tuff" /> Small scale</div>
+              <div className="mt-4">
+                <span className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">
+                  <Users className="h-3.5 w-3.5 text-tuff" /> Guests
+                </span>
+                <div className="flex items-center justify-between border border-basalt/15 bg-paper px-3 py-2">
+                  <button
+                    type="button"
+                    aria-label="Fewer guests"
+                    disabled={guests <= 1}
+                    onClick={() => setGuests((g) => Math.max(1, g - 1))}
+                    className="grid h-7 w-7 place-items-center border border-basalt/15 text-basalt transition-colors hover:border-apricot hover:text-apricot disabled:opacity-30 disabled:hover:border-basalt/15 disabled:hover:text-basalt"
+                  >
+                    <Minus className="h-3.5 w-3.5" />
+                  </button>
+                  <span className="text-sm font-semibold">{guests} {guests === 1 ? "guest" : "guests"}</span>
+                  <button
+                    type="button"
+                    aria-label="More guests"
+                    disabled={guests >= maxGuests}
+                    onClick={() => setGuests((g) => Math.min(maxGuests, g + 1))}
+                    className="grid h-7 w-7 place-items-center border border-basalt/15 text-basalt transition-colors hover:border-apricot hover:text-apricot disabled:opacity-30 disabled:hover:border-basalt/15 disabled:hover:text-basalt"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <p className="mt-1.5 text-xs text-basalt/45">Sleeps up to {maxGuests} {maxGuests === 1 ? "guest" : "guests"}.</p>
               </div>
             <BookingCta slug={listing.slug} className="mt-5" />
               <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">Online booking and payment are launching soon.</p>
