@@ -98,7 +98,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
             <div className="brand-notch sticky top-[104px] border border-basalt/12 bg-chalk p-6 shadow-[0_20px_55px_rgba(35,35,33,0.1)]">
               <div className="flex items-end justify-between gap-4 border-b border-basalt/10 pb-5">
                 <p><strong className="font-display text-4xl font-normal">{listing.priceLabel}</strong> {listing.price > 0 && <span className="text-sm text-basalt/50">/ {listing.priceUnit}</span>}</p>
-                <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-tuff">Illustrative rate</span>
+                {listing.price > 0 && <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-tuff">Illustrative rate</span>}
               </div>
               {blockedRanges.length > 0 ? (
                 <div className="mt-5">
