@@ -175,7 +175,6 @@ export function TourDetail({ listing }: { listing: Listing }) {
                 <span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-basalt/40">From</span>
                 <strong className="font-display text-4xl font-normal">{listing.priceLabel}</strong> {listing.price > 0 && <span className="text-sm text-basalt/50">/ {listing.priceUnit}</span>}
               </p>
-              {listing.price > 0 && <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-tuff">Illustrative rate</span>}
             </div>
 
             {blockedRanges.length > 0 ? (

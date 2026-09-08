@@ -105,7 +105,7 @@ export default function Tours() {
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Tours & experiences</p>
             <h1 className="mt-3 max-w-xl font-display text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl">Guided days across Armenia.</h1>
             <p className="mt-4 max-w-lg text-sm leading-6 text-paper/65">
-              Small-group hikes, monastery routes, and food-and-craft walks — led by local guides, priced per person. Rates are illustrative until you're ready to plan real dates.
+              Small-group hikes, monastery routes, and food-and-craft walks — led by local guides, priced per person.
             </p>
             <label className="relative mt-7 block max-w-md">
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-basalt/40" />
