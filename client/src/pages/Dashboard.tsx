@@ -31,6 +31,7 @@ import type { ListingInput, ListingType } from "@shared/listings";
 import { ApiError, importListingPrefill, syncIcal } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { AmenityPicker, AmenityPickerHandle } from "@/components/AmenityPicker";
 import { isGoogleMapsConfigured } from "@/lib/googleMaps";
 import { toast } from "sonner";
 
@@ -58,11 +59,11 @@ function emptyDraft(type: ListingType): DraftListing {
   };
 }
 
-function toInputPayload(draft: DraftListing, form: HTMLFormElement): ListingInput {
+function toInputPayload(draft: DraftListing, form: HTMLFormElement, amenities: string[]): ListingInput {
   const get = (name: string) => (form.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement | null)?.value ?? "";
   const price = Number(get("price")) || 0;
   const tags = get("tags").split(",").map((t) => t.trim()).filter(Boolean);
-  const amenities = get("amenities").split(",").map((t) => t.trim()).filter(Boolean);
+  // amenities come from the AmenityPicker (passed in), not a text field.
   const facts = [1, 2, 3]
     .map((n) => ({ label: get(`fact${n}Label`).trim(), value: get(`fact${n}Value`).trim() }))
     .filter((f) => f.label && f.value);
@@ -117,6 +118,7 @@ function ListingFormDialog({
   const [step, setStep] = useState(0);
   const [stepError, setStepError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const amenitiesRef = useRef<AmenityPickerHandle>(null);
   const draftId = draft?.id;
   // Reset to the first step whenever the dialog (re)opens or a different draft loads.
   useEffect(() => {
@@ -170,7 +172,7 @@ function ListingFormDialog({
     setSaving(true);
     setError(null);
     try {
-      const payload = toInputPayload(draft, event.currentTarget);
+      const payload = toInputPayload(draft, event.currentTarget, amenitiesRef.current?.getValue() ?? []);
       if (isEdit && draft.id) {
         await updateListing(draft.id, payload);
         toast(`${payload.title} updated.`);
@@ -271,7 +273,7 @@ function ListingFormDialog({
             </div>
 
             <div className="grid gap-1.5"><Label htmlFor="tags">Tags (comma separated)</Label><Input id="tags" name="tags" placeholder="Forest, Breakfast, Design stay" defaultValue={draft.tags?.join(", ")} /></div>
-            <div className="grid gap-1.5"><Label htmlFor="amenities">Amenities (comma separated)</Label><Input id="amenities" name="amenities" placeholder="Wi-Fi, Breakfast basket, Local transfers" defaultValue={draft.amenities?.join(", ")} /></div>
+            <AmenityPicker ref={amenitiesRef} type={draft.type} defaultValue={draft.amenities ?? []} />
 
             <div>
               <Label className="mb-2 block">Quick facts (up to 3, optional)</Label>
