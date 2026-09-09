@@ -21,6 +21,8 @@
 import { useEffect, useMemo, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import "leaflet.markercluster";
+import "leaflet.markercluster/dist/MarkerCluster.css";
 import { Listing } from "@/data/listings";
 import { cn } from "@/lib/utils";
 
@@ -43,7 +45,7 @@ export function ArmeniaMap({ listings, selectedId, onSelect, className, single =
 
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
-  const layerRef = useRef<L.LayerGroup | null>(null);
+  const layerRef = useRef<L.MarkerClusterGroup | null>(null);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
 
@@ -56,11 +58,29 @@ export function ArmeniaMap({ listings, selectedId, onSelect, className, single =
       attributionControl: true,
     }).setView(ARMENIA_CENTER, 7);
     map.zoomControl.setPosition("topright");
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    // CARTO Positron — a clean, muted light basemap that reads as a quiet
+    // brand surface rather than default OSM's busy color. Keyless; attribution
+    // credits both OSM (data) and CARTO (tiles), as their usage requires.
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
       maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      detectRetina: true,
+      subdomains: "abcd",
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     }).addTo(map);
-    layerRef.current = L.layerGroup().addTo(map);
+    // Cluster nearby listings into a brand pill showing the count; a single
+    // listing (detail pages) just shows its own marker, no cluster.
+    layerRef.current = L.markerClusterGroup({
+      showCoverageOnHover: false,
+      maxClusterRadius: 46,
+      spiderfyOnMaxZoom: true,
+      iconCreateFunction: (cluster) =>
+        L.divIcon({
+          className: "",
+          html: `<span class="revamp-cluster">${cluster.getChildCount()}</span>`,
+          iconSize: L.point(38, 38),
+        }),
+    }).addTo(map);
     mapRef.current = map;
 
     // Leaflet needs a correctly-sized container; recompute when it changes
