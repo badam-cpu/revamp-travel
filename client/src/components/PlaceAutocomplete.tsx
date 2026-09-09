@@ -80,7 +80,12 @@ export function PlaceAutocomplete({ onSelect }: { onSelect: (place: ResolvedPlac
           if (event.key === "Enter") event.preventDefault();
         }}
         style={{ colorScheme: "light" }}
-        className="[&_gmp-place-autocomplete]:block [&_gmp-place-autocomplete]:w-full"
+        // Frame the (borderless) Google widget with a brand outline: rounded
+        // (0.875rem to match the app's `.rounded-none` radius), white fill,
+        // soft basalt border, apricot on focus — so it reads as a real field
+        // like City/Region below it. overflow-hidden clips the inner input's
+        // own corners to the rounded frame.
+        className="[&_gmp-place-autocomplete]:block [&_gmp-place-autocomplete]:w-full [&_gmp-place-autocomplete]:overflow-hidden [&_gmp-place-autocomplete]:rounded-[0.875rem] [&_gmp-place-autocomplete]:border [&_gmp-place-autocomplete]:border-basalt/20 [&_gmp-place-autocomplete]:bg-paper [&_gmp-place-autocomplete:focus-within]:border-apricot"
       />
       <p className="text-xs text-basalt/45">
         Pick a result to fill in city, region, and coordinates below — you can still edit any of them by hand after.
