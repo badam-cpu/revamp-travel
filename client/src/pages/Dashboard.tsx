@@ -626,6 +626,12 @@ function DashboardContent() {
   const { profile } = useAuth();
   const { offline } = useListings();
 
+  // Greet the operator by first name — the first word of their profile name
+  // (person's display name preferred over a business name), lightly capitalized.
+  const rawName = (profile?.displayName || profile?.businessName || "").trim();
+  const firstWord = rawName.split(/\s+/)[0] ?? "";
+  const firstName = firstWord ? firstWord.charAt(0).toUpperCase() + firstWord.slice(1) : "";
+
   useDocumentMeta({
     title: "Dashboard | Revamp Travel",
     description: "Manage your own stay and tour listings on Revamp Travel.",
@@ -639,7 +645,7 @@ function DashboardContent() {
       <main className="container py-12 lg:py-16">
         <p className="eyebrow">Operator dashboard</p>
         <h1 className="mt-3 font-display text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl">
-          {profile?.businessName || profile?.displayName || "Your listings"}.
+          {firstName ? `Hi ${firstName}.` : "Your listings."}
         </h1>
         <p className="mt-4 max-w-xl text-base leading-7 text-basalt/60">
           Add, edit, or remove your own stays and tours — nobody else can see or edit them but you. A new listing goes through a quick review before it's visible to travelers; edits to an already-live listing save immediately.

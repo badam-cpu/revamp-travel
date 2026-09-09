@@ -43,7 +43,7 @@ export default function Home() {
           <div className="container relative z-10 flex min-h-[660px] flex-col justify-center pb-28 pt-16 sm:min-h-[720px]">
             <div className="max-w-[720px]">
               <div className="hero-enter flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.23em] text-tuff"><span className="h-px w-10 bg-tuff" /> Curated across Armenia</div>
-              <h1 className="hero-enter mt-7 font-display text-[4rem] leading-[0.86] tracking-[-0.055em] text-basalt sm:text-[5.6rem] lg:text-[7rem]">Stone roads.<br /><span className="text-apricot">Apricot</span> mornings.</h1>
+              <h1 className="hero-enter mt-7 font-display text-[4rem] leading-[0.86] tracking-[-0.055em] text-basalt sm:text-[5.6rem] lg:text-[7rem]">Stay.<br /><span className="text-apricot">Experience.</span><br />Repeat.</h1>
               <p className="hero-enter mt-7 max-w-lg text-base leading-7 text-basalt/65 sm:text-lg">Exceptional stays, Armenian tables, and local routes—carefully gathered for travelers who want to feel the country, not just pass through it.</p>
               <Link href="/explore" className="hero-enter mt-8 inline-flex items-center gap-3 text-xs font-bold uppercase tracking-[0.17em] text-basalt hover:text-apricot">Find your way through Armenia <span className="grid h-9 w-9 place-items-center border border-basalt/25"><ArrowDown className="h-4 w-4" /></span></Link>
             </div>
