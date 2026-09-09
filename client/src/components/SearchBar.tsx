@@ -76,7 +76,7 @@ export function SearchBar({ compact = false, initialQuery = "", initialType = "a
           </span>
         </label>
       )}
-      <Button type="submit" className="min-h-[78px] rounded-none bg-apricot px-7 text-white hover:bg-apricot/90">
+      <Button type="submit" className="min-h-[78px] rounded-[0px] bg-apricot px-7 text-white hover:bg-apricot/90">
         <Search className="mr-2 h-4 w-4" /> Search
       </Button>
     </form>
