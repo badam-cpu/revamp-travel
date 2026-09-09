@@ -178,10 +178,15 @@ ${opts.bodyHtml}
 // Shared fragments
 // ---------------------------------------------------------------------
 
+/** A listing image is either a root-relative brand asset (/images/…) or an absolute uploaded URL (Supabase Storage) — only prepend the origin to the former. */
+function imgUrl(src: string, origin: string): string {
+  return /^https?:\/\//i.test(src) ? src : `${origin}${src}`;
+}
+
 function listingCardHtml(listing: PublicListing, origin: string): string {
   return `<article>
 <h3><a href="${origin}/listing/${escapeHtml(listing.slug)}">${escapeHtml(listing.title)}</a></h3>
-<img src="${origin}${listing.image}" alt="${escapeHtml(listing.title)}" />
+<img src="${escapeHtml(imgUrl(listing.image, origin))}" alt="${escapeHtml(listing.title)}" />
 <p>${escapeHtml(listing.shortDescription)}</p>
 <p>${escapeHtml(listing.city)}, ${escapeHtml(listing.region)} — ${escapeHtml(listing.priceLabel)} / ${escapeHtml(listing.priceUnit)}</p>
 </article>`;
@@ -328,7 +333,7 @@ function renderListingDetail(listing: PublicListing, catalog: PublicListing[], o
   const amenitiesHtml = listing.amenities.length > 0 ? `<ul>${listing.amenities.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
   const galleryHtml = [listing.image, ...listing.gallery]
     .filter((src, index, all) => all.indexOf(src) === index)
-    .map((src) => `<img src="${origin}${src}" alt="${escapeHtml(listing.title)}" />`)
+    .map((src) => `<img src="${escapeHtml(imgUrl(src, origin))}" alt="${escapeHtml(listing.title)}" />`)
     .join("\n");
   const tagsHtml = listing.tags.length > 0 ? `<p>${listing.tags.map((tag) => escapeHtml(tag)).join(", ")}</p>` : "";
 
@@ -360,7 +365,7 @@ ${
     title,
     description: listing.shortDescription,
     canonical: `${origin}${canonicalPath}`,
-    ogImage: `${origin}${listing.image}`,
+    ogImage: imgUrl(listing.image, origin),
     jsonLd: [
       buildListingJsonLd(listing, origin),
       buildBreadcrumbJsonLd(origin, [

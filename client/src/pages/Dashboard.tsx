@@ -40,6 +40,7 @@ import { ApiError, importListingPrefill, syncIcal } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { AmenityPicker, AmenityPickerHandle } from "@/components/AmenityPicker";
+import { PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { isGoogleMapsConfigured } from "@/lib/googleMaps";
 import { toast } from "sonner";
@@ -68,11 +69,12 @@ function emptyDraft(type: ListingType): DraftListing {
   };
 }
 
-function toInputPayload(draft: DraftListing, form: HTMLFormElement, amenities: string[]): ListingInput {
+function toInputPayload(draft: DraftListing, form: HTMLFormElement, amenities: string[], photos: string[]): ListingInput {
   const get = (name: string) => (form.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement | null)?.value ?? "";
   const price = Number(get("price")) || 0;
   const tags = get("tags").split(",").map((t) => t.trim()).filter(Boolean);
-  // amenities come from the AmenityPicker (passed in), not a text field.
+  // amenities come from the AmenityPicker, photos from the PhotoUploader —
+  // both passed in, neither a text field. Cover photo = first, gallery = all.
   const facts = [1, 2, 3]
     .map((n) => ({ label: get(`fact${n}Label`).trim(), value: get(`fact${n}Value`).trim() }))
     .filter((f) => f.label && f.value);
@@ -84,7 +86,9 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, amenities: s
     city: get("city").trim(),
     region: get("region").trim(),
     coordinates: { lat: Number(get("lat")) || 0, lng: Number(get("lng")) || 0 },
-    image: get("image").trim() || undefined,
+    // No photos → leave undefined so toRow() falls back to a brand illustration.
+    image: photos[0] || undefined,
+    gallery: photos.length ? photos : undefined,
     shortDescription: get("shortDescription").trim(),
     longDescription: get("longDescription").trim(),
     price,
@@ -97,6 +101,12 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, amenities: s
     accent: (get("accent") as ListingInput["accent"]) || "apricot",
     maxGuests: Number(get("maxGuests")) > 0 ? Number(get("maxGuests")) : undefined,
   };
+}
+
+/** Photos an operator actually uploaded/added — the brand-illustration fallbacks (self-hosted /images or /brand SVGs) don't count, so editing a listing that never had real photos starts the uploader empty. */
+function realPhotos(draft: DraftListing): string[] {
+  const source = draft.gallery?.length ? draft.gallery : draft.image ? [draft.image] : [];
+  return source.filter((u) => u && !u.startsWith("/images/") && !u.startsWith("/brand/"));
 }
 
 /** What saving this draft will actually do — differs by whether it's new, awaiting review, or already live. */
@@ -138,6 +148,7 @@ function ListingFormDialog({
   const [stepError, setStepError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const amenitiesRef = useRef<AmenityPickerHandle>(null);
+  const photosRef = useRef<PhotoUploaderHandle>(null);
   const draftId = draft?.id;
   // Reset to the first step whenever the dialog (re)opens or a different draft loads.
   useEffect(() => {
@@ -195,7 +206,7 @@ function ListingFormDialog({
     setSaving(true);
     setError(null);
     try {
-      const payload = toInputPayload(draft, event.currentTarget, amenitiesRef.current?.getValue() ?? []);
+      const payload = toInputPayload(draft, event.currentTarget, amenitiesRef.current?.getValue() ?? [], photosRef.current?.getValue() ?? []);
       if (isEdit && draft.id) {
         await updateListing(draft.id, payload);
         toast(`${payload.title} updated.`);
@@ -360,10 +371,7 @@ function ListingFormDialog({
                   </div>
                 </div>
 
-                <div className="grid gap-2">
-                  <Label htmlFor="image" className="text-sm font-semibold">Image URL <span className="font-normal text-basalt/45">(optional)</span></Label>
-                  <Input id="image" name="image" placeholder="Leave blank to use a brand illustration" defaultValue={draft.image} className={FIELD} />
-                </div>
+                <PhotoUploader ref={photosRef} defaultValue={realPhotos(draft)} />
 
                 <label className="flex items-center gap-3 border border-basalt/12 bg-chalk px-4 py-3 text-sm">
                   <input type="checkbox" name="featured" defaultChecked={draft.featured} className="h-4 w-4 accent-[#F15822]" />
