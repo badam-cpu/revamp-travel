@@ -70,23 +70,28 @@ export function PlaceAutocomplete({ onSelect }: { onSelect: (place: ResolvedPlac
   return (
     <div className="grid gap-1.5">
       <Label>Search for the address (optional)</Label>
+      {/* The brand outline lives on THIS wrapper, never on the widget itself —
+          styling the gmp-place-autocomplete host (esp. overflow-hidden) clips
+          its own suggestions dropdown and breaks the search. The wrapper frames
+          it (rounded 0.875rem to match the app's `.rounded-none`, white fill,
+          soft border, apricot on focus) while the element stays untouched, and
+          nothing here has overflow-hidden, so the dropdown shows freely. */}
       <div
-        ref={containerRef}
-        // Pressing Enter to pick a suggestion shouldn't submit the
-        // surrounding listing form — preventDefault on the native keydown
-        // stops that default action without blocking the widget's own
-        // internal handling of the same keypress.
-        onKeyDownCapture={(event) => {
-          if (event.key === "Enter") event.preventDefault();
-        }}
         style={{ colorScheme: "light" }}
-        // Frame the (borderless) Google widget with a brand outline: rounded
-        // (0.875rem to match the app's `.rounded-none` radius), white fill,
-        // soft basalt border, apricot on focus — so it reads as a real field
-        // like City/Region below it. overflow-hidden clips the inner input's
-        // own corners to the rounded frame.
-        className="[&_gmp-place-autocomplete]:block [&_gmp-place-autocomplete]:w-full [&_gmp-place-autocomplete]:overflow-hidden [&_gmp-place-autocomplete]:rounded-[0.875rem] [&_gmp-place-autocomplete]:border [&_gmp-place-autocomplete]:border-basalt/20 [&_gmp-place-autocomplete]:bg-paper [&_gmp-place-autocomplete:focus-within]:border-apricot"
-      />
+        className="rounded-[0.875rem] border border-basalt/20 bg-paper focus-within:border-apricot"
+      >
+        <div
+          ref={containerRef}
+          // Pressing Enter to pick a suggestion shouldn't submit the
+          // surrounding listing form — preventDefault on the native keydown
+          // stops that default action without blocking the widget's own
+          // internal handling of the same keypress.
+          onKeyDownCapture={(event) => {
+            if (event.key === "Enter") event.preventDefault();
+          }}
+          className="[&_gmp-place-autocomplete]:block [&_gmp-place-autocomplete]:w-full [&_gmp-place-autocomplete]:bg-transparent"
+        />
+      </div>
       <p className="text-xs text-basalt/45">
         Pick a result to fill in city, region, and coordinates below — you can still edit any of them by hand after.
       </p>
