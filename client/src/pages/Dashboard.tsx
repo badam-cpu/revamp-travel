@@ -38,11 +38,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import type { ListingInput, ListingType } from "@shared/listings";
 import { ApiError, importListingPrefill, syncIcal } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { PlaceAutocomplete } from "@/components/PlaceAutocomplete";
 import { AmenityPicker, AmenityPickerHandle } from "@/components/AmenityPicker";
 import { PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
-import { isGoogleMapsConfigured } from "@/lib/googleMaps";
 import { toast } from "sonner";
 
 // `prefillImageUrl` is display-only — it's carried on the draft purely so
@@ -291,16 +290,17 @@ function ListingFormDialog({
 
               {/* Step 2 — where it is */}
               <div hidden={step !== 1} className="mt-10 grid gap-6">
-                {isGoogleMapsConfigured && (
-                  <AddressAutocomplete
-                    onSelect={(s) => {
-                      setField("lat", String(s.lat));
-                      setField("lng", String(s.lng));
-                      if (s.city) setField("city", s.city);
-                      if (s.region) setField("region", s.region);
-                    }}
-                  />
-                )}
+                {/* Optional Google Places autofill — self-gates: renders nothing
+                    unless VITE_GOOGLE_MAPS_API_KEY is set. Only ever sets the
+                    fields below; the operator can still edit each by hand. */}
+                <PlaceAutocomplete
+                  onSelect={(place) => {
+                    if (place.city) setField("city", place.city);
+                    if (place.region) setField("region", place.region);
+                    if (typeof place.lat === "number") setField("lat", String(place.lat));
+                    if (typeof place.lng === "number") setField("lng", String(place.lng));
+                  }}
+                />
                 <div className="grid gap-6 sm:grid-cols-2">
                   <div className="grid gap-2">
                     <Label htmlFor="city" className="text-sm font-semibold">City</Label>

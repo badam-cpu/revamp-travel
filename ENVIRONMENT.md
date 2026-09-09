@@ -15,6 +15,13 @@ Browsing, search, filtering, and the SVG atlas work with no secrets at all (they
 | `API_PORT` | Port the Express API listens on **in development**, proxied to by Vite. Not used in production (see `PORT`). | No | `3001` |
 | `PORT` | Port the single Express process listens on **in production** (`pnpm start`), serving both the built SPA and `/api/plan-trip`. | No | `3000` |
 
+| `VITE_GOOGLE_MAPS_API_KEY` | Google Maps Platform key, read by `client/src/lib/googleMaps.ts` to power the dashboard listing form's address-autocomplete field (`client/src/components/PlaceAutocomplete.tsx`). Ships to the browser by design — see the setup note below for why that's safe here. | Only for that one autofill convenience — without it, `PlaceAutocomplete` renders nothing and the form's city/region/lat/lng inputs work exactly as plain manual fields. | none |
+
+**Setting up `VITE_GOOGLE_MAPS_API_KEY` (address autocomplete):** unlike Supabase's anon key, nothing like Row-Level Security limits what this key can do once it's public, so the restrictions you put on it *in Google Cloud Console* are what keep it safe, not secrecy:
+1. Enable **"Places API (New)"** specifically (not the older, unsuffixed "Places API" — deprecated).
+2. Create an API key under Keys & Credentials, and enable billing on the project.
+3. Restrict it two ways before using it anywhere real: **Application restrictions → Websites (HTTP referrers)** set to your actual domain(s); **API restrictions → Restrict key** to only "Places API (New)". Leaving either unrestricted means anyone who finds the key in your page source can use it elsewhere. If suggestions never appear, try `v=beta` in `client/src/lib/googleMaps.ts`'s script URL (Google sometimes ships the web component on the beta channel first).
+
 `POST /api/import-listing` — the link-prefill assist on `/dashboard` (`server/urlPrefill.ts`) — needs **no new environment variable at all**. It reuses `VITE_SUPABASE_ANON_KEY`/`VITE_SUPABASE_URL` (already required for accounts) to verify the caller is signed in, then fetches the operator-pasted URL directly with no external API key involved.
 
 The SEO/crawler layer — dynamic `robots.txt`/`sitemap.xml`, per-page metadata, and the bot prerenderer (`server/prerender.ts` + the `netlify/edge-functions/prerender.ts` edge function) — also needs **no new environment variable**. The prerenderer/sitemap read the published catalog with the same anon `VITE_SUPABASE_*` key (published listings are publicly readable under RLS), and every public URL is derived from the incoming request's own host, so nothing has to be told the deployment's domain.
