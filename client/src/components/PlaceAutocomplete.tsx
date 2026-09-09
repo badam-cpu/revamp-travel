@@ -40,6 +40,10 @@ export function PlaceAutocomplete({ onSelect }: { onSelect: (place: ResolvedPlac
         return;
       }
       const el = new PlaceAutocompleteElementCtor({ componentRestrictions: { country: "am" } });
+      // Force the widget to render light — its shadow DOM otherwise follows the
+      // OS `prefers-color-scheme`, which turns the box black in dark mode while
+      // the rest of this (deliberately light) app stays white.
+      el.style.setProperty("color-scheme", "light");
       // Google's newer region-restriction property — set defensively since
       // the installed @types package doesn't declare it on this element yet
       // (see googleMaps.ts's header comment). A harmless no-op if this API
@@ -75,6 +79,7 @@ export function PlaceAutocomplete({ onSelect }: { onSelect: (place: ResolvedPlac
         onKeyDownCapture={(event) => {
           if (event.key === "Enter") event.preventDefault();
         }}
+        style={{ colorScheme: "light" }}
         className="[&_gmp-place-autocomplete]:block [&_gmp-place-autocomplete]:w-full"
       />
       <p className="text-xs text-basalt/45">

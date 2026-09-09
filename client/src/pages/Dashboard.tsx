@@ -311,17 +311,28 @@ function ListingFormDialog({
                     <Input id="region" name="region" placeholder="e.g. Kotayk" defaultValue={draft.region} className={FIELD} />
                   </div>
                 </div>
-                <div className="grid gap-6 sm:grid-cols-2">
-                  <div className="grid gap-2">
-                    <Label htmlFor="lat" className="text-sm font-semibold">Latitude</Label>
-                    <Input id="lat" name="lat" type="number" step="0.0001" min={38} max={42} defaultValue={draft.coordinates?.lat} className={FIELD} />
+                {/* Coordinates are technical, so they live here as a quiet,
+                    auto-filled sub-section rather than two prominent inputs:
+                    picking an address above fills them in; an operator only
+                    touches them to nudge the pin. */}
+                <div className="grid gap-3 border border-basalt/10 bg-chalk/60 p-4">
+                  <div>
+                    <p className="text-sm font-semibold">Map coordinates</p>
+                    <p className="mt-1 text-xs leading-5 text-basalt/50">
+                      Filled in automatically when you pick an address above — they drop your listing's pin on the Armenia atlas. You only need to adjust these if the pin looks slightly off. Must fall inside Armenia (latitude 38–42, longitude 43–47).
+                    </p>
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="lng" className="text-sm font-semibold">Longitude</Label>
-                    <Input id="lng" name="lng" type="number" step="0.0001" min={43} max={47} defaultValue={draft.coordinates?.lng} className={FIELD} />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="lat" className="text-xs font-semibold text-basalt/60">Latitude</Label>
+                      <Input id="lat" name="lat" type="number" step="0.0001" min={38} max={42} defaultValue={draft.coordinates?.lat} className="h-11 rounded-none" />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="lng" className="text-xs font-semibold text-basalt/60">Longitude</Label>
+                      <Input id="lng" name="lng" type="number" step="0.0001" min={43} max={47} defaultValue={draft.coordinates?.lng} className="h-11 rounded-none" />
+                    </div>
                   </div>
                 </div>
-                <p className="-mt-2 text-xs text-basalt/45">Coordinates must fall inside Armenia (lat 38–42, lng 43–47) — used to place the pin on the atlas.</p>
               </div>
 
               {/* Step 3 — describe it */}
