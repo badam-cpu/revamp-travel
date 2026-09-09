@@ -1,5 +1,26 @@
-/** Revamp brandbook: keep the Armenia atlas reliable and synchronized, using only orange, charcoal, white, and approved tints. */
-import { useMemo } from "react";
+/**
+ * Real, location-based map for listings — replaces the old deterministic SVG
+ * "atlas." Uses Leaflet + OpenStreetMap tiles (no API key, free), so a Yerevan
+ * listing shows a street-level Yerevan map and a remote one shows its wider
+ * Armenian surroundings, automatically, from each listing's real coordinates.
+ *
+ * The public props are unchanged from the SVG version (`listings`,
+ * `selectedId`, `onSelect`, `single`, `className`) so every call site — the
+ * listing/tour detail pages, /map, the Explore & Tours map sheets, and the
+ * home preview — keeps working untouched. Markers are brand-styled price pills
+ * (CSS DivIcons, no marker-image assets to break in the bundler); clicking one
+ * fires `onSelect`, and the selected/active listing is summarized in a corner
+ * card, same behavior as before.
+ *
+ * Location logic: `single` (a detail page) centers on the one listing —
+ * street zoom for Yerevan, a wider regional view otherwise. Multi-listing
+ * views fit the map to all pins, so the framing follows wherever the listings
+ * actually are. Scroll-wheel zoom is off so the map never hijacks page scroll;
+ * drag + the zoom buttons still work.
+ */
+import { useEffect, useMemo, useRef } from "react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import { Listing } from "@/data/listings";
 import { cn } from "@/lib/utils";
 
@@ -11,51 +32,95 @@ interface ArmeniaMapProps {
   single?: boolean;
 }
 
-const bounds = { minLat: 38.8, maxLat: 41.35, minLng: 43.35, maxLng: 46.7 };
+const ARMENIA_CENTER: [number, number] = [40.18, 44.51];
 
-function markerPosition(listing: Listing) {
-  const x = 13 + ((listing.coordinates.lng - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * 74;
-  const y = 10 + ((bounds.maxLat - listing.coordinates.lat) / (bounds.maxLat - bounds.minLat)) * 80;
-  return { left: `${Math.max(8, Math.min(90, x))}%`, top: `${Math.max(7, Math.min(90, y))}%` };
+function escapeHtml(input: string): string {
+  return input.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 export function ArmeniaMap({ listings, selectedId, onSelect, className, single = false }: ArmeniaMapProps) {
   const active = useMemo(() => listings.find((listing) => listing.id === selectedId) || listings[0], [listings, selectedId]);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const layerRef = useRef<L.LayerGroup | null>(null);
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+
+  // Create the map once, then keep it in sync via the effect below.
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return;
+    const map = L.map(containerRef.current, {
+      scrollWheelZoom: false,
+      zoomControl: true,
+      attributionControl: true,
+    }).setView(ARMENIA_CENTER, 7);
+    map.zoomControl.setPosition("topright");
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(map);
+    layerRef.current = L.layerGroup().addTo(map);
+    mapRef.current = map;
+
+    // Leaflet needs a correctly-sized container; recompute when it changes
+    // (e.g. opening inside the mobile map Sheet, which mounts at 0 height).
+    const ro = new ResizeObserver(() => map.invalidateSize());
+    ro.observe(containerRef.current);
+    const t = setTimeout(() => map.invalidateSize(), 0);
+
+    return () => {
+      clearTimeout(t);
+      ro.disconnect();
+      map.remove();
+      mapRef.current = null;
+      layerRef.current = null;
+    };
+  }, []);
+
+  // Sync markers + framing whenever the data or selection changes.
+  useEffect(() => {
+    const map = mapRef.current;
+    const group = layerRef.current;
+    if (!map || !group) return;
+    group.clearLayers();
+
+    const points: [number, number][] = [];
+    listings.forEach((listing) => {
+      const latlng: [number, number] = [listing.coordinates.lat, listing.coordinates.lng];
+      points.push(latlng);
+      const isSelected = selectedId === listing.id || (single && listing.id === active?.id);
+      const icon = L.divIcon({
+        className: "revamp-pin-wrap",
+        iconSize: [0, 0],
+        html: `<span class="revamp-pin${isSelected ? " selected" : ""}">${escapeHtml(listing.priceLabel)}</span>`,
+      });
+      const marker = L.marker(latlng, { icon, title: listing.title, keyboard: false }).addTo(group);
+      marker.on("click", () => onSelectRef.current?.(listing.id));
+    });
+
+    if (points.length === 0) {
+      map.setView(ARMENIA_CENTER, 7);
+      return;
+    }
+    if (single || points.length === 1) {
+      const a = active ?? listings[0];
+      // Yerevan → street-level; anywhere else → a wider view of its surroundings.
+      const zoom = a.city.trim().toLowerCase() === "yerevan" ? 14 : 9;
+      map.setView([a.coordinates.lat, a.coordinates.lng], zoom);
+    } else {
+      map.fitBounds(L.latLngBounds(points), { padding: [40, 40], maxZoom: 13 });
+    }
+  }, [listings, selectedId, single, active]);
+
   return (
     <div className={cn("atlas-map relative overflow-hidden bg-[#D9D8CD]", className)}>
-      <div className="absolute inset-0 atlas-grid" />
-      <svg className="absolute inset-[4%_7%] h-[92%] w-[86%]" viewBox="0 0 500 700" aria-hidden="true">
-        <path className="atlas-country-shadow" d="M224 18L283 35L307 77L348 91L363 132L397 157L381 201L414 241L397 280L430 321L401 351L410 397L370 423L379 469L347 500L360 546L329 574L315 626L271 653L235 686L198 661L179 619L144 596L152 549L118 518L131 476L98 439L119 399L86 356L108 317L84 271L116 238L105 190L145 164L151 116L188 93L196 49Z" />
-        <path className="atlas-country" d="M219 12L277 31L300 72L342 86L356 127L390 151L374 196L406 236L389 275L422 316L393 346L402 391L362 418L371 463L339 495L352 540L321 568L307 620L263 647L228 680L191 655L172 613L137 590L145 543L111 512L124 470L91 433L112 393L79 350L101 311L77 265L109 232L98 184L138 158L144 110L181 87L189 43Z" />
-        <path className="atlas-region" d="M180 88C230 128 300 126 354 127M111 231C196 250 311 238 388 195M102 311C180 344 319 341 394 346M119 393C210 413 303 405 363 418M132 470C212 478 279 489 340 495M153 543C211 553 263 575 320 568" />
-        <path className="atlas-route" d="M176 164C236 203 220 274 291 313C349 344 282 416 321 486C343 528 293 571 264 628" />
-        <circle cx="176" cy="164" r="5" /><circle cx="291" cy="313" r="5" /><circle cx="321" cy="486" r="5" /><circle cx="264" cy="628" r="5" />
-      </svg>
-
-      <div className="absolute left-5 top-5 flex items-center gap-3">
-        <span className="h-8 w-8 rounded-full bg-apricot" />
-        <div className="bg-paper/94 px-3 py-2 text-[9px] font-bold uppercase tracking-[0.18em] text-basalt shadow-sm">Armenia · 40.18° N</div>
-      </div>
-      <span className="absolute right-5 top-5 text-[9px] font-bold uppercase tracking-[0.18em] text-basalt/42">43.35°—46.70° E</span>
-      <span className="absolute bottom-5 left-5 [writing-mode:vertical-rl] text-[8px] font-bold uppercase tracking-[0.2em] text-basalt/35">revamp. field atlas · elevation lines</span>
-
-      {listings.map((listing) => (
-        <button
-          key={listing.id}
-          type="button"
-          aria-label={`Select ${listing.title}`}
-          onClick={() => onSelect?.(listing.id)}
-          style={markerPosition(listing)}
-          className={cn("atlas-marker", `marker-${listing.accent}`, (selectedId === listing.id || (single && listing.id === active?.id)) && "selected")}
-        >
-          <span>{listing.priceLabel}</span>
-        </button>
-      ))}
-
+      <div ref={containerRef} className="absolute inset-0 h-full w-full" />
       {active && (
-        <div className="absolute bottom-5 right-5 max-w-[220px] border-l-2 border-apricot bg-basalt px-4 py-3 text-paper shadow-xl">
-          <p className="text-[8px] font-bold uppercase tracking-[0.18em] text-paper/45">{active.city} · {active.region}</p>
+        <div className="pointer-events-none absolute bottom-4 left-4 z-[1000] max-w-[220px] border-l-2 border-apricot bg-basalt px-4 py-3 text-paper shadow-xl">
+          <p className="text-[8px] font-bold uppercase tracking-[0.18em] text-paper/45">
+            {active.city} · {active.region}
+          </p>
           <p className="mt-1 font-display text-lg leading-tight">{active.title}</p>
         </div>
       )}
