@@ -1,28 +1,27 @@
 /**
- * Real, location-based map for listings — replaces the old deterministic SVG
- * "atlas." Uses Leaflet + OpenStreetMap tiles (no API key, free), so a Yerevan
- * listing shows a street-level Yerevan map and a remote one shows its wider
- * Armenian surroundings, automatically, from each listing's real coordinates.
+ * Real, location-based listings map — Google Maps (reuses the same
+ * VITE_GOOGLE_MAPS_API_KEY as the dashboard address autocomplete; loaded via
+ * client/src/lib/googleMaps.ts). A Yerevan listing shows a street-level Yerevan
+ * map and a remote one shows its wider surroundings, from each listing's real
+ * coordinates.
  *
- * The public props are unchanged from the SVG version (`listings`,
+ * Public props are unchanged from earlier map implementations (`listings`,
  * `selectedId`, `onSelect`, `single`, `className`) so every call site — the
- * listing/tour detail pages, /map, the Explore & Tours map sheets, and the
- * home preview — keeps working untouched. Markers are brand-styled price pills
- * (CSS DivIcons, no marker-image assets to break in the bundler); clicking one
- * fires `onSelect`, and the selected/active listing is summarized in a corner
- * card, same behavior as before.
+ * listing/tour detail pages, /map, the Explore & Tours map sheets, and the home
+ * preview — keeps working untouched. Markers are brand apricot price-pill SVG
+ * icons (basalt when selected); clicking one fires `onSelect`. Nearby listings
+ * cluster into an apricot count pill (@googlemaps/markerclusterer). The active
+ * listing is summarized in a corner card.
  *
- * Location logic: `single` (a detail page) centers on the one listing —
- * street zoom for Yerevan, a wider regional view otherwise. Multi-listing
- * views fit the map to all pins, so the framing follows wherever the listings
- * actually are. Scroll-wheel zoom is off so the map never hijacks page scroll;
- * drag + the zoom buttons still work.
+ * No mapId is required: brand muting is done with a classic JSON `styles` array
+ * and markers are classic `google.maps.Marker`s with SVG icons — so only the
+ * plain API key is needed, nothing extra to configure in Google Cloud. If the
+ * key is missing or the API fails to load, a neutral placeholder renders and
+ * the rest of the page is unaffected.
  */
-import { useEffect, useMemo, useRef } from "react";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-import "leaflet.markercluster";
-import "leaflet.markercluster/dist/MarkerCluster.css";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { MarkerClusterer, type Renderer } from "@googlemaps/markerclusterer";
+import { ensureMapsScript } from "@/lib/googleMaps";
 import { Listing } from "@/data/listings";
 import { cn } from "@/lib/utils";
 
@@ -34,108 +33,155 @@ interface ArmeniaMapProps {
   single?: boolean;
 }
 
-const ARMENIA_CENTER: [number, number] = [40.18, 44.51];
+const ARMENIA_CENTER = { lat: 40.18, lng: 44.51 };
 
-function escapeHtml(input: string): string {
-  return input.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+// Muted, light brand styling — desaturated geometry, softened roads/water,
+// simplified POIs — so the map reads as a quiet surface, not busy full-color.
+const MUTED_STYLE: google.maps.MapTypeStyle[] = [
+  { elementType: "geometry", stylers: [{ saturation: -55 }, { lightness: 12 }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#5b5b57" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#f4f3ee" }, { weight: 2 }] },
+  { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+  { featureType: "poi", stylers: [{ visibility: "simplified" }] },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#dfe3d6" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ saturation: -60 }, { lightness: 22 }] },
+  { featureType: "road", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+  { featureType: "transit", stylers: [{ visibility: "off" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#cfd8d3" }] },
+];
+
+function escapeXml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function pillIcon(label: string, selected: boolean): google.maps.Icon {
+  const bg = selected ? "#212121" : "#F15822";
+  const h = 26;
+  const w = Math.max(40, Math.round(18 + label.length * 8.2));
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="${(h - 2) / 2}" fill="${bg}" stroke="#ffffff" stroke-width="2"/><text x="${w / 2}" y="${h / 2}" dy=".35em" text-anchor="middle" font-family="Manrope, Arial, sans-serif" font-size="12" font-weight="700" fill="#ffffff">${escapeXml(label)}</text></svg>`;
+  return {
+    url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg),
+    scaledSize: new google.maps.Size(w, h),
+    anchor: new google.maps.Point(w / 2, h / 2),
+  };
+}
+
+function clusterIcon(count: number): google.maps.Icon {
+  const d = 40;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${d}" height="${d}"><circle cx="${d / 2}" cy="${d / 2}" r="${d / 2 - 2}" fill="#F15822" stroke="#ffffff" stroke-width="2"/><text x="${d / 2}" y="${d / 2}" dy=".35em" text-anchor="middle" font-family="Manrope, Arial, sans-serif" font-size="14" font-weight="700" fill="#ffffff">${count}</text></svg>`;
+  return {
+    url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg),
+    scaledSize: new google.maps.Size(d, d),
+    anchor: new google.maps.Point(d / 2, d / 2),
+  };
 }
 
 export function ArmeniaMap({ listings, selectedId, onSelect, className, single = false }: ArmeniaMapProps) {
   const active = useMemo(() => listings.find((listing) => listing.id === selectedId) || listings[0], [listings, selectedId]);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<L.Map | null>(null);
-  const layerRef = useRef<L.MarkerClusterGroup | null>(null);
+  const mapRef = useRef<google.maps.Map | null>(null);
+  const clustererRef = useRef<MarkerClusterer | null>(null);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  const [ready, setReady] = useState(false);
+  const [failed, setFailed] = useState(false);
 
-  // Create the map once, then keep it in sync via the effect below.
+  // Create the map once.
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
-    const map = L.map(containerRef.current, {
-      scrollWheelZoom: false,
-      zoomControl: true,
-      attributionControl: true,
-    }).setView(ARMENIA_CENTER, 7);
-    map.zoomControl.setPosition("topright");
-    // Standard OpenStreetMap tiles — genuinely keyless (no watermark/API-key
-    // requirement). The muted "brand surface" look is achieved with a CSS
-    // filter on the tile pane (see index.css) rather than a hosted styled
-    // basemap, so there's no third-party key/policy dependency to break.
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    }).addTo(map);
-    // Cluster nearby listings into a brand pill showing the count; a single
-    // listing (detail pages) just shows its own marker, no cluster.
-    layerRef.current = L.markerClusterGroup({
-      showCoverageOnHover: false,
-      maxClusterRadius: 46,
-      spiderfyOnMaxZoom: true,
-      iconCreateFunction: (cluster) =>
-        L.divIcon({
-          className: "",
-          html: `<span class="revamp-cluster">${cluster.getChildCount()}</span>`,
-          iconSize: L.point(38, 38),
-        }),
-    }).addTo(map);
-    mapRef.current = map;
-
-    // Leaflet needs a correctly-sized container; recompute when it changes
-    // (e.g. opening inside the mobile map Sheet, which mounts at 0 height).
-    const ro = new ResizeObserver(() => map.invalidateSize());
-    ro.observe(containerRef.current);
-    const t = setTimeout(() => map.invalidateSize(), 0);
-
+    let cancelled = false;
+    ensureMapsScript().then(async (ok) => {
+      if (cancelled || !containerRef.current) return;
+      if (!ok) {
+        setFailed(true);
+        return;
+      }
+      try {
+        await google.maps.importLibrary("maps");
+        await google.maps.importLibrary("marker");
+        if (cancelled || !containerRef.current) return;
+        const map = new google.maps.Map(containerRef.current, {
+          center: ARMENIA_CENTER,
+          zoom: 7,
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: false,
+          zoomControl: true,
+          clickableIcons: false,
+          gestureHandling: "cooperative", // don't hijack page scroll
+          styles: MUTED_STYLE,
+        });
+        mapRef.current = map;
+        const renderer: Renderer = {
+          render: ({ count, position }) => new google.maps.Marker({ position, icon: clusterIcon(count), zIndex: 10_000 + count }),
+        };
+        clustererRef.current = new MarkerClusterer({ map, renderer });
+        setReady(true);
+      } catch (err) {
+        console.error("Google Maps failed to initialize", err);
+        setFailed(true);
+      }
+    });
     return () => {
-      clearTimeout(t);
-      ro.disconnect();
-      map.remove();
+      cancelled = true;
+      clustererRef.current?.clearMarkers();
+      clustererRef.current = null;
       mapRef.current = null;
-      layerRef.current = null;
     };
   }, []);
 
-  // Sync markers + framing whenever the data or selection changes.
+  // Sync markers + framing whenever data/selection changes (once the map is up).
   useEffect(() => {
     const map = mapRef.current;
-    const group = layerRef.current;
-    if (!map || !group) return;
-    group.clearLayers();
+    const clusterer = clustererRef.current;
+    if (!ready || !map || !clusterer) return;
 
-    const points: [number, number][] = [];
-    listings.forEach((listing) => {
-      const latlng: [number, number] = [listing.coordinates.lat, listing.coordinates.lng];
-      points.push(latlng);
+    clusterer.clearMarkers();
+    const markers = listings.map((listing) => {
       const isSelected = selectedId === listing.id || (single && listing.id === active?.id);
-      const icon = L.divIcon({
-        className: "revamp-pin-wrap",
-        iconSize: [0, 0],
-        html: `<span class="revamp-pin${isSelected ? " selected" : ""}">${escapeHtml(listing.priceLabel)}</span>`,
+      const marker = new google.maps.Marker({
+        position: { lat: listing.coordinates.lat, lng: listing.coordinates.lng },
+        icon: pillIcon(listing.priceLabel, isSelected),
+        title: listing.title,
+        zIndex: isSelected ? 9_000 : 1,
       });
-      const marker = L.marker(latlng, { icon, title: listing.title, keyboard: false }).addTo(group);
-      marker.on("click", () => onSelectRef.current?.(listing.id));
+      marker.addListener("click", () => onSelectRef.current?.(listing.id));
+      return marker;
     });
+    clusterer.addMarkers(markers);
 
-    if (points.length === 0) {
-      map.setView(ARMENIA_CENTER, 7);
+    if (listings.length === 0) {
+      map.setCenter(ARMENIA_CENTER);
+      map.setZoom(7);
       return;
     }
-    if (single || points.length === 1) {
+    if (single || listings.length === 1) {
       const a = active ?? listings[0];
-      // Yerevan → street-level; anywhere else → a wider view of its surroundings.
-      const zoom = a.city.trim().toLowerCase() === "yerevan" ? 14 : 9;
-      map.setView([a.coordinates.lat, a.coordinates.lng], zoom);
+      map.setCenter({ lat: a.coordinates.lat, lng: a.coordinates.lng });
+      map.setZoom(a.city.trim().toLowerCase() === "yerevan" ? 14 : 9);
     } else {
-      map.fitBounds(L.latLngBounds(points), { padding: [40, 40], maxZoom: 13 });
+      const bounds = new google.maps.LatLngBounds();
+      listings.forEach((l) => bounds.extend({ lat: l.coordinates.lat, lng: l.coordinates.lng }));
+      map.fitBounds(bounds, 56);
+      google.maps.event.addListenerOnce(map, "idle", () => {
+        const z = map.getZoom();
+        if (typeof z === "number" && z > 15) map.setZoom(15);
+      });
     }
-  }, [listings, selectedId, single, active]);
+  }, [ready, listings, selectedId, single, active]);
 
   return (
-    <div className={cn("atlas-map relative overflow-hidden bg-[#D9D8CD]", className)}>
+    <div className={cn("atlas-map relative overflow-hidden bg-[#EDECE6]", className)}>
       <div ref={containerRef} className="absolute inset-0 h-full w-full" />
+      {failed && (
+        <div className="absolute inset-0 grid place-items-center bg-chalk px-6 text-center">
+          <p className="max-w-xs text-xs leading-5 text-basalt/50">
+            Map preview needs a Google Maps key (<span className="font-mono">VITE_GOOGLE_MAPS_API_KEY</span>). Listing coordinates are still saved and shown elsewhere.
+          </p>
+        </div>
+      )}
       {active && (
-        <div className="pointer-events-none absolute bottom-4 left-4 z-[1000] max-w-[220px] border-l-2 border-apricot bg-basalt px-4 py-3 text-paper shadow-xl">
+        <div className="pointer-events-none absolute bottom-4 left-4 z-[5] max-w-[220px] border-l-2 border-apricot bg-basalt px-4 py-3 text-paper shadow-xl">
           <p className="text-[8px] font-bold uppercase tracking-[0.18em] text-paper/45">
             {active.city} · {active.region}
           </p>

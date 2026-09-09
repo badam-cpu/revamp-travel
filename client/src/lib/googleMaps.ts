@@ -1,31 +1,69 @@
 /**
- * Minimal loader for the Google Maps JavaScript API's Places library —
- * used only by the dashboard's address-autocomplete field
- * (client/src/components/PlaceAutocomplete.tsx). Hand-written rather than
- * pulling in the `@googlemaps/js-api-loader` package: this is a single
- * script tag with a callback, not enough surface to justify a dependency,
- * consistent with this project's general "no dependency for something
- * this small" bias (see server/prerender.ts's header comment for the same
- * reasoning applied elsewhere).
+ * Loader for the Google Maps JavaScript API — shared by the dashboard's
+ * address-autocomplete field (client/src/components/PlaceAutocomplete.tsx) and
+ * the listings map (client/src/components/ArmeniaMap.tsx). Hand-written single
+ * script tag rather than pulling in @googlemaps/js-api-loader: not enough
+ * surface to justify a dependency.
  *
- * Entirely optional: if `VITE_GOOGLE_MAPS_API_KEY` isn't set, this
- * resolves to `null` and `PlaceAutocomplete` quietly renders nothing — the
- * dashboard form's city/region/lat/lng fields keep working as plain manual
- * inputs, same "missing config degrades gracefully" pattern as the trip
- * planner's `ANTHROPIC_API_KEY` and Supabase's offline fallback.
+ * Entirely optional: if `VITE_GOOGLE_MAPS_API_KEY` isn't set, `ensureMapsScript`
+ * resolves to `false` and callers degrade gracefully (PlaceAutocomplete renders
+ * nothing; ArmeniaMap shows a neutral placeholder). Only one `<script>` is ever
+ * added no matter how many components ask, so the two features share one load.
  *
- * A note on why this file reads results defensively: `PlaceAutocompleteElement`
- * is a Google web component that is still under active revision upstream.
- * The community `@types/google.maps` package installed in this project
- * (pinned by whatever version is in package.json at the time) does not
- * necessarily match the exact event/property shape Google's live service
- * returns — we found a real mismatch while building this (the installed
- * types describe an older `event.place` shape; Google's current published
- * docs describe `event.placePrediction.toPlace()` + `fetchFields()`).
- * Rather than bet on one shape, `extractResolvedPlace()` below checks for
- * both at runtime. If Google changes this again, this is the one function
- * to update — nothing else in the app needs to know.
+ * A note on reading autocomplete results defensively: `PlaceAutocompleteElement`
+ * is a Google web component still under active revision upstream. The installed
+ * `@types/google.maps` package doesn't necessarily match the exact event shape
+ * Google's live service returns (we found the installed types describe an older
+ * `event.place` shape while current docs describe
+ * `event.placePrediction.toPlace()` + `fetchFields()`). `extractResolvedPlace()`
+ * checks for both at runtime — it's the one function to update if Google changes
+ * this again.
  */
+
+const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
+
+export const isGoogleMapsConfigured = Boolean(apiKey);
+
+let scriptPromise: Promise<boolean> | null = null;
+
+/**
+ * Loads the Maps JS API `<script>` exactly once (shared across callers) and
+ * resolves `true` when `google.maps.importLibrary` is available, or `false`
+ * if there's no API key or the script failed to load. Never throws. Callers
+ * then `await google.maps.importLibrary("maps" | "marker" | "places")` for the
+ * specific pieces they need.
+ */
+export function ensureMapsScript(): Promise<boolean> {
+  if (!apiKey) return Promise.resolve(false);
+  if (scriptPromise) return scriptPromise;
+
+  scriptPromise = new Promise((resolve) => {
+    // The ambient google.maps types declare `google` as always-present, which
+    // isn't true before the script loads — read via globalThis to sidestep the
+    // "always truthy" narrowing and reflect the real "maybe not loaded" state.
+    const existing = (globalThis as Record<string, unknown>).google as typeof google | undefined;
+    if (existing?.maps?.importLibrary) {
+      resolve(true);
+      return;
+    }
+
+    const callbackName = "__revampGoogleMapsReady";
+    (window as unknown as Record<string, () => void>)[callbackName] = () => resolve(true);
+    const script = document.createElement("script");
+    // v=weekly is Google's recommended default channel; if PlaceAutocompleteElement
+    // comes back unavailable, v=beta is the one place to try (see the address
+    // autocomplete delta's notes).
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly&loading=async&callback=${callbackName}`;
+    script.async = true;
+    script.onerror = () => {
+      console.error("Google Maps script failed to load");
+      resolve(false);
+    };
+    document.head.appendChild(script);
+  });
+
+  return scriptPromise;
+}
 
 export interface ResolvedPlace {
   city?: string;
@@ -37,80 +75,30 @@ export interface ResolvedPlace {
 
 type PlaceAutocompleteElementCtor = typeof google.maps.places.PlaceAutocompleteElement;
 
-let placesReadyPromise: Promise<PlaceAutocompleteElementCtor | null> | null = null;
-
 /**
- * Loads the Maps JS API (if not already loaded) and resolves with the
- * `PlaceAutocompleteElement` constructor, or `null` if there's no API key
- * configured or the library failed to load for any reason (network error,
- * invalid key, the element genuinely isn't available on the loaded
- * channel — see the troubleshooting note in this project's
- * CLAUDE_CODE_PROMPT for this delta). Never throws.
+ * Resolves the `PlaceAutocompleteElement` constructor once the Places library
+ * is loaded, or `null` if there's no key or it couldn't load. Never throws.
  */
-export function loadPlaceAutocompleteElement(): Promise<PlaceAutocompleteElementCtor | null> {
-  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
-  if (!apiKey) return Promise.resolve(null);
-  if (placesReadyPromise) return placesReadyPromise;
-
-  placesReadyPromise = new Promise((resolve) => {
-    const finish = async () => {
-      try {
-        await google.maps.importLibrary("places");
-        // importLibrary's return value (per the installed @types/google.maps
-        // package) doesn't list PlaceAutocompleteElement on the `places`
-        // library's typed shape, even though Google's own class exists —
-        // importLibrary also registers the loaded library on the global
-        // `google.maps.places` namespace (documented Google behavior), so
-        // we read the constructor from there instead of destructuring the
-        // call's return value.
-        resolve(google.maps.places.PlaceAutocompleteElement ?? null);
-      } catch (err) {
-        console.error("Google Places library failed to load", err);
-        resolve(null);
-      }
-    };
-
-    // The ambient google.maps types declare `google` as an always-present
-    // global (they describe the shape *after* the script loads, not
-    // before), and that non-optional declaration flows into `window`'s own
-    // type too — so a plain `window.google?.…` check gets flagged as
-    // "always true" no matter how it's cast through `window`. Reading via
-    // `globalThis` as an untyped record first, then re-typing as possibly
-    // `undefined`, escapes that and reflects the real "might not be loaded
-    // yet" runtime state.
-    const existingGoogle = (globalThis as Record<string, unknown>).google as typeof google | undefined;
-    if (existingGoogle?.maps?.importLibrary) {
-      finish();
-      return;
-    }
-
-    const callbackName = "__revampGoogleMapsReady";
-    (window as unknown as Record<string, () => void>)[callbackName] = finish;
-    const script = document.createElement("script");
-    // v=weekly is Google's recommended default channel. If
-    // PlaceAutocompleteElement comes back unavailable in your browser
-    // console after applying this, try v=beta here — some Google web
-    // components ship there before reaching the weekly channel, and this
-    // is the one place that would need to change.
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly&loading=async&callback=${callbackName}`;
-    script.async = true;
-    script.onerror = () => {
-      console.error("Google Maps script failed to load");
-      resolve(null);
-    };
-    document.head.appendChild(script);
-  });
-
-  return placesReadyPromise;
+export async function loadPlaceAutocompleteElement(): Promise<PlaceAutocompleteElementCtor | null> {
+  const ready = await ensureMapsScript();
+  if (!ready) return null;
+  try {
+    await google.maps.importLibrary("places");
+    // importLibrary registers the loaded library on the global namespace
+    // (documented Google behavior); the installed types don't list
+    // PlaceAutocompleteElement on the returned shape, so read it from there.
+    return google.maps.places.PlaceAutocompleteElement ?? null;
+  } catch (err) {
+    console.error("Google Places library failed to load", err);
+    return null;
+  }
 }
 
 /**
  * Reads city/region/coordinates out of a `gmp-select` event fired by a
  * `PlaceAutocompleteElement`, handling both known event shapes (see this
- * file's header comment). Returns `null` if neither shape is present or
- * reading fails for any reason — callers should treat that as "couldn't
- * autofill this one, the operator can still type it by hand," never as a
- * hard error.
+ * file's header). Returns `null` if neither is present or reading fails —
+ * callers treat that as "couldn't autofill, type it by hand," never an error.
  */
 export async function extractResolvedPlace(event: Event): Promise<ResolvedPlace | null> {
   const raw = event as unknown as {
