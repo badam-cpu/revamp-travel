@@ -90,6 +90,14 @@ export function ArmeniaMap({ listings, selectedId, onSelect, className, single =
   // Create the map once.
   useEffect(() => {
     let cancelled = false;
+    // Google renders its own "Oops! Something went wrong" overlay inside the
+    // map div on any auth failure (key not authorized for the Maps JS API,
+    // referrer blocked, billing off). Catch it and show our own neutral
+    // placeholder instead so a broken key never surfaces a raw Google error to
+    // visitors. gm_authFailure is a single global Google invokes on auth error.
+    (window as unknown as Record<string, () => void>).gm_authFailure = () => {
+      if (!cancelled) setFailed(true);
+    };
     ensureMapsScript().then(async (ok) => {
       if (cancelled || !containerRef.current) return;
       if (!ok) {
@@ -175,9 +183,10 @@ export function ArmeniaMap({ listings, selectedId, onSelect, className, single =
       <div ref={containerRef} className="absolute inset-0 h-full w-full" />
       {failed && (
         <div className="absolute inset-0 grid place-items-center bg-chalk px-6 text-center">
-          <p className="max-w-xs text-xs leading-5 text-basalt/50">
-            Map preview needs a Google Maps key (<span className="font-mono">VITE_GOOGLE_MAPS_API_KEY</span>). Listing coordinates are still saved and shown elsewhere.
-          </p>
+          <div className="max-w-xs">
+            <p className="text-sm font-semibold text-basalt/70">{active ? `${active.city}, ${active.region}` : "Armenia"}</p>
+            <p className="mt-1 text-xs leading-5 text-basalt/45">Interactive map is temporarily unavailable.</p>
+          </div>
         </div>
       )}
       {active && (
