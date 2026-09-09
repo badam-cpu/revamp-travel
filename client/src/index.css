@@ -139,8 +139,9 @@
   /* Clustered-listings pill — brand apricot circle with the count. */
   .revamp-cluster { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 9999px; background: #F15822; color: #fff; border: 2px solid #fff; font: 700 13px/1 "Manrope", sans-serif; box-shadow: 0 4px 14px rgba(33,33,33,.3); cursor: pointer; }
   .leaflet-container { font-family: "Manrope", sans-serif; background: #EDECE6; }
-  /* Positron is already muted; a whisper of warmth nudges it toward the brand's paper tone without hurting legibility. */
-  .leaflet-container .leaflet-tile-pane { filter: saturate(.92) sepia(.05); }
+  /* Mute standard OSM into a quiet brand surface: desaturate, lift slightly,
+     a whisper of warmth — kept legible, not washed out. */
+  .leaflet-container .leaflet-tile-pane { filter: grayscale(.5) saturate(.82) brightness(1.04) sepia(.05); }
   button, a, [role="button"] { transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1); }
   button:active, [role="button"]:active { transform: scale(.97); }
 }

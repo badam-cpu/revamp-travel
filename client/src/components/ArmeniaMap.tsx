@@ -58,15 +58,13 @@ export function ArmeniaMap({ listings, selectedId, onSelect, className, single =
       attributionControl: true,
     }).setView(ARMENIA_CENTER, 7);
     map.zoomControl.setPosition("topright");
-    // CARTO Positron — a clean, muted light basemap that reads as a quiet
-    // brand surface rather than default OSM's busy color. Keyless; attribution
-    // credits both OSM (data) and CARTO (tiles), as their usage requires.
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+    // Standard OpenStreetMap tiles — genuinely keyless (no watermark/API-key
+    // requirement). The muted "brand surface" look is achieved with a CSS
+    // filter on the tile pane (see index.css) rather than a hosted styled
+    // basemap, so there's no third-party key/policy dependency to break.
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
-      detectRetina: true,
-      subdomains: "abcd",
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
     // Cluster nearby listings into a brand pill showing the count; a single
     // listing (detail pages) just shows its own marker, no cluster.
