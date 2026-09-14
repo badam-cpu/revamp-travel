@@ -9,7 +9,7 @@
  * Edit this array only to change what a *fresh* install seeds with.
  */
 
-export type ListingType = "stay" | "eat" | "tour";
+export type ListingType = "stay" | "eat" | "tour" | "experience";
 
 export interface ListingFact {
   label: string;
@@ -37,6 +37,14 @@ export interface Listing {
   amenities: string[];
   featured?: boolean;
   accent: "apricot" | "sevan" | "tuff";
+  // `type: "experience"` only (see supabase/migrations/0003_experience_listing_type.sql)
+  // — optional on every other type so nothing else has to change shape.
+  // Duration/group size/meeting point/languages are deliberately NOT
+  // fields here; they're free-form `facts`, same as tours already do.
+  highlights?: string[];
+  notIncluded?: string[];
+  whatToBring?: string[];
+  importantInfo?: string;
   /** Maximum number of guests the listing sleeps/hosts; caps the guest selector. */
   maxGuests?: number;
 }
@@ -68,6 +76,7 @@ export const brandAssets = {
     stay: assets.dilijan,
     eat: assets.food,
     tour: assets.garni,
+    experience: assets.landscape,
   },
 };
 
@@ -307,194 +316,75 @@ export const seedListings: Listing[] = [
     accent: "sevan",
   },
   {
-    id: "tour-slow-down-sip-coffee-see-the-city",
-    slug: "slow-down-sip-coffee-see-the-city",
-    type: "tour",
-    title: "Slow Down, Sip Coffee & See the City",
-    eyebrow: "Yerevan coffee walk",
+    id: "experience-yerevan-lavash",
+    slug: "lavash-and-wine-craft-afternoon",
+    type: "experience",
+    title: "Lavash & Wine Craft Afternoon",
+    eyebrow: "Hands-on kitchen class",
     city: "Yerevan",
     region: "Yerevan",
-    coordinates: { lat: 40.1792, lng: 44.5152 },
+    coordinates: { lat: 40.19, lng: 44.506 },
     image: assets.food,
-    gallery: [assets.food, assets.landscape, assets.hero],
-    shortDescription: "An unhurried walk through central Yerevan built around great coffee stops and real conversation with a local host.",
-    longDescription: "This is Yerevan at walking pace: a relaxed route through the city's central streets and courtyards, pausing at favourite coffee spots along the way. Your local host trades the checklist of sights for stories, context, and the kind of easy conversation that makes a new city feel familiar. Made for solo travellers and small groups who would rather understand a place than rush through it.",
-    price: 75,
-    priceLabel: "$75",
+    gallery: [assets.food, assets.wine, assets.restaurant, assets.hero],
+    shortDescription: "Bake lavash in a wood-fired tonir, blend your own spice mix, and pair it all with four Armenian wines.",
+    longDescription: "A small-group afternoon built around Armenia’s two most local flavors: bread and wine. A local instructor walks you through mixing and stretching lavash dough, baking it against a working tonir, then blending a take-home spice mix from the market stalls next door. The afternoon closes with a seated tasting of four Armenian wines chosen to match what you just baked.",
+    price: 52,
+    priceLabel: "$52",
     priceUnit: "person",
-    tags: ["Coffee", "Walking", "Local host"],
-    facts: [{ label: "Duration", value: "1.5 hours" }, { label: "Format", value: "Private group" }],
-    amenities: ["Local host", "Coffee stops", "Central Yerevan"],
-    accent: "apricot",
-  },
-  {
-    id: "tour-run-the-city-before-it-wakes-up",
-    slug: "run-the-city-before-it-wakes-up",
-    type: "tour",
-    title: "Run the City Before It Wakes Up",
-    eyebrow: "Yerevan morning run",
-    city: "Yerevan",
-    region: "Yerevan",
-    coordinates: { lat: 40.183, lng: 44.5144 },
-    image: assets.landscape,
-    gallery: [assets.landscape, assets.hero, assets.garni],
-    shortDescription: "See Yerevan at its quietest on an easy guided morning run through the city's landmarks and empty streets.",
-    longDescription: "Beat the heat and the crowds with a guided run through Yerevan while the city is still waking. A local running host sets an easy, conversational pace past the main squares, parks, and landmarks, so you get your morning movement in and a first orientation to the city at the same time. Suitable for anyone comfortable with a gentle jog.",
-    price: 80,
-    priceLabel: "$80",
-    priceUnit: "person",
-    tags: ["Running", "Morning", "Active"],
-    facts: [{ label: "Duration", value: "1.5 hours" }, { label: "Format", value: "Private group" }],
-    amenities: ["Running host", "Route planning", "City orientation"],
-    accent: "sevan",
-  },
-  {
-    id: "tour-a-private-letter-writing-ritual",
-    slug: "a-private-letter-writing-ritual",
-    type: "tour",
-    title: "A Private Letter-Writing Ritual",
-    eyebrow: "Yerevan slow experience",
-    city: "Yerevan",
-    region: "Yerevan",
-    coordinates: { lat: 40.1876, lng: 44.5153 },
-    image: assets.landscape,
-    gallery: [assets.landscape, assets.food, assets.hero],
-    shortDescription: "A quiet, reflective session set aside for writing a letter — to someone you love, or to yourself.",
-    longDescription: "A gentle antidote to a packed itinerary: time set aside, in a calm Yerevan setting, to slow down and write. Your host frames a simple letter-writing ritual over a warm drink, whether you want to reach out to someone back home or leave a note for your future self. Unhurried, personal, and a little unexpected.",
-    price: 85,
-    priceLabel: "$85",
-    priceUnit: "person",
-    tags: ["Reflective", "Slow travel", "Writing"],
-    facts: [{ label: "Duration", value: "1.5 hours" }, { label: "Format", value: "Private group" }],
-    amenities: ["Host", "Stationery provided", "Warm drink"],
-    accent: "tuff",
-  },
-  {
-    id: "tour-two-hours-of-doing-absolutely-nothing",
-    slug: "two-hours-of-doing-absolutely-nothing",
-    type: "tour",
-    title: "Two Hours of Doing Absolutely Nothing",
-    eyebrow: "Yerevan slow experience",
-    city: "Yerevan",
-    region: "Yerevan",
-    coordinates: { lat: 40.181, lng: 44.514 },
-    image: assets.landscape,
-    gallery: [assets.landscape, assets.hero, assets.sevan],
-    shortDescription: "A guided practice in slowing right down — two hours with no agenda, no rushing, and nothing to tick off.",
-    longDescription: "The opposite of a sightseeing sprint. This experience gives you permission to do nothing at all, well: two hours of unstructured calm in a relaxed Yerevan setting, gently held by a host who keeps the pressure to 'see things' at bay. Sit, watch the city, breathe, and let the day stretch out. Made for travellers who need to exhale.",
-    price: 130,
-    priceLabel: "$130",
-    priceUnit: "person",
-    tags: ["Slow travel", "Mindful", "Relaxation"],
-    facts: [{ label: "Duration", value: "2 hours" }, { label: "Format", value: "Private group" }],
-    amenities: ["Host", "Calm setting", "No agenda"],
-    accent: "apricot",
-  },
-  {
-    id: "tour-jamon-cheese-unexpected-conversations",
-    slug: "jamon-cheese-unexpected-conversations",
-    type: "tour",
-    title: "Jamon, Cheese & Unexpected Conversations",
-    eyebrow: "Yerevan food & social",
-    city: "Yerevan",
-    region: "Yerevan",
-    coordinates: { lat: 40.1795, lng: 44.5108 },
-    image: assets.wine,
-    gallery: [assets.wine, assets.food, assets.restaurant],
-    shortDescription: "A relaxed table of cured meats, cheese, and good conversation designed to turn strangers into friends.",
-    longDescription: "Part tasting, part social club. Gather around a shared board of jamon, cheese, and small bites while your host keeps the conversation flowing between travellers. It is a low-key, welcoming way to spend an evening in Yerevan — the food is the excuse, the connection is the point. Ideal for solo travellers who would rather not eat alone.",
-    price: 85,
-    priceLabel: "$85",
-    priceUnit: "person",
-    tags: ["Food", "Social", "Tasting"],
-    facts: [{ label: "Duration", value: "1.5 hours" }, { label: "Format", value: "Private group" }],
-    amenities: ["Host", "Food board", "Shared table"],
-    accent: "sevan",
-  },
-  {
-    id: "tour-armenian-language-walking-tour",
-    slug: "armenian-language-walking-tour",
-    type: "tour",
-    title: "Armenian Language Walking Tour",
-    eyebrow: "Yerevan language walk",
-    city: "Yerevan",
-    region: "Yerevan",
-    coordinates: { lat: 40.186, lng: 44.512 },
-    image: assets.garni,
-    gallery: [assets.garni, assets.landscape, assets.hero],
-    shortDescription: "Learn your first words of Armenian out on the streets, guided by a local who makes the alphabet click.",
-    longDescription: "A walking tour and a first language lesson rolled into one. As you move through Yerevan, your local guide introduces the Armenian alphabet, useful everyday phrases, and the stories behind the words you see on signs and menus. You leave able to read a little, say a little, and see the city's script with new eyes. No prior Armenian needed.",
-    price: 60,
-    priceLabel: "$60",
-    priceUnit: "person",
-    tags: ["Language", "Walking", "Culture"],
-    facts: [{ label: "Duration", value: "2 hours" }, { label: "Format", value: "Private group" }],
-    amenities: ["Local guide", "Phrase cheat-sheet", "City walk"],
-    accent: "tuff",
-  },
-  {
-    id: "tour-dilijan-forest-hike-wild-mountain-tea-ritual",
-    slug: "dilijan-forest-hike-wild-mountain-tea-ritual",
-    type: "tour",
-    title: "Dilijan Forest Hike & Wild Mountain Tea Ritual",
-    eyebrow: "Dilijan day hike",
-    city: "Dilijan",
-    region: "Tavush",
-    coordinates: { lat: 40.7411, lng: 44.8626 },
-    image: assets.dilijan,
-    gallery: [assets.dilijan, assets.landscape, assets.cabin, assets.sevan],
-    shortDescription: "A full day in the forests around Dilijan, ending with a ritual of tea brewed from wild mountain herbs.",
-    longDescription: "Trade the city for the deep green of Dilijan National Park. A local guide leads a day-long forest hike through some of Armenia's most beautiful woodland, with time to slow down, notice, and breathe. The walk closes with a mountain tea ritual — herbs gathered from the hills, brewed and shared. A restorative day for travellers who love the outdoors.",
-    price: 200,
-    priceLabel: "$200",
-    priceUnit: "person",
-    tags: ["Hiking", "Forest", "Tea ritual"],
-    facts: [{ label: "Duration", value: "6 hours" }, { label: "Format", value: "Private group" }, { label: "Level", value: "Moderate" }],
-    amenities: ["Local guide", "Mountain tea", "Dilijan National Park"],
+    tags: ["Craft", "Food", "Wine"],
+    facts: [
+      { label: "Duration", value: "3 hours" },
+      { label: "Group size", value: "Up to 8" },
+      { label: "Meeting point", value: "Yerevan city center" },
+      { label: "Languages", value: "Armenian, English" },
+    ],
+    amenities: ["Local instructor", "All ingredients", "Wine tasting", "Apron & recipe card", "Take-home spice jar"],
+    highlights: [
+      "Bake traditional lavash against a working tonir oven",
+      "Blend and bottle your own spice mix to take home",
+      "Taste four Armenian wines paired with what you made",
+    ],
+    notIncluded: ["Hotel pickup", "Additional wine bottles"],
+    whatToBring: ["Comfortable clothing you don't mind getting floury", "A camera for the tonir moment"],
+    importantInfo:
+      "Not recommended for children under 6 near the open tonir flame. Let us know about allergies when booking — the kitchen handles wheat, dairy, and nuts.",
     featured: true,
-    accent: "sevan",
-  },
-  {
-    id: "tour-cinema-and-art-tour-with-museum-tickets",
-    slug: "cinema-and-art-tour-with-museum-tickets",
-    type: "tour",
-    title: "Cinema and Art Tour with Museum Tickets",
-    eyebrow: "Yerevan culture tour",
-    city: "Yerevan",
-    region: "Yerevan",
-    coordinates: { lat: 40.187, lng: 44.5155 },
-    image: assets.garni,
-    gallery: [assets.garni, assets.hero, assets.landscape],
-    shortDescription: "A guided walk through Yerevan's film and art story, with museum entry included.",
-    longDescription: "Yerevan has a rich creative history, and this tour follows its threads of cinema and visual art through the city. Your host connects the landmarks, institutions, and stories that shaped Armenia's film and art scene, with museum tickets included so you go beyond the street level. A satisfying half-day for the culturally curious.",
-    price: 115,
-    priceLabel: "$115",
-    priceUnit: "person",
-    tags: ["Art", "Cinema", "Culture"],
-    facts: [{ label: "Duration", value: "3 hours" }, { label: "Format", value: "Private group" }],
-    amenities: ["Host", "Museum tickets included", "City walk"],
     accent: "apricot",
   },
   {
-    id: "tour-trx-strength-conditioning-session",
-    slug: "trx-strength-conditioning-session",
-    type: "tour",
-    title: "TRX Strength & Conditioning Session",
-    eyebrow: "Yerevan fitness",
-    city: "Yerevan",
-    region: "Yerevan",
-    coordinates: { lat: 40.174, lng: 44.509 },
+    id: "experience-vanadzor-weaving",
+    slug: "lori-carpet-weaving-workshop",
+    type: "experience",
+    title: "Lori Carpet Weaving Workshop",
+    eyebrow: "Hands-on craft",
+    city: "Vanadzor",
+    region: "Lori",
+    coordinates: { lat: 40.8128, lng: 44.4886 },
     image: assets.landscape,
-    gallery: [assets.landscape, assets.hero],
-    shortDescription: "Keep your training on track with a guided TRX strength and conditioning session at a Yerevan gym.",
-    longDescription: "Travel does not have to mean skipping your workout. Join a coached TRX strength and conditioning session at a well-equipped Yerevan gym, scaled to your level whether you are a regular or just keeping ticking over. A focused hour to move, sweat, and reset before the rest of your day. Great for active travellers who want to keep a routine on the road.",
-    price: 65,
-    priceLabel: "$65",
+    gallery: [assets.landscape, assets.cabin, assets.sevan, assets.hero],
+    shortDescription: "Learn traditional Armenian rug-knotting from a village weaver, on a working loom passed down three generations.",
+    longDescription: "In a quiet weaving house outside Vanadzor, a master weaver walks you through the knots, dyes, and patterns that define Lori’s carpet tradition. Work a few rows on a real loom, learn how natural dyes are prepared from walnut husk and madder root, and leave with a small woven sample of your own.",
+    price: 45,
+    priceLabel: "$45",
     priceUnit: "person",
-    tags: ["Fitness", "Strength", "Active"],
-    facts: [{ label: "Duration", value: "1 hour" }, { label: "Format", value: "Small group" }],
-    amenities: ["Coach", "Gym access", "Equipment provided"],
-    accent: "tuff",
+    tags: ["Craft", "Village visit", "Textiles"],
+    facts: [
+      { label: "Duration", value: "2.5 hours" },
+      { label: "Group size", value: "Up to 6" },
+      { label: "Meeting point", value: "Vanadzor city center" },
+      { label: "Languages", value: "Armenian, English" },
+    ],
+    amenities: ["Local weaver", "Materials included", "Tea & pastries", "Take-home wool sample"],
+    highlights: [
+      "Sit at a working traditional loom",
+      "See natural wool-dyeing with walnut husk and madder root",
+      "Hear the family's three-generation weaving history",
+    ],
+    notIncluded: ["Transport from Yerevan", "Finished full-size rugs (samples only)"],
+    whatToBring: ["Closed-toe shoes", "A jacket — the weaving house is unheated in cooler months"],
+    importantInfo:
+      "Held in a private home workshop, not a shop — seats are limited to keep it hands-on. Not wheelchair accessible (narrow stairs to the loom room).",
+    accent: "sevan",
   },
 ];
 
@@ -508,6 +398,7 @@ export const typeLabels: Record<ListingType, string> = {
   stay: "Stay",
   eat: "Eat",
   tour: "Tour",
+  experience: "Experience",
 };
 
 export function findListingIn(list: Listing[], slug: string | undefined) {
@@ -517,7 +408,7 @@ export function findListingIn(list: Listing[], slug: string | undefined) {
 /** Fields accepted from the Manage UI when creating or updating a listing.
  * `id` and `slug` are always derived server-side from `title` (+ a
  * disambiguating suffix on collision) so the client never has to invent them. */
-export const EDITABLE_LISTING_TYPES: ListingType[] = ["stay", "tour"];
+export const EDITABLE_LISTING_TYPES: ListingType[] = ["stay", "tour", "experience"];
 
 export interface ListingInput {
   type: ListingType;
@@ -538,6 +429,10 @@ export interface ListingInput {
   amenities: string[];
   featured?: boolean;
   accent: "apricot" | "sevan" | "tuff";
+  highlights?: string[];
+  notIncluded?: string[];
+  whatToBring?: string[];
+  importantInfo?: string;
   /** Maximum number of guests the listing sleeps/hosts; caps the guest selector. */
   maxGuests?: number;
 }

@@ -4,7 +4,7 @@
  * CRUD + file-backed store. Row-Level Security is what makes it safe to call
  * create/update/delete straight from the client: an operator can only ever
  * write rows where operator_id = auth.uid(), and only for type in
- * ('stay','tour') — Postgres enforces that, not this file.
+ * ('stay','tour','experience') — Postgres enforces that, not this file.
  *
  * The public interface (`listings`, `refresh`, `createListing`,
  * `updateListing`, `deleteListing`, `offline`) is unchanged from the old
@@ -60,7 +60,7 @@ interface ListingsContextType {
 const ListingsContext = createContext<ListingsContextType | undefined>(undefined);
 
 const ROW_COLUMNS =
-  "id, operator_id, type, slug, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, amenities, facts, featured, accent, status, review_note, reviewed_at, ical_url, ical_synced_at, ical_error, blocked_ranges, seasonal_rates, max_guests";
+  "id, operator_id, type, slug, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, amenities, facts, featured, accent, status, review_note, reviewed_at, ical_url, ical_synced_at, ical_error, blocked_ranges, seasonal_rates, max_guests, highlights, not_included, what_to_bring, important_info";
 
 interface ListingRow {
   id: string;
@@ -93,6 +93,10 @@ interface ListingRow {
   blocked_ranges: BlockedRange[] | null;
   seasonal_rates: SeasonalRate[] | null;
   max_guests: number | null;
+  highlights: string[] | null;
+  not_included: string[] | null;
+  what_to_bring: string[] | null;
+  important_info: string | null;
 }
 
 function mapListingRow(row: ListingRow): LiveListing {
@@ -129,6 +133,10 @@ function mapListingRow(row: ListingRow): LiveListing {
     blockedRanges: Array.isArray(row.blocked_ranges) ? row.blocked_ranges : [],
     seasonalRates: Array.isArray(row.seasonal_rates) ? row.seasonal_rates : [],
     maxGuests: row.max_guests ?? undefined,
+    highlights: row.highlights ?? [],
+    notIncluded: row.not_included ?? [],
+    whatToBring: row.what_to_bring ?? [],
+    importantInfo: row.important_info ?? "",
   };
 }
 
@@ -154,6 +162,10 @@ function toRow(input: ListingInput) {
     featured: input.featured ?? false,
     accent: input.accent,
     max_guests: input.maxGuests ?? null,
+    highlights: input.highlights ?? [],
+    not_included: input.notIncluded ?? [],
+    what_to_bring: input.whatToBring ?? [],
+    important_info: input.importantInfo ?? "",
   };
 }
 

@@ -17,6 +17,7 @@ const categories = [
   { type: "stay", number: "01", title: "Stay with a sense of place", label: "Homes, cabins & small hotels", image: brandAssets.categories.stay },
   { type: "eat", number: "02", title: "Taste the landscape", label: "Tables, cellars & courtyards", image: brandAssets.categories.eat },
   { type: "tour", number: "03", title: "Go with someone local", label: "Walks, routes & field days", image: brandAssets.categories.tour },
+  { type: "experience", number: "04", title: "Make something with your hands", label: "Classes, crafts & tastings", image: brandAssets.categories.experience },
 ];
 
 export default function Home() {
@@ -55,12 +56,12 @@ export default function Home() {
 
         <section className="container py-20 lg:py-28">
           <div className="grid gap-8 lg:grid-cols-[0.7fr_1.3fr] lg:items-end">
-            <div><p className="eyebrow">Three ways in</p><h2 className="mt-3 font-display text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl">Let curiosity<br />choose the route.</h2></div>
-            <p className="max-w-xl text-base leading-7 text-basalt/58 lg:justify-self-end">Start with a room, a table, or a day in the open. Each collection is small enough to feel considered and broad enough to lead somewhere unexpected.</p>
+            <div><p className="eyebrow">Four ways in</p><h2 className="mt-3 font-display text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl">Let curiosity<br />choose the route.</h2></div>
+            <p className="max-w-xl text-base leading-7 text-basalt/58 lg:justify-self-end">Start with a room, a table, a day in the open, or something made with your own hands. Each collection is small enough to feel considered and broad enough to lead somewhere unexpected.</p>
           </div>
-          <div className="mt-12 grid gap-4 md:grid-cols-3">
-            {categories.map((category, index) => (
-              <Link key={category.type} href={`/explore/${category.type}`} className={`category-panel group relative overflow-hidden ${index === 1 ? "md:translate-y-8" : ""}`}>
+          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {categories.map((category) => (
+              <Link key={category.type} href={`/explore/${category.type}`} className="category-panel group relative overflow-hidden">
                 <img src={category.image} alt="" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.025]" />
                 <div className="absolute inset-0 bg-gradient-to-t from-basalt/78 via-basalt/8 to-transparent" />
                 <span className="absolute left-5 top-5 grid h-9 w-9 place-items-center bg-paper text-[10px] font-bold text-basalt">{category.number}</span>

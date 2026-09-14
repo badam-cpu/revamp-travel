@@ -20,7 +20,8 @@ export function SiteFooter() {
           <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
             <Link href="/explore/stay" className="hover:text-white">Places to stay</Link>
             <Link href="/explore/eat" className="hover:text-white">Restaurants</Link>
-            <Link href="/explore/tour" className="hover:text-white">Tours & experiences</Link>
+            <Link href="/explore/tour" className="hover:text-white">Tours</Link>
+            <Link href="/explore/experience" className="hover:text-white">Experiences</Link>
             <Link href="/map" className="hover:text-white">Open the map</Link>
             <Link href="/plan" className="hover:text-white">AI trip planner</Link>
             {profile?.role === "operator" ? (

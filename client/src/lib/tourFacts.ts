@@ -16,8 +16,8 @@ export function factValue(listing: Listing, ...labels: string[]) {
   return undefined;
 }
 
-/** The facts already surfaced by dedicated labels (duration/group/level/format/start), so detail views can show "everything else" separately without repeating them. */
+/** The facts already surfaced by dedicated labels (duration/group/level/format/start, plus experience listings' "Group size"), so detail views can show "everything else" — e.g. an experience's Meeting point / Languages — separately without repeating them. */
 export function otherFacts(listing: Listing) {
-  const known = new Set(["duration", "group", "level", "format", "start"]);
+  const known = new Set(["duration", "group", "level", "format", "start", "group size"]);
   return listing.facts.filter((fact) => !known.has(fact.label.toLowerCase()));
 }

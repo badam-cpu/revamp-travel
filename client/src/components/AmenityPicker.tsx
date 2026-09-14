@@ -70,9 +70,17 @@ const TOUR_GROUPS: AmenityGroup[] = [
   { category: "Gear & experience", items: ["Walking poles", "Entrance fees", "Guesthouse night", "Studio visits", "Materials demo"] },
 ];
 
+const EXPERIENCE_GROUPS: AmenityGroup[] = [
+  { category: "Instruction & hosting", items: ["Local instructor", "Local weaver", "Local host", "Small groups"] },
+  { category: "Materials & tastings", items: ["All ingredients", "Materials included", "Wine tasting", "Tea & pastries"] },
+  { category: "Take-home", items: ["Apron & recipe card", "Take-home spice jar", "Take-home wool sample", "Certificate"] },
+  { category: "Logistics", items: ["Hotel pickup", "Yerevan transfer", "Entrance fees"] },
+];
+
 const CATALOGS: Partial<Record<ListingType, AmenityGroup[]>> = {
   stay: STAY_GROUPS,
   tour: TOUR_GROUPS,
+  experience: EXPERIENCE_GROUPS,
 };
 
 export type AmenityPickerHandle = { getValue: () => string[] };

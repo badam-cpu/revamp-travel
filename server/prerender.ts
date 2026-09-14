@@ -37,7 +37,7 @@ export type PageKind =
 
 export interface MatchedRoute {
   kind: PageKind;
-  category?: "stay" | "eat";
+  category?: "stay" | "eat" | "experience";
   slug?: string;
 }
 
@@ -52,6 +52,7 @@ export function matchRoute(pathname: string): MatchedRoute {
   if (path === "/explore") return { kind: "explore" };
   if (path === "/explore/stay") return { kind: "explore-category", category: "stay" };
   if (path === "/explore/eat") return { kind: "explore-category", category: "eat" };
+  if (path === "/explore/experience") return { kind: "explore-category", category: "experience" };
   if (path.startsWith("/explore/")) return { kind: "explore" }; // unrecognized category → unfiltered explore, not a 404
   if (path === "/map") return { kind: "map" };
   if (path === "/plan") return { kind: "plan" };
@@ -164,7 +165,8 @@ ${jsonLdBlocks}
 <a href="/explore">Explore</a> ·
 <a href="/explore/stay">Stay</a> ·
 <a href="/explore/eat">Eat</a> ·
-<a href="/explore/tour">Tours</a> ·
+<a href="/explore/tour">Tour</a> ·
+<a href="/explore/experience">Experience</a> ·
 <a href="/map">Map</a> ·
 <a href="/plan">AI Planner</a> ·
 <a href="/login">Sign in</a>
@@ -217,6 +219,7 @@ function renderHome(catalog: PublicListing[], origin: string): string {
 <li><a href="${origin}/explore/stay">${typeLabels.stay} — places to stay</a></li>
 <li><a href="${origin}/explore/eat">${typeLabels.eat} — restaurants</a></li>
 <li><a href="${origin}/explore/tour">${typeLabels.tour} — guided tours</a></li>
+<li><a href="${origin}/explore/experience">${typeLabels.experience} — hands-on classes & activities</a></li>
 </ul>
 </section>
 <section>
@@ -243,7 +246,7 @@ ${regions.map((region) => `<li><a href="${origin}/explore?query=${encodeURICompo
 function renderExplore(catalog: PublicListing[], origin: string, category: ListingType | undefined): string {
   const filtered = category ? catalog.filter((listing) => listing.type === category) : catalog;
   const label = category ? typeLabels[category] : "All listings";
-  const canonicalPath = category === "stay" ? "/explore/stay" : category === "eat" ? "/explore/eat" : category === "tour" ? "/explore/tour" : "/explore";
+  const canonicalPath = category === "stay" ? "/explore/stay" : category === "eat" ? "/explore/eat" : category === "tour" ? "/explore/tour" : category === "experience" ? "/explore/experience" : "/explore";
   const title = category ? `${label} in Armenia | Revamp Travel` : "Explore Armenia | Revamp Travel";
   const description = category
     ? `Browse ${label.toLowerCase()} across Armenia on Revamp Travel.`
@@ -292,7 +295,7 @@ ${Array.from(byRegion.entries())
 function renderPlan(origin: string): string {
   const bodyHtml = `
 <h1>AI Trip Planner</h1>
-<p>Generate a day-by-day Armenia itinerary grounded in Revamp Travel's live, published stay/eat/tour catalog. Open <a href="${origin}/plan">the planner</a> to set trip length, starting city, traveler count, pace, budget, and interests.</p>`;
+<p>Generate a day-by-day Armenia itinerary grounded in Revamp Travel's live, published stay/eat/tour/experience catalog. Open <a href="${origin}/plan">the planner</a> to set trip length, starting city, traveler count, pace, budget, and interests.</p>`;
 
   return renderPageShell({
     title: "AI Trip Planner | Revamp Travel",
@@ -323,7 +326,7 @@ function renderAuthPage(origin: string, kind: "login" | "signup"): string {
 function renderListingDetail(listing: PublicListing, catalog: PublicListing[], origin: string): string {
   const canonicalPath = `/listing/${listing.slug}`;
   const title = `${listing.title} — ${typeLabels[listing.type]} in ${listing.city} | Revamp Travel`;
-  const categoryPath = listing.type === "stay" ? "/explore/stay" : listing.type === "eat" ? "/explore/eat" : "/explore/tour";
+  const categoryPath = listing.type === "stay" ? "/explore/stay" : listing.type === "eat" ? "/explore/eat" : listing.type === "experience" ? "/explore/experience" : "/explore/tour";
   const related = catalog.filter((item) => item.slug !== listing.slug && (item.type === listing.type || item.region === listing.region)).slice(0, 3);
 
   const factsHtml =
@@ -336,6 +339,10 @@ function renderListingDetail(listing: PublicListing, catalog: PublicListing[], o
     .map((src) => `<img src="${escapeHtml(imgUrl(src, origin))}" alt="${escapeHtml(listing.title)}" />`)
     .join("\n");
   const tagsHtml = listing.tags.length > 0 ? `<p>${listing.tags.map((tag) => escapeHtml(tag)).join(", ")}</p>` : "";
+  const highlightsHtml = listing.highlights?.length ? `<h2>Highlights</h2><ul>${listing.highlights.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
+  const notIncludedHtml = listing.notIncluded?.length ? `<h2>Not included</h2><ul>${listing.notIncluded.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
+  const whatToBringHtml = listing.whatToBring?.length ? `<h2>What to bring</h2><ul>${listing.whatToBring.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
+  const importantInfoHtml = listing.importantInfo ? `<h2>Good to know</h2><p>${escapeHtml(listing.importantInfo)}</p>` : "";
 
   const bodyHtml = `
 <nav aria-label="Breadcrumb">
@@ -351,8 +358,12 @@ ${galleryHtml}
 <p>${escapeHtml(listing.longDescription)}</p>
 <p>${listing.price > 0 ? `${escapeHtml(listing.priceLabel)} / ${escapeHtml(listing.priceUnit)}` : escapeHtml(listing.priceLabel)} — online booking and payment are launching soon.</p>
 ${factsHtml}
+${highlightsHtml}
 <h2>What's part of the experience</h2>
 ${amenitiesHtml}
+${notIncludedHtml}
+${whatToBringHtml}
+${importantInfoHtml}
 ${tagsHtml}
 <a href="${origin}/explore">Back to Explore</a>
 ${

@@ -35,7 +35,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
           buildBreadcrumbJsonLd(window.location.origin, [
             { name: "Home", path: "/" },
             { name: "Explore", path: "/explore" },
-            { name: typeLabels[listing.type], path: listing.type === "stay" ? "/explore/stay" : listing.type === "eat" ? "/explore/eat" : "/explore/tour" },
+            { name: typeLabels[listing.type], path: listing.type === "stay" ? "/explore/stay" : listing.type === "eat" ? "/explore/eat" : listing.type === "experience" ? "/explore/experience" : "/explore/tour" },
             { name: listing.title, path: `/listing/${listing.slug}` },
           ]),
         ]
@@ -52,9 +52,9 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   const blockedRanges = live?.blockedRanges ?? [];
   const maxGuests = live?.maxGuests ?? 8;
 
-  // Tours get a dedicated GetYourGuide-style detail layout; stays and
-  // restaurants keep the original shared template below.
-  if (listing.type === "tour") {
+  // Tours and experiences get a dedicated GetYourGuide-style detail layout;
+  // stays and restaurants keep the original shared template below.
+  if (listing.type === "tour" || listing.type === "experience") {
     return (
       <div className="min-h-screen bg-paper text-basalt">
         <SiteHeader />

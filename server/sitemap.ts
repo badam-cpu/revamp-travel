@@ -9,7 +9,7 @@
 import type { Request, Response } from "express";
 import { getPublishedCatalog } from "./supabase.js";
 
-const STATIC_ROUTES = ["/", "/explore", "/explore/stay", "/explore/eat", "/explore/tour", "/map", "/plan", "/login", "/signup"];
+const STATIC_ROUTES = ["/", "/explore", "/explore/stay", "/explore/eat", "/explore/tour", "/explore/experience", "/map", "/plan", "/login", "/signup"];
 
 export async function sitemapHandler(req: Request, res: Response): Promise<void> {
   const origin = `${req.protocol}://${req.get("host")}`;

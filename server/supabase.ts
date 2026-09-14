@@ -43,6 +43,10 @@ interface CatalogRow {
   amenities: string[];
   accent: "apricot" | "sevan" | "tuff";
   updated_at: string;
+  highlights: string[] | null;
+  not_included: string[] | null;
+  what_to_bring: string[] | null;
+  important_info: string | null;
 }
 
 function mapCatalogRow(row: CatalogRow): PublicListing {
@@ -70,6 +74,10 @@ function mapCatalogRow(row: CatalogRow): PublicListing {
     amenities: row.amenities,
     accent: row.accent,
     updatedAt: row.updated_at,
+    highlights: row.highlights ?? undefined,
+    notIncluded: row.not_included ?? undefined,
+    whatToBring: row.what_to_bring ?? undefined,
+    importantInfo: row.important_info ?? undefined,
   };
 }
 
@@ -91,7 +99,7 @@ export async function getPublishedCatalog(): Promise<PublicListing[]> {
   const { data, error } = await client
     .from("listings")
     .select(
-      "slug, type, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, facts, amenities, accent, updated_at",
+      "slug, type, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, facts, amenities, accent, updated_at, highlights, not_included, what_to_bring, important_info",
     )
     .eq("status", "published");
   const rows = error || !data ? [] : (data as CatalogRow[]).map(mapCatalogRow);

@@ -22,6 +22,7 @@ const SCHEMA_TYPE_BY_LISTING_TYPE: Record<ListingType, string> = {
   stay: "LodgingBusiness",
   eat: "Restaurant",
   tour: "TouristTrip",
+  experience: "Service",
 };
 
 /** Structured data for one listing-detail page. */

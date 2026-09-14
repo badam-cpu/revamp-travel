@@ -12,7 +12,8 @@ import { useAuth } from "@/contexts/AuthContext";
 const baseLinks = [
   { href: "/explore/stay", label: "Stay" },
   { href: "/explore/eat", label: "Eat" },
-  { href: "/explore/tour", label: "Tours" },
+  { href: "/explore/tour", label: "Tour" },
+  { href: "/explore/experience", label: "Experience" },
   { href: "/map", label: "Map" },
   { href: "/plan", label: "AI Planner", accent: true },
 ];

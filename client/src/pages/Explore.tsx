@@ -15,7 +15,7 @@ import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { buildCollectionPageJsonLd } from "@shared/seo";
 import { cn } from "@/lib/utils";
 
-const validTypes = new Set(["all", "stay", "eat", "tour"]);
+const validTypes = new Set(["all", "stay", "eat", "tour", "experience"]);
 
 export default function Explore({ initialType = "" }: { initialType?: string }) {
   const [, navigate] = useLocation();
@@ -80,7 +80,7 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
               <Button variant="ghost" size="sm" className="rounded-none text-xs" onClick={reset}><RotateCcw className="mr-2 h-3.5 w-3.5" /> Reset</Button>
             </div>
             <div className="flex flex-wrap gap-x-2 gap-y-3">
-              {["all", "stay", "eat", "tour"].map((value) => (
+              {["all", "stay", "eat", "tour", "experience"].map((value) => (
                 <button
                   key={value}
                   onClick={() => (value === "tour" ? navigate(`/explore/tour${query.trim() ? `?query=${encodeURIComponent(query.trim())}` : ""}`) : setType(value))}

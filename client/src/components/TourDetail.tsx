@@ -1,6 +1,8 @@
 /**
- * GetYourGuide-style detail layout used only for type: "tour" listings
- * (ListingPage.tsx keeps the original shared template for stays/restaurants).
+ * GetYourGuide-style detail layout shared by type: "tour" and type:
+ * "experience" listings (ListingPage.tsx keeps the original shared template
+ * for stays/restaurants). Experience-only Highlights/Not included/What to
+ * bring/Good-to-know sections render conditionally when present.
  * Everything here reads from the real Listing record — gallery, facts, tags,
  * amenities — and degrades gracefully for a host-added tour that has fewer
  * photos or fewer quick facts than the curated seed tours, instead of
@@ -11,7 +13,7 @@
  * quick-facts row and "what's included" list carry the weight instead.
  */
 import { useMemo, useState } from "react";
-import { ArrowLeft, Check, Clock, Gauge, Info, MapPin, Minus, Plus, Share2, Bookmark, Users } from "lucide-react";
+import { AlertCircle, ArrowLeft, Backpack, Check, Clock, Gauge, Info, MapPin, Minus, Plus, Share2, Bookmark, Sparkles, Users, X } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import { Listing } from "@/data/listings";
@@ -32,20 +34,24 @@ export function TourDetail({ listing }: { listing: Listing }) {
 
   const images = listing.gallery.length ? listing.gallery : [listing.image];
   const duration = factValue(listing, "Duration");
-  const group = factValue(listing, "Group", "Format");
+  const group = factValue(listing, "Group", "Format", "Group size");
   const level = factValue(listing, "Level", "Start");
   const extraFacts = otherFacts(listing);
 
-  const relatedTours = useMemo(
-    () => listings.filter((item) => item.type === "tour" && item.id !== listing.id).slice(0, 3),
-    [listings, listing.id],
+  const isExperience = listing.type === "experience";
+  const browsePath = isExperience ? "/explore/experience" : "/explore/tour";
+  const browseNoun = isExperience ? "experiences" : "tours";
+
+  const relatedItems = useMemo(
+    () => listings.filter((item) => item.type === listing.type && item.id !== listing.id).slice(0, 3),
+    [listings, listing.id, listing.type],
   );
 
   return (
     <>
       <div className="container relative flex items-center justify-between py-5">
-        <Link href="/explore/tour" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-basalt/55 hover:text-apricot">
-          <ArrowLeft className="h-4 w-4" /> Back to tours
+        <Link href={browsePath} className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-basalt/55 hover:text-apricot">
+          <ArrowLeft className="h-4 w-4" /> Back to {browseNoun}
         </Link>
         <div className="flex gap-2">
           <Button
@@ -140,6 +146,22 @@ export function TourDetail({ listing }: { listing: Listing }) {
             <p className="mt-4 text-base leading-8 text-basalt/62">{listing.longDescription}</p>
           </div>
 
+          {!!listing.highlights?.length && (
+            <div className="mt-8 border-t border-basalt/10 pt-8">
+              <p className="eyebrow">Highlights</p>
+              <div className="mt-5 grid gap-3">
+                {listing.highlights.map((item) => (
+                  <div key={item} className="flex items-start gap-3 text-sm leading-6 text-basalt/75">
+                    <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-apricot/10 text-apricot">
+                      <Sparkles className="h-3.5 w-3.5" />
+                    </span>
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {listing.amenities.length > 0 && (
             <div className="mt-10 border-t border-basalt/10 pt-8">
               <p className="eyebrow">What's included</p>
@@ -153,9 +175,53 @@ export function TourDetail({ listing }: { listing: Listing }) {
                   </div>
                 ))}
               </div>
-              <p className="mt-4 text-xs leading-5 text-basalt/40">
-                Anything beyond what's listed above — personal gear, extra meals, transport to Armenia — isn't included.
-              </p>
+              {!listing.notIncluded?.length && (
+                <p className="mt-4 text-xs leading-5 text-basalt/40">
+                  Anything beyond what's listed above — personal gear, extra meals, transport to Armenia — isn't included.
+                </p>
+              )}
+            </div>
+          )}
+
+          {!!listing.notIncluded?.length && (
+            <div className="mt-10 border-t border-basalt/10 pt-8">
+              <p className="eyebrow">Not included</p>
+              <div className="mt-5 grid gap-x-8 gap-y-3 sm:grid-cols-2">
+                {listing.notIncluded.map((item) => (
+                  <div key={item} className="flex items-center gap-3 border-b border-basalt/10 pb-3 text-sm text-basalt/70">
+                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-destructive/10 text-destructive">
+                      <X className="h-3.5 w-3.5" />
+                    </span>
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!!listing.whatToBring?.length && (
+            <div className="mt-10 border-t border-basalt/10 pt-8">
+              <p className="eyebrow">What to bring</p>
+              <div className="mt-5 grid gap-x-8 gap-y-3 sm:grid-cols-2">
+                {listing.whatToBring.map((item) => (
+                  <div key={item} className="flex items-center gap-3 border-b border-basalt/10 pb-3 text-sm text-basalt/70">
+                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-tuff/10 text-tuff">
+                      <Backpack className="h-3.5 w-3.5" />
+                    </span>
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {listing.importantInfo && (
+            <div className="mt-10 flex items-start gap-3 border border-tuff/30 bg-tuff/5 p-4 text-sm leading-6 text-basalt/75">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-tuff" />
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-tuff">Good to know</p>
+                <p className="mt-1.5">{listing.importantInfo}</p>
+              </div>
             </div>
           )}
 
@@ -225,19 +291,19 @@ export function TourDetail({ listing }: { listing: Listing }) {
         </aside>
       </section>
 
-      {relatedTours.length > 0 && (
+      {relatedItems.length > 0 && (
         <section className="container py-16 lg:py-24">
           <div className="flex items-end justify-between gap-5">
             <div>
               <p className="eyebrow">Keep exploring</p>
-              <h2 className="mt-3 font-display text-4xl tracking-[-0.04em] sm:text-5xl">More tours like this.</h2>
+              <h2 className="mt-3 font-display text-4xl tracking-[-0.04em] sm:text-5xl">More {browseNoun} like this.</h2>
             </div>
-            <Link href="/explore/tour" className="hidden text-xs font-bold uppercase tracking-[0.15em] text-apricot sm:block">
-              View all tours
+            <Link href={browsePath} className="hidden text-xs font-bold uppercase tracking-[0.15em] text-apricot sm:block">
+              View all {browseNoun}
             </Link>
           </div>
           <div className="mt-9 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {relatedTours.map((item) => (
+            {relatedItems.map((item) => (
               <TourCard key={item.id} listing={item} />
             ))}
           </div>

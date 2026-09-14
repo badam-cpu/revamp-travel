@@ -74,7 +74,12 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, amenities: s
   const tags = get("tags").split(",").map((t) => t.trim()).filter(Boolean);
   // amenities come from the AmenityPicker, photos from the PhotoUploader —
   // both passed in, neither a text field. Cover photo = first, gallery = all.
-  const facts = [1, 2, 3]
+  // tour/experience-only comma-separated lists + free-text important info.
+  const highlights = get("highlights").split(",").map((t) => t.trim()).filter(Boolean);
+  const notIncluded = get("notIncluded").split(",").map((t) => t.trim()).filter(Boolean);
+  const whatToBring = get("whatToBring").split(",").map((t) => t.trim()).filter(Boolean);
+  const importantInfo = get("importantInfo").trim();
+  const facts = [1, 2, 3, 4, 5, 6]
     .map((n) => ({ label: get(`fact${n}Label`).trim(), value: get(`fact${n}Value`).trim() }))
     .filter((f) => f.label && f.value);
 
@@ -96,6 +101,10 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, amenities: s
     tags,
     facts,
     amenities,
+    highlights,
+    notIncluded,
+    whatToBring,
+    importantInfo,
     featured: (form.elements.namedItem("featured") as HTMLInputElement | null)?.checked || false,
     accent: (get("accent") as ListingInput["accent"]) || "apricot",
     maxGuests: Number(get("maxGuests")) > 0 ? Number(get("maxGuests")) : undefined,
@@ -355,6 +364,30 @@ function ListingFormDialog({
               <div hidden={step !== 3} className="mt-10 grid gap-8">
                 <AmenityPicker ref={amenitiesRef} type={draft.type} defaultValue={draft.amenities ?? []} />
 
+                {/* Tour & experience-only detail fields. */}
+                {(draft.type === "tour" || draft.type === "experience") && (
+                  <div className="grid gap-6">
+                    <div className="grid gap-2">
+                      <Label htmlFor="highlights" className="text-sm font-semibold">Highlights <span className="font-normal text-basalt/45">(comma separated)</span></Label>
+                      <Input id="highlights" name="highlights" placeholder="Bake lavash in a tonir, Blend your own spice mix" defaultValue={draft.highlights?.join(", ")} className={FIELD} />
+                    </div>
+                    <div className="grid gap-6 sm:grid-cols-2">
+                      <div className="grid gap-2">
+                        <Label htmlFor="notIncluded" className="text-sm font-semibold">Not included <span className="font-normal text-basalt/45">(comma separated)</span></Label>
+                        <Input id="notIncluded" name="notIncluded" placeholder="Hotel pickup, Extra wine bottles" defaultValue={draft.notIncluded?.join(", ")} className={FIELD} />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="whatToBring" className="text-sm font-semibold">What to bring <span className="font-normal text-basalt/45">(comma separated)</span></Label>
+                        <Input id="whatToBring" name="whatToBring" placeholder="Comfortable clothing, A camera" defaultValue={draft.whatToBring?.join(", ")} className={FIELD} />
+                      </div>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="importantInfo" className="text-sm font-semibold">Important info <span className="font-normal text-basalt/45">(optional)</span></Label>
+                      <Textarea id="importantInfo" name="importantInfo" rows={2} placeholder="Age restrictions, accessibility notes, cancellation policy…" defaultValue={draft.importantInfo} className="rounded-none text-base" />
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid gap-6 sm:grid-cols-3">
                   <div className="grid gap-2">
                     <Label htmlFor="price" className="text-sm font-semibold">Price ({draft.type === "stay" ? "per night" : "per person"})</Label>
@@ -371,9 +404,9 @@ function ListingFormDialog({
                 </div>
 
                 <div className="grid gap-3">
-                  <Label className="text-sm font-semibold">Quick facts <span className="font-normal text-basalt/45">(up to 3, optional)</span></Label>
+                  <Label className="text-sm font-semibold">Quick facts <span className="font-normal text-basalt/45">(up to 6, optional)</span></Label>
                   <div className="grid gap-2">
-                    {[0, 1, 2].map((i) => (
+                    {[0, 1, 2, 3, 4, 5].map((i) => (
                       <div key={i} className="grid grid-cols-2 gap-2">
                         <Input name={`fact${i + 1}Label`} placeholder="Label, e.g. Sleeps" defaultValue={draft.facts?.[i]?.label} className="h-11 rounded-none" />
                         <Input name={`fact${i + 1}Value`} placeholder="Value, e.g. 2 guests" defaultValue={draft.facts?.[i]?.value} className="h-11 rounded-none" />
@@ -658,7 +691,8 @@ function DashboardContent() {
         )}
 
         <DashboardSection type="stay" title="Stays" description="Guesthouses, cabins, and small hotels shown on /explore/stay and the home page." />
-        <DashboardSection type="tour" title="Tours" description="Guided routes and experiences shown on /explore/tour and the home page." />
+        <DashboardSection type="tour" title="Tours" description="Guided routes shown on /explore/tour and the home page." />
+        <DashboardSection type="experience" title="Experiences" description="Hands-on classes and local activities shown on /explore/experience and the home page." />
 
         <section className="border-t border-basalt/10 py-12">
           <div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-apricot" /><p className="eyebrow">Coming soon</p></div>

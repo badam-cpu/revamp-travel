@@ -34,7 +34,7 @@ export default function MapPage() {
           <h1 className="mt-3 font-display text-5xl leading-none tracking-[-0.04em]">Armenia,<br />place by place.</h1>
           <p className="mt-4 max-w-xs text-sm leading-6 text-paper/48">Follow the volcanic spine from Tavush forest to Syunik’s southern roads.</p>
           <div className="mt-6 flex flex-wrap gap-2">
-            {["all", "stay", "eat", "tour"].map((value) => (
+            {["all", "stay", "eat", "tour", "experience"].map((value) => (
               <button key={value} onClick={() => { setType(value); const first = listings.find((item) => value === "all" || item.type === value); if (first) setSelectedId(first.id); }} className={cn("border border-white/15 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.15em] text-paper/55 transition-colors hover:text-white", type === value && "border-apricot bg-apricot text-white")}>
                 {value === "all" ? "All" : typeLabels[value as ListingType]}
               </button>

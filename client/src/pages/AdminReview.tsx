@@ -177,7 +177,7 @@ function AdminReviewContent() {
         <p className="eyebrow">Review queue</p>
         <h1 className="mt-3 font-display text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl">Pending listings.</h1>
         <p className="mt-4 max-w-xl text-base leading-7 text-basalt/60">
-          New stay and tour listings wait here until approved. Approving publishes a listing immediately; sending it back notifies the operator with your note so they can fix it and resubmit.
+          New stay, tour, and experience listings wait here until approved. Approving publishes a listing immediately; sending it back notifies the operator with your note so they can fix it and resubmit.
         </p>
 
         {error && (

@@ -16,7 +16,7 @@
  *      and it's the account you sign in as later to edit them.
  *
  * Why this needs two different Supabase keys, not one:
- *   - stay/tour rows are inserted by signing in as that operator with the
+ *   - stay/tour/experience rows are inserted by signing in as that operator with the
  *     ANON key and going through supabase-js exactly like Dashboard.tsx
  *     does — the same "operators can create their own stay/tour listings"
  *     Row-Level Security policy every real operator's inserts go through
@@ -99,6 +99,10 @@ function toRow(listing: Listing) {
     facts: listing.facts,
     featured: listing.featured ?? false,
     accent: listing.accent,
+    highlights: listing.highlights ?? [],
+    not_included: listing.notIncluded ?? [],
+    what_to_bring: listing.whatToBring ?? [],
+    important_info: listing.importantInfo ?? "",
   };
 }
 
