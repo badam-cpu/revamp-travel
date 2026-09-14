@@ -339,7 +339,9 @@ function renderListingDetail(listing: PublicListing, catalog: PublicListing[], o
     .map((src) => `<img src="${escapeHtml(imgUrl(src, origin))}" alt="${escapeHtml(listing.title)}" />`)
     .join("\n");
   const tagsHtml = listing.tags.length > 0 ? `<p>${listing.tags.map((tag) => escapeHtml(tag)).join(", ")}</p>` : "";
-  const highlightsHtml = listing.highlights?.length ? `<h2>Highlights</h2><ul>${listing.highlights.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
+  // "Itinerary" for experiences, "Highlights" for tours — same `highlights`
+  // data; keep in sync with TourDetail.tsx's client-rendered heading.
+  const highlightsHtml = listing.highlights?.length ? `<h2>${listing.type === "experience" ? "Itinerary" : "Highlights"}</h2><ul>${listing.highlights.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
   const notIncludedHtml = listing.notIncluded?.length ? `<h2>Not included</h2><ul>${listing.notIncluded.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
   const whatToBringHtml = listing.whatToBring?.length ? `<h2>What to bring</h2><ul>${listing.whatToBring.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
   const notSuitableForHtml = listing.notSuitableFor?.length ? `<h2>Not suitable for</h2><ul>${listing.notSuitableFor.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";

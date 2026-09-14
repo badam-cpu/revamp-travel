@@ -13,6 +13,7 @@ import Tours from "./pages/Tours";
 import MapPage from "./pages/MapPage";
 import ListingPage from "./pages/ListingPage";
 import Dashboard from "./pages/Dashboard";
+import ExperienceOnboarding from "./pages/ExperienceOnboarding";
 import AdminReview from "./pages/AdminReview";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -28,6 +29,8 @@ function Router() {
       <Route path="/explore">{() => <Explore />}</Route>
       <Route path="/map" component={MapPage} />
       <Route path="/plan" component={Plan} />
+      <Route path="/dashboard/experiences/new" component={ExperienceOnboarding} />
+      <Route path="/dashboard/experiences/:id/edit">{(params) => <ExperienceOnboarding params={params} />}</Route>
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/admin" component={AdminReview} />
       <Route path="/login" component={Login} />

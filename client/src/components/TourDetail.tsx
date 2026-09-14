@@ -148,7 +148,7 @@ export function TourDetail({ listing }: { listing: Listing }) {
 
           {!!listing.highlights?.length && (
             <div className="mt-8 border-t border-basalt/10 pt-8">
-              <p className="eyebrow">Highlights</p>
+              <p className="eyebrow">{isExperience ? "Itinerary" : "Highlights"}</p>
               <div className="mt-5 grid gap-3">
                 {listing.highlights.map((item) => (
                   <div key={item} className="flex items-start gap-3 text-sm leading-6 text-basalt/75">

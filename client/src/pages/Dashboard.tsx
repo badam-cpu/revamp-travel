@@ -22,6 +22,7 @@
  * step gating is handled by validateStep(), and the server still Zod-validates.
  */
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import { AlertTriangle, ArrowLeft, CalendarClock, Link2, Pencil, Plus, Sparkles, Trash2, X } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -42,6 +43,7 @@ import { PlaceAutocomplete } from "@/components/PlaceAutocomplete";
 import { AmenityPicker, AmenityPickerHandle } from "@/components/AmenityPicker";
 import { PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
 import { SearchableMultiSelect, SearchableMultiSelectHandle } from "@/components/SearchableMultiSelect";
+import { EXPERIENCE_PREFILL_STORAGE_KEY } from "@/pages/ExperienceOnboarding";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { toast } from "sonner";
 
@@ -578,9 +580,10 @@ function AvailabilityRow({ listing }: { listing: LiveListing }) {
   );
 }
 
-function DashboardSection({ type, title, description }: { type: ListingType; title: string; description: string }) {
+function DashboardSection({ type, title, description, wizardMode }: { type: ListingType; title: string; description: string; wizardMode?: boolean }) {
   const { user } = useAuth();
   const { listings, deleteListing } = useListings();
+  const [, navigate] = useLocation();
   const items = listings.filter((l) => l.type === type && l.operatorId === user?.id);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draft, setDraft] = useState<DraftListing | null>(null);
@@ -589,8 +592,18 @@ function DashboardSection({ type, title, description }: { type: ListingType; tit
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
-  const openAdd = () => { setDraft(emptyDraft(type)); setDialogOpen(true); };
-  const openEdit = (listing: LiveListing) => { setDraft(listing); setDialogOpen(true); };
+  // `wizardMode` (Experiences only) routes Add/Edit/prefill to the full-page
+  // wizard (App.tsx's /dashboard/experiences/*) instead of the shared dialog.
+  const openAdd = () => {
+    if (wizardMode) { navigate("/dashboard/experiences/new"); return; }
+    setDraft(emptyDraft(type));
+    setDialogOpen(true);
+  };
+  const openEdit = (listing: LiveListing) => {
+    if (wizardMode) { navigate(`/dashboard/experiences/${listing.id}/edit`); return; }
+    setDraft(listing);
+    setDialogOpen(true);
+  };
 
   const handleImport = async (event: FormEvent) => {
     event.preventDefault();
@@ -600,6 +613,24 @@ function DashboardSection({ type, title, description }: { type: ListingType; tit
     setImportError(null);
     try {
       const prefill = await importListingPrefill(url);
+      if (wizardMode) {
+        // Hand the prefill to the wizard via sessionStorage, then navigate.
+        sessionStorage.setItem(
+          EXPERIENCE_PREFILL_STORAGE_KEY,
+          JSON.stringify({
+            title: prefill.title ?? "",
+            description: prefill.description ?? "",
+            imageUrl: prefill.imageUrl,
+            amenities: prefill.amenities ?? [],
+            price: prefill.price ?? 0,
+            city: prefill.city ?? "",
+            region: prefill.region ?? "",
+          }),
+        );
+        setImportUrl("");
+        navigate("/dashboard/experiences/new");
+        return;
+      }
       setDraft({
         ...emptyDraft(type),
         title: prefill.title ?? "",
@@ -700,7 +731,7 @@ function DashboardSection({ type, title, description }: { type: ListingType; tit
         </div>
       )}
 
-      <ListingFormDialog draft={draft} open={dialogOpen} onOpenChange={setDialogOpen} onSaved={() => setDialogOpen(false)} />
+      {!wizardMode && <ListingFormDialog draft={draft} open={dialogOpen} onOpenChange={setDialogOpen} onSaved={() => setDialogOpen(false)} />}
     </section>
   );
 }
@@ -742,7 +773,7 @@ function DashboardContent() {
 
         <DashboardSection type="stay" title="Stays" description="Guesthouses, cabins, and small hotels shown on /explore/stay and the home page." />
         <DashboardSection type="tour" title="Tours" description="Guided routes shown on /explore/tour and the home page." />
-        <DashboardSection type="experience" title="Experiences" description="Hands-on classes and local activities shown on /explore/experience and the home page." />
+        <DashboardSection type="experience" title="Experiences" description="Hands-on classes and local activities shown on /explore/experience and the home page." wizardMode />
 
         <section className="border-t border-basalt/10 py-12">
           <div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-apricot" /><p className="eyebrow">Coming soon</p></div>
