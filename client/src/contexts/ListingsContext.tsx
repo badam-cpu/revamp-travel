@@ -60,7 +60,7 @@ interface ListingsContextType {
 const ListingsContext = createContext<ListingsContextType | undefined>(undefined);
 
 const ROW_COLUMNS =
-  "id, operator_id, type, slug, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, amenities, facts, featured, accent, status, review_note, reviewed_at, ical_url, ical_synced_at, ical_error, blocked_ranges, seasonal_rates, max_guests, highlights, not_included, what_to_bring, important_info";
+  "id, operator_id, type, slug, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, amenities, facts, featured, accent, status, review_note, reviewed_at, ical_url, ical_synced_at, ical_error, blocked_ranges, seasonal_rates, max_guests, highlights, not_included, what_to_bring, important_info, not_suitable_for";
 
 interface ListingRow {
   id: string;
@@ -97,6 +97,7 @@ interface ListingRow {
   not_included: string[] | null;
   what_to_bring: string[] | null;
   important_info: string | null;
+  not_suitable_for: string[] | null;
 }
 
 function mapListingRow(row: ListingRow): LiveListing {
@@ -137,6 +138,7 @@ function mapListingRow(row: ListingRow): LiveListing {
     notIncluded: row.not_included ?? [],
     whatToBring: row.what_to_bring ?? [],
     importantInfo: row.important_info ?? "",
+    notSuitableFor: row.not_suitable_for ?? [],
   };
 }
 
@@ -166,6 +168,7 @@ function toRow(input: ListingInput) {
     not_included: input.notIncluded ?? [],
     what_to_bring: input.whatToBring ?? [],
     important_info: input.importantInfo ?? "",
+    not_suitable_for: input.notSuitableFor ?? [],
   };
 }
 

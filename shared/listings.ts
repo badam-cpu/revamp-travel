@@ -45,6 +45,8 @@ export interface Listing {
   notIncluded?: string[];
   whatToBring?: string[];
   importantInfo?: string;
+  /** Curated "who is this not suitable for?" list (tour/experience). */
+  notSuitableFor?: string[];
   /** Maximum number of guests the listing sleeps/hosts; caps the guest selector. */
   maxGuests?: number;
 }
@@ -433,6 +435,8 @@ export interface ListingInput {
   notIncluded?: string[];
   whatToBring?: string[];
   importantInfo?: string;
+  /** Curated "who is this not suitable for?" list (tour/experience). */
+  notSuitableFor?: string[];
   /** Maximum number of guests the listing sleeps/hosts; caps the guest selector. */
   maxGuests?: number;
 }

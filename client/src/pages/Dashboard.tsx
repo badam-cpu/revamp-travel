@@ -41,6 +41,7 @@ import { cn } from "@/lib/utils";
 import { PlaceAutocomplete } from "@/components/PlaceAutocomplete";
 import { AmenityPicker, AmenityPickerHandle } from "@/components/AmenityPicker";
 import { PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
+import { SearchableMultiSelect, SearchableMultiSelectHandle } from "@/components/SearchableMultiSelect";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { toast } from "sonner";
 
@@ -68,16 +69,23 @@ function emptyDraft(type: ListingType): DraftListing {
   };
 }
 
-function toInputPayload(draft: DraftListing, form: HTMLFormElement, amenities: string[], photos: string[]): ListingInput {
+interface RefLists {
+  amenities: string[];
+  photos: string[];
+  notIncluded: string[];
+  whatToBring: string[];
+  notSuitableFor: string[];
+}
+
+function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLists): ListingInput {
   const get = (name: string) => (form.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement | null)?.value ?? "";
   const price = Number(get("price")) || 0;
   const tags = get("tags").split(",").map((t) => t.trim()).filter(Boolean);
-  // amenities come from the AmenityPicker, photos from the PhotoUploader —
-  // both passed in, neither a text field. Cover photo = first, gallery = all.
-  // tour/experience-only comma-separated lists + free-text important info.
+  // amenities/photos and the searchable lists (notIncluded/whatToBring/
+  // notSuitableFor) come from their ref-based pickers, passed in via `lists`.
+  // Highlights stays a free-text field; importantInfo a free-text note.
+  const { amenities, photos, notIncluded, whatToBring, notSuitableFor } = lists;
   const highlights = get("highlights").split(",").map((t) => t.trim()).filter(Boolean);
-  const notIncluded = get("notIncluded").split(",").map((t) => t.trim()).filter(Boolean);
-  const whatToBring = get("whatToBring").split(",").map((t) => t.trim()).filter(Boolean);
   const importantInfo = get("importantInfo").trim();
   const facts = [1, 2, 3, 4, 5, 6]
     .map((n) => ({ label: get(`fact${n}Label`).trim(), value: get(`fact${n}Value`).trim() }))
@@ -105,6 +113,7 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, amenities: s
     notIncluded,
     whatToBring,
     importantInfo,
+    notSuitableFor,
     featured: (form.elements.namedItem("featured") as HTMLInputElement | null)?.checked || false,
     accent: (get("accent") as ListingInput["accent"]) || "apricot",
     maxGuests: Number(get("maxGuests")) > 0 ? Number(get("maxGuests")) : undefined,
@@ -144,6 +153,20 @@ const FIELD = "h-12 rounded-none text-base";
  * size/Meeting point, not a stay's "Sleeps / 2 guests"). Placeholders only —
  * operators still type whatever free-form facts they want.
  */
+/** Curated options for the searchable multi-select fields on tour/experience listings. Operators can still add their own via the picker's "add" row. */
+const NOT_INCLUDED_OPTIONS = [
+  "Hotel pickup", "Hotel drop-off", "Gratuities", "Food and drinks", "Alcoholic beverages", "Entrance fees",
+  "Transport to the meeting point", "Travel insurance", "Personal expenses", "Additional materials", "Souvenirs",
+];
+const WHAT_TO_BRING_OPTIONS = [
+  "Comfortable walking shoes", "Comfortable clothing", "Weather-appropriate clothing", "Sun protection", "Hat", "Sunglasses",
+  "Water bottle", "Camera", "Cash for extras", "Passport or ID", "Light jacket", "Snacks",
+];
+const NOT_SUITABLE_FOR_OPTIONS = [
+  "People with mobility impairments", "Wheelchair users", "People with heart conditions", "People with altitude sickness",
+  "Pregnant women", "Babies under 1 year", "Children under 10 years", "People over 70 years", "People with back problems",
+];
+
 const FACT_EXAMPLES: Record<ListingType, [string, string][]> = {
   stay: [["Sleeps", "2 guests"], ["Setting", "Forest edge"], ["Best for", "Slow weekends"], ["Check-in", "3 PM"], ["Parking", "On site"], ["Breakfast", "Included"]],
   tour: [["Duration", "6 hours"], ["Group", "Up to 8"], ["Level", "Easy"], ["Starts", "Yerevan"], ["Season", "May–Oct"], ["Languages", "EN / RU"]],
@@ -170,6 +193,9 @@ function ListingFormDialog({
   const formRef = useRef<HTMLFormElement>(null);
   const amenitiesRef = useRef<AmenityPickerHandle>(null);
   const photosRef = useRef<PhotoUploaderHandle>(null);
+  const notIncludedRef = useRef<SearchableMultiSelectHandle>(null);
+  const whatToBringRef = useRef<SearchableMultiSelectHandle>(null);
+  const notSuitableForRef = useRef<SearchableMultiSelectHandle>(null);
   const draftId = draft?.id;
   // Reset to the first step whenever the dialog (re)opens or a different draft loads.
   useEffect(() => {
@@ -227,7 +253,13 @@ function ListingFormDialog({
     setSaving(true);
     setError(null);
     try {
-      const payload = toInputPayload(draft, event.currentTarget, amenitiesRef.current?.getValue() ?? [], photosRef.current?.getValue() ?? []);
+      const payload = toInputPayload(draft, event.currentTarget, {
+        amenities: amenitiesRef.current?.getValue() ?? [],
+        photos: photosRef.current?.getValue() ?? [],
+        notIncluded: notIncludedRef.current?.getValue() ?? [],
+        whatToBring: whatToBringRef.current?.getValue() ?? [],
+        notSuitableFor: notSuitableForRef.current?.getValue() ?? [],
+      });
       if (isEdit && draft.id) {
         await updateListing(draft.id, payload);
         toast(`${payload.title} updated.`);
@@ -384,15 +416,17 @@ function ListingFormDialog({
                       <Label htmlFor="highlights" className="text-sm font-semibold">Highlights <span className="font-normal text-basalt/45">(comma separated)</span></Label>
                       <Input id="highlights" name="highlights" placeholder="Bake lavash in a tonir, Blend your own spice mix" defaultValue={draft.highlights?.join(", ")} className={FIELD} />
                     </div>
-                    <div className="grid gap-6 sm:grid-cols-2">
-                      <div className="grid gap-2">
-                        <Label htmlFor="notIncluded" className="text-sm font-semibold">Not included <span className="font-normal text-basalt/45">(comma separated)</span></Label>
-                        <Input id="notIncluded" name="notIncluded" placeholder="Hotel pickup, Extra wine bottles" defaultValue={draft.notIncluded?.join(", ")} className={FIELD} />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="whatToBring" className="text-sm font-semibold">What to bring <span className="font-normal text-basalt/45">(comma separated)</span></Label>
-                        <Input id="whatToBring" name="whatToBring" placeholder="Comfortable clothing, A camera" defaultValue={draft.whatToBring?.join(", ")} className={FIELD} />
-                      </div>
+                    <div className="grid gap-2">
+                      <Label className="text-sm font-semibold">Not included <span className="font-normal text-basalt/45">(search or add your own)</span></Label>
+                      <SearchableMultiSelect ref={notIncludedRef} options={NOT_INCLUDED_OPTIONS} defaultValue={draft.notIncluded ?? []} placeholder="Search what's not included" />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label className="text-sm font-semibold">What to bring <span className="font-normal text-basalt/45">(search or add your own)</span></Label>
+                      <SearchableMultiSelect ref={whatToBringRef} options={WHAT_TO_BRING_OPTIONS} defaultValue={draft.whatToBring ?? []} placeholder="Search what to bring" />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label className="text-sm font-semibold">Who is this not suitable for? <span className="font-normal text-basalt/45">(search or add your own)</span></Label>
+                      <SearchableMultiSelect ref={notSuitableForRef} options={NOT_SUITABLE_FOR_OPTIONS} defaultValue={draft.notSuitableFor ?? []} placeholder="Search groups this isn't suitable for" />
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="importantInfo" className="text-sm font-semibold">Important info <span className="font-normal text-basalt/45">(optional)</span></Label>

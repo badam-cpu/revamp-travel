@@ -103,6 +103,7 @@ function toRow(listing: Listing) {
     not_included: listing.notIncluded ?? [],
     what_to_bring: listing.whatToBring ?? [],
     important_info: listing.importantInfo ?? "",
+    not_suitable_for: listing.notSuitableFor ?? [],
   };
 }
 

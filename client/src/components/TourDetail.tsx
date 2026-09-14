@@ -13,7 +13,7 @@
  * quick-facts row and "what's included" list carry the weight instead.
  */
 import { useMemo, useState } from "react";
-import { AlertCircle, ArrowLeft, Backpack, Check, Clock, Gauge, Info, MapPin, Minus, Plus, Share2, Bookmark, Sparkles, Users, X } from "lucide-react";
+import { AlertCircle, ArrowLeft, Backpack, Ban, Check, Clock, Gauge, Info, MapPin, Minus, Plus, Share2, Bookmark, Sparkles, Users, X } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import { Listing } from "@/data/listings";
@@ -207,6 +207,22 @@ export function TourDetail({ listing }: { listing: Listing }) {
                   <div key={item} className="flex items-center gap-3 border-b border-basalt/10 pb-3 text-sm text-basalt/70">
                     <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-tuff/10 text-tuff">
                       <Backpack className="h-3.5 w-3.5" />
+                    </span>
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!!listing.notSuitableFor?.length && (
+            <div className="mt-10 border-t border-basalt/10 pt-8">
+              <p className="eyebrow">Not suitable for</p>
+              <div className="mt-5 grid gap-x-8 gap-y-3 sm:grid-cols-2">
+                {listing.notSuitableFor.map((item) => (
+                  <div key={item} className="flex items-center gap-3 border-b border-basalt/10 pb-3 text-sm text-basalt/70">
+                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-destructive/10 text-destructive">
+                      <Ban className="h-3.5 w-3.5" />
                     </span>
                     {item}
                   </div>
