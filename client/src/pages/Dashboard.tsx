@@ -138,6 +138,19 @@ const LAST_STEP = STEPS.length - 1;
 /** Roomy, brand-radius field sizing shared across the onboarding inputs. */
 const FIELD = "h-12 rounded-none text-base";
 
+/**
+ * Per-type example [label, value] pairs for the Quick facts placeholders, so
+ * the hints match the listing type (a tour/experience shows Duration/Group
+ * size/Meeting point, not a stay's "Sleeps / 2 guests"). Placeholders only —
+ * operators still type whatever free-form facts they want.
+ */
+const FACT_EXAMPLES: Record<ListingType, [string, string][]> = {
+  stay: [["Sleeps", "2 guests"], ["Setting", "Forest edge"], ["Best for", "Slow weekends"], ["Check-in", "3 PM"], ["Parking", "On site"], ["Breakfast", "Included"]],
+  tour: [["Duration", "6 hours"], ["Group", "Up to 8"], ["Level", "Easy"], ["Starts", "Yerevan"], ["Season", "May–Oct"], ["Languages", "EN / RU"]],
+  experience: [["Duration", "3 hours"], ["Group size", "Up to 8"], ["Meeting point", "Republic Square"], ["Languages", "EN / RU / HY"], ["Skill level", "Beginner"], ["Ages", "12+"]],
+  eat: [["Cuisine", "Modern Armenian"], ["Service", "Lunch & dinner"], ["Setting", "Garden courtyard"], ["Seats", "40"], ["Booking", "Recommended"], ["Signature", "Lamb khorovats"]],
+};
+
 function ListingFormDialog({
   draft,
   open,
@@ -406,12 +419,15 @@ function ListingFormDialog({
                 <div className="grid gap-3">
                   <Label className="text-sm font-semibold">Quick facts <span className="font-normal text-basalt/45">(up to 6, optional)</span></Label>
                   <div className="grid gap-2">
-                    {[0, 1, 2, 3, 4, 5].map((i) => (
-                      <div key={i} className="grid grid-cols-2 gap-2">
-                        <Input name={`fact${i + 1}Label`} placeholder="Label, e.g. Sleeps" defaultValue={draft.facts?.[i]?.label} className="h-11 rounded-none" />
-                        <Input name={`fact${i + 1}Value`} placeholder="Value, e.g. 2 guests" defaultValue={draft.facts?.[i]?.value} className="h-11 rounded-none" />
-                      </div>
-                    ))}
+                    {[0, 1, 2, 3, 4, 5].map((i) => {
+                      const [exLabel, exValue] = FACT_EXAMPLES[draft.type][i];
+                      return (
+                        <div key={i} className="grid grid-cols-2 gap-2">
+                          <Input name={`fact${i + 1}Label`} placeholder={`Label, e.g. ${exLabel}`} defaultValue={draft.facts?.[i]?.label} className="h-11 rounded-none" />
+                          <Input name={`fact${i + 1}Value`} placeholder={`Value, e.g. ${exValue}`} defaultValue={draft.facts?.[i]?.value} className="h-11 rounded-none" />
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
