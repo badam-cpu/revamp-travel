@@ -62,8 +62,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AmenityPicker, AmenityPickerHandle } from "@/components/AmenityPicker";
 import { PlaceAutocomplete } from "@/components/PlaceAutocomplete";
+import { PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
 import { ListEditor } from "@/components/ListEditor";
 import type { ResolvedPlace } from "@/lib/googleMaps";
 import { useListings, LiveListing } from "@/contexts/ListingsContext";
@@ -97,7 +99,7 @@ interface WizardData {
   whatToBring: string[];
   notSuitableFor: string[];
   importantInfo: string;
-  image: string;
+  photos: string[];
   prefillImageUrl?: string;
   price: number;
   priceUnit: string;
@@ -127,11 +129,17 @@ function emptyWizardData(): WizardData {
     whatToBring: [],
     notSuitableFor: [],
     importantInfo: "",
-    image: "",
+    photos: [],
     price: 0,
     priceUnit: "person",
     featured: false,
   };
+}
+
+/** Existing real photos on a listing (drop the brand-illustration fallbacks under /images or /brand), for seeding the uploader when editing. */
+function realPhotos(listing: LiveListing): string[] {
+  const source = listing.gallery?.length ? listing.gallery : listing.image ? [listing.image] : [];
+  return source.filter((u) => u && !u.startsWith("/images/") && !u.startsWith("/brand/"));
 }
 
 function readSessionPrefill(): Partial<WizardData> | null {
@@ -182,7 +190,7 @@ function listingToWizardData(listing: LiveListing): WizardData {
     whatToBring: listing.whatToBring ?? [],
     notSuitableFor: listing.notSuitableFor ?? [],
     importantInfo: listing.importantInfo ?? "",
-    image: listing.image,
+    photos: realPhotos(listing),
     price: listing.price,
     priceUnit: listing.priceUnit,
     featured: listing.featured ?? false,
@@ -211,7 +219,8 @@ function toListingInput(data: WizardData): ListingInput {
     city: data.city.trim(),
     region: data.region.trim(),
     coordinates: data.coordinates,
-    image: data.image.trim() || undefined,
+    image: data.photos[0] || undefined,
+    gallery: data.photos.length ? data.photos : undefined,
     shortDescription: data.shortDescription.trim(),
     longDescription: data.longDescription.trim(),
     price,
@@ -287,6 +296,7 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const amenitiesRef = useRef<AmenityPickerHandle>(null);
+  const photosRef = useRef<PhotoUploaderHandle>(null);
   const cityRef = useRef<HTMLInputElement>(null);
   const regionRef = useRef<HTMLInputElement>(null);
   const latRef = useRef<HTMLInputElement>(null);
@@ -315,6 +325,8 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
   useEffect(() => {
     const value = amenitiesRef.current?.getValue();
     if (value) setData((d) => ({ ...d, amenities: value }));
+    const photos = photosRef.current?.getValue();
+    if (photos) setData((d) => ({ ...d, photos }));
   }, [currentStep]);
 
   useDocumentMeta({
@@ -525,8 +537,15 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                         <Input value={data.groupSize} onChange={(e) => set("groupSize", e.target.value)} placeholder="Up to 8" />
                       </StepField>
                     </div>
-                    <StepField label="Meeting point">
-                      <Input value={data.meetingPoint} onChange={(e) => set("meetingPoint", e.target.value)} placeholder="Yerevan city center" />
+                    <StepField label="Meeting point" help="Search for the spot to fill in a real address, or just type it.">
+                      <div className="grid gap-2">
+                        <PlaceAutocomplete
+                          label={null}
+                          helpText={null}
+                          onSelect={(p) => set("meetingPoint", p.formattedAddress || [p.city, p.region].filter(Boolean).join(", "))}
+                        />
+                        <Input value={data.meetingPoint} onChange={(e) => set("meetingPoint", e.target.value)} placeholder="e.g. Republic Square, Yerevan" />
+                      </div>
                     </StepField>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <StepField label="Languages">
@@ -574,22 +593,42 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                       <div className="flex items-start gap-3 border border-basalt/10 bg-chalk p-3">
                         <img src={data.prefillImageUrl} alt="" className="h-16 w-16 shrink-0 rounded object-cover" />
                         <p className="text-xs leading-5 text-basalt/55">
-                          Reference photo from the link you pasted — shown for reference only, it won't be saved. Paste your own hosted photo URL below (or leave it blank for a brand illustration).
+                          Reference photo from the link you pasted — shown for reference only, it won't be saved. Add your own photos below (or leave it blank for a brand illustration).
                         </p>
                       </div>
                     )}
-                    <StepField label="Image URL (optional)" help="Leave blank to use a brand illustration.">
-                      <Input value={data.image} onChange={(e) => set("image", e.target.value)} placeholder="https://…" />
+                    <StepField label="Photos" help="Drag &amp; drop or click to upload — the first photo is the cover. Leave empty to use a brand illustration.">
+                      {/* keyed on `hydrated` so an edit reseeds the uploader once the listing's photos load */}
+                      <PhotoUploader key={hydrated ? "ready" : "loading"} ref={photosRef} defaultValue={data.photos} />
                     </StepField>
                   </div>
 
                   {/* Step 8 — Pricing */}
                   <div className={cn("grid gap-4 sm:grid-cols-2", currentStep !== 8 && "hidden")}>
-                    <StepField label="Price per person">
-                      <Input type="number" min={0} value={data.price} onChange={(e) => set("price", Number(e.target.value) || 0)} />
+                    <StepField label={`Price (per ${data.priceUnit || "person"})`}>
+                      <Input
+                        type="number"
+                        min={1}
+                        inputMode="decimal"
+                        value={data.price || ""}
+                        onChange={(e) => set("price", Number(e.target.value) || 0)}
+                        placeholder="e.g. 120"
+                      />
                     </StepField>
-                    <StepField label="Price unit label">
-                      <Input value={data.priceUnit} onChange={(e) => set("priceUnit", e.target.value)} placeholder="person" />
+                    <StepField label="Charged per">
+                      <Select value={data.priceUnit} onValueChange={(v) => set("priceUnit", v)}>
+                        <SelectTrigger><SelectValue placeholder="person" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="person">Person</SelectItem>
+                          <SelectItem value="group">Group</SelectItem>
+                          <SelectItem value="session">Session</SelectItem>
+                          <SelectItem value="class">Class</SelectItem>
+                          <SelectItem value="visit">Visit</SelectItem>
+                          <SelectItem value="couple">Couple</SelectItem>
+                          <SelectItem value="ticket">Ticket</SelectItem>
+                          <SelectItem value="day">Day</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </StepField>
                   </div>
 

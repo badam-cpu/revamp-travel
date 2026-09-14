@@ -23,7 +23,17 @@ import { useEffect, useRef, useState } from "react";
 import { Label } from "@/components/ui/label";
 import { loadPlaceAutocompleteElement, extractResolvedPlace, type ResolvedPlace } from "@/lib/googleMaps";
 
-export function PlaceAutocomplete({ onSelect }: { onSelect: (place: ResolvedPlace) => void }) {
+export function PlaceAutocomplete({
+  onSelect,
+  label = "Search for the address (optional)",
+  helpText = "Pick a result to fill in city, region, and coordinates below — you can still edit any of them by hand after.",
+}: {
+  onSelect: (place: ResolvedPlace) => void;
+  /** Field label above the search box; pass null to omit (e.g. when a parent field already labels it). */
+  label?: string | null;
+  /** Helper line below; pass null to omit. */
+  helpText?: string | null;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
@@ -69,7 +79,7 @@ export function PlaceAutocomplete({ onSelect }: { onSelect: (place: ResolvedPlac
 
   return (
     <div className="grid gap-1.5">
-      <Label>Search for the address (optional)</Label>
+      {label && <Label>{label}</Label>}
       {/* The brand outline lives on THIS wrapper, never on the widget itself —
           styling the gmp-place-autocomplete host (esp. overflow-hidden) clips
           its own suggestions dropdown and breaks the search. The wrapper frames
@@ -92,9 +102,7 @@ export function PlaceAutocomplete({ onSelect }: { onSelect: (place: ResolvedPlac
           className="[&_gmp-place-autocomplete]:block [&_gmp-place-autocomplete]:w-full [&_gmp-place-autocomplete]:bg-transparent"
         />
       </div>
-      <p className="text-xs text-basalt/45">
-        Pick a result to fill in city, region, and coordinates below — you can still edit any of them by hand after.
-      </p>
+      {helpText && <p className="text-xs text-basalt/45">{helpText}</p>}
     </div>
   );
 }
