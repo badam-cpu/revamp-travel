@@ -519,8 +519,19 @@ function StatusBadge({ status }: { status: LiveListing["status"] }) {
 }
 
 /** Per-listing Airbnb calendar (iCal) connect + sync control. One-way import: shows unavailable dates on Revamp, no prices. */
+// Per-type calendar-source hint. The importer (server/ical.ts) accepts ANY
+// iCalendar .ics feed, so this only tailors the copy/placeholder to the
+// platform each type is most likely syncing from.
+const ICAL_SOURCE: Record<ListingType, { name: string; placeholder: string }> = {
+  stay: { name: "Airbnb", placeholder: "https://www.airbnb.com/calendar/ical/….ics" },
+  tour: { name: "GetYourGuide", placeholder: "https://…/calendar/….ics (GetYourGuide, Viator, etc.)" },
+  experience: { name: "your booking platform", placeholder: "https://…/….ics (any booking calendar)" },
+  eat: { name: "your booking platform", placeholder: "https://…/….ics" },
+};
+
 function AvailabilityRow({ listing }: { listing: LiveListing }) {
   const { setIcalUrl, refresh } = useListings();
+  const source = ICAL_SOURCE[listing.type];
   const [url, setUrl] = useState(listing.icalUrl ?? "");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -555,7 +566,7 @@ function AvailabilityRow({ listing }: { listing: LiveListing }) {
   ) : listing.icalSyncedAt ? (
     `${listing.blockedRanges.length} blocked date ${listing.blockedRanges.length === 1 ? "range" : "ranges"} · last synced ${new Date(listing.icalSyncedAt).toLocaleString()}`
   ) : (
-    "Paste your Airbnb listing's calendar-export link to show its unavailable dates on Revamp. One-way, availability only — no prices."
+    `Paste your ${source.name} calendar-export (.ics) link to show its unavailable dates on Revamp — any iCal feed works. One-way, availability only, so double-bookings are blocked; no prices imported.`
   );
 
   return (
@@ -568,7 +579,7 @@ function AvailabilityRow({ listing }: { listing: LiveListing }) {
           type="url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://www.airbnb.com/calendar/ical/….ics"
+          placeholder={source.placeholder}
           className="h-9 min-w-0 flex-1 rounded-none text-xs"
         />
         <Button type="button" variant="outline" size="sm" className="h-9 shrink-0 rounded-none border-basalt/15 text-xs" disabled={busy} onClick={save}>
