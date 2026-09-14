@@ -10,6 +10,7 @@ import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { Button } from "@/components/ui/button";
 import { brandAssets, regions } from "@/data/listings";
 import { useListings } from "@/contexts/ListingsContext";
+import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { buildWebsiteJsonLd } from "@shared/seo";
 
@@ -22,14 +23,28 @@ const categories = [
 
 export default function Home() {
   const { listings } = useListings();
-  const featured = (listings.filter((listing) => listing.featured).length ? listings.filter((listing) => listing.featured) : listings).slice(0, 6);
+  const { settings } = useSiteSettings();
+
+  // Admin-editable home content, each with a fallback to the built-in default.
+  const heroImage = settings.heroImage || brandAssets.hero;
+  const heroSubcopy =
+    settings.heroSubcopy ||
+    "Exceptional stays, Armenian tables, and local routes—carefully gathered for travelers who want to feel the country, not just pass through it.";
+
+  // Featured row: admin's ordered slug list (published only) if set, else the
+  // automatic pick (listings flagged `featured`, falling back to the first few).
+  const adminFeatured = settings.featuredSlugs
+    .map((slug) => listings.find((l) => l.slug === slug))
+    .filter((l): l is (typeof listings)[number] => Boolean(l));
+  const autoFeatured = (listings.filter((listing) => listing.featured).length ? listings.filter((listing) => listing.featured) : listings).slice(0, 6);
+  const featured = (adminFeatured.length ? adminFeatured : autoFeatured).slice(0, 6);
   const [selectedId, setSelectedId] = useState(featured[0]?.id);
 
   useDocumentMeta({
     title: "Revamp Travel — Discover Armenia",
     description: "Curated places to stay, Armenian restaurants, local tours, and memorable routes across Armenia.",
     canonicalPath: "/",
-    ogImage: brandAssets.hero,
+    ogImage: heroImage,
     jsonLd: buildWebsiteJsonLd(window.location.origin),
   });
 
@@ -38,14 +53,16 @@ export default function Home() {
       <SiteHeader />
       <main>
         <section className="hero-field relative min-h-[660px] overflow-hidden border-b border-basalt/10 sm:min-h-[720px]">
-          <img src={brandAssets.hero} alt="Armenian highlands at morning light" className="absolute inset-0 h-full w-full object-cover object-center" />
+          <img src={heroImage} alt="Armenian highlands at morning light" className="absolute inset-0 h-full w-full object-cover object-center" />
           <div className="hero-image-overlay absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.98)_0%,rgba(255,255,255,0.88)_36%,rgba(255,255,255,0.18)_67%,rgba(33,33,33,0.12)_100%)]" />
           <div className="brand-pattern-hero pointer-events-none absolute -left-8 top-14 text-[15rem] font-bold leading-none tracking-[-0.12em] text-apricot/10">re.</div>
           <div className="container relative z-10 flex min-h-[660px] flex-col justify-center pb-28 pt-16 sm:min-h-[720px]">
             <div className="max-w-[720px]">
               <div className="hero-enter flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.23em] text-tuff"><span className="h-px w-10 bg-tuff" /> Curated across Armenia</div>
-              <h1 className="hero-enter mt-7 font-display text-[4rem] leading-[0.86] tracking-[-0.055em] text-basalt sm:text-[5.6rem] lg:text-[7rem]">Stay.<br /><span className="text-apricot">Experience.</span><br />Repeat.</h1>
-              <p className="hero-enter mt-7 max-w-lg text-base leading-7 text-basalt/65 sm:text-lg">Exceptional stays, Armenian tables, and local routes—carefully gathered for travelers who want to feel the country, not just pass through it.</p>
+              <h1 className="hero-enter mt-7 font-display text-[4rem] leading-[0.86] tracking-[-0.055em] text-basalt sm:text-[5.6rem] lg:text-[7rem]">
+                {settings.heroHeadline ? settings.heroHeadline : (<>Stay.<br /><span className="text-apricot">Experience.</span><br />Repeat.</>)}
+              </h1>
+              <p className="hero-enter mt-7 max-w-lg text-base leading-7 text-basalt/65 sm:text-lg">{heroSubcopy}</p>
               <Link href="/explore" className="hero-enter mt-8 inline-flex items-center gap-3 text-xs font-bold uppercase tracking-[0.17em] text-basalt hover:text-apricot">Find your way through Armenia <span className="grid h-9 w-9 place-items-center border border-basalt/25"><ArrowDown className="h-4 w-4" /></span></Link>
             </div>
             <div className="absolute bottom-9 right-8 hidden items-end gap-3 text-right text-white lg:flex"><div><p className="text-[10px] font-bold uppercase tracking-[0.17em] text-white/65">Field note 001</p><p className="mt-1 font-display text-xl">Morning road to Geghard</p></div><MapPin className="mb-1 h-5 w-5 text-apricot" /></div>

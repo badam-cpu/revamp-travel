@@ -7,6 +7,8 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ListingsProvider } from "./contexts/ListingsContext";
+import { SiteSettingsProvider } from "./contexts/SiteSettingsContext";
+import { AnnouncementBanner } from "./components/AnnouncementBanner";
 import Home from "./pages/Home";
 import Explore from "./pages/Explore";
 import Tours from "./pages/Tours";
@@ -49,10 +51,13 @@ function App() {
       <ThemeProvider defaultTheme="light">
         <AuthProvider>
           <ListingsProvider>
-            <TooltipProvider>
-              <Toaster />
-              <Router />
-            </TooltipProvider>
+            <SiteSettingsProvider>
+              <TooltipProvider>
+                <Toaster />
+                <AnnouncementBanner />
+                <Router />
+              </TooltipProvider>
+            </SiteSettingsProvider>
           </ListingsProvider>
         </AuthProvider>
       </ThemeProvider>

@@ -17,6 +17,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Check, MapPin, X } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
+import { AdminSiteContent } from "@/components/AdminSiteContent";
 import { RequireRole } from "@/components/RequireRole";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -197,6 +198,7 @@ function AdminReviewContent() {
             ))}
           </div>
         )}
+        <AdminSiteContent />
       </main>
       <SiteFooter />
     </div>
