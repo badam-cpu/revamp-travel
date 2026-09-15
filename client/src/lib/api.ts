@@ -159,6 +159,18 @@ export async function sendSupportMessage(message: string): Promise<{ reply: stri
   });
 }
 
+/** A guest optionally leaves an email/name so Revamp can follow up after they leave. */
+export async function submitSupportContact(email: string, name?: string): Promise<{ ok: boolean }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Start a chat first.");
+  return request<{ ok: boolean }>("/api/support-contact", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ email, name }),
+  });
+}
+
 export interface IcalSyncResult {
   count: number;
   syncedAt: string;

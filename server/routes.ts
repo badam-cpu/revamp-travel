@@ -59,6 +59,11 @@ const supportChatSchema = z.object({
   message: z.string().trim().min(1).max(2000),
 });
 
+const supportContactSchema = z.object({
+  email: z.string().trim().email().max(200),
+  name: z.string().trim().max(120).optional(),
+});
+
 function issuesToMessage(err: z.ZodError): string {
   return err.issues.map((issue) => `${issue.path.join(".") || "value"}: ${issue.message}`).join("; ");
 }
@@ -465,6 +470,40 @@ export function registerApiRoutes(app: Express) {
     } catch (err) {
       console.error("[support-chat]", err);
       res.status(500).json({ error: "Couldn't send your message. Please try again." });
+    }
+  });
+
+  // POST /api/support-contact — a guest optionally leaves an email/name so
+  // Revamp can follow up after they leave. Stored on their support thread
+  // (service role, after validation); never required to chat.
+  app.post("/api/support-contact", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Start a chat first." });
+
+    const parsed = supportContactSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Support isn't available right now." });
+
+    try {
+      let { data: thread } = await admin.from("support_threads").select("id").eq("traveler_id", userId).maybeSingle();
+      if (!thread) {
+        const { data: created, error: cErr } = await admin.from("support_threads").insert({ traveler_id: userId }).select("id").single();
+        if (cErr || !created) throw new Error(cErr?.message || "thread create failed");
+        thread = created;
+      }
+      const { error } = await admin
+        .from("support_threads")
+        .update({ guest_email: parsed.data.email, guest_name: parsed.data.name || null })
+        .eq("id", thread.id);
+      if (error) throw new Error(error.message);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[support-contact]", err);
+      res.status(500).json({ error: "Couldn't save your details. Please try again." });
     }
   });
 }

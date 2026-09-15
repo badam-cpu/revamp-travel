@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from "react";
 import { MessageCircle, Send, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
-import { sendSupportMessage, ApiError } from "@/lib/api";
+import { sendSupportMessage, submitSupportContact, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface Msg {
@@ -30,7 +30,13 @@ export function SupportWidget() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactSaved, setContactSaved] = useState(false);
+  const [savingContact, setSavingContact] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // A guest (anonymous session) has no email; a signed-in traveler already does.
+  const isGuest = !!user && !user.email;
 
   // Load the traveler's own thread when the panel first opens.
   useEffect(() => {
@@ -39,8 +45,11 @@ export function SupportWidget() {
       .from("support_messages")
       .select("id, sender, body, created_at")
       .order("created_at", { ascending: true })
-      .then(({ data }) => {
+      .then(async ({ data }) => {
         setMessages((data ?? []) as Msg[]);
+        // Already left an email on this thread? Then don't ask again.
+        const { data: t } = await supabase.from("support_threads").select("guest_email").maybeSingle();
+        if (t?.guest_email) setContactSaved(true);
         setLoaded(true);
       });
   }, [open, user, loaded]);
@@ -52,6 +61,21 @@ export function SupportWidget() {
 
   // Don't show to operators/admins.
   if (loading || profile?.role === "operator" || profile?.role === "admin") return null;
+
+  const saveContact = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const email = contactEmail.trim();
+    if (!email || savingContact) return;
+    setSavingContact(true);
+    try {
+      await submitSupportContact(email);
+      setContactSaved(true);
+    } catch (err) {
+      setMessages((m) => [...m, { id: `err-${Date.now()}`, sender: "ai", body: err instanceof ApiError ? err.message : "Couldn't save your email — please try again." }]);
+    } finally {
+      setSavingContact(false);
+    }
+  };
 
   const send = async () => {
     const body = input.trim();
@@ -124,6 +148,32 @@ export function SupportWidget() {
                 ))}
                 {sending && <div className="flex justify-start"><div className="rounded-2xl rounded-tl-sm bg-chalk px-3.5 py-2.5 text-sm text-basalt/40">…</div></div>}
               </div>
+
+              {/* Guest email capture — optional, appears once the chat has started. */}
+              {isGuest && messages.length > 0 && (
+                contactSaved ? (
+                  <div className="border-t border-basalt/10 bg-chalk/60 px-4 py-2 text-[11px] text-basalt/55">
+                    ✓ Thanks — we'll follow up by email if we need to.
+                  </div>
+                ) : (
+                  <form onSubmit={saveContact} className="border-t border-basalt/10 bg-chalk/60 px-4 py-3">
+                    <p className="mb-2 text-xs text-basalt/60">Want a reply by email? <span className="text-basalt/40">(optional)</span></p>
+                    <div className="flex gap-2">
+                      <input
+                        type="email"
+                        required
+                        value={contactEmail}
+                        onChange={(e) => setContactEmail(e.target.value)}
+                        placeholder="you@email.com"
+                        className="h-9 flex-1 rounded-lg border border-basalt/15 bg-paper px-3 text-sm outline-none focus:border-apricot"
+                      />
+                      <button type="submit" disabled={savingContact || !contactEmail.trim()} className="rounded-lg bg-basalt px-3 text-sm font-semibold text-white hover:bg-basalt/90 disabled:opacity-40">
+                        {savingContact ? "…" : "Save"}
+                      </button>
+                    </div>
+                  </form>
+                )
+              )}
 
               <form
                 onSubmit={(e) => {

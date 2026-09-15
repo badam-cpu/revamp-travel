@@ -17,6 +17,8 @@ interface Thread {
   traveler_id: string;
   status: "open" | "needs_human" | "resolved";
   last_message_at: string;
+  guest_email: string | null;
+  guest_name: string | null;
   profiles: { display_name: string } | null;
 }
 interface Msg {
@@ -43,7 +45,7 @@ export function AdminSupportInbox() {
   const loadThreads = useCallback(async () => {
     const { data } = await supabase
       .from("support_threads")
-      .select("id, traveler_id, status, last_message_at, profiles!traveler_id(display_name)")
+      .select("id, traveler_id, status, last_message_at, guest_email, guest_name, profiles!traveler_id(display_name)")
       .order("last_message_at", { ascending: false });
     setThreads((data ?? []) as unknown as Thread[]);
   }, []);
@@ -122,8 +124,8 @@ export function AdminSupportInbox() {
                   )}
                 >
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold">{t.profiles?.display_name || "Traveler"}</span>
-                    <span className="text-[11px] text-basalt/45">{new Date(t.last_message_at).toLocaleDateString()}</span>
+                    <span className="block truncate text-sm font-semibold">{t.guest_name || t.profiles?.display_name || "Guest"}</span>
+                    <span className="block truncate text-[11px] text-basalt/45">{t.guest_email || new Date(t.last_message_at).toLocaleDateString()}</span>
                   </span>
                   <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em]", s.className)}>{s.label}</span>
                 </button>
@@ -137,10 +139,20 @@ export function AdminSupportInbox() {
               <div className="grid flex-1 place-items-center p-8 text-center text-sm text-basalt/45">Select a thread to read and reply.</div>
             ) : (
               <>
-                <div className="flex items-center justify-between border-b border-basalt/10 px-4 py-2.5">
-                  <span className="text-sm font-semibold">{threads.find((t) => t.id === activeId)?.profiles?.display_name || "Traveler"}</span>
-                  <button type="button" onClick={() => resolve(activeId)} className="text-xs font-semibold text-basalt/50 hover:text-sevan">Mark resolved</button>
-                </div>
+                {(() => {
+                  const active = threads.find((t) => t.id === activeId);
+                  return (
+                    <div className="flex items-center justify-between gap-3 border-b border-basalt/10 px-4 py-2.5">
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold">{active?.guest_name || active?.profiles?.display_name || "Guest"}</span>
+                        {active?.guest_email && (
+                          <a href={`mailto:${active.guest_email}`} className="block truncate text-[11px] text-apricot hover:underline">{active.guest_email}</a>
+                        )}
+                      </span>
+                      <button type="button" onClick={() => resolve(activeId)} className="shrink-0 text-xs font-semibold text-basalt/50 hover:text-sevan">Mark resolved</button>
+                    </div>
+                  );
+                })()}
                 <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
                   {messages.map((m) => (
                     <div key={m.id} className={cn("flex", m.sender === "traveler" ? "justify-start" : "justify-end")}>
