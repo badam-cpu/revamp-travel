@@ -90,7 +90,14 @@ export function SupportWidget() {
       const { reply } = await sendSupportMessage(body);
       setMessages((m) => [...m, { id: `ai-${Date.now()}`, sender: "ai", body: reply }]);
     } catch (err) {
-      setMessages((m) => [...m, { id: `err-${Date.now()}`, sender: "ai", body: err instanceof ApiError ? err.message : "Something went wrong — please try again." }]);
+      console.error("[support] send failed", err);
+      // Surface the real reason (e.g. anonymous sign-ins disabled) rather than a
+      // generic message, so misconfiguration is diagnosable.
+      const detail = err instanceof ApiError || err instanceof Error ? err.message : "";
+      setMessages((m) => [
+        ...m,
+        { id: `err-${Date.now()}`, sender: "ai", body: detail ? `Couldn't send that: ${detail}` : "Something went wrong — please try again." },
+      ]);
     } finally {
       setSending(false);
     }
