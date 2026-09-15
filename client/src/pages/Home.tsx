@@ -11,19 +11,24 @@ import { Button } from "@/components/ui/button";
 import { brandAssets, regions } from "@/data/listings";
 import { useListings } from "@/contexts/ListingsContext";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { buildWebsiteJsonLd } from "@shared/seo";
 
+// `name` is the canonical category word used everywhere else (nav, filters,
+// listing badges); it anchors the poetic `title` so a visitor can map a tile
+// back to the "Stay/Eat/Tour/Experience" they clicked.
 const categories = [
-  { type: "stay", number: "01", title: "Stay with a sense of place", label: "Homes, cabins & small hotels", image: brandAssets.categories.stay },
-  { type: "eat", number: "02", title: "Taste the landscape", label: "Tables, cellars & courtyards", image: brandAssets.categories.eat },
-  { type: "tour", number: "03", title: "Go with someone local", label: "Walks, routes & field days", image: brandAssets.categories.tour },
-  { type: "experience", number: "04", title: "Make something with your hands", label: "Classes, crafts & tastings", image: brandAssets.categories.experience },
+  { type: "stay", number: "01", name: "Stay", title: "Stay with a sense of place", label: "Homes, cabins & small hotels", image: brandAssets.categories.stay },
+  { type: "eat", number: "02", name: "Eat", title: "Taste the landscape", label: "Tables, cellars & courtyards", image: brandAssets.categories.eat },
+  { type: "tour", number: "03", name: "Tour", title: "Go with someone local", label: "Walks, routes & field days", image: brandAssets.categories.tour },
+  { type: "experience", number: "04", name: "Experience", title: "Make something with your hands", label: "Classes, crafts & tastings", image: brandAssets.categories.experience },
 ];
 
 export default function Home() {
   const { listings } = useListings();
   const { settings } = useSiteSettings();
+  const { format } = useCurrency();
 
   // Admin-editable home content, each with a fallback to the built-in default.
   const heroImage = settings.heroImage || brandAssets.hero;
@@ -82,7 +87,7 @@ export default function Home() {
                 <img src={category.image} alt="" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.025]" />
                 <div className="absolute inset-0 bg-gradient-to-t from-basalt/78 via-basalt/8 to-transparent" />
                 <span className="absolute left-5 top-5 grid h-9 w-9 place-items-center bg-paper text-[10px] font-bold text-basalt">{category.number}</span>
-                <div className="absolute inset-x-0 bottom-0 p-6 text-white"><p className="text-[10px] font-bold uppercase tracking-[0.17em] text-white/60">{category.label}</p><h3 className="mt-2 max-w-[260px] font-display text-4xl leading-[0.96] tracking-[-0.03em]">{category.title}</h3><MoveUpRight className="mt-5 h-5 w-5 text-apricot transition-transform group-hover:-translate-y-1 group-hover:translate-x-1" /></div>
+                <div className="absolute inset-x-0 bottom-0 p-6 text-white"><p className="text-[10px] font-bold uppercase tracking-[0.17em]"><span className="text-apricot">{category.name}</span><span className="text-white/55"> · {category.label}</span></p><h3 className="mt-2 max-w-[260px] font-display text-4xl leading-[0.96] tracking-[-0.03em]">{category.title}</h3><MoveUpRight className="mt-5 h-5 w-5 text-apricot transition-transform group-hover:-translate-y-1 group-hover:translate-x-1" /></div>
               </Link>
             ))}
           </div>
@@ -129,11 +134,11 @@ export default function Home() {
                 {featured.slice(0, 4).map((listing) => (
                   <Link key={listing.id} href={`/listing/${listing.slug}`} onMouseEnter={() => setSelectedId(listing.id)} className={`flex items-center justify-between border-t border-basalt/10 py-4 transition-colors hover:text-apricot ${selectedId === listing.id ? "text-apricot" : ""}`}>
                     <span><span className="mr-3 text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/40">{listing.city}</span><strong>{listing.title}</strong></span>
-                    <span className="text-xs">{listing.priceLabel} <ArrowRight className="ml-1 inline h-3 w-3" /></span>
+                    <span className="text-xs">{listing.price > 0 ? format(Math.round(listing.price * 100)) : "Rate on request"} <ArrowRight className="ml-1 inline h-3 w-3" /></span>
                   </Link>
                 ))}
               </div>
-              <Button asChild className="mt-7 rounded-none bg-sevan px-6 text-white hover:bg-sevan/90"><Link href="/map"><Compass className="mr-2 h-4 w-4" /> Open the field atlas</Link></Button>
+              <Button asChild className="mt-7 rounded-none bg-sevan px-6 text-white hover:bg-sevan/90"><Link href="/map"><Compass className="mr-2 h-4 w-4" /> Open the map</Link></Button>
             </div>
             <ArmeniaMap listings={featured} selectedId={selectedId} onSelect={setSelectedId} className="brand-notch h-[620px]" />
           </div>
