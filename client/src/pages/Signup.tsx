@@ -5,7 +5,7 @@
  * one thing this form can't let the user change their mind about silently,
  * so it's presented as two explicit cards rather than a buried dropdown.
  */
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { AlertTriangle, Compass, Store } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -20,13 +20,19 @@ import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { cn } from "@/lib/utils";
 
 export default function Signup() {
-  const { signUp } = useAuth();
+  const { signUp, user, loading: authLoading } = useAuth();
   const [, navigate] = useLocation();
   useDocumentMeta({
     title: "Sign up | Revamp Travel",
     description: "Create a Revamp Travel account as a traveler or an operator.",
     canonicalPath: "/signup",
   });
+
+  // Already signed in? Don't show the sign-up form — send them home.
+  useEffect(() => {
+    if (authLoading || !user) return;
+    navigate("/");
+  }, [authLoading, user, navigate]);
   const [role, setRole] = useState<UserRole>("traveler");
   const [displayName, setDisplayName] = useState("");
   const [businessName, setBusinessName] = useState("");
@@ -71,6 +77,20 @@ export default function Signup() {
               <Link href="/login">Go to sign in</Link>
             </Button>
           </div>
+        </main>
+        <SiteFooter />
+      </div>
+    );
+  }
+
+  // Signed in already — brief placeholder while the effect redirects, so a
+  // logged-in user never sees the sign-up form.
+  if (user) {
+    return (
+      <div className="min-h-screen bg-paper text-basalt">
+        <SiteHeader />
+        <main className="container flex min-h-[70vh] items-center justify-center py-16">
+          <p className="text-sm text-basalt/55">You're already signed in — taking you home…</p>
         </main>
         <SiteFooter />
       </div>

@@ -1,5 +1,5 @@
 /** Revamp brandbook: same white/orange/charcoal form surfaces as Dashboard.tsx and Plan.tsx. */
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { AlertTriangle, MailCheck } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -12,13 +12,22 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 
 export default function Login() {
-  const { signIn, resetPassword } = useAuth();
+  const { signIn, resetPassword, user, loading: authLoading } = useAuth();
   const [, navigate] = useLocation();
   useDocumentMeta({
     title: "Sign in | Revamp Travel",
     description: "Sign in to your Revamp Travel account to book, save places, or manage your listings.",
     canonicalPath: "/login",
   });
+
+  // Already signed in? Don't show the sign-in form — send them on (honoring
+  // ?redirect=, else home). This is the header-says-signed-in / page-says-
+  // sign-in inconsistency fixed.
+  useEffect(() => {
+    if (authLoading || !user) return;
+    const redirect = new URLSearchParams(window.location.search).get("redirect");
+    navigate(redirect && redirect.startsWith("/") ? redirect : "/");
+  }, [authLoading, user, navigate]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -60,6 +69,20 @@ export default function Login() {
       setResetLoading(false);
     }
   };
+
+  // Signed in already — render a brief placeholder instead of the form while
+  // the effect above redirects, so a logged-in user never sees "Sign in".
+  if (user) {
+    return (
+      <div className="min-h-screen bg-paper text-basalt">
+        <SiteHeader />
+        <main className="container flex min-h-[70vh] items-center justify-center py-16">
+          <p className="text-sm text-basalt/55">Taking you to your account…</p>
+        </main>
+        <SiteFooter />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-paper text-basalt">
