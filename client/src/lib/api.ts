@@ -87,6 +87,47 @@ export async function importListingPrefill(url: string): Promise<ListingPrefill>
   });
 }
 
+export interface StartCheckoutParams {
+  listingId: string;
+  startDate: string;
+  endDate: string;
+  guests: number;
+}
+
+/**
+ * Begins a PayLink checkout for a booking. Returns the hosted-payment redirect
+ * URL to send the browser to; the server has already created a pending booking
+ * and computed the amount itself (the client never sends a price). Confirmation
+ * happens server-side after the traveler returns — see confirmCheckout.
+ */
+export async function startCheckout(params: StartCheckoutParams): Promise<{ redirectUrl: string }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in to book.");
+  return request<{ redirectUrl: string }>("/api/start-checkout", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(params),
+  });
+}
+
+/**
+ * Asks the server to poll PayLink for the signed-in user's pending bookings and
+ * confirm any that were paid. Idempotent and safe to call on every account
+ * load and on the post-payment return. Returns how many were just confirmed and
+ * whether any are still awaiting payment.
+ */
+export async function confirmCheckout(): Promise<{ confirmed: number; pending: boolean }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in to confirm your booking.");
+  return request<{ confirmed: number; pending: boolean }>("/api/confirm-checkout", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({}),
+  });
+}
+
 export interface IcalSyncResult {
   count: number;
   syncedAt: string;

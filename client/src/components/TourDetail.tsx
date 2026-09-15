@@ -13,24 +13,25 @@
  * quick-facts row and "what's included" list carry the weight instead.
  */
 import { useMemo, useState } from "react";
-import { AlertCircle, ArrowLeft, Backpack, Ban, Check, Clock, Gauge, Info, MapPin, Minus, Plus, Share2, Bookmark, Sparkles, Users, X } from "lucide-react";
+import { AlertCircle, ArrowLeft, Backpack, Ban, Check, Clock, Gauge, Info, MapPin, Share2, Bookmark, Sparkles, Users, X } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import { Listing } from "@/data/listings";
 import { useListings } from "@/contexts/ListingsContext";
+import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { TourCard } from "@/components/TourCard";
-import { BookingCta } from "@/components/BookingCta";
-import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
+import { BookingPanel } from "@/components/BookingPanel";
 import { Button } from "@/components/ui/button";
 import { factValue, otherFacts } from "@/lib/tourFacts";
 import { cn } from "@/lib/utils";
 
 export function TourDetail({ listing }: { listing: Listing }) {
   const { listings } = useListings();
+  const { isSaved, toggleSaved } = useSavedPlaces();
+  const saved = isSaved(listing.id);
   const [activeImage, setActiveImage] = useState(0);
-  const [travelers, setTravelers] = useState(2);
-  const blockedRanges = listings.find((l) => l.id === listing.id)?.blockedRanges ?? [];
+  const live = listings.find((l) => l.id === listing.id) ?? null;
 
   const images = listing.gallery.length ? listing.gallery : [listing.image];
   const duration = factValue(listing, "Duration");
@@ -65,8 +66,8 @@ export function TourDetail({ listing }: { listing: Listing }) {
           >
             <Share2 className="mr-2 h-4 w-4" /> Share
           </Button>
-          <Button variant="outline" size="sm" className="rounded-none border-basalt/15 bg-paper" onClick={() => toast(`${listing.title} saved for later.`)}>
-            <Bookmark className="mr-2 h-4 w-4" /> Save
+          <Button variant="outline" size="sm" aria-pressed={saved} className={cn("rounded-none border-basalt/15 bg-paper", saved && "border-apricot text-apricot")} onClick={() => toggleSaved({ id: listing.id, title: listing.title })}>
+            <Bookmark className={cn("mr-2 h-4 w-4", saved && "fill-current")} /> {saved ? "Saved" : "Save"}
           </Button>
         </div>
       </div>
@@ -251,59 +252,14 @@ export function TourDetail({ listing }: { listing: Listing }) {
         </div>
 
         <aside>
-          <div className="brand-notch sticky top-[104px] border border-basalt/12 bg-chalk p-6 shadow-[0_20px_55px_rgba(35,35,33,0.1)]">
-            <div className="flex items-end justify-between gap-4 border-b border-basalt/10 pb-5">
-              <p>
-                <span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-basalt/40">From</span>
-                <strong className="font-display text-4xl font-normal">{listing.priceLabel}</strong> {listing.price > 0 && <span className="text-sm text-basalt/50">/ {listing.priceUnit}</span>}
-              </p>
+          {live ? (
+            <BookingPanel listing={live} />
+          ) : (
+            <div className="brand-notch sticky top-[104px] border border-basalt/12 bg-chalk p-6 shadow-[0_20px_55px_rgba(35,35,33,0.1)]">
+              <p><strong className="font-display text-4xl font-normal">{listing.priceLabel}</strong> {listing.price > 0 && <span className="text-sm text-basalt/50">/ {listing.priceUnit}</span>}</p>
+              <p className="mt-4 text-sm leading-6 text-basalt/55">Booking isn't available in offline preview.</p>
             </div>
-
-            {blockedRanges.length > 0 ? (
-              <div className="mt-5">
-                <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">Availability</span>
-                <AvailabilityCalendar blockedRanges={blockedRanges} />
-              </div>
-            ) : (
-              <label className="mt-5 block">
-                <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">Preferred date</span>
-                <input type="date" className="h-11 w-full border border-basalt/15 bg-paper px-3 text-sm outline-none focus:border-apricot" />
-              </label>
-            )}
-
-            <div className="mt-4">
-              <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">Travelers</span>
-              <div className="flex items-center justify-between border border-basalt/15 bg-paper px-3 py-2">
-                <button
-                  type="button"
-                  aria-label="Fewer travelers"
-                  onClick={() => setTravelers((t) => Math.max(1, t - 1))}
-                  className="grid h-7 w-7 place-items-center border border-basalt/15 text-basalt hover:border-apricot hover:text-apricot"
-                >
-                  <Minus className="h-3.5 w-3.5" />
-                </button>
-                <span className="text-sm font-semibold">
-                  {travelers} {travelers === 1 ? "traveler" : "travelers"}
-                </span>
-                <button
-                  type="button"
-                  aria-label="More travelers"
-                  onClick={() => setTravelers((t) => Math.min(20, t + 1))}
-                  className="grid h-7 w-7 place-items-center border border-basalt/15 text-basalt hover:border-apricot hover:text-apricot"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-4 flex items-center justify-between border-t border-basalt/10 pt-4 text-sm">
-              <span className="text-basalt/55">Estimated total</span>
-              <strong className="font-display text-xl font-normal">${listing.price * travelers}</strong>
-            </div>
-
-            <BookingCta slug={listing.slug} className="mt-5" />
-            <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">Online booking and payment are launching soon.</p>
-          </div>
+          )}
         </aside>
       </section>
 
@@ -331,7 +287,12 @@ export function TourDetail({ listing }: { listing: Listing }) {
           <span className="block text-[9px] font-bold uppercase tracking-[0.14em] text-basalt/40">From</span>
           <strong className="font-display text-2xl font-normal">{listing.priceLabel}</strong> {listing.price > 0 && <span className="text-xs text-basalt/45">/ {listing.priceUnit}</span>}
         </p>
-        <BookingCta slug={listing.slug} variant="compact" />
+        <Button
+          onClick={() => document.getElementById("book")?.scrollIntoView({ behavior: "smooth", block: "center" })}
+          className="h-11 rounded-none bg-apricot px-6 text-white hover:bg-apricot/90"
+        >
+          Book
+        </Button>
       </div>
     </>
   );

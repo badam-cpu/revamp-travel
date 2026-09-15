@@ -12,6 +12,10 @@
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { listPublishedForPlanner, verifyUser, userClient } from "./supabase.js";
+import { supabaseAdmin, adminConfigured } from "./supabaseAdmin.js";
+import { paylinkConfigured, registerPayment } from "./paylink.js";
+import { reconcileUserBookings } from "./bookings.js";
+import { computeBookingAmountCents, isBookableType, DEFAULT_CURRENCY } from "../shared/bookings.js";
 import { planTrip, PlannerError } from "./planner.js";
 import { fetchPrefill, PrefillError } from "./urlPrefill.js";
 import { fetchIcalBlockedRanges } from "./ical.js";
@@ -35,6 +39,14 @@ const importListingSchema = z.object({
 
 const syncIcalSchema = z.object({
   listingId: z.string().uuid(),
+});
+
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date.");
+const startCheckoutSchema = z.object({
+  listingId: z.string().uuid(),
+  startDate: isoDate,
+  endDate: isoDate,
+  guests: z.number().int().min(1).max(50),
 });
 
 function issuesToMessage(err: z.ZodError): string {
@@ -161,6 +173,130 @@ export function registerApiRoutes(app: Express) {
       await supa.from("listings").update({ ical_error: message, ical_synced_at: new Date().toISOString() }).eq("id", listingId);
       console.error("sync-ical failed", err);
       res.status(err instanceof SafeFetchError ? err.status : 502).json({ error: message });
+    }
+  });
+
+  // --- PayLink booking loop --------------------------------------------
+  // POST /api/start-checkout — begin a booking for the signed-in traveler. The
+  // client sends only listingId + dates + guests; the amount is computed
+  // server-side from the listing (shared/bookings.ts) so it can't be tampered
+  // with. Creates a `pending_payment` booking and returns the PayLink
+  // redirectUrl. Access is NOT granted here — only confirm-checkout (server-
+  // verified) flips a booking to `confirmed`.
+  app.post("/api/start-checkout", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in to book." });
+    if (!paylinkConfigured()) return res.status(503).json({ error: "Payments aren't available yet." });
+
+    const parsed = startCheckoutSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    const { listingId, startDate, endDate, guests } = parsed.data;
+
+    if (endDate <= startDate) return res.status(400).json({ error: "Check-out must be after check-in." });
+    const today = new Date().toISOString().slice(0, 10);
+    if (startDate < today) return res.status(400).json({ error: "Pick a start date in the future." });
+
+    const supa = userClient(token);
+    if (!supa) return res.status(503).json({ error: "Booking isn't configured on the server." });
+
+    // Read the listing under RLS — published listings are publicly readable.
+    const { data: listing, error: readErr } = await supa
+      .from("listings")
+      .select("id, type, title, status, price_cents, price_unit, blocked_ranges")
+      .eq("id", listingId)
+      .maybeSingle();
+    if (readErr || !listing) return res.status(404).json({ error: "Listing not found." });
+    if (listing.status !== "published") return res.status(400).json({ error: "This listing isn't open for booking." });
+    if (!isBookableType(listing.type)) return res.status(400).json({ error: "This listing can't be booked online." });
+
+    const amountCents = computeBookingAmountCents(
+      { priceCents: listing.price_cents, priceUnit: listing.price_unit },
+      { startDate, endDate, guests },
+    );
+    if (amountCents <= 0) return res.status(400).json({ error: "This listing is rate-on-request — contact the operator to book." });
+
+    // Availability: reject if the dates clash with the listing's iCal blocked
+    // ranges, an existing confirmed booking, or a live (recent) pending hold.
+    const blocked: { start: string; end: string }[] = Array.isArray(listing.blocked_ranges) ? listing.blocked_ranges : [];
+    const overlapsBlocked = blocked.some((r) => r.start < endDate && r.end > startDate);
+    if (overlapsBlocked) return res.status(409).json({ error: "Those dates aren't available." });
+
+    const admin = supabaseAdmin();
+    if (admin) {
+      // Overlap = existing.start < new.end AND existing.end > new.start.
+      const { data: clashes } = await admin
+        .from("bookings")
+        .select("id, status, created_at")
+        .eq("listing_id", listingId)
+        .in("status", ["confirmed", "pending_payment"])
+        .lt("start_date", endDate)
+        .gt("end_date", startDate);
+      const holdCutoff = Date.now() - 15 * 60_000; // pending holds older than 15m are stale
+      const taken = (clashes ?? []).some(
+        (c) => c.status === "confirmed" || (c.status === "pending_payment" && Date.parse(c.created_at) > holdCutoff),
+      );
+      if (taken) return res.status(409).json({ error: "Those dates were just taken. Try different dates." });
+    }
+
+    const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
+    const currency = process.env.PAYLINK_CURRENCY || DEFAULT_CURRENCY;
+    try {
+      const pay = await registerPayment({
+        // PayLink's `amount` is in major currency units; amount_cents is minor.
+        amount: Math.round(amountCents) / 100,
+        currency,
+        returnUrl: `${site}/account?checkout=return`,
+        info: `Revamp booking · ${listing.title}`,
+      });
+      if (!pay.redirectUrl) return res.status(502).json({ error: "Couldn't start checkout." });
+
+      // Insert the pending hold as the traveler (RLS allows own + pending only).
+      const { error: insErr } = await supa.from("bookings").insert({
+        listing_id: listingId,
+        traveler_id: userId,
+        start_date: startDate,
+        end_date: endDate,
+        guests,
+        amount_cents: amountCents,
+        currency,
+        status: "pending_payment",
+        provider: "paylink",
+        paylink_request_id: pay.requestId,
+        paylink_order_id: pay.orderId,
+      });
+      if (insErr) {
+        console.error("[start-checkout] insert failed", insErr.message);
+        return res.status(500).json({ error: "Couldn't record your booking." });
+      }
+      res.json({ redirectUrl: pay.redirectUrl });
+    } catch (err) {
+      console.error("[start-checkout]", err);
+      res.status(502).json({ error: "Couldn't start checkout." });
+    }
+  });
+
+  // POST /api/confirm-checkout — server-verified confirmation. Called when the
+  // traveler returns from PayLink (/account?checkout=return) and on account
+  // load. Polls PayLink for the user's pending bookings and confirms any it
+  // reports approved. This is the SOLE path that confirms a booking — hitting
+  // the return URL without a real approved payment confirms nothing.
+  app.post("/api/confirm-checkout", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in to confirm your booking." });
+    if (!adminConfigured()) return res.status(503).json({ error: "Payments aren't available yet." });
+
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Payments aren't available yet." });
+    try {
+      const r = await reconcileUserBookings(admin, userId);
+      res.json({ confirmed: r.confirmed, pending: r.checked > 0 && r.confirmed === 0 });
+    } catch (err) {
+      console.error("[confirm-checkout]", err);
+      res.status(500).json({ error: "Couldn't confirm your payment." });
     }
   });
 }

@@ -32,6 +32,12 @@ interface SignUpParams {
   businessName?: string;
 }
 
+interface ProfilePatch {
+  displayName?: string;
+  businessName?: string | null;
+  bio?: string | null;
+}
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
@@ -44,6 +50,8 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<void>;
   /** Sets a new password for the currently-authenticated (incl. recovery) session. */
   updatePassword: (password: string) => Promise<void>;
+  /** Updates the signed-in user's own profile row (display name, business name, bio). */
+  updateProfile: (patch: ProfilePatch) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -140,9 +148,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   }, []);
 
+  const updateProfile = useCallback(
+    async (patch: ProfilePatch) => {
+      const userId = session?.user?.id;
+      if (!userId) throw new Error("You need to be signed in.");
+      const row: Record<string, unknown> = {};
+      if (patch.displayName !== undefined) row.display_name = patch.displayName;
+      if (patch.businessName !== undefined) row.business_name = patch.businessName;
+      if (patch.bio !== undefined) row.bio = patch.bio;
+      const { error } = await supabase.from("profiles").update(row).eq("id", userId);
+      if (error) throw error;
+      await loadProfile(userId);
+    },
+    [session?.user?.id, loadProfile],
+  );
+
   return (
     <AuthContext.Provider
-      value={{ user: session?.user ?? null, session, profile, loading, signUp, signIn, signOut, resetPassword, updatePassword }}
+      value={{ user: session?.user ?? null, session, profile, loading, signUp, signIn, signOut, resetPassword, updatePassword, updateProfile }}
     >
       {children}
     </AuthContext.Provider>

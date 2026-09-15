@@ -43,6 +43,7 @@ import { PlaceAutocomplete } from "@/components/PlaceAutocomplete";
 import { AmenityPicker, AmenityPickerHandle } from "@/components/AmenityPicker";
 import { PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
 import { SearchableMultiSelect, SearchableMultiSelectHandle } from "@/components/SearchableMultiSelect";
+import { OperatorBookings } from "@/components/OperatorBookings";
 import { EXPERIENCE_PREFILL_STORAGE_KEY } from "@/pages/ExperienceOnboarding";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { toast } from "sonner";
@@ -781,6 +782,10 @@ function DashboardContent() {
             Can't reach the catalog right now — showing the built-in sample listings read-only. Adding, editing, and deleting will resume once the connection is back.
           </div>
         )}
+
+        <div className="mt-10">
+          <OperatorBookings />
+        </div>
 
         <DashboardSection type="stay" title="Stays" description="Guesthouses, cabins, and small hotels shown on /explore/stay and the home page." />
         <DashboardSection type="tour" title="Tours" description="Guided routes shown on /explore/tour and the home page." />

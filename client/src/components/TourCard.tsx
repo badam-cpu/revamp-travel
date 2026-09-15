@@ -9,14 +9,16 @@
 import { useState } from "react";
 import { Bookmark, ChevronLeft, ChevronRight, Clock, Gauge, MapPin, Users } from "lucide-react";
 import { Link } from "wouter";
-import { toast } from "sonner";
 import { Listing } from "@/data/listings";
 import { factValue } from "@/lib/tourFacts";
 import { cn } from "@/lib/utils";
+import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 
 export function TourCard({ listing }: { listing: Listing }) {
   const images = listing.gallery.length ? listing.gallery : [listing.image];
   const [index, setIndex] = useState(0);
+  const { isSaved, toggleSaved } = useSavedPlaces();
+  const saved = isSaved(listing.id);
 
   const duration = factValue(listing, "Duration");
   const group = factValue(listing, "Group", "Format");
@@ -49,15 +51,19 @@ export function TourCard({ listing }: { listing: Listing }) {
 
           <button
             type="button"
-            aria-label={`Save ${listing.title}`}
+            aria-label={saved ? `Remove ${listing.title} from saved` : `Save ${listing.title}`}
+            aria-pressed={saved}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              toast(`${listing.title} saved for later.`);
+              toggleSaved({ id: listing.id, title: listing.title });
             }}
-            className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-white/90 text-basalt shadow-sm backdrop-blur-sm transition-colors hover:bg-apricot hover:text-white"
+            className={cn(
+              "absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full shadow-sm backdrop-blur-sm transition-colors",
+              saved ? "bg-apricot text-white" : "bg-white/90 text-basalt hover:bg-apricot hover:text-white",
+            )}
           >
-            <Bookmark className="h-4 w-4" />
+            <Bookmark className={cn("h-4 w-4", saved && "fill-current")} />
           </button>
 
           {images.length > 1 && (

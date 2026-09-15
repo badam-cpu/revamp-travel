@@ -1,0 +1,156 @@
+/**
+ * Confirm + reconcile PayLink payments for bookings, and grant the booking.
+ * The revamp analog of rankr's payments.mjs: it sits between server/paylink.ts
+ * (the provider API) and the DB, so "verify server-side, then confirm" lives
+ * in exactly one place — used by POST /api/confirm-checkout (on the traveler's
+ * return and on account load) and by the daily reconcile cron.
+ *
+ * The "grant" here is flipping a booking `pending_payment → confirmed`, which
+ * (via the confirmed-only exclusion constraint in 0010) blocks the dates.
+ * Writes go through the service-role client (server/supabaseAdmin.ts) because
+ * this transition cannot be authorized by RLS. Idempotent: the flip is guarded
+ * `where status = 'pending_payment'`, so a double poll never double-confirms.
+ */
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { checkPayment } from "./paylink.js";
+
+export interface BookingRow {
+  id: string;
+  listing_id: string;
+  traveler_id: string;
+  status: string;
+  paylink_request_id: string | null;
+  paylink_order_id: string | null;
+  created_at: string;
+}
+
+export interface ConfirmResult {
+  granted: boolean;
+  status: string;
+  already?: boolean;
+  conflict?: boolean;
+}
+
+const TERMINAL_FAIL = /fail|declin|cancel|expire|reject/i;
+
+/**
+ * Confirm one pending booking against PayLink; if approved, mark it confirmed
+ * (which blocks the dates). Returns { granted, status }. Idempotent — a row
+ * already `confirmed` is left alone.
+ */
+export async function confirmBookingRow(admin: SupabaseClient, row: BookingRow): Promise<ConfirmResult> {
+  if (row.status === "confirmed") return { granted: true, status: "confirmed", already: true };
+  if (row.status !== "pending_payment") return { granted: false, status: row.status };
+
+  const check = await checkPayment({ requestId: row.paylink_request_id, orderId: row.paylink_order_id });
+  if (!check.ok) return { granted: false, status: "unconfirmed" };
+
+  if (!check.approved) {
+    // Record a terminal failure so we stop polling it forever.
+    if (TERMINAL_FAIL.test(String(check.status))) {
+      await admin.from("bookings").update({ status: "payment_failed" }).eq("id", row.id).eq("status", "pending_payment");
+      return { granted: false, status: "payment_failed" };
+    }
+    return { granted: false, status: check.status };
+  }
+
+  // Approved → flip to confirmed, but only if still pending (guards a concurrent
+  // confirm) and backfill the orderId PayLink assigned once payment was made.
+  const { data, error } = await admin
+    .from("bookings")
+    .update({
+      status: "confirmed",
+      paid_at: new Date().toISOString(),
+      paylink_order_id: check.orderId ?? row.paylink_order_id,
+    })
+    .eq("id", row.id)
+    .eq("status", "pending_payment")
+    .select("id");
+
+  if (error) {
+    // The most likely error is the confirmed-only exclusion constraint: another
+    // booking already confirmed these exact dates while this one was mid-pay.
+    // Leave the row pending and surface a conflict — it needs a manual refund,
+    // never a silent double-book. (Rare: start-checkout guards overlap.)
+    if (/exclu|overlap|conflict|23P01/i.test(error.message)) {
+      console.error("[bookings] confirm overlap conflict", row.id, error.message);
+      return { granted: false, status: "conflict", conflict: true };
+    }
+    console.error("[bookings] confirm write failed", row.id, error.message);
+    return { granted: false, status: "unconfirmed" };
+  }
+
+  if (!data || data.length === 0) {
+    // Someone else confirmed it first — treat as success.
+    return { granted: true, status: "confirmed", already: true };
+  }
+  return { granted: true, status: "confirmed" };
+}
+
+/**
+ * Poll all of one traveler's recent pending bookings (on return / account
+ * load). Returns how many were confirmed this pass.
+ */
+export async function reconcileUserBookings(admin: SupabaseClient, userId: string): Promise<{ confirmed: number; checked: number }> {
+  const { data, error } = await admin
+    .from("bookings")
+    .select("id, listing_id, traveler_id, status, paylink_request_id, paylink_order_id, created_at")
+    .eq("traveler_id", userId)
+    .eq("status", "pending_payment")
+    .order("created_at", { ascending: false })
+    .limit(10);
+  if (error || !data) return { confirmed: 0, checked: 0 };
+  let confirmed = 0;
+  for (const row of data as BookingRow[]) {
+    const r = await confirmBookingRow(admin, row);
+    if (r.granted) confirmed++;
+  }
+  return { confirmed, checked: data.length };
+}
+
+/**
+ * Global sweep for the daily cron — catches bookings where the traveler never
+ * returned to the redirect. Skips very fresh rows (still mid-checkout), caps
+ * the batch, and expires pending holds that have gone stale so they stop
+ * blocking soft availability and stop being polled forever.
+ */
+export async function reconcileAllPendingBookings(
+  admin: SupabaseClient,
+  { limit = 100, minAgeMinutes = 2, expireAfterHours = 24 }: { limit?: number; minAgeMinutes?: number; expireAfterHours?: number } = {},
+): Promise<{ polled: number; confirmed: number; expired: number }> {
+  const cutoff = new Date(Date.now() - minAgeMinutes * 60_000).toISOString();
+  const { data, error } = await admin
+    .from("bookings")
+    .select("id, listing_id, traveler_id, status, paylink_request_id, paylink_order_id, created_at")
+    .eq("status", "pending_payment")
+    .lt("created_at", cutoff)
+    .order("created_at", { ascending: true })
+    .limit(limit);
+  if (error || !data) return { polled: 0, confirmed: 0, expired: 0 };
+
+  const expireBefore = Date.now() - expireAfterHours * 3_600_000;
+  let confirmed = 0;
+  let expired = 0;
+  for (const row of data as BookingRow[]) {
+    try {
+      const r = await confirmBookingRow(admin, row);
+      if (r.granted) {
+        confirmed++;
+        continue;
+      }
+      // Still pending and old enough → expire the hold.
+      if (r.status !== "payment_failed" && Date.parse(row.created_at) < expireBefore) {
+        const { data: upd } = await admin
+          .from("bookings")
+          .update({ status: "expired" })
+          .eq("id", row.id)
+          .eq("status", "pending_payment")
+          .select("id");
+        if (upd && upd.length) expired++;
+      }
+    } catch (err) {
+      console.error("[bookings] reconcile row failed", row.id, err);
+    }
+  }
+  return { polled: data.length, confirmed, expired };
+}

@@ -1,25 +1,26 @@
 /** Revamp brandbook: detail pages combine rounded imagery, bold sans hierarchy, concise facts, white space, and orange actions. */
-import { useState } from "react";
-import { ArrowLeft, Bookmark, CalendarDays, Check, MapPin, Minus, Plus, Share2, Users } from "lucide-react";
+import { ArrowLeft, Bookmark, Check, MapPin, Share2 } from "lucide-react";
 import { Link } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { ListingCard } from "@/components/ListingCard";
 import { TourDetail } from "@/components/TourDetail";
-import { BookingCta } from "@/components/BookingCta";
-import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
+import { BookingPanel } from "@/components/BookingPanel";
 import { Button } from "@/components/ui/button";
 import { findListing, typeLabels } from "@/data/listings";
 import { useListings } from "@/contexts/ListingsContext";
+import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
+import { cn } from "@/lib/utils";
 import { buildBreadcrumbJsonLd, buildListingJsonLd } from "@shared/seo";
 import { toast } from "sonner";
 
 export default function ListingPage({ params }: { params: { slug: string } }) {
   const { listings } = useListings();
-  const [guests, setGuests] = useState(1);
+  const { isSaved, toggleSaved } = useSavedPlaces();
   const listing = findListing(params.slug, listings);
+  const saved = listing ? isSaved(listing.id) : false;
 
   // Hook call must come before any early return (rules of hooks) — this
   // covers both the not-found and found cases with one call.
@@ -49,8 +50,6 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   }
 
   const live = listings.find((l) => l.id === listing.id);
-  const blockedRanges = live?.blockedRanges ?? [];
-  const maxGuests = live?.maxGuests ?? 8;
 
   // Tours and experiences get a dedicated GetYourGuide-style detail layout;
   // stays and restaurants keep the original shared template below.
@@ -77,7 +76,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
           <Link href="/explore" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-basalt/55 hover:text-apricot"><ArrowLeft className="h-4 w-4" /> Back to places</Link>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="rounded-none border-basalt/15 bg-paper" onClick={async () => { await navigator.clipboard?.writeText(window.location.href); toast("Link copied to your clipboard."); }}><Share2 className="mr-2 h-4 w-4" /> Share</Button>
-            <Button variant="outline" size="sm" className="rounded-none border-basalt/15 bg-paper" onClick={() => toast(`${listing.title} saved for later.`)}><Bookmark className="mr-2 h-4 w-4" /> Save</Button>
+            <Button variant="outline" size="sm" aria-pressed={saved} className={cn("rounded-none border-basalt/15 bg-paper", saved && "border-apricot text-apricot")} onClick={() => toggleSaved({ id: listing.id, title: listing.title })}><Bookmark className={cn("mr-2 h-4 w-4", saved && "fill-current")} /> {saved ? "Saved" : "Save"}</Button>
           </div>
         </div>
 
@@ -123,48 +122,14 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
           </div>
 
           <aside>
-            <div className="brand-notch sticky top-[104px] border border-basalt/12 bg-chalk p-6 shadow-[0_20px_55px_rgba(35,35,33,0.1)]">
-              <div className="flex items-end justify-between gap-4 border-b border-basalt/10 pb-5">
+            {live ? (
+              <BookingPanel listing={live} />
+            ) : (
+              <div className="brand-notch sticky top-[104px] border border-basalt/12 bg-chalk p-6 shadow-[0_20px_55px_rgba(35,35,33,0.1)]">
                 <p><strong className="font-display text-4xl font-normal">{listing.priceLabel}</strong> {listing.price > 0 && <span className="text-sm text-basalt/50">/ {listing.priceUnit}</span>}</p>
+                <p className="mt-4 text-sm leading-6 text-basalt/55">Booking isn't available in offline preview.</p>
               </div>
-              {blockedRanges.length > 0 ? (
-                <div className="mt-5">
-                  <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">Availability</span>
-                  <AvailabilityCalendar blockedRanges={blockedRanges} />
-                </div>
-              ) : (
-                <label className="mt-5 block"><span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">Preferred date</span><div className="relative"><CalendarDays className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-apricot" /><input type="date" className="h-11 w-full border border-basalt/15 bg-paper pl-10 pr-3 text-sm outline-none focus:border-apricot" /></div></label>
-              )}
-              <div className="mt-4">
-                <span className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">
-                  <Users className="h-3.5 w-3.5 text-tuff" /> Guests
-                </span>
-                <div className="flex items-center justify-between border border-basalt/15 bg-paper px-3 py-2">
-                  <button
-                    type="button"
-                    aria-label="Fewer guests"
-                    disabled={guests <= 1}
-                    onClick={() => setGuests((g) => Math.max(1, g - 1))}
-                    className="grid h-7 w-7 place-items-center border border-basalt/15 text-basalt transition-colors hover:border-apricot hover:text-apricot disabled:opacity-30 disabled:hover:border-basalt/15 disabled:hover:text-basalt"
-                  >
-                    <Minus className="h-3.5 w-3.5" />
-                  </button>
-                  <span className="text-sm font-semibold">{guests} {guests === 1 ? "guest" : "guests"}</span>
-                  <button
-                    type="button"
-                    aria-label="More guests"
-                    disabled={guests >= maxGuests}
-                    onClick={() => setGuests((g) => Math.min(maxGuests, g + 1))}
-                    className="grid h-7 w-7 place-items-center border border-basalt/15 text-basalt transition-colors hover:border-apricot hover:text-apricot disabled:opacity-30 disabled:hover:border-basalt/15 disabled:hover:text-basalt"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-                <p className="mt-1.5 text-xs text-basalt/45">Sleeps up to {maxGuests} {maxGuests === 1 ? "guest" : "guests"}.</p>
-              </div>
-            <BookingCta slug={listing.slug} className="mt-5" />
-              <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">Online booking and payment are launching soon.</p>
-            </div>
+            )}
           </aside>
         </section>
 
@@ -191,7 +156,12 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
 
       <div className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between border-t border-basalt/10 bg-paper/95 px-4 py-3 shadow-[0_-10px_30px_rgba(35,35,33,0.08)] backdrop-blur lg:hidden">
         <p><strong className="font-display text-2xl font-normal">{listing.priceLabel}</strong> {listing.price > 0 && <span className="text-xs text-basalt/45">/ {listing.priceUnit}</span>}</p>
-        <BookingCta slug={listing.slug} variant="compact" />
+        <Button
+          onClick={() => document.getElementById("book")?.scrollIntoView({ behavior: "smooth", block: "center" })}
+          className="h-11 rounded-none bg-apricot px-6 text-white hover:bg-apricot/90"
+        >
+          Book
+        </Button>
       </div>
       <SiteFooter />
     </div>

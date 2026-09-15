@@ -58,20 +58,27 @@ export function SiteHeader() {
           ))}
         </nav>
         <div className="hidden items-center gap-2 lg:flex">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="rounded-none text-basalt hover:bg-tuff/10"
-            onClick={() => toast("Your saved places will appear here.")}
-            aria-label="Saved places"
-          >
-            <Bookmark className="h-4 w-4" />
-          </Button>
+          {user && (
+            <Button
+              asChild
+              variant="ghost"
+              size="icon"
+              className="rounded-none text-basalt hover:bg-tuff/10"
+              aria-label="Saved places"
+            >
+              <Link href="/account?tab=saved">
+                <Bookmark className="h-4 w-4" />
+              </Link>
+            </Button>
+          )}
           {user ? (
             <>
-              <span className="inline-flex items-center gap-1.5 pl-1 pr-2 text-xs font-semibold text-basalt/60">
+              <Link
+                href="/account"
+                className="inline-flex items-center gap-1.5 pl-1 pr-2 text-xs font-semibold text-basalt/60 transition-colors hover:text-basalt"
+              >
                 <User className="h-3.5 w-3.5" /> {profile?.displayName || "Account"}
-              </span>
+              </Link>
               <Button variant="ghost" size="sm" className="rounded-none text-basalt/70 hover:text-basalt" onClick={handleSignOut}>
                 <LogOut className="mr-2 h-3.5 w-3.5" /> Sign out
               </Button>
@@ -123,7 +130,9 @@ export function SiteHeader() {
               <div className="mt-auto border-t border-white/15 pt-6">
                 {user ? (
                   <div className="flex items-center justify-between text-sm text-paper/70">
-                    <span className="inline-flex items-center gap-1.5"><User className="h-3.5 w-3.5" /> {profile?.displayName || "Account"}</span>
+                    <SheetClose asChild>
+                      <Link href="/account" className="inline-flex items-center gap-1.5 font-semibold hover:text-white"><User className="h-3.5 w-3.5" /> {profile?.displayName || "Account"}</Link>
+                    </SheetClose>
                     <SheetClose asChild>
                       <button onClick={handleSignOut} className="inline-flex items-center gap-1.5 font-semibold text-apricot">
                         <LogOut className="h-3.5 w-3.5" /> Sign out

@@ -7,6 +7,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ListingsProvider } from "./contexts/ListingsContext";
+import { SavedPlacesProvider } from "./contexts/SavedPlacesContext";
 import { SiteSettingsProvider } from "./contexts/SiteSettingsContext";
 import { AnnouncementBanner } from "./components/AnnouncementBanner";
 import Home from "./pages/Home";
@@ -20,6 +21,7 @@ import AdminReview from "./pages/AdminReview";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ResetPassword from "./pages/ResetPassword";
+import Account from "./pages/Account";
 import Plan from "./pages/Plan";
 
 function Router() {
@@ -38,6 +40,7 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
       <Route path="/reset-password" component={ResetPassword} />
+      <Route path="/account" component={Account} />
       <Route path="/listing/:slug">{(params) => <ListingPage params={params} />}</Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
@@ -51,13 +54,15 @@ function App() {
       <ThemeProvider defaultTheme="light">
         <AuthProvider>
           <ListingsProvider>
-            <SiteSettingsProvider>
-              <TooltipProvider>
-                <Toaster />
-                <AnnouncementBanner />
-                <Router />
-              </TooltipProvider>
-            </SiteSettingsProvider>
+            <SavedPlacesProvider>
+              <SiteSettingsProvider>
+                <TooltipProvider>
+                  <Toaster />
+                  <AnnouncementBanner />
+                  <Router />
+                </TooltipProvider>
+              </SiteSettingsProvider>
+            </SavedPlacesProvider>
           </ListingsProvider>
         </AuthProvider>
       </ThemeProvider>

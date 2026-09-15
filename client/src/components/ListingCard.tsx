@@ -3,9 +3,11 @@ import { Bookmark, MapPin, MoveUpRight } from "lucide-react";
 import { Link } from "wouter";
 import { Listing, typeLabels } from "@/data/listings";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 
 export function ListingCard({ listing, large = false, active = false, onHover }: { listing: Listing; large?: boolean; active?: boolean; onHover?: (id?: string) => void }) {
+  const { isSaved, toggleSaved } = useSavedPlaces();
+  const saved = isSaved(listing.id);
   return (
     <article
       className={cn("group relative", active && "is-active")}
@@ -21,15 +23,19 @@ export function ListingCard({ listing, large = false, active = false, onHover }:
           </span>
           <button
             type="button"
-            aria-label={`Save ${listing.title}`}
+            aria-label={saved ? `Remove ${listing.title} from saved` : `Save ${listing.title}`}
+            aria-pressed={saved}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              toast(`${listing.title} saved for later.`);
+              toggleSaved({ id: listing.id, title: listing.title });
             }}
-            className="absolute right-4 top-4 grid h-9 w-9 place-items-center bg-basalt/55 text-white backdrop-blur-sm transition-colors hover:bg-apricot"
+            className={cn(
+              "absolute right-4 top-4 grid h-9 w-9 place-items-center text-white backdrop-blur-sm transition-colors",
+              saved ? "bg-apricot" : "bg-basalt/55 hover:bg-apricot",
+            )}
           >
-            <Bookmark className="h-4 w-4" />
+            <Bookmark className={cn("h-4 w-4", saved && "fill-current")} />
           </button>
           <div className="absolute bottom-4 left-4 flex items-center gap-1.5 text-xs font-semibold text-white">
             <MapPin className="h-3.5 w-3.5" /> {listing.city}, {listing.region}

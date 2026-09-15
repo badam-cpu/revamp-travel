@@ -6,7 +6,7 @@
  * blocked night. Selection is a soft "preferred dates" preview only — per the
  * product's honesty rule, no booking is taken here yet.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { BlockedRange } from "@/contexts/ListingsContext";
@@ -36,8 +36,18 @@ function expandBlocked(ranges: BlockedRange[]): Set<string> {
   return set;
 }
 
-export function AvailabilityCalendar({ blockedRanges }: { blockedRanges: BlockedRange[] }) {
-  const blocked = useMemo(() => expandBlocked(blockedRanges), [blockedRanges]);
+export function AvailabilityCalendar({
+  blockedRanges,
+  bookedRanges = [],
+  onChange,
+}: {
+  blockedRanges: BlockedRange[];
+  /** Confirmed-booking ranges (from listing_booked_ranges), greyed out alongside the iCal ranges. */
+  bookedRanges?: BlockedRange[];
+  /** Reports the picked check-in → check-out range up to the booking panel. */
+  onChange?: (range: { start: string | null; end: string | null }) => void;
+}) {
+  const blocked = useMemo(() => expandBlocked([...blockedRanges, ...bookedRanges]), [blockedRanges, bookedRanges]);
   const today = useMemo(() => {
     const t = new Date();
     t.setHours(0, 0, 0, 0);
@@ -46,6 +56,13 @@ export function AvailabilityCalendar({ blockedRanges }: { blockedRanges: Blocked
   const [view, setView] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [start, setStart] = useState<string | null>(null);
   const [end, setEnd] = useState<string | null>(null);
+
+  // Report the current selection upward (only a complete range counts as chosen).
+  useEffect(() => {
+    onChange?.({ start, end });
+    // onChange identity isn't stable across renders; depend only on the values.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [start, end]);
 
   // A range start..end is valid for a stay if no night in [start, end) is blocked.
   const spansBlocked = (from: string, to: string): boolean => {
@@ -179,7 +196,7 @@ export function AvailabilityCalendar({ blockedRanges }: { blockedRanges: Blocked
         </span>
       </div>
       <p className="mt-2 text-xs leading-5 text-basalt/45">
-        Unavailable dates are synced from the host's own calendar. Dates are a guide — no booking is taken on Revamp yet.
+        Unavailable dates are synced from the host's own calendar and existing bookings.
       </p>
     </div>
   );
