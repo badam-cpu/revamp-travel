@@ -219,16 +219,17 @@ export function registerApiRoutes(app: Express) {
     // Read the listing under RLS — published listings are publicly readable.
     const { data: listing, error: readErr } = await supa
       .from("listings")
-      .select("id, type, title, status, price_cents, price_unit, blocked_ranges, cancellation_policy, free_cancel_days, nonrefundable_discount_percent")
+      .select("id, type, title, status, price_cents, price_unit, blocked_ranges, cancellation_policy, free_cancel_days, nonrefundable_discount_percent, cleaning_fee_cents")
       .eq("id", listingId)
       .maybeSingle();
     if (readErr || !listing) return res.status(404).json({ error: "Listing not found." });
     if (listing.status !== "published") return res.status(400).json({ error: "This listing isn't open for booking." });
     if (!isBookableType(listing.type)) return res.status(400).json({ error: "This listing can't be booked online." });
 
-    // Base is discount-aware (non-refundable listing charged at its discount);
-    // the guest is then charged base + a 10% turnover tax added on top.
-    const baseCents = computeBookingAmountCents(
+    // Accommodation is discount-aware (non-refundable listing charged at its
+    // discount); base = accommodation + the flat cleaning fee; the guest is
+    // then charged base + tax on top.
+    const accommodationCents = computeBookingAmountCents(
       {
         priceCents: listing.price_cents,
         priceUnit: listing.price_unit,
@@ -237,8 +238,8 @@ export function registerApiRoutes(app: Express) {
       },
       { startDate, endDate, guests },
     );
-    if (baseCents <= 0) return res.status(400).json({ error: "This listing is rate-on-request — contact the operator to book." });
-    const charge = computeBookingCharge(baseCents); // base + tax = total the guest pays
+    if (accommodationCents <= 0) return res.status(400).json({ error: "This listing is rate-on-request — contact the operator to book." });
+    const charge = computeBookingCharge(accommodationCents + (listing.cleaning_fee_cents ?? 0)); // base + tax = total the guest pays
 
     // Availability: reject if the dates clash with the listing's iCal blocked
     // ranges, an existing confirmed booking, or a live (recent) pending hold.

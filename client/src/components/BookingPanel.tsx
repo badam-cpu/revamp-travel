@@ -22,7 +22,7 @@ import type { LiveListing, BlockedRange } from "@/contexts/ListingsContext";
 import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
 import { Button } from "@/components/ui/button";
 import { startCheckout, ApiError } from "@/lib/api";
-import { computeBookingAmountCents, computeBookingCharge, describeBookingBasis, describeCancellationPolicy, isBookableType, TURNOVER_TAX_PERCENT } from "@shared/bookings";
+import { computeBookingAmountCents, computeBookingCharge, describeBookingBasis, describeCancellationPolicy, isBookableType, TAX_PERCENT } from "@shared/bookings";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -72,7 +72,7 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
     return null;
   }, [isStay, range]);
 
-  const baseCents = selected
+  const accommodationCents = selected
     ? computeBookingAmountCents(
         {
           priceCents: Math.round(listing.price * 100),
@@ -83,8 +83,10 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
         { ...selected, guests },
       )
     : 0;
-  // Guest pays base + a 10% turnover tax added on top (same helper the server charges with).
-  const charge = computeBookingCharge(baseCents);
+  // Base = accommodation + flat cleaning fee; guest pays base + tax on top
+  // (same helper the server charges with).
+  const cleaningCents = accommodationCents > 0 ? listing.cleaningFeeCents ?? 0 : 0;
+  const charge = computeBookingCharge(accommodationCents + cleaningCents);
   const amountCents = charge.totalCents; // what the guest is actually charged
   const currency = "USD"; // display currency of the listing price; server charges PAYLINK_CURRENCY
   const policyText = describeCancellationPolicy(listing.cancellationPolicy, {
@@ -184,10 +186,16 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
         <div className="mt-4 grid gap-1.5 border-t border-basalt/10 pt-4 text-sm">
           <div className="flex items-center justify-between text-basalt/55">
             <span>{describeBookingBasis(listing, { ...selected, guests })}</span>
-            <span>{prettyMoney(charge.baseCents, currency)}</span>
+            <span>{prettyMoney(accommodationCents, currency)}</span>
           </div>
+          {cleaningCents > 0 && (
+            <div className="flex items-center justify-between text-basalt/55">
+              <span>Cleaning fee</span>
+              <span>{prettyMoney(cleaningCents, currency)}</span>
+            </div>
+          )}
           <div className="flex items-center justify-between text-basalt/55">
-            <span>Turnover tax ({TURNOVER_TAX_PERCENT}%)</span>
+            <span>Tax ({TAX_PERCENT}%)</span>
             <span>{prettyMoney(charge.taxCents, currency)}</span>
           </div>
           <div className="flex items-center justify-between border-t border-basalt/10 pt-1.5">

@@ -124,6 +124,7 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
     cancellationPolicy: get("cancellationPolicy") === "non_refundable" ? "non_refundable" : "flexible",
     freeCancelDays: Number(get("freeCancelDays")) >= 0 && get("freeCancelDays") !== "" ? Number(get("freeCancelDays")) : 7,
     nonrefundableDiscountPercent: Number(get("nonrefundableDiscountPercent")) >= 0 && get("nonrefundableDiscountPercent") !== "" ? Number(get("nonrefundableDiscountPercent")) : 5,
+    cleaningFeeCents: Number(get("cleaningFee")) > 0 ? Math.round(Number(get("cleaningFee")) * 100) : 0,
   };
 }
 
@@ -454,6 +455,10 @@ function ListingFormDialog({
                   <div className="grid gap-2">
                     <Label htmlFor="maxGuests" className="text-sm font-semibold">Max guests</Label>
                     <Input id="maxGuests" name="maxGuests" type="number" min={1} max={50} placeholder={draft.type === "stay" ? "e.g. 4" : "e.g. 8"} defaultValue={draft.maxGuests || ""} className={FIELD} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="cleaningFee" className="text-sm font-semibold">Cleaning fee <span className="font-normal text-basalt/45">(optional, per booking)</span></Label>
+                    <Input id="cleaningFee" name="cleaningFee" type="number" min={0} placeholder="e.g. 25" defaultValue={draft.cleaningFeeCents ? draft.cleaningFeeCents / 100 : ""} className={FIELD} />
                   </div>
                 </div>
 

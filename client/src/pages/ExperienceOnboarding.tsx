@@ -106,6 +106,7 @@ interface WizardData {
   cancellationPolicy: "flexible" | "non_refundable";
   freeCancelDays: number;
   nonrefundableDiscountPercent: number;
+  cleaningFeeCents: number;
   featured: boolean;
   status?: LiveListing["status"];
   reviewNote?: string | null;
@@ -138,6 +139,7 @@ function emptyWizardData(): WizardData {
     cancellationPolicy: "flexible",
     freeCancelDays: 7,
     nonrefundableDiscountPercent: 5,
+    cleaningFeeCents: 0,
     featured: false,
   };
 }
@@ -202,6 +204,7 @@ function listingToWizardData(listing: LiveListing): WizardData {
     cancellationPolicy: listing.cancellationPolicy ?? "flexible",
     freeCancelDays: listing.freeCancelDays ?? 7,
     nonrefundableDiscountPercent: listing.nonrefundableDiscountPercent ?? 5,
+    cleaningFeeCents: listing.cleaningFeeCents ?? 0,
     featured: listing.featured ?? false,
     status: listing.status,
     reviewNote: listing.reviewNote,
@@ -247,6 +250,7 @@ function toListingInput(data: WizardData): ListingInput {
     cancellationPolicy: data.cancellationPolicy,
     freeCancelDays: data.freeCancelDays,
     nonrefundableDiscountPercent: data.nonrefundableDiscountPercent,
+    cleaningFeeCents: data.cleaningFeeCents,
     // Experiences don't expose the stay/tour marker-color picker — every
     // experience pin uses the same accent as the rest of the type
     // (Dashboard.tsx's emptyDraft default for type: "experience").
@@ -641,6 +645,9 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                           <SelectItem value="day">Day</SelectItem>
                         </SelectContent>
                       </Select>
+                    </StepField>
+                    <StepField label="Cleaning fee (optional)" help="A flat fee added once per booking.">
+                      <Input type="number" min={0} value={data.cleaningFeeCents ? data.cleaningFeeCents / 100 : ""} onChange={(e) => set("cleaningFeeCents", Math.round((Number(e.target.value) || 0) * 100))} placeholder="e.g. 25" />
                     </StepField>
                     <div className="sm:col-span-2">
                       <StepField label="Cancellation policy" help="Flexible gives free cancellation up to a cutoff; non-refundable is cheaper but never refunds.">

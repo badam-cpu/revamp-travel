@@ -60,7 +60,7 @@ interface ListingsContextType {
 const ListingsContext = createContext<ListingsContextType | undefined>(undefined);
 
 const ROW_COLUMNS =
-  "id, operator_id, type, slug, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, amenities, facts, featured, accent, status, review_note, reviewed_at, ical_url, ical_synced_at, ical_error, blocked_ranges, seasonal_rates, max_guests, highlights, not_included, what_to_bring, important_info, not_suitable_for, cancellation_policy, free_cancel_days, nonrefundable_discount_percent";
+  "id, operator_id, type, slug, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, amenities, facts, featured, accent, status, review_note, reviewed_at, ical_url, ical_synced_at, ical_error, blocked_ranges, seasonal_rates, max_guests, highlights, not_included, what_to_bring, important_info, not_suitable_for, cancellation_policy, free_cancel_days, nonrefundable_discount_percent, cleaning_fee_cents";
 
 interface ListingRow {
   id: string;
@@ -101,6 +101,7 @@ interface ListingRow {
   cancellation_policy: "flexible" | "non_refundable" | null;
   free_cancel_days: number | null;
   nonrefundable_discount_percent: number | null;
+  cleaning_fee_cents: number | null;
 }
 
 function mapListingRow(row: ListingRow): LiveListing {
@@ -145,6 +146,7 @@ function mapListingRow(row: ListingRow): LiveListing {
     cancellationPolicy: row.cancellation_policy ?? "flexible",
     freeCancelDays: row.free_cancel_days ?? 7,
     nonrefundableDiscountPercent: row.nonrefundable_discount_percent ?? 0,
+    cleaningFeeCents: row.cleaning_fee_cents ?? 0,
   };
 }
 
@@ -178,6 +180,7 @@ function toRow(input: ListingInput) {
     cancellation_policy: input.cancellationPolicy ?? "flexible",
     free_cancel_days: input.freeCancelDays ?? 7,
     nonrefundable_discount_percent: input.nonrefundableDiscountPercent ?? 5,
+    cleaning_fee_cents: input.cleaningFeeCents ?? 0,
   };
 }
 

@@ -22,25 +22,27 @@ export const DEFAULT_NONREFUNDABLE_DISCOUNT = 5;
  * Marketplace economics (single source of truth for client preview + server
  * charge, so they always agree — change here, not in env).
  *   • Commission: Revamp's cut, % of the base booking amount (Revamp revenue).
- *   • Turnover tax: added ON TOP of the base and paid by the guest; Revamp
- *     remits it (pass-through, not revenue), computed on the full base amount.
- * Guest charge = base + tax. Operator payout = base − commission.
+ *   • Tax: added ON TOP of the base and paid by the guest; Revamp remits it
+ *     (pass-through, not revenue), computed on the full base amount.
+ * The base = accommodation (rate × nights/guests, discount-applied) + the
+ * operator's flat cleaning fee. Guest charge = base + tax. Operator payout =
+ * base − commission (so the operator keeps the cleaning fee, less commission).
  */
 export const PLATFORM_COMMISSION_PERCENT = 12.5;
-export const TURNOVER_TAX_PERCENT = 10;
+export const TAX_PERCENT = 10;
 
 export interface BookingCharge {
-  baseCents: number; // pre-tax booking amount (after any non-refundable discount)
-  taxCents: number; // turnover tax added on top, guest-paid, Revamp remits
+  baseCents: number; // pre-tax booking amount = accommodation + cleaning fee (after any discount)
+  taxCents: number; // tax added on top, guest-paid, Revamp remits
   totalCents: number; // what the guest is actually charged (base + tax)
   commissionCents: number; // Revamp's cut of the base
   operatorNetCents: number; // what the operator is paid (base − commission)
 }
 
-/** Full money breakdown for a base booking amount. */
+/** Full money breakdown for a base booking amount (accommodation + cleaning). */
 export function computeBookingCharge(baseCents: number): BookingCharge {
   const base = Math.max(0, Math.round(baseCents));
-  const taxCents = Math.round((base * TURNOVER_TAX_PERCENT) / 100);
+  const taxCents = Math.round((base * TAX_PERCENT) / 100);
   const commissionCents = Math.round((base * PLATFORM_COMMISSION_PERCENT) / 100);
   return {
     baseCents: base,

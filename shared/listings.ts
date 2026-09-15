@@ -63,6 +63,8 @@ export interface Listing {
   freeCancelDays?: number;
   /** Non-refundable policy: % off the base price as the incentive. */
   nonrefundableDiscountPercent?: number;
+  /** Flat cleaning fee added once per booking (operator keeps it, less commission). */
+  cleaningFeeCents?: number;
 }
 
 // Deployment note: this fork replaces the Manus-managed `/manus-storage/...`
@@ -459,4 +461,6 @@ export interface ListingInput {
   freeCancelDays?: number;
   /** Non-refundable policy: % off the base price as the incentive. */
   nonrefundableDiscountPercent?: number;
+  /** Flat cleaning fee added once per booking (operator keeps it, less commission). */
+  cleaningFeeCents?: number;
 }
