@@ -40,15 +40,15 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-basalt/10 bg-paper/94 text-basalt backdrop-blur-xl">
-      <div className="container flex h-[76px] items-center justify-between">
+      <div className="container flex h-[76px] items-center justify-between gap-5">
         <BrandMark />
-        <nav className="hidden items-center gap-8 lg:flex" aria-label="Primary navigation">
+        <nav className="hidden items-center gap-6 xl:flex" aria-label="Primary navigation">
           {links.map((link) => (
             <Link
               key={link.href}
               href={link.href}
               className={cn(
-                "nav-link relative flex items-center gap-1.5 py-2 text-sm font-semibold tracking-[-0.01em] text-basalt/70 transition-colors hover:text-basalt",
+                "nav-link relative flex items-center gap-1.5 whitespace-nowrap py-2 text-sm font-semibold tracking-[-0.01em] text-basalt/70 transition-colors hover:text-basalt",
                 link.accent && "text-apricot hover:text-apricot",
                 location.startsWith(link.href) && (link.accent ? "text-apricot" : "text-basalt"),
               )}
@@ -58,7 +58,7 @@ export function SiteHeader() {
             </Link>
           ))}
         </nav>
-        <div className="hidden items-center gap-2 lg:flex">
+        <div className="hidden shrink-0 items-center gap-1.5 xl:flex">
           <CurrencyToggle />
           {user && (
             <Button
@@ -103,7 +103,7 @@ export function SiteHeader() {
         </div>
         <Sheet>
           <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="rounded-none lg:hidden" aria-label="Open navigation">
+            <Button variant="ghost" size="icon" className="rounded-none xl:hidden" aria-label="Open navigation">
               <Menu className="h-5 w-5" />
             </Button>
           </SheetTrigger>

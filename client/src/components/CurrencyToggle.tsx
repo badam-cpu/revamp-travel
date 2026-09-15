@@ -21,11 +21,11 @@ export function CurrencyToggle({ className, light = false }: { className?: strin
           onClick={() => setCurrency(c)}
           aria-pressed={currency === c}
           className={cn(
-            "px-2.5 py-1.5 transition-colors",
+            "px-2 py-1.5 transition-colors",
             currency === c ? "bg-apricot text-white" : light ? "text-paper/70 hover:text-white" : "text-basalt/60 hover:text-basalt",
           )}
         >
-          {c === "USD" ? "$ USD" : "֏ AMD"}
+          {c}
         </button>
       ))}
     </div>
