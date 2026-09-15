@@ -87,10 +87,10 @@ export function SiteHeader() {
             </>
           ) : (
             <>
-              <Button asChild variant="ghost" size="sm" className="rounded-none text-basalt/70 hover:text-basalt">
+              <Button asChild variant="ghost" size="sm" className="rounded-none px-3 text-sm font-semibold text-basalt/70 hover:bg-transparent hover:text-basalt">
                 <Link href="/login">Sign in</Link>
               </Button>
-              <Button asChild variant="outline" size="sm" className="rounded-none border-basalt/20">
+              <Button asChild size="sm" className="rounded-none bg-basalt px-4 text-sm font-semibold text-paper hover:bg-basalt/90">
                 <Link href="/signup">Sign up</Link>
               </Button>
             </>
