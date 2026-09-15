@@ -16,7 +16,7 @@ import { supabaseAdmin, adminConfigured } from "./supabaseAdmin.js";
 import { paylinkConfigured, registerPayment } from "./paylink.js";
 import { reconcileUserBookings } from "./bookings.js";
 import { sendCancellation, type BookingEmailInfo } from "./email.js";
-import { computeBookingAmountCents, isBookableType, DEFAULT_CURRENCY } from "../shared/bookings.js";
+import { computeBookingAmountCents, computeRefundCents, isBookableType, DEFAULT_CURRENCY } from "../shared/bookings.js";
 import { planTrip, PlannerError } from "./planner.js";
 import { fetchPrefill, PrefillError } from "./urlPrefill.js";
 import { fetchIcalBlockedRanges } from "./ical.js";
@@ -209,15 +209,21 @@ export function registerApiRoutes(app: Express) {
     // Read the listing under RLS — published listings are publicly readable.
     const { data: listing, error: readErr } = await supa
       .from("listings")
-      .select("id, type, title, status, price_cents, price_unit, blocked_ranges")
+      .select("id, type, title, status, price_cents, price_unit, blocked_ranges, cancellation_policy, free_cancel_days, nonrefundable_discount_percent")
       .eq("id", listingId)
       .maybeSingle();
     if (readErr || !listing) return res.status(404).json({ error: "Listing not found." });
     if (listing.status !== "published") return res.status(400).json({ error: "This listing isn't open for booking." });
     if (!isBookableType(listing.type)) return res.status(400).json({ error: "This listing can't be booked online." });
 
+    // Amount is discount-aware: a non-refundable listing is charged at its discount.
     const amountCents = computeBookingAmountCents(
-      { priceCents: listing.price_cents, priceUnit: listing.price_unit },
+      {
+        priceCents: listing.price_cents,
+        priceUnit: listing.price_unit,
+        cancellationPolicy: listing.cancellation_policy ?? "flexible",
+        nonrefundableDiscountPercent: listing.nonrefundable_discount_percent ?? 0,
+      },
       { startDate, endDate, guests },
     );
     if (amountCents <= 0) return res.status(400).json({ error: "This listing is rate-on-request — contact the operator to book." });
@@ -258,6 +264,7 @@ export function registerApiRoutes(app: Express) {
       if (!pay.redirectUrl) return res.status(502).json({ error: "Couldn't start checkout." });
 
       // Insert the pending hold as the traveler (RLS allows own + pending only).
+      // Snapshot the cancellation terms so a later listing change can't alter them.
       const { error: insErr } = await supa.from("bookings").insert({
         listing_id: listingId,
         traveler_id: userId,
@@ -270,6 +277,8 @@ export function registerApiRoutes(app: Express) {
         provider: "paylink",
         paylink_request_id: pay.requestId,
         paylink_order_id: pay.orderId,
+        cancellation_policy: listing.cancellation_policy ?? "flexible",
+        free_cancel_days: listing.free_cancel_days ?? 7,
       });
       if (insErr) {
         console.error("[start-checkout] insert failed", insErr.message);
@@ -324,7 +333,7 @@ export function registerApiRoutes(app: Express) {
 
     const { data: booking } = await admin
       .from("bookings")
-      .select("id, listing_id, traveler_id, status, start_date, end_date, guests, amount_cents, currency, paid_at")
+      .select("id, listing_id, traveler_id, status, start_date, end_date, guests, amount_cents, currency, paid_at, cancellation_policy, free_cancel_days")
       .eq("id", parsed.data.bookingId)
       .maybeSingle();
     if (!booking) return res.status(404).json({ error: "Booking not found." });
@@ -348,11 +357,25 @@ export function registerApiRoutes(app: Express) {
     const today = new Date().toISOString().slice(0, 10);
     if (booking.start_date < today) return res.status(400).json({ error: "This trip has already started or passed." });
 
-    const refundOwed = booking.status === "confirmed" && !!booking.paid_at;
+    // Refund owed is computed from the policy SNAPSHOT on the booking (fair to
+    // the traveler even if the listing changed since). PayLink has no refund
+    // API, so this is what the operator issues by hand; we record it.
+    const refundCents = computeRefundCents(
+      {
+        status: booking.status,
+        paidAt: booking.paid_at,
+        amountCents: booking.amount_cents,
+        startDate: booking.start_date,
+        cancellationPolicy: booking.cancellation_policy,
+        freeCancelDays: booking.free_cancel_days,
+      },
+      new Date().toISOString(),
+    );
+    const refundOwed = refundCents > 0;
 
     const { data: upd, error: updErr } = await admin
       .from("bookings")
-      .update({ status: "cancelled" })
+      .update({ status: "cancelled", refund_amount_cents: refundCents })
       .eq("id", booking.id)
       .in("status", ["pending_payment", "confirmed"])
       .select("id");
@@ -376,16 +399,16 @@ export function registerApiRoutes(app: Express) {
       try {
         if (isTraveler) {
           const { data: op } = await admin.auth.admin.getUserById(listing.operator_id);
-          if (op?.user?.email) await sendCancellation(op.user.email, info, { toRole: "operator", refundOwed });
+          if (op?.user?.email) await sendCancellation(op.user.email, info, { toRole: "operator", refundCents });
         } else {
           const { data: tr } = await admin.auth.admin.getUserById(booking.traveler_id);
-          if (tr?.user?.email) await sendCancellation(tr.user.email, info, { toRole: "traveler", refundOwed });
+          if (tr?.user?.email) await sendCancellation(tr.user.email, info, { toRole: "traveler", refundCents });
         }
       } catch (err) {
         console.error("[cancel-booking] email failed", err);
       }
     }
 
-    res.json({ cancelled: true, refundOwed });
+    res.json({ cancelled: true, refundOwed, refundCents });
   });
 }

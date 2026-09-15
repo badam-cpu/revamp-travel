@@ -11,7 +11,12 @@
  * place that rule lives, imported by both `server/routes.ts` (to charge) and
  * the client (to preview the same figure).
  */
-import type { Listing, ListingType } from "./listings.js";
+import type { Listing, ListingType, CancellationPolicy } from "./listings.js";
+
+/** Defaults when a listing hasn't set them explicitly. */
+export const DEFAULT_CANCELLATION_POLICY: CancellationPolicy = "flexible";
+export const DEFAULT_FREE_CANCEL_DAYS = 7;
+export const DEFAULT_NONREFUNDABLE_DISCOUNT = 5;
 
 /**
  * Booking lifecycle. Only `confirmed` blocks availability; `pending_payment`
@@ -77,6 +82,11 @@ export function nightsBetween(startDate: string, endDate: string): number {
   return Math.max(1, Math.round((end - start) / 86_400_000));
 }
 
+/** Shift a YYYY-MM-DD date by whole days (may be negative), returning YYYY-MM-DD. */
+export function addDaysIso(iso: string, days: number): string {
+  return new Date(Date.parse(iso + "T00:00:00Z") + days * 86_400_000).toISOString().slice(0, 10);
+}
+
 /**
  * The single source of truth for what a booking costs. Server charges this;
  * client previews it. `priceCents` is the listing's stored unit price.
@@ -85,14 +95,72 @@ export function nightsBetween(startDate: string, endDate: string): number {
  *   • anything else    → flat unit price
  */
 export function computeBookingAmountCents(
-  listing: { priceCents: number; priceUnit: string },
+  listing: { priceCents: number; priceUnit: string; cancellationPolicy?: CancellationPolicy; nonrefundableDiscountPercent?: number },
   params: { startDate: string; endDate: string; guests: number },
 ): number {
   const unit = (listing.priceUnit || "").toLowerCase().trim();
   const base = Math.max(0, Math.round(listing.priceCents));
-  if (PER_NIGHT_UNITS.has(unit)) return base * nightsBetween(params.startDate, params.endDate);
-  if (PER_PERSON_UNITS.has(unit)) return base * Math.max(1, params.guests);
-  return base;
+  let total: number;
+  if (PER_NIGHT_UNITS.has(unit)) total = base * nightsBetween(params.startDate, params.endDate);
+  else if (PER_PERSON_UNITS.has(unit)) total = base * Math.max(1, params.guests);
+  else total = base;
+  // Non-refundable rate is offered at a discount as the incentive.
+  if (listing.cancellationPolicy === "non_refundable") {
+    const pct = Math.min(90, Math.max(0, Math.round(listing.nonrefundableDiscountPercent ?? 0)));
+    total = Math.round(total * (1 - pct / 100));
+  }
+  return total;
+}
+
+/**
+ * How much of a booking is refundable if cancelled now. Refunds are computed
+ * from the policy SNAPSHOT stored on the booking (so a later listing change
+ * can't alter a traveler's terms). PayLink has no refund API, so this is the
+ * amount the operator issues by hand — 0 means nothing is owed.
+ *   • unpaid (never confirmed) → 0 (no money was captured)
+ *   • non_refundable          → 0
+ *   • flexible                → full amount before the cutoff (freeCancelDays
+ *                               before check-in, inclusive), 0 after
+ */
+export function computeRefundCents(
+  booking: {
+    status: string;
+    paidAt?: string | null;
+    amountCents: number;
+    startDate: string;
+    cancellationPolicy?: CancellationPolicy | null;
+    freeCancelDays?: number | null;
+  },
+  nowIso: string,
+): number {
+  const paid = booking.status === "confirmed" || !!booking.paidAt;
+  if (!paid) return 0;
+  const policy = booking.cancellationPolicy ?? DEFAULT_CANCELLATION_POLICY;
+  if (policy === "non_refundable") return 0;
+  const days = booking.freeCancelDays ?? DEFAULT_FREE_CANCEL_DAYS;
+  const cutoff = addDaysIso(booking.startDate, -days);
+  const today = nowIso.slice(0, 10);
+  return today <= cutoff ? booking.amountCents : 0;
+}
+
+/** One-line policy description for the UI. */
+export function describeCancellationPolicy(
+  policy: CancellationPolicy | undefined | null,
+  opts: { freeCancelDays?: number; startDate?: string; discountPercent?: number } = {},
+): string {
+  const p = policy ?? DEFAULT_CANCELLATION_POLICY;
+  if (p === "non_refundable") {
+    const d = opts.discountPercent ?? 0;
+    return d > 0 ? `Non-refundable · ${d}% off` : "Non-refundable";
+  }
+  const days = opts.freeCancelDays ?? DEFAULT_FREE_CANCEL_DAYS;
+  if (opts.startDate) {
+    const cutoff = addDaysIso(opts.startDate, -days);
+    const [y, m, d] = cutoff.split("-").map(Number);
+    const pretty = new Date(y, (m ?? 1) - 1, d ?? 1).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return `Free cancellation until ${pretty}`;
+  }
+  return `Free cancellation until ${days} day${days === 1 ? "" : "s"} before check-in`;
 }
 
 /** Whether a listing type can be booked at all (restaurants never can). */

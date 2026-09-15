@@ -133,11 +133,11 @@ export async function confirmCheckout(): Promise<{ confirmed: number; pending: b
  * admin). Frees the dates. Returns whether a manual refund is owed (a paid,
  * confirmed booking — PayLink has no refund API, so it's processed by hand).
  */
-export async function cancelBooking(bookingId: string): Promise<{ cancelled: boolean; refundOwed: boolean }> {
+export async function cancelBooking(bookingId: string): Promise<{ cancelled: boolean; refundOwed: boolean; refundCents: number }> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new ApiError("Sign in to cancel a booking.");
-  return request<{ cancelled: boolean; refundOwed: boolean }>("/api/cancel-booking", {
+  return request<{ cancelled: boolean; refundOwed: boolean; refundCents: number }>("/api/cancel-booking", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({ bookingId }),

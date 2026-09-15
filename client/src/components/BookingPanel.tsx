@@ -22,7 +22,7 @@ import type { LiveListing, BlockedRange } from "@/contexts/ListingsContext";
 import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
 import { Button } from "@/components/ui/button";
 import { startCheckout, ApiError } from "@/lib/api";
-import { computeBookingAmountCents, describeBookingBasis, isBookableType } from "@shared/bookings";
+import { computeBookingAmountCents, describeBookingBasis, describeCancellationPolicy, isBookableType } from "@shared/bookings";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -84,9 +84,22 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
   }, [isStay, range, activityDate]);
 
   const amountCents = selected
-    ? computeBookingAmountCents({ priceCents: Math.round(listing.price * 100), priceUnit: listing.priceUnit }, { ...selected, guests })
+    ? computeBookingAmountCents(
+        {
+          priceCents: Math.round(listing.price * 100),
+          priceUnit: listing.priceUnit,
+          cancellationPolicy: listing.cancellationPolicy,
+          nonrefundableDiscountPercent: listing.nonrefundableDiscountPercent,
+        },
+        { ...selected, guests },
+      )
     : 0;
   const currency = "USD"; // display currency of the listing price; server charges PAYLINK_CURRENCY
+  const policyText = describeCancellationPolicy(listing.cancellationPolicy, {
+    freeCancelDays: listing.freeCancelDays,
+    startDate: selected?.startDate,
+    discountPercent: listing.nonrefundableDiscountPercent,
+  });
 
   if (!bookable) {
     return (
@@ -199,6 +212,12 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
           <strong className="font-display text-xl font-normal">{prettyMoney(amountCents, currency)}</strong>
         </div>
       )}
+
+      {/* Cancellation policy */}
+      <p className="mt-3 text-xs leading-5 text-basalt/55">
+        {listing.cancellationPolicy === "non_refundable" ? "🔒 " : "✓ "}
+        {policyText}.
+      </p>
 
       {/* Action */}
       {loading ? (

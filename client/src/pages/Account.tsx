@@ -249,9 +249,9 @@ function TripsTab({ reloadKey }: { reloadKey: number }) {
     if (!window.confirm(`Cancel your booking for ${t.listings?.title ?? "this listing"}? This frees the dates.`)) return;
     setCancelling(t.id);
     try {
-      const { refundOwed } = await cancelBooking(t.id);
+      const { refundCents } = await cancelBooking(t.id);
       setTrips((prev) => (prev ? prev.map((x) => (x.id === t.id ? { ...x, status: "cancelled" } : x)) : prev));
-      toast(refundOwed ? "Booking cancelled — your refund will be processed." : "Booking cancelled.");
+      toast(refundCents > 0 ? `Booking cancelled — ${fmtMoney(refundCents, t.currency)} will be refunded.` : "Booking cancelled — no refund applies under this policy.");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Couldn't cancel that booking.");
     } finally {

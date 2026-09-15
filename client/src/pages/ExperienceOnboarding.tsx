@@ -103,6 +103,9 @@ interface WizardData {
   prefillImageUrl?: string;
   price: number;
   priceUnit: string;
+  cancellationPolicy: "flexible" | "non_refundable";
+  freeCancelDays: number;
+  nonrefundableDiscountPercent: number;
   featured: boolean;
   status?: LiveListing["status"];
   reviewNote?: string | null;
@@ -132,6 +135,9 @@ function emptyWizardData(): WizardData {
     photos: [],
     price: 0,
     priceUnit: "person",
+    cancellationPolicy: "flexible",
+    freeCancelDays: 7,
+    nonrefundableDiscountPercent: 5,
     featured: false,
   };
 }
@@ -193,6 +199,9 @@ function listingToWizardData(listing: LiveListing): WizardData {
     photos: realPhotos(listing),
     price: listing.price,
     priceUnit: listing.priceUnit,
+    cancellationPolicy: listing.cancellationPolicy ?? "flexible",
+    freeCancelDays: listing.freeCancelDays ?? 7,
+    nonrefundableDiscountPercent: listing.nonrefundableDiscountPercent ?? 5,
     featured: listing.featured ?? false,
     status: listing.status,
     reviewNote: listing.reviewNote,
@@ -235,6 +244,9 @@ function toListingInput(data: WizardData): ListingInput {
     notSuitableFor: data.notSuitableFor,
     importantInfo: data.importantInfo.trim(),
     featured: data.featured,
+    cancellationPolicy: data.cancellationPolicy,
+    freeCancelDays: data.freeCancelDays,
+    nonrefundableDiscountPercent: data.nonrefundableDiscountPercent,
     // Experiences don't expose the stay/tour marker-color picker — every
     // experience pin uses the same accent as the rest of the type
     // (Dashboard.tsx's emptyDraft default for type: "experience").
@@ -630,6 +642,26 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                         </SelectContent>
                       </Select>
                     </StepField>
+                    <div className="sm:col-span-2">
+                      <StepField label="Cancellation policy" help="Flexible gives free cancellation up to a cutoff; non-refundable is cheaper but never refunds.">
+                        <Select value={data.cancellationPolicy} onValueChange={(v) => set("cancellationPolicy", v as WizardData["cancellationPolicy"])}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="flexible">Flexible — free cancellation up to a cutoff</SelectItem>
+                            <SelectItem value="non_refundable">Non-refundable — cheaper, no refunds</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </StepField>
+                    </div>
+                    {data.cancellationPolicy === "flexible" ? (
+                      <StepField label="Free-cancel window (days before start)" help="After this cutoff, no refund.">
+                        <Input type="number" min={0} max={365} value={data.freeCancelDays} onChange={(e) => set("freeCancelDays", Number(e.target.value) || 0)} placeholder="7" />
+                      </StepField>
+                    ) : (
+                      <StepField label="Non-refundable discount %" help="Applied off the base price as the incentive.">
+                        <Input type="number" min={0} max={90} value={data.nonrefundableDiscountPercent} onChange={(e) => set("nonrefundableDiscountPercent", Number(e.target.value) || 0)} placeholder="5" />
+                      </StepField>
+                    )}
                   </div>
 
                   {/* Step 9 — Review & submit */}

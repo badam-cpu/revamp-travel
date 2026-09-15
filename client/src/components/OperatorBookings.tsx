@@ -60,9 +60,9 @@ export function OperatorBookings() {
     if (!window.confirm(`Cancel this booking for ${b.listings?.title ?? "your listing"}? The traveler is notified and the dates reopen.`)) return;
     setCancelling(b.id);
     try {
-      const { refundOwed } = await cancelBooking(b.id);
+      const { refundCents } = await cancelBooking(b.id);
       setRows((prev) => (prev ? prev.map((x) => (x.id === b.id ? { ...x, status: "cancelled" } : x)) : prev));
-      toast(refundOwed ? "Cancelled — remember to refund the traveler in PayLink." : "Booking cancelled.");
+      toast(refundCents > 0 ? `Cancelled — refund ${fmtMoney(refundCents, b.currency)} to the traveler in PayLink.` : "Booking cancelled — no refund applies.");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Couldn't cancel that booking.");
     } finally {

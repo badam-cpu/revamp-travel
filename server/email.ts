@@ -120,15 +120,19 @@ export function sendOperatorNewBooking(to: string, b: BookingEmailInfo, traveler
   return send(to, `New booking: ${b.listingTitle}`, html);
 }
 
-/** Cancellation notice to a party. `refundOwed` adds the manual-refund note. */
-export function sendCancellation(to: string, b: BookingEmailInfo, opts: { toRole: "traveler" | "operator"; refundOwed: boolean }) {
+/** Cancellation notice to a party. `refundCents` (0 = none) drives the refund note. */
+export function sendCancellation(to: string, b: BookingEmailInfo, opts: { toRole: "traveler" | "operator"; refundCents: number }) {
   const site = SITE();
   const who = opts.toRole === "traveler" ? "Your booking" : "A booking on your listing";
-  const refundNote = opts.refundOwed
-    ? opts.toRole === "traveler"
-      ? `<p style="font-size:14px;line-height:1.6;color:#6B6357;margin:0 0 6px;">A refund for this booking is being processed and will be returned to your original payment method.</p>`
-      : `<p style="font-size:14px;line-height:1.6;color:#6B6357;margin:0 0 6px;">This booking was paid — a refund needs to be issued to the traveler from your PayLink account.</p>`
-    : "";
+  const refundStr = money(opts.refundCents, b.currency);
+  const refundNote =
+    opts.refundCents > 0
+      ? opts.toRole === "traveler"
+        ? `<p style="font-size:14px;line-height:1.6;color:#6B6357;margin:0 0 6px;">A refund of <strong>${esc(refundStr)}</strong> is being processed and will be returned to your original payment method.</p>`
+        : `<p style="font-size:14px;line-height:1.6;color:#6B6357;margin:0 0 6px;">Per the cancellation policy, please refund <strong>${esc(refundStr)}</strong> to the traveler from your PayLink account.</p>`
+      : opts.toRole === "traveler"
+        ? `<p style="font-size:14px;line-height:1.6;color:#6B6357;margin:0 0 6px;">Under this booking's cancellation policy, no refund applies.</p>`
+        : "";
   const html = shell(
     `${who} was cancelled`,
     `<p style="font-size:15px;line-height:1.6;margin:0 0 6px;"><strong>${esc(b.listingTitle)}</strong> — this booking has been cancelled and the dates are open again.</p>

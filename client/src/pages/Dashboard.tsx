@@ -120,6 +120,9 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
     featured: (form.elements.namedItem("featured") as HTMLInputElement | null)?.checked || false,
     accent: (get("accent") as ListingInput["accent"]) || "apricot",
     maxGuests: Number(get("maxGuests")) > 0 ? Number(get("maxGuests")) : undefined,
+    cancellationPolicy: get("cancellationPolicy") === "non_refundable" ? "non_refundable" : "flexible",
+    freeCancelDays: Number(get("freeCancelDays")) >= 0 && get("freeCancelDays") !== "" ? Number(get("freeCancelDays")) : 7,
+    nonrefundableDiscountPercent: Number(get("nonrefundableDiscountPercent")) >= 0 && get("nonrefundableDiscountPercent") !== "" ? Number(get("nonrefundableDiscountPercent")) : 5,
   };
 }
 
@@ -450,6 +453,31 @@ function ListingFormDialog({
                   <div className="grid gap-2">
                     <Label htmlFor="maxGuests" className="text-sm font-semibold">Max guests</Label>
                     <Input id="maxGuests" name="maxGuests" type="number" min={1} max={50} placeholder={draft.type === "stay" ? "e.g. 4" : "e.g. 8"} defaultValue={draft.maxGuests || ""} className={FIELD} />
+                  </div>
+                </div>
+
+                <div className="grid gap-4 border border-basalt/10 bg-chalk/60 p-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="cancellationPolicy" className="text-sm font-semibold">Cancellation policy</Label>
+                    <Select name="cancellationPolicy" defaultValue={draft.cancellationPolicy ?? "flexible"}>
+                      <SelectTrigger id="cancellationPolicy" className="h-12 rounded-none text-base"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="flexible">Flexible — free cancellation up to a cutoff</SelectItem>
+                        <SelectItem value="non_refundable">Non-refundable — cheaper, no refunds</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-6 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="freeCancelDays" className="text-sm font-semibold">Free-cancel window <span className="font-normal text-basalt/45">(flexible)</span></Label>
+                      <Input id="freeCancelDays" name="freeCancelDays" type="number" min={0} max={365} placeholder="7" defaultValue={draft.freeCancelDays ?? 7} className={FIELD} />
+                      <p className="text-xs text-basalt/45">Days before check-in that free cancellation ends. After it, no refund.</p>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="nonrefundableDiscountPercent" className="text-sm font-semibold">Non-refundable discount % <span className="font-normal text-basalt/45">(incentive)</span></Label>
+                      <Input id="nonrefundableDiscountPercent" name="nonrefundableDiscountPercent" type="number" min={0} max={90} placeholder="5" defaultValue={draft.nonrefundableDiscountPercent ?? 5} className={FIELD} />
+                      <p className="text-xs text-basalt/45">Applied only when the policy is non-refundable.</p>
+                    </div>
                   </div>
                 </div>
 

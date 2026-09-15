@@ -11,6 +11,14 @@
 
 export type ListingType = "stay" | "eat" | "tour" | "experience";
 
+/**
+ * Per-listing cancellation policy the operator chooses (see refund logic in
+ * shared/bookings.ts). `flexible` = free cancellation until `freeCancelDays`
+ * before check-in, no refund after. `non_refundable` = no refunds ever, offered
+ * at a `nonrefundableDiscountPercent` discount as the incentive.
+ */
+export type CancellationPolicy = "flexible" | "non_refundable";
+
 export interface ListingFact {
   label: string;
   value: string;
@@ -49,6 +57,12 @@ export interface Listing {
   notSuitableFor?: string[];
   /** Maximum number of guests the listing sleeps/hosts; caps the guest selector. */
   maxGuests?: number;
+  /** Cancellation policy (default "flexible"). See shared/bookings.ts. */
+  cancellationPolicy?: CancellationPolicy;
+  /** Flexible policy: free cancellation until this many days before check-in. */
+  freeCancelDays?: number;
+  /** Non-refundable policy: % off the base price as the incentive. */
+  nonrefundableDiscountPercent?: number;
 }
 
 // Deployment note: this fork replaces the Manus-managed `/manus-storage/...`
@@ -439,4 +453,10 @@ export interface ListingInput {
   notSuitableFor?: string[];
   /** Maximum number of guests the listing sleeps/hosts; caps the guest selector. */
   maxGuests?: number;
+  /** Cancellation policy (default "flexible"). See shared/bookings.ts. */
+  cancellationPolicy?: CancellationPolicy;
+  /** Flexible policy: free cancellation until this many days before check-in. */
+  freeCancelDays?: number;
+  /** Non-refundable policy: % off the base price as the incentive. */
+  nonrefundableDiscountPercent?: number;
 }
