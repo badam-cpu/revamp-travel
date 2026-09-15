@@ -77,7 +77,7 @@ export function buildWebsiteJsonLd(origin: string): JsonLd {
   return {
     "@context": "https://schema.org",
     "@type": "WebSite",
-    name: "Revamp Travel",
+    name: "Revamp Vacations",
     url: origin,
     potentialAction: {
       "@type": "SearchAction",

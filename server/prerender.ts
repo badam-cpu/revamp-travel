@@ -211,7 +211,7 @@ function renderHome(catalog: PublicListing[], origin: string): string {
   const shown = featured.length > 0 ? featured : catalog.slice(0, 6);
 
   const bodyHtml = `
-<h1>Revamp Travel — Discover Armenia</h1>
+<h1>Revamp Vacations — Discover Armenia</h1>
 <p>Curated places to stay, Armenian restaurants, local tours, and memorable routes across Armenia.</p>
 <section>
 <h2>Browse by category</h2>
@@ -234,7 +234,7 @@ ${regions.map((region) => `<li><a href="${origin}/explore?query=${encodeURICompo
 </section>`;
 
   return renderPageShell({
-    title: "Revamp Travel — Discover Armenia",
+    title: "Revamp Vacations — Discover Armenia",
     description: "Curated places to stay, Armenian restaurants, local tours, and memorable routes across Armenia.",
     canonical: `${origin}/`,
     ogImage: `${origin}${brandAssets.hero}`,
@@ -247,10 +247,10 @@ function renderExplore(catalog: PublicListing[], origin: string, category: Listi
   const filtered = category ? catalog.filter((listing) => listing.type === category) : catalog;
   const label = category ? typeLabels[category] : "All listings";
   const canonicalPath = category === "stay" ? "/explore/stay" : category === "eat" ? "/explore/eat" : category === "tour" ? "/explore/tour" : category === "experience" ? "/explore/experience" : "/explore";
-  const title = category ? `${label} in Armenia | Revamp Travel` : "Explore Armenia | Revamp Travel";
+  const title = category ? `${label} in Armenia | Revamp Vacations` : "Explore Armenia | Revamp Vacations";
   const description = category
-    ? `Browse ${label.toLowerCase()} across Armenia on Revamp Travel.`
-    : "Browse places to stay, restaurants, and tours across Armenia on Revamp Travel.";
+    ? `Browse ${label.toLowerCase()} across Armenia on Revamp Vacations.`
+    : "Browse places to stay, restaurants, and tours across Armenia on Revamp Vacations.";
 
   const bodyHtml = `
 <h1>${escapeHtml(label)}</h1>
@@ -276,18 +276,18 @@ function renderMap(catalog: PublicListing[], origin: string): string {
   }
 
   const bodyHtml = `
-<h1>Map — Revamp Travel</h1>
+<h1>Map — Revamp Vacations</h1>
 <p>Every published listing, grouped by region. The interactive atlas itself needs JavaScript; here's the same listings as a directory.</p>
 ${Array.from(byRegion.entries())
   .map(([region, listings]) => `<section><h2>${escapeHtml(region)}</h2>${listingGridHtml(listings, origin)}</section>`)
   .join("\n")}`;
 
   return renderPageShell({
-    title: "Map — Revamp Travel",
-    description: "Every published Revamp Travel listing across Armenia, browsable by region.",
+    title: "Map — Revamp Vacations",
+    description: "Every published Revamp Vacations listing across Armenia, browsable by region.",
     canonical: `${origin}/map`,
     ogImage: `${origin}${brandAssets.hero}`,
-    jsonLd: [buildCollectionPageJsonLd(origin, "/map", "Map — Revamp Travel", catalog)],
+    jsonLd: [buildCollectionPageJsonLd(origin, "/map", "Map — Revamp Vacations", catalog)],
     bodyHtml,
   });
 }
@@ -295,11 +295,11 @@ ${Array.from(byRegion.entries())
 function renderPlan(origin: string): string {
   const bodyHtml = `
 <h1>AI Trip Planner</h1>
-<p>Generate a day-by-day Armenia itinerary grounded in Revamp Travel's live, published stay/eat/tour/experience catalog. Open <a href="${origin}/plan">the planner</a> to set trip length, starting city, traveler count, pace, budget, and interests.</p>`;
+<p>Generate a day-by-day Armenia itinerary grounded in Revamp Vacations's live, published stay/eat/tour/experience catalog. Open <a href="${origin}/plan">the planner</a> to set trip length, starting city, traveler count, pace, budget, and interests.</p>`;
 
   return renderPageShell({
-    title: "AI Trip Planner | Revamp Travel",
-    description: "Generate a day-by-day Armenia itinerary grounded in Revamp Travel's live, published catalog.",
+    title: "AI Trip Planner | Revamp Vacations",
+    description: "Generate a day-by-day Armenia itinerary grounded in Revamp Vacations's live, published catalog.",
     canonical: `${origin}/plan`,
     ogImage: `${origin}${brandAssets.hero}`,
     bodyHtml,
@@ -307,11 +307,11 @@ function renderPlan(origin: string): string {
 }
 
 function renderAuthPage(origin: string, kind: "login" | "signup"): string {
-  const title = kind === "login" ? "Sign in | Revamp Travel" : "Sign up | Revamp Travel";
+  const title = kind === "login" ? "Sign in | Revamp Vacations" : "Sign up | Revamp Vacations";
   const description =
     kind === "login"
-      ? "Sign in to your Revamp Travel account to book, save places, or manage your listings."
-      : "Create a Revamp Travel account as a traveler or an operator.";
+      ? "Sign in to your Revamp Vacations account to book, save places, or manage your listings."
+      : "Create a Revamp Vacations account as a traveler or an operator.";
   const bodyHtml = `<h1>${kind === "login" ? "Sign in" : "Sign up"}</h1><p>${escapeHtml(description)}</p>`;
 
   return renderPageShell({
@@ -325,7 +325,7 @@ function renderAuthPage(origin: string, kind: "login" | "signup"): string {
 
 function renderListingDetail(listing: PublicListing, catalog: PublicListing[], origin: string): string {
   const canonicalPath = `/listing/${listing.slug}`;
-  const title = `${listing.title} — ${typeLabels[listing.type]} in ${listing.city} | Revamp Travel`;
+  const title = `${listing.title} — ${typeLabels[listing.type]} in ${listing.city} | Revamp Vacations`;
   const categoryPath = listing.type === "stay" ? "/explore/stay" : listing.type === "eat" ? "/explore/eat" : listing.type === "experience" ? "/explore/experience" : "/explore/tour";
   const related = catalog.filter((item) => item.slug !== listing.slug && (item.type === listing.type || item.region === listing.region)).slice(0, 3);
 
@@ -397,7 +397,7 @@ ${
 function renderNotFound(origin: string): string {
   const bodyHtml = `<h1>This path ends here.</h1><p>The page you're looking for doesn't exist or isn't published.</p><a href="${origin}/explore">Return to the marketplace</a>`;
   return renderPageShell({
-    title: "Place not found | Revamp Travel",
+    title: "Place not found | Revamp Vacations",
     description: "This listing or page could not be found.",
     canonical: `${origin}/404`,
     ogImage: `${origin}${brandAssets.hero}`,

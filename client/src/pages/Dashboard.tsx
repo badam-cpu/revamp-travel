@@ -787,8 +787,8 @@ function DashboardContent() {
   const firstName = firstWord ? firstWord.charAt(0).toUpperCase() + firstWord.slice(1) : "";
 
   useDocumentMeta({
-    title: "Dashboard | Revamp Travel",
-    description: "Manage your own stay and tour listings on Revamp Travel.",
+    title: "Dashboard | Revamp Vacations",
+    description: "Manage your own stay and tour listings on Revamp Vacations.",
     canonicalPath: "/dashboard",
     noindex: true,
   });

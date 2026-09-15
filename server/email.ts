@@ -5,7 +5,7 @@
  * config never breaks a booking confirm or cancel:
  *   RESEND_API_KEY — from resend.com
  *   EMAIL_FROM     — a sender on a domain verified in Resend,
- *                    e.g. "Revamp Travel <bookings@revamptravel.example>"
+ *                    e.g. "Revamp Vacations <bookings@revamptravel.example>"
  *
  * Neither var carries a VITE_ prefix — server-only, never in the client bundle.
  */
@@ -39,7 +39,7 @@ function shell(title: string, bodyHtml: string, siteUrl: string): string {
       <h1 style="font-size:21px;line-height:1.25;margin:0 0 14px;">${esc(title)}</h1>
       ${bodyHtml}
       <p style="font-size:12px;color:#8B8478;margin-top:28px;line-height:1.5;border-top:1px solid #eee;padding-top:14px;">
-        <a href="${esc(siteUrl)}" style="color:#8B8478;">Revamp Travel</a> · Armenia's travel marketplace.
+        <a href="${esc(siteUrl)}" style="color:#8B8478;">Revamp Vacations</a> · Armenia's travel marketplace.
       </p>
     </div>`;
 }

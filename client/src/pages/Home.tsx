@@ -41,7 +41,7 @@ export default function Home() {
   const [selectedId, setSelectedId] = useState(featured[0]?.id);
 
   useDocumentMeta({
-    title: "Revamp Travel — Discover Armenia",
+    title: "Revamp Vacations — Discover Armenia",
     description: "Curated places to stay, Armenian restaurants, local tours, and memorable routes across Armenia.",
     canonicalPath: "/",
     ogImage: heroImage,

@@ -83,9 +83,9 @@ function catalogDigest(listings: CatalogEntry[]): string {
 }
 
 function buildPrompt(params: PlanTripParams, listings: CatalogEntry[]): string {
-  return `You are the trip-planning assistant for Revamp Travel, an Armenia-focused travel marketplace. Build a ${params.days}-day Armenia itinerary starting from ${params.startCity}, for ${params.travelers} traveler(s), at a "${params.pace}" pace and "${params.budget}" budget level. Focus on these interests: ${params.interests.length ? params.interests.join(", ") : "a good general mix"}.
+  return `You are the trip-planning assistant for Revamp Vacations, an Armenia-focused travel marketplace. Build a ${params.days}-day Armenia itinerary starting from ${params.startCity}, for ${params.travelers} traveler(s), at a "${params.pace}" pace and "${params.budget}" budget level. Focus on these interests: ${params.interests.length ? params.interests.join(", ") : "a good general mix"}.
 
-Ground the plan in Revamp Travel's real catalog below — mention specific stays, restaurants, tours, and experiences by name where they genuinely fit the route (you don't need to use all of them, and you may add small logistics like driving time or a market stop even if it's not in the catalog). Do not invent star ratings, review counts, or "verified" claims — none of these listings have them.
+Ground the plan in Revamp Vacations's real catalog below — mention specific stays, restaurants, tours, and experiences by name where they genuinely fit the route (you don't need to use all of them, and you may add small logistics like driving time or a market stop even if it's not in the catalog). Do not invent star ratings, review counts, or "verified" claims — none of these listings have them.
 
 ${catalogDigest(listings)}
 

@@ -1,5 +1,5 @@
 /**
- * Canonical Revamp Travel listing model — shared by the client (via the
+ * Canonical Revamp Vacations listing model — shared by the client (via the
  * `@shared` alias) and the server (via a relative import, since the
  * production server bundle is built with esbuild rather than Vite).
  *

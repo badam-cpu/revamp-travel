@@ -24,8 +24,8 @@ export default function Signup() {
   const { signUp, user, loading: authLoading } = useAuth();
   const [, navigate] = useLocation();
   useDocumentMeta({
-    title: "Sign up | Revamp Travel",
-    description: "Create a Revamp Travel account as a traveler or an operator.",
+    title: "Sign up | Revamp Vacations",
+    description: "Create a Revamp Vacations account as a traveler or an operator.",
     canonicalPath: "/signup",
   });
 

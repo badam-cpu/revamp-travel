@@ -16,8 +16,8 @@ export default function Login() {
   const { signIn, resetPassword, user, loading: authLoading } = useAuth();
   const [, navigate] = useLocation();
   useDocumentMeta({
-    title: "Sign in | Revamp Travel",
-    description: "Sign in to your Revamp Travel account to book, save places, or manage your listings.",
+    title: "Sign in | Revamp Vacations",
+    description: "Sign in to your Revamp Vacations account to book, save places, or manage your listings.",
     canonicalPath: "/login",
   });
 

@@ -148,7 +148,7 @@ function AdminReviewContent() {
   const [error, setError] = useState<string | null>(null);
 
   useDocumentMeta({
-    title: "Review queue | Revamp Travel",
+    title: "Review queue | Revamp Vacations",
     description: "Approve or send back pending operator listings.",
     canonicalPath: "/admin",
     noindex: true,

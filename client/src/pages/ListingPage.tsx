@@ -25,7 +25,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   // Hook call must come before any early return (rules of hooks) — this
   // covers both the not-found and found cases with one call.
   useDocumentMeta({
-    title: listing ? `${listing.title} — ${typeLabels[listing.type]} in ${listing.city} | Revamp Travel` : "Place not found | Revamp Travel",
+    title: listing ? `${listing.title} — ${typeLabels[listing.type]} in ${listing.city} | Revamp Vacations` : "Place not found | Revamp Vacations",
     description: listing?.shortDescription ?? "This listing could not be found.",
     canonicalPath: `/listing/${params.slug}`,
     ogImage: listing?.image,

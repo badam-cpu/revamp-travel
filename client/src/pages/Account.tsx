@@ -355,7 +355,7 @@ export default function Account() {
   const search = useSearch();
 
   useDocumentMeta({
-    title: "Your account | Revamp Travel",
+    title: "Your account | Revamp Vacations",
     description: "Your trips, saved places, and profile.",
     canonicalPath: "/account",
     noindex: true,

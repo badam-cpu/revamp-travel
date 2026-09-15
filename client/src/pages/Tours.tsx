@@ -97,7 +97,7 @@ export default function Tours() {
   };
 
   useDocumentMeta({
-    title: "Tours in Armenia | Revamp Travel",
+    title: "Tours in Armenia | Revamp Vacations",
     description: "Browse guided tours across Armenia — hikes, culture walks, and small-group day trips.",
     canonicalPath: "/explore/tour",
     jsonLd: buildCollectionPageJsonLd(window.location.origin, "/explore/tour", "Tours in Armenia", filtered),

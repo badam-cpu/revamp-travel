@@ -27,8 +27,8 @@ export default function Plan() {
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
 
   useDocumentMeta({
-    title: "AI Trip Planner | Revamp Travel",
-    description: "Generate a day-by-day Armenia itinerary grounded in Revamp Travel's live, published catalog.",
+    title: "AI Trip Planner | Revamp Vacations",
+    description: "Generate a day-by-day Armenia itinerary grounded in Revamp Vacations's live, published catalog.",
     canonicalPath: "/plan",
   });
 
@@ -58,7 +58,7 @@ export default function Plan() {
         <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-apricot"><Sparkles className="h-3.5 w-3.5" /> AI trip planner</div>
         <h1 className="mt-3 max-w-2xl font-display text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl">An itinerary built from this catalog.</h1>
         <p className="mt-4 max-w-xl text-base leading-7 text-basalt/60">
-          Tell it how long you have and what you're after — it drafts a day-by-day plan, naming real stays, tables, and tours from the Revamp Travel marketplace where they fit.
+          Tell it how long you have and what you're after — it drafts a day-by-day plan, naming real stays, tables, and tours from the Revamp Vacations marketplace where they fit.
         </p>
 
         <div className="mt-10 grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">

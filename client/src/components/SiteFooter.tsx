@@ -41,7 +41,7 @@ export function SiteFooter() {
       </div>
       <div className="border-t border-white/10">
         <div className="container flex flex-col gap-2 py-5 text-[11px] text-paper/40 sm:flex-row sm:items-center sm:justify-between">
-          <span>© 2026 Revamp Travel.</span>
+          <span>© 2026 Revamp Vacations.</span>
           <span>Two-sided marketplace · online booking and payment are launching soon.</span>
         </div>
       </div>

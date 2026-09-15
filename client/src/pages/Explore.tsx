@@ -47,11 +47,11 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
   const pageLabel = type === "all" ? "All listings" : typeLabels[type as ListingType];
   const canonicalPath = type === "all" ? "/explore" : `/explore/${type}`;
   useDocumentMeta({
-    title: type === "all" ? "Explore Armenia | Revamp Travel" : `${pageLabel} in Armenia | Revamp Travel`,
+    title: type === "all" ? "Explore Armenia | Revamp Vacations" : `${pageLabel} in Armenia | Revamp Vacations`,
     description:
       type === "all"
-        ? "Browse places to stay, restaurants, and tours across Armenia on Revamp Travel."
-        : `Browse ${pageLabel.toLowerCase()} across Armenia on Revamp Travel.`,
+        ? "Browse places to stay, restaurants, and tours across Armenia on Revamp Vacations."
+        : `Browse ${pageLabel.toLowerCase()} across Armenia on Revamp Vacations.`,
     canonicalPath,
     jsonLd: buildCollectionPageJsonLd(window.location.origin, canonicalPath, pageLabel, filtered),
   });

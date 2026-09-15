@@ -17,10 +17,10 @@ export default function MapPage() {
   const filtered = useMemo(() => listings.filter((listing) => type === "all" || listing.type === type), [type, listings]);
 
   useDocumentMeta({
-    title: "Map — Revamp Travel",
-    description: "Every published Revamp Travel listing across Armenia, browsable on an interactive map.",
+    title: "Map — Revamp Vacations",
+    description: "Every published Revamp Vacations listing across Armenia, browsable on an interactive map.",
     canonicalPath: "/map",
-    jsonLd: buildCollectionPageJsonLd(window.location.origin, "/map", "Map — Revamp Travel", listings),
+    jsonLd: buildCollectionPageJsonLd(window.location.origin, "/map", "Map — Revamp Vacations", listings),
   });
 
   return (
