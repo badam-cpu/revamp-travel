@@ -22,6 +22,9 @@ const BASE = (process.env.PAYLINK_BASE_URL || "").replace(/\/+$/, "");
 const PARTNER_ID = process.env.PAYLINK_PARTNER_ID;
 const PARTNER_KEY = process.env.PAYLINK_PARTNER_KEY;
 const REQUEST_TYPE = process.env.PAYLINK_REQUEST_TYPE || "1";
+// PayLink's hosted page language (RegisterRequest.language): en / hy / ru / fr.
+// Defaults to English so the checkout isn't in Armenian; override via env.
+const LANGUAGE = process.env.PAYLINK_LANGUAGE || "en";
 
 // PayLink's integration/test host and production host expose DIFFERENT route
 // schemes (each verified against its own /swagger/v1/swagger.json). Pick the
@@ -155,6 +158,7 @@ export async function registerPayment({
     requestType: REQUEST_TYPE,
     amount,
     currency,
+    language: LANGUAGE,
     isActive: true,
     isFlexible: false,
     allowAnonymous,
