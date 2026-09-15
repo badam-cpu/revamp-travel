@@ -47,6 +47,10 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   /** Starts the Google OAuth flow; returns to `redirectPath` (or home) after. */
   signInWithGoogle: (redirectPath?: string | null) => Promise<void>;
+  /** Creates a throwaway guest session (Supabase anonymous auth) — used so a
+   *  shopper can chat with support without signing up. Requires anonymous
+   *  sign-ins to be enabled in the Supabase project. */
+  signInAnonymously: () => Promise<void>;
   signOut: () => Promise<void>;
   /** Emails a password-reset link that returns the user to /reset-password. */
   resetPassword: (email: string) => Promise<void>;
@@ -149,6 +153,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   }, []);
 
+  const signInAnonymously = useCallback(async () => {
+    const { error } = await supabase.auth.signInAnonymously();
+    if (error) throw error;
+  }, []);
+
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
   }, []);
@@ -181,7 +190,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user: session?.user ?? null, session, profile, loading, signUp, signIn, signInWithGoogle, signOut, resetPassword, updatePassword, updateProfile }}
+      value={{ user: session?.user ?? null, session, profile, loading, signUp, signIn, signInWithGoogle, signInAnonymously, signOut, resetPassword, updatePassword, updateProfile }}
     >
       {children}
     </AuthContext.Provider>

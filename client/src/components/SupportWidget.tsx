@@ -10,7 +10,6 @@
  * thread), so a bare select returns only their conversation.
  */
 import { useEffect, useRef, useState } from "react";
-import { Link } from "wouter";
 import { MessageCircle, Send, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,7 +24,7 @@ interface Msg {
 }
 
 export function SupportWidget() {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, signInAnonymously } = useAuth();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -58,9 +57,12 @@ export function SupportWidget() {
     const body = input.trim();
     if (!body || sending) return;
     setInput("");
+    setLoaded(true); // active conversation — don't let the loader overwrite these
     setMessages((m) => [...m, { id: `local-${Date.now()}`, sender: "traveler", body }]);
     setSending(true);
     try {
+      // No account? Get a silent guest session so shoppers can ask without signing up.
+      if (!user) await signInAnonymously();
       const { reply } = await sendSupportMessage(body);
       setMessages((m) => [...m, { id: `ai-${Date.now()}`, sender: "ai", body: reply }]);
     } catch (err) {
@@ -97,19 +99,11 @@ export function SupportWidget() {
             </button>
           </div>
 
-          {!user ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-              <MessageCircle className="h-8 w-8 text-basalt/25" />
-              <p className="text-sm text-basalt/60">Sign in to chat with the Revamp team — we'll help with bookings, listings, and trip questions.</p>
-              <Link href={`/login?redirect=${encodeURIComponent(window.location.pathname)}`} className="rounded-none bg-apricot px-5 py-2.5 text-sm font-semibold text-white hover:bg-apricot/90">
-                Sign in
-              </Link>
-            </div>
-          ) : (
+          {
             <>
               <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
                 <div className="rounded-2xl rounded-tl-sm bg-chalk px-3.5 py-2.5 text-sm text-basalt/80">
-                  Hi{profile?.displayName ? ` ${profile.displayName.split(" ")[0]}` : ""}! 👋 Ask us anything about stays, tours, experiences, or your bookings.
+                  Hi{profile?.displayName && profile.displayName !== "Guest" ? ` ${profile.displayName.split(" ")[0]}` : ""}! 👋 Ask us anything about stays, tours, experiences, or booking — no account needed.
                 </div>
                 {messages.map((m) => (
                   <div key={m.id} className={cn("flex", m.sender === "traveler" ? "justify-end" : "justify-start")}>
@@ -161,7 +155,7 @@ export function SupportWidget() {
                 </button>
               </form>
             </>
-          )}
+          }
         </div>
       )}
     </>
