@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/PasswordInput";
+import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 import { useAuth, UserRole } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
@@ -104,6 +105,14 @@ export default function Signup() {
         <div className="w-full max-w-md">
           <p className="eyebrow">Join Revamp</p>
           <h1 className="mt-3 font-display text-4xl tracking-[-0.03em]">Create an account.</h1>
+
+          <div className="mt-8">
+            <GoogleSignInButton label="Sign up with Google" />
+            <p className="mt-2 text-center text-xs text-basalt/45">Google sign-up creates a traveler account — operators, use email below.</p>
+            <div className="my-5 flex items-center gap-3 text-xs uppercase tracking-[0.12em] text-basalt/40">
+              <span className="h-px flex-1 bg-basalt/10" /> or <span className="h-px flex-1 bg-basalt/10" />
+            </div>
+          </div>
 
           <div className="mt-6 grid grid-cols-2 gap-3">
             <button

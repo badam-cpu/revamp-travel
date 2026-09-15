@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/PasswordInput";
+import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 
@@ -92,7 +93,14 @@ export default function Login() {
           <p className="eyebrow">Welcome back</p>
           <h1 className="mt-3 font-display text-4xl tracking-[-0.03em]">Sign in.</h1>
 
-          <form onSubmit={submit} className="mt-8 grid gap-4">
+          <div className="mt-8">
+            <GoogleSignInButton redirect={typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("redirect") : null} />
+            <div className="my-5 flex items-center gap-3 text-xs uppercase tracking-[0.12em] text-basalt/40">
+              <span className="h-px flex-1 bg-basalt/10" /> or <span className="h-px flex-1 bg-basalt/10" />
+            </div>
+          </div>
+
+          <form onSubmit={submit} className="grid gap-4">
             <div className="grid gap-1.5">
               <Label htmlFor="email">Email</Label>
               <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />

@@ -45,6 +45,8 @@ interface AuthContextType {
   loading: boolean;
   signUp: (params: SignUpParams) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
+  /** Starts the Google OAuth flow; returns to `redirectPath` (or home) after. */
+  signInWithGoogle: (redirectPath?: string | null) => Promise<void>;
   signOut: () => Promise<void>;
   /** Emails a password-reset link that returns the user to /reset-password. */
   resetPassword: (email: string) => Promise<void>;
@@ -133,6 +135,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   }, []);
 
+  const signInWithGoogle = useCallback(async (redirectPath?: string | null) => {
+    // OAuth is a full-page redirect: Google → back to `redirectTo` (which must
+    // be in Supabase's allowed Redirect URLs). A brand-new Google account has
+    // no role/business_name from a form, so `handle_new_user` defaults it to a
+    // traveler (see supabase/migrations/0012_oauth_profile_names.sql).
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const target = redirectPath && redirectPath.startsWith("/") ? redirectPath : "/";
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${origin}${target}` },
+    });
+    if (error) throw error;
+  }, []);
+
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
   }, []);
@@ -165,7 +181,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user: session?.user ?? null, session, profile, loading, signUp, signIn, signOut, resetPassword, updatePassword, updateProfile }}
+      value={{ user: session?.user ?? null, session, profile, loading, signUp, signIn, signInWithGoogle, signOut, resetPassword, updatePassword, updateProfile }}
     >
       {children}
     </AuthContext.Provider>
