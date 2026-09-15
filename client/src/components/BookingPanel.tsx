@@ -23,6 +23,7 @@ import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
 import { Button } from "@/components/ui/button";
 import { startCheckout, ApiError } from "@/lib/api";
 import { computeBookingAmountCents, computeBookingCharge, describeBookingBasis, describeCancellationPolicy, isBookableType, TAX_PERCENT } from "@shared/bookings";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -31,17 +32,14 @@ const DAY_MS = 86_400_000;
 function addDays(iso: string, days: number): string {
   return new Date(Date.parse(iso + "T00:00:00Z") + days * DAY_MS).toISOString().slice(0, 10);
 }
-function prettyMoney(cents: number, currency: string): string {
-  const major = cents / 100;
-  const n = major % 1 === 0 ? major.toString() : major.toFixed(2);
-  return currency === "USD" ? `$${n}` : `${n} ${currency}`;
-}
 
 export function BookingPanel({ listing }: { listing: LiveListing }) {
   const { user, loading } = useAuth();
+  const { format, currency: displayCurrency } = useCurrency();
   const bookable = isBookableType(listing.type);
   const isStay = listing.type === "stay";
   const maxGuests = listing.maxGuests ?? 8;
+  const priceLabel = listing.price > 0 ? format(Math.round(listing.price * 100)) : "Rate on request";
 
   const [guests, setGuests] = useState(1);
   const [range, setRange] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
@@ -87,8 +85,7 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
   // (same helper the server charges with).
   const cleaningCents = accommodationCents > 0 ? listing.cleaningFeeCents ?? 0 : 0;
   const charge = computeBookingCharge(accommodationCents + cleaningCents);
-  const amountCents = charge.totalCents; // what the guest is actually charged
-  const currency = "USD"; // display currency of the listing price; server charges PAYLINK_CURRENCY
+  const amountCents = charge.totalCents; // what the guest is actually charged (USD, settlement)
   const policyText = describeCancellationPolicy(listing.cancellationPolicy, {
     freeCancelDays: listing.freeCancelDays,
     startDate: selected?.startDate,
@@ -99,7 +96,7 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
     return (
       <div className="brand-notch sticky top-[104px] border border-basalt/12 bg-chalk p-6 shadow-[0_20px_55px_rgba(35,35,33,0.1)]">
         <p>
-          <strong className="font-display text-4xl font-normal">{listing.priceLabel}</strong>{" "}
+          <strong className="font-display text-4xl font-normal">{priceLabel}</strong>{" "}
           {listing.price > 0 && <span className="text-sm text-basalt/50">/ {listing.priceUnit}</span>}
         </p>
         <p className="mt-4 text-sm leading-6 text-basalt/55">
@@ -134,7 +131,7 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
     <div id="book" className="brand-notch sticky top-[104px] border border-basalt/12 bg-chalk p-6 shadow-[0_20px_55px_rgba(35,35,33,0.1)]">
       <div className="flex items-end justify-between gap-4 border-b border-basalt/10 pb-5">
         <p>
-          <strong className="font-display text-4xl font-normal">{listing.priceLabel}</strong>{" "}
+          <strong className="font-display text-4xl font-normal">{priceLabel}</strong>{" "}
           {listing.price > 0 && <span className="text-sm text-basalt/50">/ {listing.priceUnit}</span>}
         </p>
       </div>
@@ -186,21 +183,21 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
         <div className="mt-4 grid gap-1.5 border-t border-basalt/10 pt-4 text-sm">
           <div className="flex items-center justify-between text-basalt/55">
             <span>{describeBookingBasis(listing, { ...selected, guests })}</span>
-            <span>{prettyMoney(accommodationCents, currency)}</span>
+            <span>{format(accommodationCents)}</span>
           </div>
           {cleaningCents > 0 && (
             <div className="flex items-center justify-between text-basalt/55">
               <span>Cleaning fee</span>
-              <span>{prettyMoney(cleaningCents, currency)}</span>
+              <span>{format(cleaningCents)}</span>
             </div>
           )}
           <div className="flex items-center justify-between text-basalt/55">
             <span>Tax ({TAX_PERCENT}%)</span>
-            <span>{prettyMoney(charge.taxCents, currency)}</span>
+            <span>{format(charge.taxCents)}</span>
           </div>
           <div className="flex items-center justify-between border-t border-basalt/10 pt-1.5">
             <span className="font-semibold">Total</span>
-            <strong className="font-display text-xl font-normal">{prettyMoney(charge.totalCents, currency)}</strong>
+            <strong className="font-display text-xl font-normal">{format(charge.totalCents)}</strong>
           </div>
         </div>
       )}
@@ -230,11 +227,11 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
           disabled={!selected || submitting}
           className={cn("mt-5 h-12 w-full rounded-none bg-apricot text-white hover:bg-apricot/90", (!selected || submitting) && "opacity-60")}
         >
-          {submitting ? "Starting checkout…" : selected ? `Request to book · ${prettyMoney(amountCents, currency)}` : "Select dates to book"}
+          {submitting ? "Starting checkout…" : selected ? `Request to book · ${format(amountCents)}` : "Select dates to book"}
         </Button>
       )}
       <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">
-        You'll pay securely via PayLink. Your dates are confirmed once payment clears.
+        You'll pay securely via PayLink. Your dates are confirmed once payment clears.{displayCurrency === "AMD" ? " Charged in USD; AMD shown for reference." : ""}
       </p>
     </div>
   );

@@ -4,10 +4,13 @@ import { Link } from "wouter";
 import { Listing, typeLabels } from "@/data/listings";
 import { cn } from "@/lib/utils";
 import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 export function ListingCard({ listing, large = false, active = false, onHover }: { listing: Listing; large?: boolean; active?: boolean; onHover?: (id?: string) => void }) {
   const { isSaved, toggleSaved } = useSavedPlaces();
+  const { format } = useCurrency();
   const saved = isSaved(listing.id);
+  const priceLabel = listing.price > 0 ? format(Math.round(listing.price * 100)) : "Rate on request";
   return (
     <article
       className={cn("group relative", active && "is-active")}
@@ -51,7 +54,7 @@ export function ListingCard({ listing, large = false, active = false, onHover }:
         </div>
         <div className="mt-4 flex items-center justify-between border-t border-basalt/10 pt-3 text-xs text-basalt/50">
           <span>{listing.tags.slice(0, 2).join(" · ")}</span>
-          <span><strong className="text-sm text-basalt">{listing.priceLabel}</strong>{listing.price > 0 ? ` / ${listing.priceUnit}` : ""}</span>
+          <span><strong className="text-sm text-basalt">{priceLabel}</strong>{listing.price > 0 ? ` / ${listing.priceUnit}` : ""}</span>
         </div>
       </Link>
     </article>

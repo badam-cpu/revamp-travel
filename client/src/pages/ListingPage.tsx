@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { findListing, typeLabels } from "@/data/listings";
 import { useListings } from "@/contexts/ListingsContext";
 import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { cn } from "@/lib/utils";
 import { buildBreadcrumbJsonLd, buildListingJsonLd } from "@shared/seo";
@@ -19,8 +20,10 @@ import { toast } from "sonner";
 export default function ListingPage({ params }: { params: { slug: string } }) {
   const { listings } = useListings();
   const { isSaved, toggleSaved } = useSavedPlaces();
+  const { format } = useCurrency();
   const listing = findListing(params.slug, listings);
   const saved = listing ? isSaved(listing.id) : false;
+  const priceLabel = listing && listing.price > 0 ? format(Math.round(listing.price * 100)) : "Rate on request";
 
   // Hook call must come before any early return (rules of hooks) — this
   // covers both the not-found and found cases with one call.
@@ -126,7 +129,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
               <BookingPanel listing={live} />
             ) : (
               <div className="brand-notch sticky top-[104px] border border-basalt/12 bg-chalk p-6 shadow-[0_20px_55px_rgba(35,35,33,0.1)]">
-                <p><strong className="font-display text-4xl font-normal">{listing.priceLabel}</strong> {listing.price > 0 && <span className="text-sm text-basalt/50">/ {listing.priceUnit}</span>}</p>
+                <p><strong className="font-display text-4xl font-normal">{priceLabel}</strong> {listing.price > 0 && <span className="text-sm text-basalt/50">/ {listing.priceUnit}</span>}</p>
                 <p className="mt-4 text-sm leading-6 text-basalt/55">Booking isn't available in offline preview.</p>
               </div>
             )}
@@ -155,7 +158,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
       </main>
 
       <div className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between border-t border-basalt/10 bg-paper/95 px-4 py-3 shadow-[0_-10px_30px_rgba(35,35,33,0.08)] backdrop-blur lg:hidden">
-        <p><strong className="font-display text-2xl font-normal">{listing.priceLabel}</strong> {listing.price > 0 && <span className="text-xs text-basalt/45">/ {listing.priceUnit}</span>}</p>
+        <p><strong className="font-display text-2xl font-normal">{priceLabel}</strong> {listing.price > 0 && <span className="text-xs text-basalt/45">/ {listing.priceUnit}</span>}</p>
         <Button
           onClick={() => document.getElementById("book")?.scrollIntoView({ behavior: "smooth", block: "center" })}
           className="h-11 rounded-none bg-apricot px-6 text-white hover:bg-apricot/90"

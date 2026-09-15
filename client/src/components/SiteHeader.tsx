@@ -5,6 +5,7 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { BrandMark } from "./BrandMark";
+import { CurrencyToggle } from "./CurrencyToggle";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -58,6 +59,7 @@ export function SiteHeader() {
           ))}
         </nav>
         <div className="hidden items-center gap-2 lg:flex">
+          <CurrencyToggle />
           {user && (
             <Button
               asChild
@@ -149,6 +151,7 @@ export function SiteHeader() {
                     </SheetClose>
                   </div>
                 )}
+                <div className="mt-5"><CurrencyToggle light /></div>
                 <p className="mt-5 text-sm text-paper/60">Stone monasteries, apricot mornings, and the road between.</p>
               </div>
             </div>

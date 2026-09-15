@@ -13,12 +13,15 @@ import { Listing } from "@/data/listings";
 import { factValue } from "@/lib/tourFacts";
 import { cn } from "@/lib/utils";
 import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 export function TourCard({ listing }: { listing: Listing }) {
   const images = listing.gallery.length ? listing.gallery : [listing.image];
   const [index, setIndex] = useState(0);
   const { isSaved, toggleSaved } = useSavedPlaces();
+  const { format } = useCurrency();
   const saved = isSaved(listing.id);
+  const priceLabel = listing.price > 0 ? format(Math.round(listing.price * 100)) : "Rate on request";
 
   const duration = factValue(listing, "Duration");
   const group = factValue(listing, "Group", "Format");
@@ -123,7 +126,7 @@ export function TourCard({ listing }: { listing: Listing }) {
           <div className="flex items-center justify-between pt-1">
             <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-basalt/40">From</span>
             <span className="font-display text-xl text-basalt">
-              {listing.priceLabel} {listing.price > 0 && <span className="font-sans text-xs font-normal text-basalt/50">/ {listing.priceUnit}</span>}
+              {priceLabel} {listing.price > 0 && <span className="font-sans text-xs font-normal text-basalt/50">/ {listing.priceUnit}</span>}
             </span>
           </div>
         </div>

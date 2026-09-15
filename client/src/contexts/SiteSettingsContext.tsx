@@ -21,6 +21,8 @@ export interface SiteSettings {
   announcementEnabled: boolean;
   announcementMessage: string;
   announcementHref: string;
+  /** AMD per 1 USD, admin-set. 0 = AMD display disabled (USD only). */
+  usdToAmdRate: number;
 }
 
 export const EMPTY_SITE_SETTINGS: SiteSettings = {
@@ -31,10 +33,11 @@ export const EMPTY_SITE_SETTINGS: SiteSettings = {
   announcementEnabled: false,
   announcementMessage: "",
   announcementHref: "",
+  usdToAmdRate: 0,
 };
 
 export const SITE_SETTINGS_COLUMNS =
-  "hero_image, hero_headline, hero_subcopy, featured_slugs, announcement_enabled, announcement_message, announcement_href";
+  "hero_image, hero_headline, hero_subcopy, featured_slugs, announcement_enabled, announcement_message, announcement_href, usd_to_amd_rate";
 
 interface SiteSettingsRow {
   hero_image: string | null;
@@ -44,6 +47,7 @@ interface SiteSettingsRow {
   announcement_enabled: boolean | null;
   announcement_message: string | null;
   announcement_href: string | null;
+  usd_to_amd_rate: number | null;
 }
 
 export function mapSiteSettingsRow(row: SiteSettingsRow): SiteSettings {
@@ -55,6 +59,7 @@ export function mapSiteSettingsRow(row: SiteSettingsRow): SiteSettings {
     announcementEnabled: row.announcement_enabled ?? false,
     announcementMessage: row.announcement_message ?? "",
     announcementHref: row.announcement_href ?? "",
+    usdToAmdRate: Number(row.usd_to_amd_rate) || 0,
   };
 }
 

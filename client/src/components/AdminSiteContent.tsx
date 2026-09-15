@@ -30,6 +30,7 @@ export function AdminSiteContent() {
   const [annEnabled, setAnnEnabled] = useState(false);
   const [annMessage, setAnnMessage] = useState("");
   const [annHref, setAnnHref] = useState("");
+  const [rate, setRate] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,6 +43,7 @@ export function AdminSiteContent() {
     setAnnEnabled(settings.announcementEnabled);
     setAnnMessage(settings.announcementMessage);
     setAnnHref(settings.announcementHref);
+    setRate(settings.usdToAmdRate ? String(settings.usdToAmdRate) : "");
     setHydrated(true);
   }, [loading, hydrated, settings]);
 
@@ -65,6 +67,7 @@ export function AdminSiteContent() {
           announcement_enabled: annEnabled,
           announcement_message: annMessage.trim(),
           announcement_href: annHref.trim(),
+          usd_to_amd_rate: Number(rate) || 0,
         })
         .eq("id", 1);
       if (err) throw new Error(err.message);
@@ -145,6 +148,14 @@ export function AdminSiteContent() {
             <Label htmlFor="annHref" className="text-sm font-semibold">Link <span className="font-normal text-basalt/45">(optional — e.g. /explore/experience)</span></Label>
             <Input id="annHref" value={annHref} onChange={(e) => setAnnHref(e.target.value)} placeholder="/explore/experience" className="h-11 rounded-none" />
           </div>
+        </div>
+
+        {/* Display currency */}
+        <div className="grid gap-2 border border-basalt/10 bg-paper p-5">
+          <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Display currency</p>
+          <p className="text-xs text-basalt/50">Prices settle in USD; this rate powers the AMD/USD switcher (display only). Set 0 to hide AMD.</p>
+          <Label htmlFor="usdToAmd" className="text-sm font-semibold">AMD per 1 USD</Label>
+          <Input id="usdToAmd" type="number" min={0} step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="e.g. 387" className="h-11 w-48 rounded-none" />
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}

@@ -9,6 +9,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { ListingsProvider } from "./contexts/ListingsContext";
 import { SavedPlacesProvider } from "./contexts/SavedPlacesContext";
 import { SiteSettingsProvider } from "./contexts/SiteSettingsContext";
+import { CurrencyProvider } from "./contexts/CurrencyContext";
 import { AnnouncementBanner } from "./components/AnnouncementBanner";
 import { SupportWidget } from "./components/SupportWidget";
 import Home from "./pages/Home";
@@ -57,12 +58,14 @@ function App() {
           <ListingsProvider>
             <SavedPlacesProvider>
               <SiteSettingsProvider>
-                <TooltipProvider>
-                  <Toaster />
-                  <AnnouncementBanner />
-                  <Router />
-                  <SupportWidget />
-                </TooltipProvider>
+                <CurrencyProvider>
+                  <TooltipProvider>
+                    <Toaster />
+                    <AnnouncementBanner />
+                    <Router />
+                    <SupportWidget />
+                  </TooltipProvider>
+                </CurrencyProvider>
               </SiteSettingsProvider>
             </SavedPlacesProvider>
           </ListingsProvider>
