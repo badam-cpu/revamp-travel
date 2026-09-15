@@ -1,0 +1,169 @@
+/**
+ * Floating "chat with Revamp" support widget (bottom-right, site-wide). All
+ * traveler messages go to a central Revamp support thread answered first by the
+ * AI (POST /api/support-chat); admins take over from the /admin inbox. This is
+ * deliberately NOT traveler↔operator messaging.
+ *
+ * Shown to travelers and signed-out visitors; hidden for operators/admins (they
+ * have their own dashboards, and admins reply from the inbox). Messages load
+ * under the traveler's own RLS (support_messages read policy scopes to their
+ * thread), so a bare select returns only their conversation.
+ */
+import { useEffect, useRef, useState } from "react";
+import { Link } from "wouter";
+import { MessageCircle, Send, X } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
+import { sendSupportMessage, ApiError } from "@/lib/api";
+import { cn } from "@/lib/utils";
+
+interface Msg {
+  id: string;
+  sender: "traveler" | "ai" | "support";
+  body: string;
+  created_at?: string;
+}
+
+export function SupportWidget() {
+  const { user, profile, loading } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [messages, setMessages] = useState<Msg[]>([]);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Load the traveler's own thread when the panel first opens.
+  useEffect(() => {
+    if (!open || !user || loaded) return;
+    supabase
+      .from("support_messages")
+      .select("id, sender, body, created_at")
+      .order("created_at", { ascending: true })
+      .then(({ data }) => {
+        setMessages((data ?? []) as Msg[]);
+        setLoaded(true);
+      });
+  }, [open, user, loaded]);
+
+  // Keep the view pinned to the latest message.
+  useEffect(() => {
+    if (open) scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages, open]);
+
+  // Don't show to operators/admins.
+  if (loading || profile?.role === "operator" || profile?.role === "admin") return null;
+
+  const send = async () => {
+    const body = input.trim();
+    if (!body || sending) return;
+    setInput("");
+    setMessages((m) => [...m, { id: `local-${Date.now()}`, sender: "traveler", body }]);
+    setSending(true);
+    try {
+      const { reply } = await sendSupportMessage(body);
+      setMessages((m) => [...m, { id: `ai-${Date.now()}`, sender: "ai", body: reply }]);
+    } catch (err) {
+      setMessages((m) => [...m, { id: `err-${Date.now()}`, sender: "ai", body: err instanceof ApiError ? err.message : "Something went wrong — please try again." }]);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <>
+      {/* Launcher */}
+      {!open && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label="Chat with Revamp support"
+          className="fixed bottom-4 right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-apricot text-white shadow-[0_10px_30px_rgba(241,88,34,0.4)] transition-transform hover:scale-105"
+        >
+          <MessageCircle className="h-6 w-6" />
+        </button>
+      )}
+
+      {/* Panel */}
+      {open && (
+        <div className="fixed bottom-4 right-4 z-50 flex h-[min(560px,80vh)] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-basalt/10 bg-paper shadow-[0_24px_70px_rgba(35,35,33,0.28)]">
+          <div className="flex items-center justify-between bg-basalt px-4 py-3 text-white">
+            <div>
+              <p className="text-sm font-bold">Revamp support</p>
+              <p className="text-[11px] text-white/60">Usually replies in a moment</p>
+            </div>
+            <button type="button" onClick={() => setOpen(false)} aria-label="Close chat" className="grid h-8 w-8 place-items-center rounded-full hover:bg-white/10">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          {!user ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+              <MessageCircle className="h-8 w-8 text-basalt/25" />
+              <p className="text-sm text-basalt/60">Sign in to chat with the Revamp team — we'll help with bookings, listings, and trip questions.</p>
+              <Link href={`/login?redirect=${encodeURIComponent(window.location.pathname)}`} className="rounded-none bg-apricot px-5 py-2.5 text-sm font-semibold text-white hover:bg-apricot/90">
+                Sign in
+              </Link>
+            </div>
+          ) : (
+            <>
+              <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
+                <div className="rounded-2xl rounded-tl-sm bg-chalk px-3.5 py-2.5 text-sm text-basalt/80">
+                  Hi{profile?.displayName ? ` ${profile.displayName.split(" ")[0]}` : ""}! 👋 Ask us anything about stays, tours, experiences, or your bookings.
+                </div>
+                {messages.map((m) => (
+                  <div key={m.id} className={cn("flex", m.sender === "traveler" ? "justify-end" : "justify-start")}>
+                    <div
+                      className={cn(
+                        "max-w-[82%] whitespace-pre-wrap px-3.5 py-2.5 text-sm",
+                        m.sender === "traveler"
+                          ? "rounded-2xl rounded-br-sm bg-apricot text-white"
+                          : m.sender === "support"
+                            ? "rounded-2xl rounded-tl-sm border border-sevan/30 bg-sevan/10 text-basalt"
+                            : "rounded-2xl rounded-tl-sm bg-chalk text-basalt/85",
+                      )}
+                    >
+                      {m.sender === "support" && <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-[0.1em] text-sevan">Revamp team</span>}
+                      {m.body}
+                    </div>
+                  </div>
+                ))}
+                {sending && <div className="flex justify-start"><div className="rounded-2xl rounded-tl-sm bg-chalk px-3.5 py-2.5 text-sm text-basalt/40">…</div></div>}
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  send();
+                }}
+                className="flex items-end gap-2 border-t border-basalt/10 p-3"
+              >
+                <textarea
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      send();
+                    }
+                  }}
+                  rows={1}
+                  placeholder="Type a message…"
+                  className="max-h-28 flex-1 resize-none rounded-xl border border-basalt/15 bg-paper px-3 py-2 text-sm outline-none focus:border-apricot"
+                />
+                <button
+                  type="submit"
+                  disabled={!input.trim() || sending}
+                  aria-label="Send"
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-apricot text-white transition-colors hover:bg-apricot/90 disabled:opacity-40"
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              </form>
+            </>
+          )}
+        </div>
+      )}
+    </>
+  );
+}

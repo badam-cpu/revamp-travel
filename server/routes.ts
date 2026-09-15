@@ -15,6 +15,7 @@ import { listPublishedForPlanner, verifyUser, userClient } from "./supabase.js";
 import { supabaseAdmin, adminConfigured } from "./supabaseAdmin.js";
 import { paylinkConfigured, registerPayment } from "./paylink.js";
 import { reconcileUserBookings } from "./bookings.js";
+import { generateSupportReply, type SupportTurn } from "./support.js";
 import { sendCancellation, type BookingEmailInfo } from "./email.js";
 import { computeBookingAmountCents, computeRefundCents, isBookableType, DEFAULT_CURRENCY } from "../shared/bookings.js";
 import { planTrip, PlannerError } from "./planner.js";
@@ -52,6 +53,10 @@ const startCheckoutSchema = z.object({
 
 const cancelBookingSchema = z.object({
   bookingId: z.string().uuid(),
+});
+
+const supportChatSchema = z.object({
+  message: z.string().trim().min(1).max(2000),
 });
 
 function issuesToMessage(err: z.ZodError): string {
@@ -410,5 +415,56 @@ export function registerApiRoutes(app: Express) {
     }
 
     res.json({ cancelled: true, refundOwed, refundCents });
+  });
+
+  // POST /api/support-chat — the traveler's message to Revamp support. Stores
+  // it in their central thread, has the AI answer first (grounded in the
+  // catalog + booking rules), stores the reply, and routes the thread to a
+  // human when the AI flags it. Messages are written with the service role so
+  // an 'ai' message can't be forged; the traveler only ever writes 'traveler'.
+  app.post("/api/support-chat", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in to chat with support." });
+
+    const parsed = supportChatSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Support chat isn't available right now." });
+
+    try {
+      // One thread per traveler — get it or create it.
+      let { data: thread } = await admin.from("support_threads").select("id, status").eq("traveler_id", userId).maybeSingle();
+      if (!thread) {
+        const { data: created, error: cErr } = await admin.from("support_threads").insert({ traveler_id: userId }).select("id, status").single();
+        if (cErr || !created) throw new Error(cErr?.message || "thread create failed");
+        thread = created;
+      }
+
+      await admin.from("support_messages").insert({ thread_id: thread.id, sender: "traveler", body: parsed.data.message });
+
+      const { data: hist } = await admin
+        .from("support_messages")
+        .select("sender, body")
+        .eq("thread_id", thread.id)
+        .order("created_at", { ascending: true })
+        .limit(30);
+
+      const listings = await listPublishedForPlanner();
+      const { reply, needsHuman } = await generateSupportReply((hist ?? []) as SupportTurn[], listings);
+
+      await admin.from("support_messages").insert({ thread_id: thread.id, sender: "ai", body: reply });
+      await admin
+        .from("support_threads")
+        .update({ status: needsHuman || thread.status === "needs_human" ? "needs_human" : "open", last_message_at: new Date().toISOString() })
+        .eq("id", thread.id);
+
+      res.json({ reply, needsHuman });
+    } catch (err) {
+      console.error("[support-chat]", err);
+      res.status(500).json({ error: "Couldn't send your message. Please try again." });
+    }
   });
 }

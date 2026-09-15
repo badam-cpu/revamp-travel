@@ -144,6 +144,21 @@ export async function cancelBooking(bookingId: string): Promise<{ cancelled: boo
   });
 }
 
+/**
+ * Sends a traveler's message to Revamp support. The server stores it, has the
+ * AI answer first (routing to a human when needed), and returns the reply.
+ */
+export async function sendSupportMessage(message: string): Promise<{ reply: string; needsHuman: boolean }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in to chat with support.");
+  return request<{ reply: string; needsHuman: boolean }>("/api/support-chat", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ message }),
+  });
+}
+
 export interface IcalSyncResult {
   count: number;
   syncedAt: string;
