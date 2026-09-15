@@ -22,7 +22,7 @@ import type { LiveListing, BlockedRange } from "@/contexts/ListingsContext";
 import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
 import { Button } from "@/components/ui/button";
 import { startCheckout, ApiError } from "@/lib/api";
-import { computeBookingAmountCents, describeBookingBasis, describeCancellationPolicy, isBookableType } from "@shared/bookings";
+import { computeBookingAmountCents, computeBookingCharge, describeBookingBasis, describeCancellationPolicy, isBookableType, TURNOVER_TAX_PERCENT } from "@shared/bookings";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -72,7 +72,7 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
     return null;
   }, [isStay, range]);
 
-  const amountCents = selected
+  const baseCents = selected
     ? computeBookingAmountCents(
         {
           priceCents: Math.round(listing.price * 100),
@@ -83,6 +83,9 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
         { ...selected, guests },
       )
     : 0;
+  // Guest pays base + a 10% turnover tax added on top (same helper the server charges with).
+  const charge = computeBookingCharge(baseCents);
+  const amountCents = charge.totalCents; // what the guest is actually charged
   const currency = "USD"; // display currency of the listing price; server charges PAYLINK_CURRENCY
   const policyText = describeCancellationPolicy(listing.cancellationPolicy, {
     freeCancelDays: listing.freeCancelDays,
@@ -176,11 +179,21 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
         <p className="mt-1.5 text-xs text-basalt/45">Up to {maxGuests} {maxGuests === 1 ? "guest" : "guests"}.</p>
       </div>
 
-      {/* Price preview */}
-      {selected && amountCents > 0 && (
-        <div className="mt-4 flex items-center justify-between border-t border-basalt/10 pt-4 text-sm">
-          <span className="text-basalt/55">{describeBookingBasis(listing, { ...selected, guests })}</span>
-          <strong className="font-display text-xl font-normal">{prettyMoney(amountCents, currency)}</strong>
+      {/* Price breakdown — base + turnover tax added on top */}
+      {selected && charge.baseCents > 0 && (
+        <div className="mt-4 grid gap-1.5 border-t border-basalt/10 pt-4 text-sm">
+          <div className="flex items-center justify-between text-basalt/55">
+            <span>{describeBookingBasis(listing, { ...selected, guests })}</span>
+            <span>{prettyMoney(charge.baseCents, currency)}</span>
+          </div>
+          <div className="flex items-center justify-between text-basalt/55">
+            <span>Turnover tax ({TURNOVER_TAX_PERCENT}%)</span>
+            <span>{prettyMoney(charge.taxCents, currency)}</span>
+          </div>
+          <div className="flex items-center justify-between border-t border-basalt/10 pt-1.5">
+            <span className="font-semibold">Total</span>
+            <strong className="font-display text-xl font-normal">{prettyMoney(charge.totalCents, currency)}</strong>
+          </div>
         </div>
       )}
 

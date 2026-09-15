@@ -14,7 +14,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkPayment } from "./paylink.js";
 import { sendTravelerConfirmation, sendOperatorNewBooking, type BookingEmailInfo } from "./email.js";
-import { payoutDueDate, splitPayout } from "../shared/payouts.js";
+import { payoutDueDate } from "../shared/payouts.js";
+import { computeBookingCharge } from "../shared/bookings.js";
 import type { ListingType } from "../shared/listings.js";
 
 export interface BookingRow {
@@ -26,6 +27,7 @@ export interface BookingRow {
   end_date: string;
   guests: number;
   amount_cents: number;
+  base_cents: number | null;
   currency: string;
   paylink_request_id: string | null;
   paylink_order_id: string | null;
@@ -33,7 +35,7 @@ export interface BookingRow {
 }
 
 // Columns every confirm/reconcile query needs (row detail for the emails too).
-const BOOKING_COLS = "id, listing_id, traveler_id, status, start_date, end_date, guests, amount_cents, currency, paylink_request_id, paylink_order_id, created_at";
+const BOOKING_COLS = "id, listing_id, traveler_id, status, start_date, end_date, guests, amount_cents, base_cents, currency, paylink_request_id, paylink_order_id, created_at";
 
 /**
  * Fire booking-confirmed emails (traveler + operator). Best-effort: any failure
@@ -49,9 +51,10 @@ async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promi
   if (!listing) return;
 
   // Create the operator payout (idempotent — one per booking). Revamp is
-  // merchant of record; this records what Revamp owes the operator and when.
-  const feePercent = Number(process.env.PLATFORM_FEE_PERCENT) || 0;
-  const { feeCents, netCents } = splitPayout(row.amount_cents, feePercent);
+  // merchant of record; the payout is on the pre-tax BASE (tax is a pass-through
+  // Revamp remits, never the operator's money), net of the platform commission.
+  const base = row.base_cents ?? row.amount_cents;
+  const { commissionCents, operatorNetCents } = computeBookingCharge(base);
   await admin.from("payouts").upsert(
     {
       booking_id: row.id,
@@ -59,9 +62,9 @@ async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promi
       listing_id: row.listing_id,
       listing_title: listing.title,
       listing_type: listing.type,
-      gross_cents: row.amount_cents,
-      fee_cents: feeCents,
-      net_cents: netCents,
+      gross_cents: base,
+      fee_cents: commissionCents,
+      net_cents: operatorNetCents,
       currency: row.currency,
       due_date: payoutDueDate(listing.type as ListingType, row.start_date),
       status: "pending",

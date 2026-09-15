@@ -17,7 +17,7 @@ import { paylinkConfigured, registerPayment } from "./paylink.js";
 import { reconcileUserBookings } from "./bookings.js";
 import { generateSupportReply, type SupportTurn } from "./support.js";
 import { sendCancellation, type BookingEmailInfo } from "./email.js";
-import { computeBookingAmountCents, computeRefundCents, isBookableType, DEFAULT_CURRENCY } from "../shared/bookings.js";
+import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, DEFAULT_CURRENCY } from "../shared/bookings.js";
 import { planTrip, PlannerError } from "./planner.js";
 import { fetchPrefill, PrefillError } from "./urlPrefill.js";
 import { fetchIcalBlockedRanges } from "./ical.js";
@@ -226,8 +226,9 @@ export function registerApiRoutes(app: Express) {
     if (listing.status !== "published") return res.status(400).json({ error: "This listing isn't open for booking." });
     if (!isBookableType(listing.type)) return res.status(400).json({ error: "This listing can't be booked online." });
 
-    // Amount is discount-aware: a non-refundable listing is charged at its discount.
-    const amountCents = computeBookingAmountCents(
+    // Base is discount-aware (non-refundable listing charged at its discount);
+    // the guest is then charged base + a 10% turnover tax added on top.
+    const baseCents = computeBookingAmountCents(
       {
         priceCents: listing.price_cents,
         priceUnit: listing.price_unit,
@@ -236,7 +237,8 @@ export function registerApiRoutes(app: Express) {
       },
       { startDate, endDate, guests },
     );
-    if (amountCents <= 0) return res.status(400).json({ error: "This listing is rate-on-request — contact the operator to book." });
+    if (baseCents <= 0) return res.status(400).json({ error: "This listing is rate-on-request — contact the operator to book." });
+    const charge = computeBookingCharge(baseCents); // base + tax = total the guest pays
 
     // Availability: reject if the dates clash with the listing's iCal blocked
     // ranges, an existing confirmed booking, or a live (recent) pending hold.
@@ -265,8 +267,8 @@ export function registerApiRoutes(app: Express) {
     const currency = process.env.PAYLINK_CURRENCY || DEFAULT_CURRENCY;
     try {
       const pay = await registerPayment({
-        // PayLink's `amount` is in major currency units; amount_cents is minor.
-        amount: Math.round(amountCents) / 100,
+        // PayLink's `amount` is in major currency units; charge the tax-inclusive total.
+        amount: charge.totalCents / 100,
         currency,
         returnUrl: `${site}/account?checkout=return`,
         info: `Revamp booking · ${listing.title}`,
@@ -281,7 +283,9 @@ export function registerApiRoutes(app: Express) {
         start_date: startDate,
         end_date: endDate,
         guests,
-        amount_cents: amountCents,
+        amount_cents: charge.totalCents,
+        base_cents: charge.baseCents,
+        tax_cents: charge.taxCents,
         currency,
         status: "pending_payment",
         provider: "paylink",

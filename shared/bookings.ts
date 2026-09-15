@@ -19,6 +19,39 @@ export const DEFAULT_FREE_CANCEL_DAYS = 7;
 export const DEFAULT_NONREFUNDABLE_DISCOUNT = 5;
 
 /**
+ * Marketplace economics (single source of truth for client preview + server
+ * charge, so they always agree — change here, not in env).
+ *   • Commission: Revamp's cut, % of the base booking amount (Revamp revenue).
+ *   • Turnover tax: added ON TOP of the base and paid by the guest; Revamp
+ *     remits it (pass-through, not revenue), computed on the full base amount.
+ * Guest charge = base + tax. Operator payout = base − commission.
+ */
+export const PLATFORM_COMMISSION_PERCENT = 12.5;
+export const TURNOVER_TAX_PERCENT = 10;
+
+export interface BookingCharge {
+  baseCents: number; // pre-tax booking amount (after any non-refundable discount)
+  taxCents: number; // turnover tax added on top, guest-paid, Revamp remits
+  totalCents: number; // what the guest is actually charged (base + tax)
+  commissionCents: number; // Revamp's cut of the base
+  operatorNetCents: number; // what the operator is paid (base − commission)
+}
+
+/** Full money breakdown for a base booking amount. */
+export function computeBookingCharge(baseCents: number): BookingCharge {
+  const base = Math.max(0, Math.round(baseCents));
+  const taxCents = Math.round((base * TURNOVER_TAX_PERCENT) / 100);
+  const commissionCents = Math.round((base * PLATFORM_COMMISSION_PERCENT) / 100);
+  return {
+    baseCents: base,
+    taxCents,
+    totalCents: base + taxCents,
+    commissionCents,
+    operatorNetCents: Math.max(0, base - commissionCents),
+  };
+}
+
+/**
  * Booking lifecycle. Only `confirmed` blocks availability; `pending_payment`
  * is a soft hold during checkout; the rest are terminal/non-blocking. Kept in
  * sync with the `booking_status` enum in
