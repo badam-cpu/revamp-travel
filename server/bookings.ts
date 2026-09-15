@@ -13,15 +13,61 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkPayment } from "./paylink.js";
+import { sendTravelerConfirmation, sendOperatorNewBooking, type BookingEmailInfo } from "./email.js";
 
 export interface BookingRow {
   id: string;
   listing_id: string;
   traveler_id: string;
   status: string;
+  start_date: string;
+  end_date: string;
+  guests: number;
+  amount_cents: number;
+  currency: string;
   paylink_request_id: string | null;
   paylink_order_id: string | null;
   created_at: string;
+}
+
+// Columns every confirm/reconcile query needs (row detail for the emails too).
+const BOOKING_COLS = "id, listing_id, traveler_id, status, start_date, end_date, guests, amount_cents, currency, paylink_request_id, paylink_order_id, created_at";
+
+/**
+ * Fire booking-confirmed emails (traveler + operator). Best-effort: any failure
+ * is logged and swallowed so it never affects the confirmation itself. Needs
+ * the service-role client to read auth.users emails via the admin API.
+ */
+async function sendConfirmationEmails(admin: SupabaseClient, row: BookingRow): Promise<void> {
+  const { data: listing } = await admin
+    .from("listings")
+    .select("title, city, region, slug, operator_id")
+    .eq("id", row.listing_id)
+    .maybeSingle();
+  if (!listing) return;
+
+  const info: BookingEmailInfo = {
+    listingTitle: listing.title,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    guests: row.guests,
+    amountCents: row.amount_cents,
+    currency: row.currency,
+    city: listing.city,
+    region: listing.region,
+    slug: listing.slug,
+  };
+
+  const [{ data: traveler }, { data: operator }, { data: travelerProfile }] = await Promise.all([
+    admin.auth.admin.getUserById(row.traveler_id),
+    admin.auth.admin.getUserById(listing.operator_id),
+    admin.from("profiles").select("display_name").eq("id", row.traveler_id).maybeSingle(),
+  ]);
+
+  const tasks: Promise<unknown>[] = [];
+  if (traveler?.user?.email) tasks.push(sendTravelerConfirmation(traveler.user.email, info));
+  if (operator?.user?.email) tasks.push(sendOperatorNewBooking(operator.user.email, info, travelerProfile?.display_name ?? "A traveler"));
+  await Promise.allSettled(tasks);
 }
 
 export interface ConfirmResult {
@@ -81,8 +127,14 @@ export async function confirmBookingRow(admin: SupabaseClient, row: BookingRow):
   }
 
   if (!data || data.length === 0) {
-    // Someone else confirmed it first — treat as success.
+    // Someone else confirmed it first — treat as success (they sent the emails).
     return { granted: true, status: "confirmed", already: true };
+  }
+  // Newly confirmed by us → notify both sides. Never let email failure affect the grant.
+  try {
+    await sendConfirmationEmails(admin, row);
+  } catch (err) {
+    console.error("[bookings] confirmation email failed", row.id, err);
   }
   return { granted: true, status: "confirmed" };
 }
@@ -94,7 +146,7 @@ export async function confirmBookingRow(admin: SupabaseClient, row: BookingRow):
 export async function reconcileUserBookings(admin: SupabaseClient, userId: string): Promise<{ confirmed: number; checked: number }> {
   const { data, error } = await admin
     .from("bookings")
-    .select("id, listing_id, traveler_id, status, paylink_request_id, paylink_order_id, created_at")
+    .select(BOOKING_COLS)
     .eq("traveler_id", userId)
     .eq("status", "pending_payment")
     .order("created_at", { ascending: false })
@@ -121,7 +173,7 @@ export async function reconcileAllPendingBookings(
   const cutoff = new Date(Date.now() - minAgeMinutes * 60_000).toISOString();
   const { data, error } = await admin
     .from("bookings")
-    .select("id, listing_id, traveler_id, status, paylink_request_id, paylink_order_id, created_at")
+    .select(BOOKING_COLS)
     .eq("status", "pending_payment")
     .lt("created_at", cutoff)
     .order("created_at", { ascending: true })

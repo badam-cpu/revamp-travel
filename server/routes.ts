@@ -15,6 +15,7 @@ import { listPublishedForPlanner, verifyUser, userClient } from "./supabase.js";
 import { supabaseAdmin, adminConfigured } from "./supabaseAdmin.js";
 import { paylinkConfigured, registerPayment } from "./paylink.js";
 import { reconcileUserBookings } from "./bookings.js";
+import { sendCancellation, type BookingEmailInfo } from "./email.js";
 import { computeBookingAmountCents, isBookableType, DEFAULT_CURRENCY } from "../shared/bookings.js";
 import { planTrip, PlannerError } from "./planner.js";
 import { fetchPrefill, PrefillError } from "./urlPrefill.js";
@@ -47,6 +48,10 @@ const startCheckoutSchema = z.object({
   startDate: isoDate,
   endDate: isoDate,
   guests: z.number().int().min(1).max(50),
+});
+
+const cancelBookingSchema = z.object({
+  bookingId: z.string().uuid(),
 });
 
 function issuesToMessage(err: z.ZodError): string {
@@ -298,5 +303,89 @@ export function registerApiRoutes(app: Express) {
       console.error("[confirm-checkout]", err);
       res.status(500).json({ error: "Couldn't confirm your payment." });
     }
+  });
+
+  // POST /api/cancel-booking — cancel a booking. Allowed for the traveler who
+  // made it, the operator whose listing it's on, or an admin. Flips the status
+  // to `cancelled` (which releases the dates — the exclusion constraint is
+  // confirmed-only) and emails the counterparty. PayLink has no refund API, so
+  // a paid booking's refund is flagged as manual (refundOwed), not auto-issued.
+  app.post("/api/cancel-booking", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in to cancel a booking." });
+
+    const parsed = cancelBookingSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Cancellation isn't available right now." });
+
+    const { data: booking } = await admin
+      .from("bookings")
+      .select("id, listing_id, traveler_id, status, start_date, end_date, guests, amount_cents, currency, paid_at")
+      .eq("id", parsed.data.bookingId)
+      .maybeSingle();
+    if (!booking) return res.status(404).json({ error: "Booking not found." });
+
+    const { data: listing } = await admin
+      .from("listings")
+      .select("title, city, region, slug, operator_id")
+      .eq("id", booking.listing_id)
+      .maybeSingle();
+
+    // Authorize: traveler who booked, the listing's operator, or an admin.
+    const { data: profile } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    const isAdmin = profile?.role === "admin";
+    const isTraveler = userId === booking.traveler_id;
+    const isOperator = !!listing && userId === listing.operator_id;
+    if (!isTraveler && !isOperator && !isAdmin) return res.status(403).json({ error: "You can't cancel this booking." });
+
+    if (booking.status !== "pending_payment" && booking.status !== "confirmed") {
+      return res.status(400).json({ error: `This booking is already ${booking.status.replace(/_/g, " ")}.` });
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    if (booking.start_date < today) return res.status(400).json({ error: "This trip has already started or passed." });
+
+    const refundOwed = booking.status === "confirmed" && !!booking.paid_at;
+
+    const { data: upd, error: updErr } = await admin
+      .from("bookings")
+      .update({ status: "cancelled" })
+      .eq("id", booking.id)
+      .in("status", ["pending_payment", "confirmed"])
+      .select("id");
+    if (updErr || !upd || upd.length === 0) {
+      return res.status(409).json({ error: "Couldn't cancel — it may have already changed." });
+    }
+
+    // Notify the counterparty (best-effort). Traveler cancels → tell operator; operator/admin cancels → tell traveler.
+    if (listing) {
+      const info: BookingEmailInfo = {
+        listingTitle: listing.title,
+        startDate: booking.start_date,
+        endDate: booking.end_date,
+        guests: booking.guests,
+        amountCents: booking.amount_cents,
+        currency: booking.currency,
+        city: listing.city,
+        region: listing.region,
+        slug: listing.slug,
+      };
+      try {
+        if (isTraveler) {
+          const { data: op } = await admin.auth.admin.getUserById(listing.operator_id);
+          if (op?.user?.email) await sendCancellation(op.user.email, info, { toRole: "operator", refundOwed });
+        } else {
+          const { data: tr } = await admin.auth.admin.getUserById(booking.traveler_id);
+          if (tr?.user?.email) await sendCancellation(tr.user.email, info, { toRole: "traveler", refundOwed });
+        }
+      } catch (err) {
+        console.error("[cancel-booking] email failed", err);
+      }
+    }
+
+    res.json({ cancelled: true, refundOwed });
   });
 }

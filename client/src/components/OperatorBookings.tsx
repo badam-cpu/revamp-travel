@@ -13,7 +13,9 @@ import { useEffect, useState } from "react";
 import { CalendarCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { cancelBooking } from "@/lib/api";
 import type { BookingStatus } from "@shared/bookings";
+import { toast } from "sonner";
 
 interface IncomingBooking {
   id: string;
@@ -49,6 +51,24 @@ function fmtMoney(cents: number, currency: string): string {
 export function OperatorBookings() {
   const { user } = useAuth();
   const [rows, setRows] = useState<IncomingBooking[] | null>(null);
+  const [cancelling, setCancelling] = useState<string | null>(null);
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const canCancel = (b: IncomingBooking) => (b.status === "pending_payment" || b.status === "confirmed") && b.start_date >= todayIso;
+
+  const cancel = async (b: IncomingBooking) => {
+    if (!window.confirm(`Cancel this booking for ${b.listings?.title ?? "your listing"}? The traveler is notified and the dates reopen.`)) return;
+    setCancelling(b.id);
+    try {
+      const { refundOwed } = await cancelBooking(b.id);
+      setRows((prev) => (prev ? prev.map((x) => (x.id === b.id ? { ...x, status: "cancelled" } : x)) : prev));
+      toast(refundOwed ? "Cancelled — remember to refund the traveler in PayLink." : "Booking cancelled.");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Couldn't cancel that booking.");
+    } finally {
+      setCancelling(null);
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -97,7 +117,19 @@ export function OperatorBookings() {
                   {b.profiles?.display_name ?? "A traveler"} · {fmtDate(b.start_date)} → {fmtDate(b.end_date)} · {b.guests} {b.guests === 1 ? "guest" : "guests"}
                 </p>
               </div>
-              <p className="text-right font-display text-lg font-normal">{fmtMoney(b.amount_cents, b.currency)}</p>
+              <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end">
+                <p className="font-display text-lg font-normal">{fmtMoney(b.amount_cents, b.currency)}</p>
+                {canCancel(b) && (
+                  <button
+                    type="button"
+                    disabled={cancelling === b.id}
+                    onClick={() => cancel(b)}
+                    className="text-xs font-semibold text-basalt/45 underline-offset-2 transition-colors hover:text-destructive hover:underline disabled:opacity-50"
+                  >
+                    {cancelling === b.id ? "Cancelling…" : "Cancel"}
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}

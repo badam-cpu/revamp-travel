@@ -31,7 +31,7 @@ import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useListings } from "@/contexts/ListingsContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { supabase } from "@/lib/supabase";
-import { confirmCheckout } from "@/lib/api";
+import { confirmCheckout, cancelBooking } from "@/lib/api";
 import type { BookingStatus } from "@shared/bookings";
 import { toast } from "sonner";
 
@@ -240,6 +240,24 @@ function SavedTab() {
 function TripsTab({ reloadKey }: { reloadKey: number }) {
   const { user } = useAuth();
   const [trips, setTrips] = useState<TripRow[] | null>(null);
+  const [cancelling, setCancelling] = useState<string | null>(null);
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const canCancel = (t: TripRow) => (t.status === "pending_payment" || t.status === "confirmed") && t.start_date >= todayIso;
+
+  const cancel = async (t: TripRow) => {
+    if (!window.confirm(`Cancel your booking for ${t.listings?.title ?? "this listing"}? This frees the dates.`)) return;
+    setCancelling(t.id);
+    try {
+      const { refundOwed } = await cancelBooking(t.id);
+      setTrips((prev) => (prev ? prev.map((x) => (x.id === t.id ? { ...x, status: "cancelled" } : x)) : prev));
+      toast(refundOwed ? "Booking cancelled — your refund will be processed." : "Booking cancelled.");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Couldn't cancel that booking.");
+    } finally {
+      setCancelling(null);
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -307,7 +325,19 @@ function TripsTab({ reloadKey }: { reloadKey: number }) {
                 {t.listings ? ` · ${t.listings.city}, ${t.listings.region}` : ""}
               </p>
             </div>
-            <p className="text-right font-display text-lg font-normal sm:text-xl">{fmtMoney(t.amount_cents, t.currency)}</p>
+            <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end">
+              <p className="font-display text-lg font-normal sm:text-xl">{fmtMoney(t.amount_cents, t.currency)}</p>
+              {canCancel(t) && (
+                <button
+                  type="button"
+                  disabled={cancelling === t.id}
+                  onClick={() => cancel(t)}
+                  className="text-xs font-semibold text-basalt/45 underline-offset-2 transition-colors hover:text-destructive hover:underline disabled:opacity-50"
+                >
+                  {cancelling === t.id ? "Cancelling…" : "Cancel"}
+                </button>
+              )}
+            </div>
           </div>
         );
       })}
