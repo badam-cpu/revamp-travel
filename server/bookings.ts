@@ -14,6 +14,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkPayment } from "./paylink.js";
 import { sendTravelerConfirmation, sendOperatorNewBooking, type BookingEmailInfo } from "./email.js";
+import { payoutDueDate, splitPayout } from "../shared/payouts.js";
+import type { ListingType } from "../shared/listings.js";
 
 export interface BookingRow {
   id: string;
@@ -38,14 +40,36 @@ const BOOKING_COLS = "id, listing_id, traveler_id, status, start_date, end_date,
  * is logged and swallowed so it never affects the confirmation itself. Needs
  * the service-role client to read auth.users emails via the admin API.
  */
-async function sendConfirmationEmails(admin: SupabaseClient, row: BookingRow): Promise<void> {
+async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promise<void> {
   const { data: listing } = await admin
     .from("listings")
-    .select("title, city, region, slug, operator_id")
+    .select("title, type, city, region, slug, operator_id")
     .eq("id", row.listing_id)
     .maybeSingle();
   if (!listing) return;
 
+  // Create the operator payout (idempotent — one per booking). Revamp is
+  // merchant of record; this records what Revamp owes the operator and when.
+  const feePercent = Number(process.env.PLATFORM_FEE_PERCENT) || 0;
+  const { feeCents, netCents } = splitPayout(row.amount_cents, feePercent);
+  await admin.from("payouts").upsert(
+    {
+      booking_id: row.id,
+      operator_id: listing.operator_id,
+      listing_id: row.listing_id,
+      listing_title: listing.title,
+      listing_type: listing.type,
+      gross_cents: row.amount_cents,
+      fee_cents: feeCents,
+      net_cents: netCents,
+      currency: row.currency,
+      due_date: payoutDueDate(listing.type as ListingType, row.start_date),
+      status: "pending",
+    },
+    { onConflict: "booking_id", ignoreDuplicates: true },
+  );
+
+  // Notify both sides (best-effort).
   const info: BookingEmailInfo = {
     listingTitle: listing.title,
     startDate: row.start_date,
@@ -57,13 +81,11 @@ async function sendConfirmationEmails(admin: SupabaseClient, row: BookingRow): P
     region: listing.region,
     slug: listing.slug,
   };
-
   const [{ data: traveler }, { data: operator }, { data: travelerProfile }] = await Promise.all([
     admin.auth.admin.getUserById(row.traveler_id),
     admin.auth.admin.getUserById(listing.operator_id),
     admin.from("profiles").select("display_name").eq("id", row.traveler_id).maybeSingle(),
   ]);
-
   const tasks: Promise<unknown>[] = [];
   if (traveler?.user?.email) tasks.push(sendTravelerConfirmation(traveler.user.email, info));
   if (operator?.user?.email) tasks.push(sendOperatorNewBooking(operator.user.email, info, travelerProfile?.display_name ?? "A traveler"));
@@ -130,11 +152,12 @@ export async function confirmBookingRow(admin: SupabaseClient, row: BookingRow):
     // Someone else confirmed it first — treat as success (they sent the emails).
     return { granted: true, status: "confirmed", already: true };
   }
-  // Newly confirmed by us → notify both sides. Never let email failure affect the grant.
+  // Newly confirmed by us → create the payout + notify both sides. Never let a
+  // post-confirm side effect fail the grant.
   try {
-    await sendConfirmationEmails(admin, row);
+    await onBookingConfirmed(admin, row);
   } catch (err) {
-    console.error("[bookings] confirmation email failed", row.id, err);
+    console.error("[bookings] post-confirm (payout/email) failed", row.id, err);
   }
   return { granted: true, status: "confirmed" };
 }

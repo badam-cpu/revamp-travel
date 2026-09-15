@@ -393,6 +393,9 @@ export function registerApiRoutes(app: Express) {
       return res.status(409).json({ error: "Couldn't cancel — it may have already changed." });
     }
 
+    // Void the operator payout for this booking (unless it was already paid out).
+    await admin.from("payouts").update({ status: "cancelled" }).eq("booking_id", booking.id).neq("status", "paid");
+
     // Notify the counterparty (best-effort). Traveler cancels → tell operator; operator/admin cancels → tell traveler.
     if (listing) {
       const info: BookingEmailInfo = {

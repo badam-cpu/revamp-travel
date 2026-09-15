@@ -44,6 +44,7 @@ import { AmenityPicker, AmenityPickerHandle } from "@/components/AmenityPicker";
 import { PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
 import { SearchableMultiSelect, SearchableMultiSelectHandle } from "@/components/SearchableMultiSelect";
 import { OperatorBookings } from "@/components/OperatorBookings";
+import { OperatorPayouts } from "@/components/OperatorPayouts";
 import { EXPERIENCE_PREFILL_STORAGE_KEY } from "@/pages/ExperienceOnboarding";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { toast } from "sonner";
@@ -813,6 +814,7 @@ function DashboardContent() {
 
         <div className="mt-10">
           <OperatorBookings />
+          <OperatorPayouts />
         </div>
 
         <DashboardSection type="stay" title="Stays" description="Guesthouses, cabins, and small hotels shown on /explore/stay and the home page." />

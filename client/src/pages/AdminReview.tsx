@@ -19,6 +19,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { AdminSiteContent } from "@/components/AdminSiteContent";
 import { AdminSupportInbox } from "@/components/AdminSupportInbox";
+import { AdminPayouts } from "@/components/AdminPayouts";
 import { RequireRole } from "@/components/RequireRole";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -199,6 +200,7 @@ function AdminReviewContent() {
             ))}
           </div>
         )}
+        <AdminPayouts />
         <AdminSupportInbox />
         <AdminSiteContent />
       </main>
