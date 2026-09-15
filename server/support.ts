@@ -94,7 +94,10 @@ export async function generateSupportReply(history: SupportTurn[], listings: Cat
   };
   if (!anthropic) return fallback;
 
-  const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5";
+  // Support runs on Haiku by default — support Q&A is simpler than trip planning,
+  // and Haiku is ~3× cheaper. Override with SUPPORT_MODEL if needed. (Separate
+  // from ANTHROPIC_MODEL so the trip planner can stay on a stronger model.)
+  const model = process.env.SUPPORT_MODEL || "claude-haiku-4-5";
   // Map our roles to the Anthropic conversation: traveler → user, ai/support → assistant.
   const messages = history
     .filter((m) => m.body.trim())
@@ -104,11 +107,20 @@ export async function generateSupportReply(history: SupportTurn[], listings: Cat
   while (messages.length && messages[0].role !== "user") messages.shift();
   if (!messages.length) return fallback;
 
+  // Cache the stable system + catalog prefix — it's identical across every
+  // message and every user, so repeat calls read it at ~10% cost instead of
+  // re-sending the whole catalog each time. `cache_control` is a valid wire
+  // field the API honors; the installed SDK (0.32) just doesn't type it on
+  // system blocks yet, hence the cast.
+  const systemPrompt = [
+    { type: "text", text: `${SYSTEM}\n\nCURRENT CATALOG:\n${catalogDigest(listings)}`, cache_control: { type: "ephemeral" } },
+  ] as unknown as Anthropic.MessageCreateParams["system"];
+
   try {
     const response = await anthropic.messages.create({
       model,
       max_tokens: 700,
-      system: `${SYSTEM}\n\nCURRENT CATALOG:\n${catalogDigest(listings)}`,
+      system: systemPrompt,
       messages: messages.map((m) => ({ role: m.role, content: m.body })),
     });
     const text = response.content

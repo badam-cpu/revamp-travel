@@ -448,6 +448,20 @@ export function registerApiRoutes(app: Express) {
         thread = created;
       }
 
+      // Rate limit (DB-backed so it holds across serverless instances): cap
+      // traveler messages per thread per minute. Checked BEFORE the AI call so
+      // a burst can't run up the Anthropic bill.
+      const since = new Date(Date.now() - 60_000).toISOString();
+      const { count } = await admin
+        .from("support_messages")
+        .select("id", { count: "exact", head: true })
+        .eq("thread_id", thread.id)
+        .eq("sender", "traveler")
+        .gte("created_at", since);
+      if ((count ?? 0) >= 12) {
+        return res.status(429).json({ error: "You're sending messages very quickly — give it a few seconds and try again." });
+      }
+
       await admin.from("support_messages").insert({ thread_id: thread.id, sender: "traveler", body: parsed.data.message });
 
       const { data: hist } = await admin
