@@ -15,7 +15,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { CalendarDays, LogIn, Minus, Plus, Users } from "lucide-react";
+import { LogIn, Minus, Plus, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import type { LiveListing, BlockedRange } from "@/contexts/ListingsContext";
@@ -28,9 +28,6 @@ import { toast } from "sonner";
 
 const DAY_MS = 86_400_000;
 
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 function addDays(iso: string, days: number): string {
   return new Date(Date.parse(iso + "T00:00:00Z") + days * DAY_MS).toISOString().slice(0, 10);
 }
@@ -48,7 +45,6 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
 
   const [guests, setGuests] = useState(1);
   const [range, setRange] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
-  const [activityDate, setActivityDate] = useState("");
   const [booked, setBooked] = useState<BlockedRange[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -68,20 +64,13 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
     };
   }, [listing.id]);
 
-  const unavailable = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of [...(listing.blockedRanges ?? []), ...booked]) {
-      for (let d = r.start; d < r.end; d = addDays(d, 1)) set.add(d);
-    }
-    return set;
-  }, [listing.blockedRanges, booked]);
-
-  // Resolve the chosen [start, end) for either mode.
+  // Resolve the chosen [start, end) for either mode. Stays pick a range;
+  // activities pick a single date (end = next day).
   const selected = useMemo(() => {
     if (isStay) return range.start && range.end ? { startDate: range.start, endDate: range.end } : null;
-    if (activityDate) return { startDate: activityDate, endDate: addDays(activityDate, 1) };
+    if (range.start) return { startDate: range.start, endDate: addDays(range.start, 1) };
     return null;
-  }, [isStay, range, activityDate]);
+  }, [isStay, range]);
 
   const amountCents = selected
     ? computeBookingAmountCents(
@@ -115,15 +104,6 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
     );
   }
 
-  const onActivityDate = (value: string) => {
-    if (value && unavailable.has(value)) {
-      toast("That date isn't available. Try another.");
-      setActivityDate("");
-      return;
-    }
-    setActivityDate(value);
-  };
-
   const book = async () => {
     if (!selected) {
       toast(isStay ? "Choose your check-in and check-out dates." : "Pick a date first.");
@@ -154,27 +134,18 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
         </p>
       </div>
 
-      {/* Dates */}
-      {isStay ? (
-        <div className="mt-5">
-          <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">Choose your dates</span>
-          <AvailabilityCalendar blockedRanges={listing.blockedRanges ?? []} bookedRanges={booked} onChange={setRange} />
-        </div>
-      ) : (
-        <label className="mt-5 block">
-          <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">Choose a date</span>
-          <div className="relative">
-            <CalendarDays className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-apricot" />
-            <input
-              type="date"
-              min={todayIso()}
-              value={activityDate}
-              onChange={(e) => onActivityDate(e.target.value)}
-              className="h-11 w-full border border-basalt/15 bg-paper pl-10 pr-3 text-sm outline-none focus:border-apricot"
-            />
-          </div>
-        </label>
-      )}
+      {/* Dates — stays pick a range, activities pick a single date; same calendar. */}
+      <div className="mt-5">
+        <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">
+          {isStay ? "Choose your dates" : "Choose a date"}
+        </span>
+        <AvailabilityCalendar
+          mode={isStay ? "range" : "single"}
+          blockedRanges={listing.blockedRanges ?? []}
+          bookedRanges={booked}
+          onChange={setRange}
+        />
+      </div>
 
       {/* Guests */}
       <div className="mt-4">

@@ -40,12 +40,15 @@ export function AvailabilityCalendar({
   blockedRanges,
   bookedRanges = [],
   onChange,
+  mode = "range",
 }: {
   blockedRanges: BlockedRange[];
   /** Confirmed-booking ranges (from listing_booked_ranges), greyed out alongside the iCal ranges. */
   bookedRanges?: BlockedRange[];
   /** Reports the picked check-in → check-out range up to the booking panel. */
   onChange?: (range: { start: string | null; end: string | null }) => void;
+  /** "range" = check-in → check-out (stays); "single" = one date (tours/experiences). */
+  mode?: "range" | "single";
 }) {
   const blocked = useMemo(() => expandBlocked([...blockedRanges, ...bookedRanges]), [blockedRanges, bookedRanges]);
   const today = useMemo(() => {
@@ -74,6 +77,12 @@ export function AvailabilityCalendar({
   };
 
   const onPick = (key: string) => {
+    // Single-date mode (tours/experiences): one tap picks the date, no range.
+    if (mode === "single") {
+      setStart(key);
+      setEnd(null);
+      return;
+    }
     if (!start || (start && end)) {
       setStart(key);
       setEnd(null);
@@ -170,7 +179,13 @@ export function AvailabilityCalendar({
 
       <div className="mt-3 flex min-h-[1.25rem] items-center justify-between text-xs">
         <span className="text-basalt/55">
-          {start && end ? (
+          {mode === "single" ? (
+            start ? (
+              <><strong className="font-semibold text-basalt">{prettyDate(start)}</strong> selected</>
+            ) : (
+              <span className="text-basalt/45">Select a date.</span>
+            )
+          ) : start && end ? (
             <>
               <strong className="font-semibold text-basalt">{nights} {nights === 1 ? "night" : "nights"}</strong> · {prettyDate(start)} → {prettyDate(end)}
             </>
