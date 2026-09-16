@@ -40,9 +40,12 @@ export function SiteFooter() {
         </div>
       </div>
       <div className="border-t border-white/10">
-        <div className="container flex flex-col gap-2 py-5 text-[11px] text-paper/40 sm:flex-row sm:items-center sm:justify-between">
+        <div className="container flex flex-col gap-3 py-5 text-[11px] text-paper/40 sm:flex-row sm:items-center sm:justify-between">
           <span>© 2026 Revamp Vacations.</span>
-          <span>Two-sided marketplace · online booking and payment are launching soon.</span>
+          <div className="flex items-center gap-4">
+            <Link href="/privacy" className="hover:text-white">Privacy Policy</Link>
+            <Link href="/terms" className="hover:text-white">Terms of Service</Link>
+          </div>
         </div>
       </div>
     </footer>

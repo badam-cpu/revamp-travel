@@ -24,6 +24,8 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ResetPassword from "./pages/ResetPassword";
 import Account from "./pages/Account";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
 import Plan from "./pages/Plan";
 
 function Router() {
@@ -43,6 +45,8 @@ function Router() {
       <Route path="/signup" component={Signup} />
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/account" component={Account} />
+      <Route path="/privacy" component={Privacy} />
+      <Route path="/terms" component={Terms} />
       <Route path="/listing/:slug">{(params) => <ListingPage params={params} />}</Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
