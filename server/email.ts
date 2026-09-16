@@ -92,7 +92,7 @@ function detailRows(b: BookingEmailInfo): string {
     </table>`;
 }
 
-const SITE = () => (process.env.URL || "https://revamptravel.netlify.app").replace(/\/+$/, "");
+const SITE = () => (process.env.URL || "https://revampvacations.com").replace(/\/+$/, "");
 
 /** To the traveler: their booking is confirmed. */
 export function sendTravelerConfirmation(to: string, b: BookingEmailInfo) {
