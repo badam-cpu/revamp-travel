@@ -361,7 +361,7 @@ export function registerApiRoutes(app: Express) {
 
       // Insert the pending hold as the traveler (RLS allows own + pending only).
       // Snapshot the cancellation terms so a later listing change can't alter them.
-      const { error: insErr } = await supa.from("bookings").insert({
+      const bookingRow: Record<string, unknown> = {
         listing_id: listingId,
         traveler_id: userId,
         start_date: startDate,
@@ -377,10 +377,15 @@ export function registerApiRoutes(app: Express) {
         paylink_order_id: pay.orderId,
         cancellation_policy: listing.cancellation_policy ?? "flexible",
         free_cancel_days: listing.free_cancel_days ?? 7,
-        guest_name: guestName || null,
-        guest_email: guestEmail || null,
-        guest_phone: guestPhone || null,
-      });
+      };
+      // Only touch the guest_* columns for an actual guest checkout, so a
+      // signed-in booking still works even if migration 0024 hasn't run yet.
+      if (guestName || guestEmail || guestPhone) {
+        bookingRow.guest_name = guestName || null;
+        bookingRow.guest_email = guestEmail || null;
+        bookingRow.guest_phone = guestPhone || null;
+      }
+      const { error: insErr } = await supa.from("bookings").insert(bookingRow);
       if (insErr) {
         console.error("[start-checkout] insert failed", insErr.message);
         return res.status(500).json({ error: "Couldn't record your booking." });

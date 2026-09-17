@@ -1,5 +1,5 @@
 /** Revamp brandbook: detail pages combine rounded imagery, bold sans hierarchy, concise facts, white space, and orange actions. */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, BedDouble, Bookmark, Check, Coffee, Home, KeyRound, MapPin, Navigation, Share2, ShieldCheck, Sparkles, SprayCan, Users, Wifi } from "lucide-react";
 import { Link } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -44,6 +44,10 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   const { isSaved, toggleSaved } = useSavedPlaces();
   const { format } = useCurrency();
   const [amenitiesOpen, setAmenitiesOpen] = useState(false);
+  // On mobile the booking panel shows inline; the sticky bottom "Book" bar
+  // should only appear once that panel has scrolled out of view (so there's
+  // never a second "book" button on screen at the same time).
+  const [showMobileBar, setShowMobileBar] = useState(false);
   const listing = findListing(params.slug, listings);
   const saved = listing ? isSaved(listing.id) : false;
   const priceLabel = listing && listing.price > 0 ? format(Math.round(listing.price * 100)) : "Rate on request";
@@ -72,6 +76,19 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
         ]
       : undefined,
   });
+
+  // Show the sticky mobile "Book" bar only once the inline booking panel (#book)
+  // has scrolled out of view, so the two "book" CTAs never appear together.
+  useEffect(() => {
+    const el = document.getElementById("book");
+    if (!el) {
+      setShowMobileBar(false);
+      return;
+    }
+    const io = new IntersectionObserver(([entry]) => setShowMobileBar(!entry.isIntersecting), { threshold: 0 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [listing?.id, loading]);
 
   if (!listing) {
     // While the catalog is still loading (e.g. a hard refresh on this page,
@@ -303,7 +320,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
         </section>
       </main>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between border-t border-basalt/10 bg-paper/95 px-4 py-3 shadow-[0_-10px_30px_rgba(35,35,33,0.08)] backdrop-blur lg:hidden">
+      <div className={cn("fixed inset-x-0 bottom-0 z-40 items-center justify-between border-t border-basalt/10 bg-paper/95 px-4 py-3 shadow-[0_-10px_30px_rgba(35,35,33,0.08)] backdrop-blur lg:hidden", showMobileBar ? "flex" : "hidden")}>
         <p><strong className="font-display text-2xl font-normal">{priceLabel}</strong> {listing.price > 0 && <span className="text-xs text-basalt/45">/ {listing.priceUnit}</span>}</p>
         <Button
           onClick={() => document.getElementById("book")?.scrollIntoView({ behavior: "smooth", block: "center" })}
