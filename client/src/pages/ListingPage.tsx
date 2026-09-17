@@ -1,6 +1,6 @@
 /** Revamp brandbook: detail pages combine rounded imagery, bold sans hierarchy, concise facts, white space, and orange actions. */
 import { useState } from "react";
-import { ArrowLeft, BedDouble, Bookmark, Check, Coffee, KeyRound, MapPin, Share2, ShieldCheck, Sparkles, SprayCan, Wifi } from "lucide-react";
+import { ArrowLeft, BedDouble, Bookmark, Check, Coffee, Home, KeyRound, MapPin, Navigation, Share2, ShieldCheck, Sparkles, SprayCan, Users, Wifi } from "lucide-react";
 import { Link } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -111,10 +111,19 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   const inlineAmenities = listing.amenities.slice(0, AMENITIES_INLINE_LIMIT);
   const hiddenAmenityCount = Math.max(0, listing.amenities.length - inlineAmenities.length);
   const houseRules = listing.houseRules ?? [];
+  const nearby = listing.nearby ?? [];
   const cancellationText = describeCancellationPolicy(listing.cancellationPolicy, {
     freeCancelDays: listing.freeCancelDays,
     discountPercent: listing.nonrefundableDiscountPercent,
   });
+
+  // "At a glance" facts for the left column, so it's never empty even when the
+  // operator added no custom facts (derived from data the listing already has).
+  const glance: { label: string; value: string; icon: typeof ShieldCheck }[] = [];
+  if (listing.maxGuests) glance.push({ label: "Guests", value: `Up to ${listing.maxGuests}`, icon: Users });
+  glance.push({ label: "Cancellation", value: listing.cancellationPolicy === "non_refundable" ? "Non-refundable" : "Flexible", icon: ShieldCheck });
+  if (houseRules.includes("Self check-in")) glance.push({ label: "Check-in", value: "Self check-in", icon: KeyRound });
+  glance.push({ label: "Type", value: typeLabels[listing.type], icon: Home });
 
   return (
     <div className="min-h-screen bg-paper text-basalt">
@@ -148,9 +157,24 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
               <div>
                 <p className="eyebrow">{listing.eyebrow}</p>
                 <p className="mt-4 flex items-center gap-2 text-sm font-semibold"><MapPin className="h-4 w-4 text-apricot" /> {listing.city}, {listing.region}</p>
-                <div className="mt-6 space-y-4">
-                  {listing.facts.map((fact) => <div key={fact.label}><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/40">{fact.label}</p><p className="mt-1 font-semibold">{fact.value}</p></div>)}
-                </div>
+                {listing.facts.length > 0 && (
+                  <div className="mt-6 space-y-4">
+                    {listing.facts.map((fact) => <div key={fact.label}><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/40">{fact.label}</p><p className="mt-1 font-semibold">{fact.value}</p></div>)}
+                  </div>
+                )}
+                {glance.length > 0 && (
+                  <dl className="mt-6 grid grid-cols-2 gap-x-4 gap-y-5 border-t border-basalt/10 pt-6">
+                    {glance.map((g) => (
+                      <div key={g.label} className="flex items-start gap-2.5">
+                        <g.icon className="mt-0.5 h-4 w-4 shrink-0 text-apricot" strokeWidth={1.75} />
+                        <div>
+                          <dt className="text-[10px] font-bold uppercase tracking-[0.14em] text-basalt/40">{g.label}</dt>
+                          <dd className="mt-0.5 text-sm font-semibold">{g.value}</dd>
+                        </div>
+                      </div>
+                    ))}
+                  </dl>
+                )}
               </div>
               <div>
                 <h2 className="font-display text-4xl leading-tight tracking-[-0.03em]">{listing.shortDescription}</h2>
@@ -240,7 +264,28 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
             <div>
               <p className="eyebrow">On the map</p>
               <h2 className="mt-3 font-display text-5xl leading-none tracking-[-0.04em]">Meet the neighborhood.</h2>
-              <p className="mt-5 max-w-sm text-sm leading-6 text-basalt/55">Use the map as a starting point. Exact arrival notes are shared once a date is confirmed.</p>
+              <p className="mt-5 max-w-sm whitespace-pre-line text-sm leading-6 text-basalt/55">
+                {listing.neighborhood?.trim() || "Use the map as a starting point. Exact arrival notes are shared once a date is confirmed."}
+              </p>
+              {nearby.length > 0 && (
+                <div className="mt-7">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/40">What’s nearby</p>
+                  <ul className="mt-3 grid gap-2">
+                    {nearby.map((place) => (
+                      <li key={place.name} className="flex items-center gap-3 text-sm text-basalt/75">
+                        <Navigation className="h-3.5 w-3.5 shrink-0 text-apricot" strokeWidth={2} />
+                        <span className="font-medium text-basalt">{place.name}</span>
+                        {place.category && <span className="text-basalt/45">· {place.category}</span>}
+                        {typeof place.distanceM === "number" && (
+                          <span className="ml-auto shrink-0 text-xs tabular-nums text-basalt/45">
+                            {place.distanceM < 1000 ? `${place.distanceM} m` : `${(place.distanceM / 1000).toFixed(1)} km`}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
             <ArmeniaMap listings={[listing]} single className="h-[430px]" />
           </div>

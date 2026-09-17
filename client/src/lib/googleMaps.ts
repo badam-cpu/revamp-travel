@@ -65,6 +65,70 @@ export function ensureMapsScript(): Promise<boolean> {
   return scriptPromise;
 }
 
+export interface NearbyPlaceResult {
+  name: string;
+  category?: string;
+  distanceM?: number;
+}
+
+/** Great-circle metres between two lat/lng points (Haversine). */
+function distanceMeters(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const R = 6_371_000;
+  const dLat = ((bLat - aLat) * Math.PI) / 180;
+  const dLng = ((bLng - aLng) * Math.PI) / 180;
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos((aLat * Math.PI) / 180) * Math.cos((bLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s)));
+}
+
+/**
+ * Real points of interest around a listing's coordinates, via Google Places
+ * (New) `Place.searchNearby`. Returns up to `limit` places, ranked by distance
+ * and de-duplicated by category so the list is varied (not seven cafés). Never
+ * throws — resolves to `[]` if the key/library is unavailable or the call
+ * fails, so a save never breaks over this. Types on the New Places API lag the
+ * installed @types, so this reads results defensively via `unknown` casts.
+ */
+export async function fetchNearbyPlaces(lat: number, lng: number, limit = 7): Promise<NearbyPlaceResult[]> {
+  const ready = await ensureMapsScript();
+  if (!ready) return [];
+  try {
+    const lib = (await google.maps.importLibrary("places")) as unknown as {
+      Place: { searchNearby: (req: unknown) => Promise<{ places: unknown[] }> };
+      SearchNearbyRankPreference: { DISTANCE: unknown };
+    };
+    const { places } = await lib.Place.searchNearby({
+      fields: ["displayName", "location", "primaryTypeDisplayName"],
+      locationRestriction: { center: { lat, lng }, radius: 1500 },
+      maxResultCount: 20,
+      rankPreference: lib.SearchNearbyRankPreference.DISTANCE,
+    });
+    const out: NearbyPlaceResult[] = [];
+    const seen = new Set<string>();
+    for (const raw of places ?? []) {
+      const p = raw as {
+        displayName?: string;
+        primaryTypeDisplayName?: string;
+        location?: { lat: number | (() => number); lng: number | (() => number) };
+      };
+      const name = (p.displayName ?? "").trim();
+      if (!name) continue;
+      const category = (p.primaryTypeDisplayName ?? "").trim() || undefined;
+      const dedupeKey = category ?? name;
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      const plat = typeof p.location?.lat === "function" ? p.location.lat() : p.location?.lat;
+      const plng = typeof p.location?.lng === "function" ? p.location.lng() : p.location?.lng;
+      const distanceM = typeof plat === "number" && typeof plng === "number" ? distanceMeters(lat, lng, plat, plng) : undefined;
+      out.push({ name, category, distanceM });
+      if (out.length >= limit) break;
+    }
+    return out;
+  } catch (err) {
+    console.error("Nearby places lookup failed", err);
+    return [];
+  }
+}
+
 export interface ResolvedPlace {
   city?: string;
   region?: string;

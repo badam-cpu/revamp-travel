@@ -42,6 +42,7 @@ import { cn } from "@/lib/utils";
 import { PlaceAutocomplete } from "@/components/PlaceAutocomplete";
 import { AmenityPicker, AmenityPickerHandle } from "@/components/AmenityPicker";
 import { HouseRulesPicker, HouseRulesPickerHandle } from "@/components/HouseRulesPicker";
+import { fetchNearbyPlaces } from "@/lib/googleMaps";
 import { PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
 import { SearchableMultiSelect, SearchableMultiSelectHandle } from "@/components/SearchableMultiSelect";
 import { OperatorBookings } from "@/components/OperatorBookings";
@@ -81,6 +82,7 @@ interface RefLists {
   whatToBring: string[];
   notSuitableFor: string[];
   houseRules: string[];
+  nearby: import("@shared/listings").NearbyPlace[];
 }
 
 function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLists): ListingInput {
@@ -128,6 +130,8 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
     nonrefundableDiscountPercent: Number(get("nonrefundableDiscountPercent")) >= 0 && get("nonrefundableDiscountPercent") !== "" ? Number(get("nonrefundableDiscountPercent")) : 5,
     cleaningFeeCents: Number(get("cleaningFee")) > 0 ? Math.round(Number(get("cleaningFee")) * 100) : 0,
     houseRules,
+    neighborhood: get("neighborhood").trim() || undefined,
+    nearby: lists.nearby,
   };
 }
 
@@ -265,13 +269,25 @@ function ListingFormDialog({
     setSaving(true);
     setError(null);
     try {
-      const payload = toInputPayload(draft, event.currentTarget, {
+      // Refresh the real "what's nearby" list from Google Places for stays,
+      // using the address coordinates. Falls back to whatever was stored if the
+      // lookup returns nothing, so a transient failure never wipes the list.
+      const form = event.currentTarget;
+      const latN = Number((form.elements.namedItem("lat") as HTMLInputElement | null)?.value);
+      const lngN = Number((form.elements.namedItem("lng") as HTMLInputElement | null)?.value);
+      let nearby = draft.nearby ?? [];
+      if (draft.type === "stay" && latN && lngN) {
+        const fetched = await fetchNearbyPlaces(latN, lngN);
+        if (fetched.length) nearby = fetched;
+      }
+      const payload = toInputPayload(draft, form, {
         amenities: amenitiesRef.current?.getValue() ?? [],
         photos: photosRef.current?.getValue() ?? [],
         notIncluded: notIncludedRef.current?.getValue() ?? [],
         whatToBring: whatToBringRef.current?.getValue() ?? [],
         notSuitableFor: notSuitableForRef.current?.getValue() ?? [],
         houseRules: houseRulesRef.current?.getValue() ?? [],
+        nearby,
       });
       if (isEdit && draft.id) {
         await updateListing(draft.id, payload);
@@ -412,6 +428,13 @@ function ListingFormDialog({
                   <Label htmlFor="longDescription" className="text-sm font-semibold">Full description</Label>
                   <Textarea id="longDescription" name="longDescription" rows={5} placeholder="The full write-up shown on the listing page." defaultValue={draft.longDescription} className="rounded-none text-base" />
                 </div>
+                {draft.type === "stay" && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="neighborhood" className="text-sm font-semibold">Describe the neighborhood <span className="font-normal text-basalt/45">(optional)</span></Label>
+                    <Textarea id="neighborhood" name="neighborhood" rows={3} placeholder="What's the area like — the street, the vibe, what's within a short walk?" defaultValue={draft.neighborhood} className="rounded-none text-base" />
+                    <p className="text-xs text-basalt/45">A real list of nearby places is added automatically from your address when you save.</p>
+                  </div>
+                )}
                 <div className="grid gap-2">
                   <Label htmlFor="tags" className="text-sm font-semibold">Tags <span className="font-normal text-basalt/45">(comma separated)</span></Label>
                   <Input id="tags" name="tags" placeholder="Forest, Breakfast, Design stay" defaultValue={draft.tags?.join(", ")} className={FIELD} />

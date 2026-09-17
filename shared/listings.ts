@@ -24,6 +24,16 @@ export interface ListingFact {
   value: string;
 }
 
+/** A real point of interest near a listing, from Google Places (see
+ * client/src/lib/googleMaps.ts's fetchNearbyPlaces). Stored on the listing so
+ * it isn't re-queried per page view. */
+export interface NearbyPlace {
+  name: string;
+  category?: string;
+  /** Straight-line metres from the listing's coordinates. */
+  distanceM?: number;
+}
+
 export interface Listing {
   id: string;
   slug: string;
@@ -67,6 +77,10 @@ export interface Listing {
   cleaningFeeCents?: number;
   /** Stay house rules (no smoking / no pets / self check-in, …) — see client/src/lib/houseRules.ts. */
   houseRules?: string[];
+  /** Operator's free-text description of the surrounding neighborhood. */
+  neighborhood?: string;
+  /** Real nearby points of interest (Google Places), stored at save time. */
+  nearby?: NearbyPlace[];
 }
 
 // Deployment note: this fork replaces the Manus-managed `/manus-storage/...`
@@ -467,4 +481,8 @@ export interface ListingInput {
   cleaningFeeCents?: number;
   /** Stay house rules (no smoking / no pets / self check-in, …) — see client/src/lib/houseRules.ts. */
   houseRules?: string[];
+  /** Operator's free-text description of the surrounding neighborhood. */
+  neighborhood?: string;
+  /** Real nearby points of interest (Google Places), stored at save time. */
+  nearby?: NearbyPlace[];
 }
