@@ -208,19 +208,25 @@ export function isBookableType(type: ListingType): boolean {
   return type === "stay" || type === "tour" || type === "experience";
 }
 
-/** Human summary of how the amount was derived, for the checkout preview. */
+/**
+ * Human summary of how the amount was derived, for the checkout preview.
+ * `unitLabel` overrides the shown per-unit price — pass the display-currency
+ * formatted price so the line matches the currency toggle (defaults to the
+ * listing's stored AMD priceLabel).
+ */
 export function describeBookingBasis(
   listing: Pick<Listing, "priceUnit" | "priceLabel">,
   params: { startDate: string; endDate: string; guests: number },
+  unitLabel: string = listing.priceLabel,
 ): string {
   const unit = (listing.priceUnit || "").toLowerCase().trim();
   if (PER_NIGHT_UNITS.has(unit)) {
     const n = nightsBetween(params.startDate, params.endDate);
-    return `${listing.priceLabel} × ${n} night${n === 1 ? "" : "s"}`;
+    return `${unitLabel} × ${n} night${n === 1 ? "" : "s"}`;
   }
   if (PER_PERSON_UNITS.has(unit)) {
     const g = Math.max(1, params.guests);
-    return `${listing.priceLabel} × ${g} guest${g === 1 ? "" : "s"}`;
+    return `${unitLabel} × ${g} guest${g === 1 ? "" : "s"}`;
   }
-  return `${listing.priceLabel} total`;
+  return `${unitLabel} total`;
 }

@@ -182,7 +182,7 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
       {selected && charge.baseCents > 0 && (
         <div className="mt-4 grid gap-1.5 border-t border-basalt/10 pt-4 text-sm">
           <div className="flex items-center justify-between text-basalt/55">
-            <span>{describeBookingBasis(listing, { ...selected, guests })}</span>
+            <span>{describeBookingBasis(listing, { ...selected, guests }, format(Math.round(listing.price * 100)))}</span>
             <span>{format(accommodationCents)}</span>
           </div>
           {cleaningCents > 0 && (
