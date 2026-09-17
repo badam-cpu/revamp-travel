@@ -16,6 +16,8 @@ import { supabaseAdmin, adminConfigured } from "./supabaseAdmin.js";
 import { paylinkConfigured, registerPayment } from "./paylink.js";
 import { reconcileUserBookings } from "./bookings.js";
 import { generateSupportReply, type SupportTurn } from "./support.js";
+import { generateOperatorReply, type OperatorTurn } from "./operatorAssistant.js";
+import { payoutState } from "../shared/payouts.js";
 import { sendCancellation, type BookingEmailInfo } from "./email.js";
 import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, DEFAULT_CURRENCY } from "../shared/bookings.js";
 import { planTrip, PlannerError } from "./planner.js";
@@ -64,8 +66,82 @@ const supportContactSchema = z.object({
   name: z.string().trim().max(120).optional(),
 });
 
+const operatorAssistantSchema = z.object({
+  messages: z
+    .array(z.object({ role: z.enum(["user", "assistant"]), body: z.string().max(2000) }))
+    .min(1)
+    .max(20),
+});
+
 function issuesToMessage(err: z.ZodError): string {
   return err.issues.map((issue) => `${issue.path.join(".") || "value"}: ${issue.message}`).join("; ");
+}
+
+// Soft, in-memory per-operator rate limit for the assistant. Best-effort across
+// serverless instances — a light guard on the Anthropic bill, not security.
+const operatorAssistantHits = new Map<string, number[]>();
+
+function moneyByCurrency(map: Record<string, number>): string {
+  const keys = Object.keys(map);
+  if (!keys.length) return "0";
+  return keys.map((c) => `${Math.round(map[c] / 100).toLocaleString("en-US")} ${c}`).join(", ");
+}
+
+/** Compact digest of an operator's own bookings + payouts for the assistant. */
+function buildOperatorSummary(
+  bookings: {
+    start_date: string;
+    end_date: string;
+    guests: number;
+    amount_cents: number;
+    currency: string;
+    status: string;
+    listings: { title?: string; type?: string } | null;
+  }[],
+  payouts: { net_cents: number; currency: string; due_date: string; status: string }[],
+  today: string,
+): string {
+  const confirmed = bookings.filter((b) => b.status === "confirmed" || b.status === "completed");
+  const upcoming = confirmed.filter((b) => b.end_date >= today);
+  const past = confirmed.filter((b) => b.end_date < today);
+  const pending = bookings.filter((b) => b.status === "pending_payment");
+  const cancelled = bookings.filter((b) => b.status === "cancelled" || b.status === "refunded");
+
+  const revenue: Record<string, number> = {};
+  for (const b of confirmed) revenue[b.currency] = (revenue[b.currency] ?? 0) + b.amount_cents;
+
+  const owed: Record<string, number> = {};
+  const paid: Record<string, number> = {};
+  let nextDue: string | null = null;
+  for (const p of payouts) {
+    const st = payoutState(p.status as "pending" | "paid" | "cancelled", p.due_date, today);
+    if (st === "unpaid" || st === "pending") {
+      owed[p.currency] = (owed[p.currency] ?? 0) + p.net_cents;
+      if (!nextDue || p.due_date < nextDue) nextDue = p.due_date;
+    } else if (st === "paid") {
+      paid[p.currency] = (paid[p.currency] ?? 0) + p.net_cents;
+    }
+  }
+
+  const upcomingList = upcoming
+    .slice(0, 20)
+    .map(
+      (b) =>
+        `- ${b.listings?.title ?? "Listing"} (${b.listings?.type ?? "?"}) — ${b.start_date} to ${b.end_date}, ${b.guests} guest(s), ${Math.round(
+          b.amount_cents / 100,
+        ).toLocaleString("en-US")} ${b.currency}, ${b.status}`,
+    );
+
+  return [
+    `Today: ${today}`,
+    `Bookings — confirmed/completed: ${confirmed.length}, upcoming: ${upcoming.length}, past: ${past.length}, pending payment: ${pending.length}, cancelled/refunded: ${cancelled.length}.`,
+    `Revenue (guest totals, confirmed + completed): ${moneyByCurrency(revenue)}.`,
+    `Payouts you're still owed (net, not yet paid): ${moneyByCurrency(owed)}${nextDue ? `; next payout due ${nextDue}` : ""}.`,
+    `Payouts already paid to you (net): ${moneyByCurrency(paid)}.`,
+    "",
+    "Upcoming confirmed bookings:",
+    upcomingList.length ? upcomingList.join("\n") : "- (none)",
+  ].join("\n");
 }
 
 export function registerApiRoutes(app: Express) {
@@ -528,6 +604,48 @@ export function registerApiRoutes(app: Express) {
     } catch (err) {
       console.error("[support-contact]", err);
       res.status(500).json({ error: "Couldn't save your details. Please try again." });
+    }
+  });
+
+  // POST /api/operator-assistant — data-only Q&A for an operator about THEIR OWN
+  // bookings + payouts. Fetches their data RLS-scoped (userClient), builds a
+  // digest, and lets the AI answer from it. Never sees another operator's data.
+  app.post("/api/operator-assistant", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in to use the assistant." });
+
+    const parsed = operatorAssistantSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+
+    const now = Date.now();
+    const hits = (operatorAssistantHits.get(userId) ?? []).filter((t) => t > now - 60_000);
+    if (hits.length >= 15) return res.status(429).json({ error: "You're asking very quickly — give it a few seconds and try again." });
+    hits.push(now);
+    operatorAssistantHits.set(userId, hits);
+
+    const supa = userClient(token);
+    if (!supa) return res.status(503).json({ error: "The assistant isn't available right now." });
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+      const [bookingsRes, payoutsRes] = await Promise.all([
+        supa
+          .from("bookings")
+          .select("start_date, end_date, guests, amount_cents, currency, status, listings!inner(title, type, operator_id)")
+          .eq("listings.operator_id", userId)
+          .order("start_date", { ascending: true })
+          .limit(200),
+        supa.from("payouts").select("net_cents, currency, due_date, status").order("due_date", { ascending: true }).limit(200),
+      ]);
+      const bookings = (bookingsRes.data ?? []) as unknown as Parameters<typeof buildOperatorSummary>[0];
+      const payouts = (payoutsRes.data ?? []) as unknown as Parameters<typeof buildOperatorSummary>[1];
+      const summary = buildOperatorSummary(bookings, payouts, today);
+      const reply = await generateOperatorReply(parsed.data.messages as OperatorTurn[], summary);
+      res.json({ reply });
+    } catch (err) {
+      console.error("[operator-assistant]", err);
+      res.status(500).json({ error: "Couldn't answer that right now. Please try again." });
     }
   });
 }

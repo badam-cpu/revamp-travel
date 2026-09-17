@@ -47,6 +47,7 @@ import { PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
 import { SearchableMultiSelect, SearchableMultiSelectHandle } from "@/components/SearchableMultiSelect";
 import { OperatorBookings } from "@/components/OperatorBookings";
 import { OperatorPayouts } from "@/components/OperatorPayouts";
+import { OperatorAnalytics } from "@/components/OperatorAnalytics";
 import { ProfileTab, SecurityTab } from "@/pages/Account";
 import { EXPERIENCE_PREFILL_STORAGE_KEY } from "@/pages/ExperienceOnboarding";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
@@ -920,6 +921,9 @@ function DashboardContent() {
                   <StatTile n={mine.length} label="Listings" />
                   <StatTile n={published} label="Published" />
                   <StatTile n={pending} label="Pending review" />
+                </div>
+                <div className="mt-6">
+                  <OperatorAnalytics />
                 </div>
                 <div className="mt-8 flex flex-wrap gap-3">
                   <Button onClick={() => go("listings")} className="rounded-none bg-apricot text-white hover:bg-apricot/90">Manage listings</Button>

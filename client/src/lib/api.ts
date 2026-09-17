@@ -191,3 +191,24 @@ export async function syncIcal(listingId: string): Promise<IcalSyncResult> {
     body: JSON.stringify({ listingId }),
   });
 }
+
+export interface OperatorChatTurn {
+  role: "user" | "assistant";
+  body: string;
+}
+
+/**
+ * Ask the operator assistant a data-only question about the signed-in
+ * operator's own bookings and payouts. Sends the recent turns; the server
+ * fetches the operator's data (RLS-scoped), summarizes it, and the AI answers.
+ */
+export async function askOperatorAssistant(messages: OperatorChatTurn[]): Promise<{ reply: string }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in to use the assistant.");
+  return request<{ reply: string }>("/api/operator-assistant", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ messages }),
+  });
+}

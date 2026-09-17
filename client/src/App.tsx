@@ -12,6 +12,7 @@ import { SiteSettingsProvider } from "./contexts/SiteSettingsContext";
 import { CurrencyProvider } from "./contexts/CurrencyContext";
 import { AnnouncementBanner } from "./components/AnnouncementBanner";
 import { SupportWidget } from "./components/SupportWidget";
+import { OperatorAssistant } from "./components/OperatorAssistant";
 import Home from "./pages/Home";
 import Explore from "./pages/Explore";
 import Tours from "./pages/Tours";
@@ -68,6 +69,7 @@ function App() {
                     <AnnouncementBanner />
                     <Router />
                     <SupportWidget />
+                    <OperatorAssistant />
                   </TooltipProvider>
                 </CurrencyProvider>
               </SiteSettingsProvider>
