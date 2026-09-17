@@ -1,5 +1,5 @@
 /** Revamp brandbook: detail pages combine rounded imagery, bold sans hierarchy, concise facts, white space, and orange actions. */
-import { ArrowLeft, Bookmark, Check, MapPin, Share2 } from "lucide-react";
+import { ArrowLeft, BedDouble, Bookmark, Check, Coffee, KeyRound, MapPin, Share2, Sparkles, SprayCan, Wifi } from "lucide-react";
 import { Link } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -16,6 +16,18 @@ import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { cn } from "@/lib/utils";
 import { buildBreadcrumbJsonLd, buildListingJsonLd } from "@shared/seo";
 import { toast } from "sonner";
+
+/** What every Revamp stay includes — a marketplace-wide baseline shown on stay
+ * pages (a stated standard Revamp holds stay operators to, not a per-listing
+ * claim; the listing's own amenities are shown separately below). */
+const REVAMP_STANDARD = [
+  { icon: Wifi, label: "Fast Wi-Fi" },
+  { icon: BedDouble, label: "Fresh linen and towels" },
+  { icon: Coffee, label: "Tea, coffee, salt and oil" },
+  { icon: SprayCan, label: "Cleaning and laundry supplies" },
+  { icon: KeyRound, label: "Self check-in with a code" },
+  { icon: Sparkles, label: "Cleaned before you arrive" },
+];
 
 export default function ListingPage({ params }: { params: { slug: string } }) {
   const { listings } = useListings();
@@ -112,7 +124,28 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
               </div>
             </div>
 
-            <div className="py-10">
+            {listing.type === "stay" && (
+              <div className="my-10 brand-notch bg-apricot/10 p-7 sm:p-9">
+                <p className="font-display text-3xl tracking-[-0.02em]">Revamp standard</p>
+                <p className="mt-1 text-sm text-basalt/55">The same in every Revamp stay.</p>
+                <div className="mt-6 grid gap-x-10 gap-y-4 sm:grid-cols-2">
+                  {REVAMP_STANDARD.map(({ icon: Icon, label }) => (
+                    <div key={label} className="flex items-center gap-3 text-[15px] text-basalt">
+                      <Icon className="h-5 w-5 shrink-0 text-basalt" strokeWidth={1.75} /> {label}
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => document.getElementById("amenities")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                  className="mt-7 rounded-full bg-basalt/[0.07] px-5 py-2.5 text-sm font-semibold text-basalt transition-colors hover:bg-basalt/15"
+                >
+                  All amenities
+                </button>
+              </div>
+            )}
+
+            <div id="amenities" className="py-10 scroll-mt-24">
               <p className="eyebrow">What’s part of the experience</p>
               <div className="mt-6 grid gap-x-8 gap-y-4 sm:grid-cols-2">
                 {listing.amenities.map((amenity) => <div key={amenity} className="flex items-center gap-3 border-b border-basalt/10 pb-3 text-sm"><span className="grid h-6 w-6 place-items-center rounded-full bg-sevan/10 text-sevan"><Check className="h-3.5 w-3.5" /></span>{amenity}</div>)}
