@@ -269,7 +269,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
               </p>
               {nearby.length > 0 && (
                 <div className="mt-7">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/40">What’s nearby</p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/40">Sights nearby</p>
                   <ul className="mt-3 grid gap-2">
                     {nearby.map((place) => (
                       <li key={place.name} className="flex items-center gap-3 text-sm text-basalt/75">

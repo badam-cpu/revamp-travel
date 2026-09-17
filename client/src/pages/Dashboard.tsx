@@ -432,7 +432,7 @@ function ListingFormDialog({
                   <div className="grid gap-2">
                     <Label htmlFor="neighborhood" className="text-sm font-semibold">Describe the neighborhood <span className="font-normal text-basalt/45">(optional)</span></Label>
                     <Textarea id="neighborhood" name="neighborhood" rows={3} placeholder="What's the area like — the street, the vibe, what's within a short walk?" defaultValue={draft.neighborhood} className="rounded-none text-base" />
-                    <p className="text-xs text-basalt/45">A real list of nearby places is added automatically from your address when you save.</p>
+                    <p className="text-xs text-basalt/45">A list of nearby sights (landmarks, museums, parks) is added automatically from your address when you save.</p>
                   </div>
                 )}
                 <div className="grid gap-2">

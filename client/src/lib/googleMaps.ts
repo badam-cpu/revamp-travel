@@ -80,13 +80,24 @@ function distanceMeters(aLat: number, aLng: number, bLat: number, bLng: number):
   return Math.round(R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s)));
 }
 
+// Sightseeing-oriented Google Place types (New Places API, Table A). This is
+// what a guest wants under "what's nearby" — landmarks, museums, parks — not
+// other apartments/hotels. A minimal, definitely-valid subset is used as a
+// fallback if the full list is ever rejected, so one bad type can't blank it.
+const SIGHT_TYPES = [
+  "tourist_attraction", "museum", "art_gallery", "park", "historical_landmark", "monument",
+  "plaza", "national_park", "church", "zoo", "aquarium", "amusement_park", "botanical_garden",
+  "performing_arts_theater",
+];
+const SIGHT_TYPES_SAFE = ["tourist_attraction", "museum", "park"];
+
 /**
- * Real points of interest around a listing's coordinates, via Google Places
- * (New) `Place.searchNearby`. Returns up to `limit` places, ranked by distance
- * and de-duplicated by category so the list is varied (not seven cafés). Never
- * throws — resolves to `[]` if the key/library is unavailable or the call
- * fails, so a save never breaks over this. Types on the New Places API lag the
- * installed @types, so this reads results defensively via `unknown` casts.
+ * Real sightseeing spots around a listing's coordinates, via Google Places
+ * (New) `Place.searchNearby` — restricted to attraction/landmark types and with
+ * lodging excluded, ranked by distance. Returns up to `limit` places,
+ * de-duplicated by name. Never throws — resolves to `[]` if the key/library is
+ * unavailable or the call fails, so a save never breaks over this. Types on the
+ * New Places API lag the installed @types, so results are read via casts.
  */
 export async function fetchNearbyPlaces(lat: number, lng: number, limit = 7): Promise<NearbyPlaceResult[]> {
   const ready = await ensureMapsScript();
@@ -96,12 +107,24 @@ export async function fetchNearbyPlaces(lat: number, lng: number, limit = 7): Pr
       Place: { searchNearby: (req: unknown) => Promise<{ places: unknown[] }> };
       SearchNearbyRankPreference: { DISTANCE: unknown };
     };
-    const { places } = await lib.Place.searchNearby({
-      fields: ["displayName", "location", "primaryTypeDisplayName"],
-      locationRestriction: { center: { lat, lng }, radius: 1500 },
-      maxResultCount: 20,
-      rankPreference: lib.SearchNearbyRankPreference.DISTANCE,
-    });
+    const search = (includedTypes: string[]) =>
+      lib.Place.searchNearby({
+        fields: ["displayName", "location", "primaryTypeDisplayName"],
+        locationRestriction: { center: { lat, lng }, radius: 2500 },
+        includedTypes,
+        excludedTypes: ["lodging"],
+        maxResultCount: 20,
+        rankPreference: lib.SearchNearbyRankPreference.DISTANCE,
+      });
+
+    let places: unknown[] = [];
+    try {
+      ({ places } = await search(SIGHT_TYPES));
+    } catch {
+      // A rejected type list aborts the whole request — retry with the safe subset.
+      ({ places } = await search(SIGHT_TYPES_SAFE));
+    }
+
     const out: NearbyPlaceResult[] = [];
     const seen = new Set<string>();
     for (const raw of places ?? []) {
@@ -112,10 +135,10 @@ export async function fetchNearbyPlaces(lat: number, lng: number, limit = 7): Pr
       };
       const name = (p.displayName ?? "").trim();
       if (!name) continue;
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
       const category = (p.primaryTypeDisplayName ?? "").trim() || undefined;
-      const dedupeKey = category ?? name;
-      if (seen.has(dedupeKey)) continue;
-      seen.add(dedupeKey);
       const plat = typeof p.location?.lat === "function" ? p.location.lat() : p.location?.lat;
       const plng = typeof p.location?.lng === "function" ? p.location.lng() : p.location?.lng;
       const distanceM = typeof plat === "number" && typeof plng === "number" ? distanceMeters(lat, lng, plat, plng) : undefined;
