@@ -3,9 +3,11 @@ import { ArrowUpRight, Instagram, Mail } from "lucide-react";
 import { Link } from "wouter";
 import { BrandMark } from "./BrandMark";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 
 export function SiteFooter({ minimal = false }: { minimal?: boolean } = {}) {
   const { profile } = useAuth();
+  const { settings } = useSiteSettings();
 
   // Slim footer for app surfaces (operator dashboard) — just the wordmark,
   // copyright, and legal links, without the tall marketing columns.
@@ -30,8 +32,8 @@ export function SiteFooter({ minimal = false }: { minimal?: boolean } = {}) {
       <div className="container grid gap-12 py-16 md:grid-cols-[1.4fr_0.8fr_0.8fr] lg:py-24">
         <div>
           <BrandMark light />
-          <p className="mt-7 max-w-md font-display text-3xl leading-tight tracking-tight text-paper">Find the Armenia that lives between the landmarks.</p>
-          <p className="mt-5 max-w-md text-sm leading-6 text-paper/55">Curated stays, tables, and local routes across the country’s cities, forests, lakes, and southern roads.</p>
+          <p className="mt-7 max-w-md font-display text-3xl leading-tight tracking-tight text-paper">{settings.homeContent.footerTagline?.trim() || "Find the Armenia that lives between the landmarks."}</p>
+          <p className="mt-5 max-w-md text-sm leading-6 text-paper/55">{settings.homeContent.footerSubcopy?.trim() || "Curated stays, tables, and local routes across the country’s cities, forests, lakes, and southern roads."}</p>
         </div>
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Explore</p>

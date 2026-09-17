@@ -27,6 +27,27 @@ const HOME_CATS = [
   { type: "experience", name: "Experience", title: "Make something with your hands", label: "Classes, crafts & tastings" },
 ];
 
+const HOME_REGIONS = [
+  { query: "Tavush", name: "Tavush", label: "Forest & craft" },
+  { query: "Gegharkunik", name: "Gegharkunik", label: "Lake & highlands" },
+  { query: "Syunik", name: "Syunik", label: "Canyons & monasteries" },
+];
+
+const EMPTY_HOME = {
+  categoriesIntro: "",
+  editEyebrow: "",
+  editTitle: "",
+  regionsEyebrow: "",
+  regionsTitle: "",
+  regionsIntro: "",
+  regions: {} as Record<string, { name: string; label: string }>,
+  mapEyebrow: "",
+  mapTitle: "",
+  mapIntro: "",
+  footerTagline: "",
+  footerSubcopy: "",
+};
+
 export function AdminSiteContent() {
   const { settings, loading, refresh } = useSiteSettings();
   const { listings } = useListings();
@@ -43,6 +64,7 @@ export function AdminSiteContent() {
   const [catEyebrow, setCatEyebrow] = useState("");
   const [catTitle, setCatTitle] = useState("");
   const [homeCats, setHomeCats] = useState<Record<string, { title: string; label: string }>>({});
+  const [home, setHome] = useState(EMPTY_HOME);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,6 +82,21 @@ export function AdminSiteContent() {
     setCatTitle(settings.homeContent.categoriesTitle ?? "");
     const hc = settings.homeContent.categories ?? {};
     setHomeCats(Object.fromEntries(HOME_CATS.map((c) => [c.type, { title: hc[c.type]?.title ?? "", label: hc[c.type]?.label ?? "" }])));
+    const h = settings.homeContent;
+    setHome({
+      categoriesIntro: h.categoriesIntro ?? "",
+      editEyebrow: h.editEyebrow ?? "",
+      editTitle: h.editTitle ?? "",
+      regionsEyebrow: h.regionsEyebrow ?? "",
+      regionsTitle: h.regionsTitle ?? "",
+      regionsIntro: h.regionsIntro ?? "",
+      regions: Object.fromEntries(HOME_REGIONS.map((r) => [r.query, { name: h.regions?.[r.query]?.name ?? "", label: h.regions?.[r.query]?.label ?? "" }])),
+      mapEyebrow: h.mapEyebrow ?? "",
+      mapTitle: h.mapTitle ?? "",
+      mapIntro: h.mapIntro ?? "",
+      footerTagline: h.footerTagline ?? "",
+      footerSubcopy: h.footerSubcopy ?? "",
+    });
     setHydrated(true);
   }, [loading, hydrated, settings]);
 
@@ -87,9 +124,23 @@ export function AdminSiteContent() {
           home_content: {
             categoriesEyebrow: catEyebrow.trim(),
             categoriesTitle: catTitle.trim(),
+            categoriesIntro: home.categoriesIntro.trim(),
             categories: Object.fromEntries(
               HOME_CATS.map((c) => [c.type, { title: (homeCats[c.type]?.title ?? "").trim(), label: (homeCats[c.type]?.label ?? "").trim() }]),
             ),
+            editEyebrow: home.editEyebrow.trim(),
+            editTitle: home.editTitle.trim(),
+            regionsEyebrow: home.regionsEyebrow.trim(),
+            regionsTitle: home.regionsTitle.trim(),
+            regionsIntro: home.regionsIntro.trim(),
+            regions: Object.fromEntries(
+              HOME_REGIONS.map((r) => [r.query, { name: (home.regions[r.query]?.name ?? "").trim(), label: (home.regions[r.query]?.label ?? "").trim() }]),
+            ),
+            mapEyebrow: home.mapEyebrow.trim(),
+            mapTitle: home.mapTitle.trim(),
+            mapIntro: home.mapIntro.trim(),
+            footerTagline: home.footerTagline.trim(),
+            footerSubcopy: home.footerSubcopy.trim(),
           },
         })
         .eq("id", 1);
@@ -192,6 +243,10 @@ export function AdminSiteContent() {
             <Label htmlFor="catTitle" className="text-sm font-semibold">Heading <span className="font-normal text-basalt/45">(line breaks allowed)</span></Label>
             <Textarea id="catTitle" rows={2} value={catTitle} onChange={(e) => setCatTitle(e.target.value)} placeholder={"Let curiosity\nchoose the route."} className="rounded-none text-base" />
           </div>
+          <div className="grid gap-2">
+            <Label htmlFor="catIntro" className="text-sm font-semibold">Intro paragraph</Label>
+            <Textarea id="catIntro" rows={2} value={home.categoriesIntro} onChange={(e) => setHome((p) => ({ ...p, categoriesIntro: e.target.value }))} placeholder="Start with a room, a table, a day in the open…" className="rounded-none text-base" />
+          </div>
           {HOME_CATS.map((c) => (
             <div key={c.type} className="grid gap-2 border-t border-basalt/10 pt-4">
               <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-apricot">{c.name} card</p>
@@ -209,6 +264,83 @@ export function AdminSiteContent() {
               />
             </div>
           ))}
+        </div>
+
+        {/* Home "the revamp. edit" (featured) section */}
+        <div className="grid gap-4 border border-basalt/10 bg-paper p-5">
+          <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Home featured section</p>
+          <div className="grid gap-2">
+            <Label className="text-sm font-semibold">Eyebrow</Label>
+            <Input value={home.editEyebrow} onChange={(e) => setHome((p) => ({ ...p, editEyebrow: e.target.value }))} placeholder="The revamp. edit" className="h-11 rounded-none" />
+          </div>
+          <div className="grid gap-2">
+            <Label className="text-sm font-semibold">Heading <span className="font-normal text-basalt/45">(line breaks allowed)</span></Label>
+            <Textarea rows={2} value={home.editTitle} onChange={(e) => setHome((p) => ({ ...p, editTitle: e.target.value }))} placeholder="Worth taking the long way." className="rounded-none text-base" />
+          </div>
+        </div>
+
+        {/* Home regions section */}
+        <div className="grid gap-4 border border-basalt/10 bg-paper p-5">
+          <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Home regions section</p>
+          <div className="grid gap-2">
+            <Label className="text-sm font-semibold">Eyebrow</Label>
+            <Input value={home.regionsEyebrow} onChange={(e) => setHome((p) => ({ ...p, regionsEyebrow: e.target.value }))} placeholder="Regions to read slowly" className="h-11 rounded-none" />
+          </div>
+          <div className="grid gap-2">
+            <Label className="text-sm font-semibold">Heading <span className="font-normal text-basalt/45">(line breaks allowed)</span></Label>
+            <Textarea rows={2} value={home.regionsTitle} onChange={(e) => setHome((p) => ({ ...p, regionsTitle: e.target.value }))} placeholder="The landscape changes the story." className="rounded-none text-base" />
+          </div>
+          <div className="grid gap-2">
+            <Label className="text-sm font-semibold">Intro paragraph</Label>
+            <Textarea rows={2} value={home.regionsIntro} onChange={(e) => setHome((p) => ({ ...p, regionsIntro: e.target.value }))} placeholder="From Tavush forest to the high blue of Sevan…" className="rounded-none text-base" />
+          </div>
+          {HOME_REGIONS.map((r) => (
+            <div key={r.query} className="grid gap-2 border-t border-basalt/10 pt-4">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-apricot">{r.name} card</p>
+              <Input
+                value={home.regions[r.query]?.name ?? ""}
+                onChange={(e) => setHome((p) => ({ ...p, regions: { ...p.regions, [r.query]: { ...(p.regions[r.query] ?? { name: "", label: "" }), name: e.target.value } } }))}
+                placeholder={r.name}
+                className="h-11 rounded-none"
+              />
+              <Input
+                value={home.regions[r.query]?.label ?? ""}
+                onChange={(e) => setHome((p) => ({ ...p, regions: { ...p.regions, [r.query]: { ...(p.regions[r.query] ?? { name: "", label: "" }), label: e.target.value } } }))}
+                placeholder={r.label}
+                className="h-11 rounded-none"
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* Home map section */}
+        <div className="grid gap-4 border border-basalt/10 bg-paper p-5">
+          <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Home map section</p>
+          <div className="grid gap-2">
+            <Label className="text-sm font-semibold">Eyebrow</Label>
+            <Input value={home.mapEyebrow} onChange={(e) => setHome((p) => ({ ...p, mapEyebrow: e.target.value }))} placeholder="Move through the map" className="h-11 rounded-none" />
+          </div>
+          <div className="grid gap-2">
+            <Label className="text-sm font-semibold">Heading <span className="font-normal text-basalt/45">(line breaks allowed)</span></Label>
+            <Textarea rows={2} value={home.mapTitle} onChange={(e) => setHome((p) => ({ ...p, mapTitle: e.target.value }))} placeholder={"See what’s\naround the bend."} className="rounded-none text-base" />
+          </div>
+          <div className="grid gap-2">
+            <Label className="text-sm font-semibold">Intro paragraph</Label>
+            <Textarea rows={2} value={home.mapIntro} onChange={(e) => setHome((p) => ({ ...p, mapIntro: e.target.value }))} placeholder="Hover a place to follow it across Armenia…" className="rounded-none text-base" />
+          </div>
+        </div>
+
+        {/* Footer brand statement (site-wide) */}
+        <div className="grid gap-4 border border-basalt/10 bg-paper p-5">
+          <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Footer statement <span className="font-normal normal-case tracking-normal text-basalt/45">(shown site-wide)</span></p>
+          <div className="grid gap-2">
+            <Label className="text-sm font-semibold">Tagline</Label>
+            <Textarea rows={2} value={home.footerTagline} onChange={(e) => setHome((p) => ({ ...p, footerTagline: e.target.value }))} placeholder="Find the Armenia that lives between the landmarks." className="rounded-none text-base" />
+          </div>
+          <div className="grid gap-2">
+            <Label className="text-sm font-semibold">Sub-copy</Label>
+            <Textarea rows={2} value={home.footerSubcopy} onChange={(e) => setHome((p) => ({ ...p, footerSubcopy: e.target.value }))} placeholder="Curated stays, tables, and local routes…" className="rounded-none text-base" />
+          </div>
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}

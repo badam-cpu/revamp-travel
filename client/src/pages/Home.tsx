@@ -41,11 +41,31 @@ export default function Home() {
   const hc = settings.homeContent;
   const categoriesEyebrow = hc.categoriesEyebrow?.trim() || "Four ways in";
   const categoriesTitle = hc.categoriesTitle?.trim() || "Let curiosity\nchoose the route.";
+  const categoriesIntro =
+    hc.categoriesIntro?.trim() ||
+    "Start with a room, a table, a day in the open, or something made with your own hands. Each collection is small enough to feel considered and broad enough to lead somewhere unexpected.";
   const cards = categories.map((c) => ({
     ...c,
     title: hc.categories?.[c.type]?.title?.trim() || c.title,
     label: hc.categories?.[c.type]?.label?.trim() || c.label,
   }));
+  const editEyebrow = hc.editEyebrow?.trim() || "The revamp. edit";
+  const editTitle = hc.editTitle?.trim() || "Worth taking the long way.";
+  const regionsEyebrow = hc.regionsEyebrow?.trim() || "Regions to read slowly";
+  const regionsTitle = hc.regionsTitle?.trim() || "The landscape changes the story.";
+  const regionsIntro =
+    hc.regionsIntro?.trim() ||
+    "From Tavush forest to the high blue of Sevan and the deep southern folds of Syunik, Armenia rewards the detour.";
+  const regionCards = regions.map((r) => ({
+    ...r,
+    name: hc.regions?.[r.query]?.name?.trim() || r.name,
+    label: hc.regions?.[r.query]?.label?.trim() || r.label,
+  }));
+  const mapEyebrow = hc.mapEyebrow?.trim() || "Move through the map";
+  const mapTitle = hc.mapTitle?.trim() || "See what’s\naround the bend.";
+  const mapIntro =
+    hc.mapIntro?.trim() ||
+    "Hover a place to follow it across Armenia, then open the full atlas when geography—not category—is leading the plan.";
 
   // Featured row: admin's ordered slug list (published only) if set, else the
   // automatic pick (listings flagged `featured`, falling back to the first few).
@@ -90,7 +110,7 @@ export default function Home() {
         <section className="container py-20 lg:py-28">
           <div className="grid gap-8 lg:grid-cols-[0.7fr_1.3fr] lg:items-end">
             <div><p className="eyebrow">{categoriesEyebrow}</p><h2 className="mt-3 whitespace-pre-line font-display text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl">{categoriesTitle}</h2></div>
-            <p className="max-w-xl text-base leading-7 text-basalt/58 lg:justify-self-end">Start with a room, a table, a day in the open, or something made with your own hands. Each collection is small enough to feel considered and broad enough to lead somewhere unexpected.</p>
+            <p className="max-w-xl whitespace-pre-line text-base leading-7 text-basalt/58 lg:justify-self-end">{categoriesIntro}</p>
           </div>
           <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {cards.map((category) => (
@@ -107,7 +127,7 @@ export default function Home() {
         <section className="border-y border-basalt/10 bg-chalk">
           <div className="container py-20 lg:py-28">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-              <div><p className="eyebrow">The revamp. edit</p><h2 className="mt-3 font-display text-5xl tracking-[-0.04em] sm:text-6xl">Worth taking the long way.</h2></div>
+              <div><p className="eyebrow">{editEyebrow}</p><h2 className="mt-3 whitespace-pre-line font-display text-5xl tracking-[-0.04em] sm:text-6xl">{editTitle}</h2></div>
               <Link href="/explore" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.17em] text-apricot hover:text-basalt">See every place <ArrowRight className="h-4 w-4" /></Link>
             </div>
             <div className="mt-12 grid gap-x-7 gap-y-12 md:grid-cols-2 lg:grid-cols-3">
@@ -120,11 +140,11 @@ export default function Home() {
           <div className="pointer-events-none absolute -right-16 -top-28 text-[22rem] font-bold leading-none tracking-[-0.12em] text-white/[0.045]">re.</div>
           <div className="container">
             <div className="grid gap-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-end">
-              <div><p className="eyebrow text-apricot">Regions to read slowly</p><h2 className="mt-3 font-display text-5xl leading-[0.94] tracking-[-0.04em] sm:text-6xl">The landscape changes the story.</h2></div>
-              <p className="max-w-xl text-base leading-7 text-paper/52 lg:justify-self-end">From Tavush forest to the high blue of Sevan and the deep southern folds of Syunik, Armenia rewards the detour.</p>
+              <div><p className="eyebrow text-apricot">{regionsEyebrow}</p><h2 className="mt-3 whitespace-pre-line font-display text-5xl leading-[0.94] tracking-[-0.04em] sm:text-6xl">{regionsTitle}</h2></div>
+              <p className="max-w-xl whitespace-pre-line text-base leading-7 text-paper/52 lg:justify-self-end">{regionsIntro}</p>
             </div>
             <div className="mt-12 grid gap-5 md:grid-cols-[1.1fr_0.9fr_1.1fr]">
-              {regions.map((region, index) => (
+              {regionCards.map((region, index) => (
                 <Link key={region.name} href={`/explore?query=${region.query}`} className={`region-card group relative overflow-hidden ${index === 1 ? "md:mt-14" : ""}`}>
                   <img src={region.image} alt={region.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.025]" />
                   <div className="absolute inset-0 bg-gradient-to-t from-basalt/78 via-transparent to-transparent" />
@@ -138,9 +158,9 @@ export default function Home() {
         <section className="bg-paper py-20 lg:py-28">
           <div className="container grid gap-10 lg:grid-cols-[0.78fr_1.22fr]">
             <div>
-              <p className="eyebrow">Move through the map</p>
-              <h2 className="mt-3 font-display text-5xl leading-[0.94] tracking-[-0.04em] sm:text-6xl">See what’s<br />around the bend.</h2>
-              <p className="mt-5 max-w-md text-sm leading-7 text-basalt/55">Hover a place to follow it across Armenia, then open the full atlas when geography—not category—is leading the plan.</p>
+              <p className="eyebrow">{mapEyebrow}</p>
+              <h2 className="mt-3 whitespace-pre-line font-display text-5xl leading-[0.94] tracking-[-0.04em] sm:text-6xl">{mapTitle}</h2>
+              <p className="mt-5 max-w-md whitespace-pre-line text-sm leading-7 text-basalt/55">{mapIntro}</p>
               <div className="mt-8 space-y-2">
                 {featured.slice(0, 4).map((listing) => (
                   <Link key={listing.id} href={`/listing/${listing.slug}`} onMouseEnter={() => setSelectedId(listing.id)} className={`flex items-center justify-between border-t border-basalt/10 py-4 transition-colors hover:text-apricot ${selectedId === listing.id ? "text-apricot" : ""}`}>

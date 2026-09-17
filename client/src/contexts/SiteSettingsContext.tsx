@@ -18,12 +18,29 @@ export interface HomeCategoryContent {
   title?: string;
   label?: string;
 }
+/** Per-region editorial override (keyed by the region's `query` slug). */
+export interface HomeRegionContent {
+  name?: string;
+  label?: string;
+}
 /** Admin-editable home editorial copy (see migration 0023). All optional —
  * blank fields fall back to the app's built-in defaults in Home.tsx. */
 export interface HomeContent {
   categoriesEyebrow?: string;
   categoriesTitle?: string;
+  categoriesIntro?: string;
   categories?: Record<string, HomeCategoryContent>;
+  editEyebrow?: string;
+  editTitle?: string;
+  regionsEyebrow?: string;
+  regionsTitle?: string;
+  regionsIntro?: string;
+  regions?: Record<string, HomeRegionContent>;
+  mapEyebrow?: string;
+  mapTitle?: string;
+  mapIntro?: string;
+  footerTagline?: string;
+  footerSubcopy?: string;
 }
 
 export interface SiteSettings {
