@@ -251,7 +251,7 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
             disabled={!selected || submitting}
             className={cn("mt-4 h-12 w-full rounded-none bg-apricot text-white hover:bg-apricot/90", (!selected || submitting) && "opacity-60")}
           >
-            {submitting ? "Starting checkout…" : selected ? `${user ? "Request to book" : "Continue to payment"} · ${format(amountCents)}` : "Select dates to book"}
+            {submitting ? (isStay ? "Reserving your dates…" : "Reserving your spot…") : selected ? `Book · ${format(amountCents)}` : "Select dates to book"}
           </Button>
           {!user && (
             <p className="mt-2 text-center text-[11px] text-basalt/45">
