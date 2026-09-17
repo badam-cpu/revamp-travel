@@ -13,6 +13,19 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
+/** Per-card editorial override for the home "choose the route" section. */
+export interface HomeCategoryContent {
+  title?: string;
+  label?: string;
+}
+/** Admin-editable home editorial copy (see migration 0023). All optional —
+ * blank fields fall back to the app's built-in defaults in Home.tsx. */
+export interface HomeContent {
+  categoriesEyebrow?: string;
+  categoriesTitle?: string;
+  categories?: Record<string, HomeCategoryContent>;
+}
+
 export interface SiteSettings {
   heroImage: string;
   heroHeadline: string;
@@ -23,6 +36,8 @@ export interface SiteSettings {
   announcementHref: string;
   /** AMD per 1 USD, admin-set. 0 = AMD display disabled (USD only). */
   usdToAmdRate: number;
+  /** Admin-editable home editorial copy (empty {} = all defaults). */
+  homeContent: HomeContent;
 }
 
 export const EMPTY_SITE_SETTINGS: SiteSettings = {
@@ -34,10 +49,11 @@ export const EMPTY_SITE_SETTINGS: SiteSettings = {
   announcementMessage: "",
   announcementHref: "",
   usdToAmdRate: 0,
+  homeContent: {},
 };
 
 export const SITE_SETTINGS_COLUMNS =
-  "hero_image, hero_headline, hero_subcopy, featured_slugs, announcement_enabled, announcement_message, announcement_href, usd_to_amd_rate";
+  "hero_image, hero_headline, hero_subcopy, featured_slugs, announcement_enabled, announcement_message, announcement_href, usd_to_amd_rate, home_content";
 
 interface SiteSettingsRow {
   hero_image: string | null;
@@ -48,6 +64,7 @@ interface SiteSettingsRow {
   announcement_message: string | null;
   announcement_href: string | null;
   usd_to_amd_rate: number | null;
+  home_content: HomeContent | null;
 }
 
 export function mapSiteSettingsRow(row: SiteSettingsRow): SiteSettings {
@@ -60,6 +77,7 @@ export function mapSiteSettingsRow(row: SiteSettingsRow): SiteSettings {
     announcementMessage: row.announcement_message ?? "",
     announcementHref: row.announcement_href ?? "",
     usdToAmdRate: Number(row.usd_to_amd_rate) || 0,
+    homeContent: row.home_content && typeof row.home_content === "object" ? row.home_content : {},
   };
 }
 

@@ -36,6 +36,17 @@ export default function Home() {
     settings.heroSubcopy ||
     "Exceptional stays, Armenian tables, and local routes—carefully gathered for travelers who want to feel the country, not just pass through it.";
 
+  // Admin-editable "choose the route" section: heading + per-card title/label,
+  // each falling back to the built-in default.
+  const hc = settings.homeContent;
+  const categoriesEyebrow = hc.categoriesEyebrow?.trim() || "Four ways in";
+  const categoriesTitle = hc.categoriesTitle?.trim() || "Let curiosity\nchoose the route.";
+  const cards = categories.map((c) => ({
+    ...c,
+    title: hc.categories?.[c.type]?.title?.trim() || c.title,
+    label: hc.categories?.[c.type]?.label?.trim() || c.label,
+  }));
+
   // Featured row: admin's ordered slug list (published only) if set, else the
   // automatic pick (listings flagged `featured`, falling back to the first few).
   const adminFeatured = settings.featuredSlugs
@@ -78,11 +89,11 @@ export default function Home() {
 
         <section className="container py-20 lg:py-28">
           <div className="grid gap-8 lg:grid-cols-[0.7fr_1.3fr] lg:items-end">
-            <div><p className="eyebrow">Four ways in</p><h2 className="mt-3 font-display text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl">Let curiosity<br />choose the route.</h2></div>
+            <div><p className="eyebrow">{categoriesEyebrow}</p><h2 className="mt-3 whitespace-pre-line font-display text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl">{categoriesTitle}</h2></div>
             <p className="max-w-xl text-base leading-7 text-basalt/58 lg:justify-self-end">Start with a room, a table, a day in the open, or something made with your own hands. Each collection is small enough to feel considered and broad enough to lead somewhere unexpected.</p>
           </div>
           <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {categories.map((category) => (
+            {cards.map((category) => (
               <Link key={category.type} href={`/explore/${category.type}`} className="category-panel group relative overflow-hidden">
                 <img src={category.image} alt="" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.025]" />
                 <div className="absolute inset-0 bg-gradient-to-t from-basalt/78 via-basalt/8 to-transparent" />

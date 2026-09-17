@@ -18,6 +18,15 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 
+// The four home "choose the route" cards, with their built-in defaults (used as
+// placeholders so an admin sees what a blank field falls back to).
+const HOME_CATS = [
+  { type: "stay", name: "Stay", title: "Stay with a sense of place", label: "Homes, cabins & small hotels" },
+  { type: "eat", name: "Eat", title: "Taste the landscape", label: "Tables, cellars & courtyards" },
+  { type: "tour", name: "Tour", title: "Go with someone local", label: "Walks, routes & field days" },
+  { type: "experience", name: "Experience", title: "Make something with your hands", label: "Classes, crafts & tastings" },
+];
+
 export function AdminSiteContent() {
   const { settings, loading, refresh } = useSiteSettings();
   const { listings } = useListings();
@@ -31,6 +40,9 @@ export function AdminSiteContent() {
   const [annMessage, setAnnMessage] = useState("");
   const [annHref, setAnnHref] = useState("");
   const [rate, setRate] = useState("");
+  const [catEyebrow, setCatEyebrow] = useState("");
+  const [catTitle, setCatTitle] = useState("");
+  const [homeCats, setHomeCats] = useState<Record<string, { title: string; label: string }>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,6 +56,10 @@ export function AdminSiteContent() {
     setAnnMessage(settings.announcementMessage);
     setAnnHref(settings.announcementHref);
     setRate(settings.usdToAmdRate ? String(settings.usdToAmdRate) : "");
+    setCatEyebrow(settings.homeContent.categoriesEyebrow ?? "");
+    setCatTitle(settings.homeContent.categoriesTitle ?? "");
+    const hc = settings.homeContent.categories ?? {};
+    setHomeCats(Object.fromEntries(HOME_CATS.map((c) => [c.type, { title: hc[c.type]?.title ?? "", label: hc[c.type]?.label ?? "" }])));
     setHydrated(true);
   }, [loading, hydrated, settings]);
 
@@ -68,6 +84,13 @@ export function AdminSiteContent() {
           announcement_message: annMessage.trim(),
           announcement_href: annHref.trim(),
           usd_to_amd_rate: Number(rate) || 0,
+          home_content: {
+            categoriesEyebrow: catEyebrow.trim(),
+            categoriesTitle: catTitle.trim(),
+            categories: Object.fromEntries(
+              HOME_CATS.map((c) => [c.type, { title: (homeCats[c.type]?.title ?? "").trim(), label: (homeCats[c.type]?.label ?? "").trim() }]),
+            ),
+          },
         })
         .eq("id", 1);
       if (err) throw new Error(err.message);
@@ -156,6 +179,36 @@ export function AdminSiteContent() {
           <p className="text-xs text-basalt/50">Prices settle in USD; this rate powers the AMD/USD switcher (display only). Set 0 to hide AMD.</p>
           <Label htmlFor="usdToAmd" className="text-sm font-semibold">AMD per 1 USD</Label>
           <Input id="usdToAmd" type="number" min={0} step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="e.g. 387" className="h-11 w-48 rounded-none" />
+        </div>
+
+        {/* Home "choose the route" section */}
+        <div className="grid gap-4 border border-basalt/10 bg-paper p-5">
+          <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Home “choose the route” section</p>
+          <div className="grid gap-2">
+            <Label htmlFor="catEyebrow" className="text-sm font-semibold">Eyebrow</Label>
+            <Input id="catEyebrow" value={catEyebrow} onChange={(e) => setCatEyebrow(e.target.value)} placeholder="Four ways in" className="h-11 rounded-none" />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="catTitle" className="text-sm font-semibold">Heading <span className="font-normal text-basalt/45">(line breaks allowed)</span></Label>
+            <Textarea id="catTitle" rows={2} value={catTitle} onChange={(e) => setCatTitle(e.target.value)} placeholder={"Let curiosity\nchoose the route."} className="rounded-none text-base" />
+          </div>
+          {HOME_CATS.map((c) => (
+            <div key={c.type} className="grid gap-2 border-t border-basalt/10 pt-4">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-apricot">{c.name} card</p>
+              <Input
+                value={homeCats[c.type]?.title ?? ""}
+                onChange={(e) => setHomeCats((p) => ({ ...p, [c.type]: { ...(p[c.type] ?? { title: "", label: "" }), title: e.target.value } }))}
+                placeholder={c.title}
+                className="h-11 rounded-none"
+              />
+              <Input
+                value={homeCats[c.type]?.label ?? ""}
+                onChange={(e) => setHomeCats((p) => ({ ...p, [c.type]: { ...(p[c.type] ?? { title: "", label: "" }), label: e.target.value } }))}
+                placeholder={c.label}
+                className="h-11 rounded-none"
+              />
+            </div>
+          ))}
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
