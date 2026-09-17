@@ -41,6 +41,7 @@ import { ApiError, importListingPrefill, syncIcal } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { PlaceAutocomplete } from "@/components/PlaceAutocomplete";
 import { AmenityPicker, AmenityPickerHandle } from "@/components/AmenityPicker";
+import { HouseRulesPicker, HouseRulesPickerHandle } from "@/components/HouseRulesPicker";
 import { PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
 import { SearchableMultiSelect, SearchableMultiSelectHandle } from "@/components/SearchableMultiSelect";
 import { OperatorBookings } from "@/components/OperatorBookings";
@@ -79,6 +80,7 @@ interface RefLists {
   notIncluded: string[];
   whatToBring: string[];
   notSuitableFor: string[];
+  houseRules: string[];
 }
 
 function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLists): ListingInput {
@@ -88,7 +90,7 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
   // amenities/photos and the searchable lists (notIncluded/whatToBring/
   // notSuitableFor) come from their ref-based pickers, passed in via `lists`.
   // Highlights stays a free-text field; importantInfo a free-text note.
-  const { amenities, photos, notIncluded, whatToBring, notSuitableFor } = lists;
+  const { amenities, photos, notIncluded, whatToBring, notSuitableFor, houseRules } = lists;
   const highlights = get("highlights").split(",").map((t) => t.trim()).filter(Boolean);
   const importantInfo = get("importantInfo").trim();
   const facts = [1, 2, 3, 4, 5, 6]
@@ -125,6 +127,7 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
     freeCancelDays: Number(get("freeCancelDays")) >= 0 && get("freeCancelDays") !== "" ? Number(get("freeCancelDays")) : 7,
     nonrefundableDiscountPercent: Number(get("nonrefundableDiscountPercent")) >= 0 && get("nonrefundableDiscountPercent") !== "" ? Number(get("nonrefundableDiscountPercent")) : 5,
     cleaningFeeCents: Number(get("cleaningFee")) > 0 ? Math.round(Number(get("cleaningFee")) * 100) : 0,
+    houseRules,
   };
 }
 
@@ -200,6 +203,7 @@ function ListingFormDialog({
   const [stepError, setStepError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const amenitiesRef = useRef<AmenityPickerHandle>(null);
+  const houseRulesRef = useRef<HouseRulesPickerHandle>(null);
   const photosRef = useRef<PhotoUploaderHandle>(null);
   const notIncludedRef = useRef<SearchableMultiSelectHandle>(null);
   const whatToBringRef = useRef<SearchableMultiSelectHandle>(null);
@@ -267,6 +271,7 @@ function ListingFormDialog({
         notIncluded: notIncludedRef.current?.getValue() ?? [],
         whatToBring: whatToBringRef.current?.getValue() ?? [],
         notSuitableFor: notSuitableForRef.current?.getValue() ?? [],
+        houseRules: houseRulesRef.current?.getValue() ?? [],
       });
       if (isEdit && draft.id) {
         await updateListing(draft.id, payload);
@@ -416,6 +421,9 @@ function ListingFormDialog({
               {/* Step 4 — amenities & pricing */}
               <div hidden={step !== 3} className="mt-10 grid gap-8">
                 <AmenityPicker ref={amenitiesRef} type={draft.type} defaultValue={draft.amenities ?? []} />
+
+                {/* Stay-only house rules. */}
+                {draft.type === "stay" && <HouseRulesPicker ref={houseRulesRef} defaultValue={draft.houseRules ?? []} />}
 
                 {/* Tour & experience-only detail fields. */}
                 {(draft.type === "tour" || draft.type === "experience") && (

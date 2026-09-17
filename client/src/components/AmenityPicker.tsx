@@ -52,7 +52,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import type { ListingType } from "@shared/listings";
 
-type AmenityGroup = { category: string; items: string[] };
+export type AmenityGroup = { category: string; items: string[] };
 
 // Full stay-facilities taxonomy (operator-provided). "Floor" and "Size" are
 // omitted deliberately — they're numeric value fields in the source, not
@@ -111,12 +111,12 @@ const STAY_GROUPS: AmenityGroup[] = [
     ],
   },
   {
+    // Note: smoking/pets/parties/children *policies* live in the dedicated
+    // House rules field (client/src/lib/houseRules.ts), not here.
     category: "Suitability",
     items: [
-      "0-2 years", "3-12 years", "13-17 years", "Accessibility Ask", "Business Center", "Children Not Allowed",
-      "Children Welcome", "Designated Smoking Area", "EV Charger", "Long Term Stays Allowed", "Must climb stairs",
-      "Other Events Allowed", "Pets Allowed", "Pets Not Allowed", "Private Condo in the Building",
-      "Private entrance", "Single level home", "Smoking Allowed", "Smoking Ask", "Smoking Not Allowed",
+      "0-2 years", "3-12 years", "13-17 years", "Accessibility Ask", "Business Center", "EV Charger",
+      "Must climb stairs", "Private Condo in the Building", "Private entrance", "Single level home",
       "Wheelchair Accessible", "Wheelchair Inaccessible",
     ],
   },
@@ -190,6 +190,28 @@ export type AmenityPickerHandle = { getValue: () => string[] };
 /** Case/punctuation-insensitive key for loose matching against the curated list — "Wi-Fi" and "wifi" both normalize to "wifi". */
 function normalizeAmenity(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+/**
+ * Groups a listing's selected amenities by the curated catalog categories, for
+ * display on the listing page (the "all amenities" modal). Anything not in the
+ * catalog falls into a trailing "More" group, so nothing is dropped. Preserves
+ * the catalog's category order.
+ */
+export function groupAmenitiesForDisplay(type: ListingType, values: string[]): AmenityGroup[] {
+  const groups = CATALOGS[type] ?? [];
+  const catByItem = new Map<string, string>();
+  for (const g of groups) for (const it of g.items) catByItem.set(normalizeAmenity(it), g.category);
+  const buckets = new Map<string, string[]>();
+  for (const v of values) {
+    const cat = catByItem.get(normalizeAmenity(v)) ?? "More";
+    if (!buckets.has(cat)) buckets.set(cat, []);
+    buckets.get(cat)!.push(v);
+  }
+  const result: AmenityGroup[] = [];
+  for (const g of groups) if (buckets.has(g.category)) result.push({ category: g.category, items: buckets.get(g.category)! });
+  if (buckets.has("More")) result.push({ category: "More", items: buckets.get("More")! });
+  return result;
 }
 
 export const AmenityPicker = forwardRef<AmenityPickerHandle, { type: ListingType; defaultValue: string[] }>(

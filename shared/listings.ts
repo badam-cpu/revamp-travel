@@ -65,6 +65,8 @@ export interface Listing {
   nonrefundableDiscountPercent?: number;
   /** Flat cleaning fee added once per booking (operator keeps it, less commission). */
   cleaningFeeCents?: number;
+  /** Stay house rules (no smoking / no pets / self check-in, …) — see client/src/lib/houseRules.ts. */
+  houseRules?: string[];
 }
 
 // Deployment note: this fork replaces the Manus-managed `/manus-storage/...`
@@ -463,4 +465,6 @@ export interface ListingInput {
   nonrefundableDiscountPercent?: number;
   /** Flat cleaning fee added once per booking (operator keeps it, less commission). */
   cleaningFeeCents?: number;
+  /** Stay house rules (no smoking / no pets / self check-in, …) — see client/src/lib/houseRules.ts. */
+  houseRules?: string[];
 }

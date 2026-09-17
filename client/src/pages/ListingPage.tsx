@@ -1,5 +1,6 @@
 /** Revamp brandbook: detail pages combine rounded imagery, bold sans hierarchy, concise facts, white space, and orange actions. */
-import { ArrowLeft, BedDouble, Bookmark, Check, Coffee, KeyRound, MapPin, Share2, Sparkles, SprayCan, Wifi } from "lucide-react";
+import { useState } from "react";
+import { ArrowLeft, BedDouble, Bookmark, Check, Coffee, KeyRound, MapPin, Share2, ShieldCheck, Sparkles, SprayCan, Wifi } from "lucide-react";
 import { Link } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -8,12 +9,16 @@ import { ListingCard } from "@/components/ListingCard";
 import { TourDetail } from "@/components/TourDetail";
 import { BookingPanel } from "@/components/BookingPanel";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { groupAmenitiesForDisplay } from "@/components/AmenityPicker";
+import { houseRuleIcon } from "@/lib/houseRules";
 import { findListing, typeLabels } from "@/data/listings";
 import { useListings } from "@/contexts/ListingsContext";
 import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { cn } from "@/lib/utils";
+import { describeCancellationPolicy } from "@shared/bookings";
 import { buildBreadcrumbJsonLd, buildListingJsonLd } from "@shared/seo";
 import { toast } from "sonner";
 
@@ -29,10 +34,15 @@ const REVAMP_STANDARD = [
   { icon: Sparkles, label: "Cleaned before you arrive" },
 ];
 
+/** How many of a listing's own amenities to show inline before the "show all"
+ * modal — keeps a 30-35-amenity listing from flooding the page. */
+const AMENITIES_INLINE_LIMIT = 10;
+
 export default function ListingPage({ params }: { params: { slug: string } }) {
   const { listings, loading } = useListings();
   const { isSaved, toggleSaved } = useSavedPlaces();
   const { format } = useCurrency();
+  const [amenitiesOpen, setAmenitiesOpen] = useState(false);
   const listing = findListing(params.slug, listings);
   const saved = listing ? isSaved(listing.id) : false;
   const priceLabel = listing && listing.price > 0 ? format(Math.round(listing.price * 100)) : "Rate on request";
@@ -94,6 +104,18 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
 
   const related = listings.filter((item) => item.id !== listing.id && (item.type === listing.type || item.region === listing.region)).slice(0, 3);
 
+  // Listing-page derived data: grouped amenities for the "all amenities" modal,
+  // an inline-limited slice so a 30+ amenity listing doesn't flood the page,
+  // the operator's house rules, and the cancellation policy summary.
+  const amenityGroups = groupAmenitiesForDisplay(listing.type, listing.amenities);
+  const inlineAmenities = listing.amenities.slice(0, AMENITIES_INLINE_LIMIT);
+  const hiddenAmenityCount = Math.max(0, listing.amenities.length - inlineAmenities.length);
+  const houseRules = listing.houseRules ?? [];
+  const cancellationText = describeCancellationPolicy(listing.cancellationPolicy, {
+    freeCancelDays: listing.freeCancelDays,
+    discountPercent: listing.nonrefundableDiscountPercent,
+  });
+
   return (
     <div className="min-h-screen bg-paper text-basalt">
       <SiteHeader />
@@ -149,7 +171,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
                 </div>
                 <button
                   type="button"
-                  onClick={() => document.getElementById("amenities")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                  onClick={() => setAmenitiesOpen(true)}
                   className="mt-7 rounded-full bg-basalt/[0.07] px-5 py-2.5 text-sm font-semibold text-basalt transition-colors hover:bg-basalt/15"
                 >
                   All amenities
@@ -157,11 +179,42 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
               </div>
             )}
 
-            <div id="amenities" className="py-10 scroll-mt-24">
-              <p className="eyebrow">What’s part of the experience</p>
-              <div className="mt-6 grid gap-x-8 gap-y-4 sm:grid-cols-2">
-                {listing.amenities.map((amenity) => <div key={amenity} className="flex items-center gap-3 border-b border-basalt/10 pb-3 text-sm"><span className="grid h-6 w-6 place-items-center rounded-full bg-sevan/10 text-sevan"><Check className="h-3.5 w-3.5" /></span>{amenity}</div>)}
+            {listing.amenities.length > 0 && (
+              <div id="amenities" className="py-10 scroll-mt-24">
+                <p className="eyebrow">What’s part of the experience</p>
+                <div className="mt-6 grid gap-x-8 gap-y-4 sm:grid-cols-2">
+                  {inlineAmenities.map((amenity) => <div key={amenity} className="flex items-center gap-3 border-b border-basalt/10 pb-3 text-sm"><span className="grid h-6 w-6 place-items-center rounded-full bg-sevan/10 text-sevan"><Check className="h-3.5 w-3.5" /></span>{amenity}</div>)}
+                </div>
+                {hiddenAmenityCount > 0 && (
+                  <Button variant="outline" className="mt-7 rounded-none border-basalt/20 bg-paper" onClick={() => setAmenitiesOpen(true)}>
+                    Show all {listing.amenities.length} amenities
+                  </Button>
+                )}
               </div>
+            )}
+
+            {houseRules.length > 0 && (
+              <div className="border-t border-basalt/10 py-10">
+                <p className="eyebrow">House rules</p>
+                <div className="mt-6 flex flex-wrap gap-3">
+                  {houseRules.map((rule) => {
+                    const Icon = houseRuleIcon(rule);
+                    return (
+                      <span key={rule} className="inline-flex items-center gap-2.5 border border-basalt/12 bg-chalk px-4 py-2.5 text-sm font-medium text-basalt">
+                        <Icon className="h-4 w-4 shrink-0 text-basalt/60" strokeWidth={1.75} /> {rule}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="border-t border-basalt/10 py-10">
+              <p className="eyebrow">Cancellation policy</p>
+              <p className="mt-4 flex items-start gap-3 text-base leading-7 text-basalt/70">
+                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-apricot" strokeWidth={1.75} />
+                <span>{cancellationText}.{listing.cancellationPolicy === "non_refundable" ? " This rate is non-refundable." : " Cancel before the cutoff for a full refund; after it, the booking is non-refundable."}</span>
+              </p>
             </div>
 
             <div className="grid gap-2 sm:grid-cols-2">
@@ -211,6 +264,28 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
           Book
         </Button>
       </div>
+      <Dialog open={amenitiesOpen} onOpenChange={setAmenitiesOpen}>
+        <DialogContent className="max-h-[85vh] gap-0 overflow-y-auto rounded-none sm:max-w-2xl">
+          <DialogHeader className="border-b border-basalt/10 pb-4">
+            <DialogTitle className="font-display text-2xl font-normal tracking-[-0.02em]">Amenities</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-8 py-6">
+            {amenityGroups.map((group) => (
+              <div key={group.category}>
+                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-basalt/45">{group.category}</p>
+                <div className="mt-3 grid gap-x-8 gap-y-3 sm:grid-cols-2">
+                  {group.items.map((item) => (
+                    <div key={item} className="flex items-center gap-3 border-b border-basalt/10 pb-3 text-sm text-basalt">
+                      <Check className="h-4 w-4 shrink-0 text-apricot" /> {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <SiteFooter />
     </div>
   );
