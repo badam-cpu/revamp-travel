@@ -65,6 +65,36 @@ export function ensureMapsScript(): Promise<boolean> {
   return scriptPromise;
 }
 
+/**
+ * Resolve a free-text location (e.g. "Koghbatsi Street, Yerevan, Armenia") to
+ * coordinates via Google Places (New) `Place.searchByText` — reusing the Places
+ * library that address autocomplete already needs, so no extra API to enable.
+ * Never throws — resolves to `null` if the key/library is unavailable, nothing
+ * matches, or the result falls outside Armenia (a sanity bound).
+ */
+export async function geocodeQuery(query: string): Promise<{ lat: number; lng: number } | null> {
+  const q = query.trim();
+  if (!q) return null;
+  const ready = await ensureMapsScript();
+  if (!ready) return null;
+  try {
+    const lib = (await google.maps.importLibrary("places")) as unknown as {
+      Place: { searchByText: (req: unknown) => Promise<{ places: unknown[] }> };
+    };
+    const { places } = await lib.Place.searchByText({ textQuery: q, fields: ["location"], maxResultCount: 1, region: "am" });
+    const p = places?.[0] as { location?: { lat: number | (() => number); lng: number | (() => number) } } | undefined;
+    if (!p?.location) return null;
+    const lat = typeof p.location.lat === "function" ? p.location.lat() : p.location.lat;
+    const lng = typeof p.location.lng === "function" ? p.location.lng() : p.location.lng;
+    if (typeof lat !== "number" || typeof lng !== "number") return null;
+    if (lat < 38 || lat > 42 || lng < 43 || lng > 47) return null; // outside Armenia — ignore
+    return { lat, lng };
+  } catch (err) {
+    console.error("Geocode lookup failed", err);
+    return null;
+  }
+}
+
 export interface ResolvedPlace {
   city?: string;
   region?: string;

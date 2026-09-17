@@ -40,6 +40,7 @@ import type { ListingInput, ListingType } from "@shared/listings";
 import { ApiError, importListingPrefill, syncIcal } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { PlaceAutocomplete } from "@/components/PlaceAutocomplete";
+import { geocodeQuery } from "@/lib/googleMaps";
 import { AmenityPicker, AmenityPickerHandle } from "@/components/AmenityPicker";
 import { HouseRulesPicker, HouseRulesPickerHandle } from "@/components/HouseRulesPicker";
 import { PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
@@ -267,7 +268,8 @@ function ListingFormDialog({
     setSaving(true);
     setError(null);
     try {
-      const payload = toInputPayload(draft, event.currentTarget, {
+      const form = event.currentTarget;
+      const payload = toInputPayload(draft, form, {
         amenities: amenitiesRef.current?.getValue() ?? [],
         photos: photosRef.current?.getValue() ?? [],
         notIncluded: notIncludedRef.current?.getValue() ?? [],
@@ -275,6 +277,18 @@ function ListingFormDialog({
         notSuitableFor: notSuitableForRef.current?.getValue() ?? [],
         houseRules: houseRulesRef.current?.getValue() ?? [],
       });
+
+      // Keep the map pin (and the nearby-sights it drives) in sync with the
+      // address: if the operator changed the city/region text but didn't move
+      // the pin (no autocomplete pick / manual coordinate edit), geocode the new
+      // location and use that instead. Autocomplete/manual coord changes are
+      // trusted as-is (they're more precise than a city-level geocode).
+      const cityRegionChanged = payload.city !== (draft.city ?? "") || payload.region !== (draft.region ?? "");
+      const coordsChanged = payload.coordinates.lat !== draft.coordinates?.lat || payload.coordinates.lng !== draft.coordinates?.lng;
+      if (cityRegionChanged && !coordsChanged && payload.city && payload.region) {
+        const geo = await geocodeQuery(`${payload.city}, ${payload.region}, Armenia`);
+        if (geo) payload.coordinates = geo;
+      }
       if (isEdit && draft.id) {
         await updateListing(draft.id, payload);
         toast(`${payload.title} updated.`);
@@ -871,7 +885,7 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen bg-paper text-basalt">
-      <SiteHeader />
+      <SiteHeader minimal />
       <main className="container py-10 lg:py-14">
         <div className="grid gap-8 lg:grid-cols-[210px_minmax(0,1fr)]">
           <aside className="lg:sticky lg:top-[96px] lg:self-start">
@@ -957,7 +971,7 @@ function DashboardContent() {
           </div>
         </div>
       </main>
-      <SiteFooter />
+      <SiteFooter minimal />
     </div>
   );
 }

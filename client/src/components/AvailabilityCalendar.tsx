@@ -210,9 +210,6 @@ export function AvailabilityCalendar({
           <span className="h-3 w-3 rounded-full bg-basalt/12" /> Unavailable
         </span>
       </div>
-      <p className="mt-2 text-xs leading-5 text-basalt/45">
-        Unavailable dates are synced from the host's own calendar and existing bookings.
-      </p>
     </div>
   );
 }

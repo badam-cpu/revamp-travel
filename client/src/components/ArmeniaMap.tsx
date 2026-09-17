@@ -23,6 +23,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MarkerClusterer, type Renderer } from "@googlemaps/markerclusterer";
 import { ensureMapsScript } from "@/lib/googleMaps";
 import { Listing } from "@/data/listings";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
 
 interface ArmeniaMapProps {
@@ -77,6 +78,7 @@ function clusterIcon(count: number): google.maps.Icon {
 }
 
 export function ArmeniaMap({ listings, selectedId, onSelect, className, single = false }: ArmeniaMapProps) {
+  const { format } = useCurrency();
   const active = useMemo(() => listings.find((listing) => listing.id === selectedId) || listings[0], [listings, selectedId]);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -149,7 +151,7 @@ export function ArmeniaMap({ listings, selectedId, onSelect, className, single =
       const isSelected = selectedId === listing.id || (single && listing.id === active?.id);
       const marker = new google.maps.Marker({
         position: { lat: listing.coordinates.lat, lng: listing.coordinates.lng },
-        icon: pillIcon(listing.priceLabel, isSelected),
+        icon: pillIcon(listing.price > 0 ? format(Math.round(listing.price * 100)) : listing.priceLabel, isSelected),
         title: listing.title,
         zIndex: isSelected ? 9_000 : 1,
       });
@@ -176,7 +178,7 @@ export function ArmeniaMap({ listings, selectedId, onSelect, className, single =
         if (typeof z === "number" && z > 15) map.setZoom(15);
       });
     }
-  }, [ready, listings, selectedId, single, active]);
+  }, [ready, listings, selectedId, single, active, format]);
 
   return (
     <div className={cn("atlas-map relative overflow-hidden bg-[#EDECE6]", className)}>

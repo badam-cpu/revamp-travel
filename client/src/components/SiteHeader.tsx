@@ -19,11 +19,14 @@ const baseLinks = [
   { href: "/plan", label: "AI Planner", accent: true },
 ];
 
-export function SiteHeader() {
+/** `minimal` drops the public browse nav + "field guide" CTA — used in the
+ * operator dashboard, which has its own sidebar and its own "Homepage" link. */
+export function SiteHeader({ minimal = false }: { minimal?: boolean } = {}) {
   const [location] = useLocation();
   const { user, profile, signOut } = useAuth();
 
   const links = useMemo(() => {
+    if (minimal) return [];
     if (profile?.role === "operator") {
       return [...baseLinks, { href: "/dashboard", label: "Dashboard" }];
     }
@@ -31,7 +34,7 @@ export function SiteHeader() {
       return [...baseLinks, { href: "/admin", label: "Review queue" }];
     }
     return baseLinks;
-  }, [profile?.role]);
+  }, [profile?.role, minimal]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -95,11 +98,13 @@ export function SiteHeader() {
               </Button>
             </>
           )}
-          <Button asChild className="brand-notch rounded-none bg-apricot px-5 text-white hover:bg-apricot/90">
-            <Link href="/explore">
-              <Compass className="mr-2 h-4 w-4" /> Open the field guide
-            </Link>
-          </Button>
+          {!minimal && (
+            <Button asChild className="brand-notch rounded-none bg-apricot px-5 text-white hover:bg-apricot/90">
+              <Link href="/explore">
+                <Compass className="mr-2 h-4 w-4" /> Open the field guide
+              </Link>
+            </Button>
+          )}
         </div>
         <Sheet>
           <SheetTrigger asChild>

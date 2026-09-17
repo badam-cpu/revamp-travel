@@ -4,8 +4,26 @@ import { Link } from "wouter";
 import { BrandMark } from "./BrandMark";
 import { useAuth } from "@/contexts/AuthContext";
 
-export function SiteFooter() {
+export function SiteFooter({ minimal = false }: { minimal?: boolean } = {}) {
   const { profile } = useAuth();
+
+  // Slim footer for app surfaces (operator dashboard) — just the wordmark,
+  // copyright, and legal links, without the tall marketing columns.
+  if (minimal) {
+    return (
+      <footer className="border-t border-basalt/10 bg-paper text-basalt">
+        <div className="container flex flex-col gap-3 py-6 text-[13px] text-basalt/55 sm:flex-row sm:items-center sm:justify-between">
+          <span className="font-display text-lg tracking-tight text-basalt">revamp<span className="text-apricot">.</span></span>
+          <span>© 2026 Revamp Vacations.</span>
+          <div className="flex items-center gap-4">
+            <Link href="/privacy" className="hover:text-basalt">Privacy Policy</Link>
+            <Link href="/terms" className="hover:text-basalt">Terms of Service</Link>
+          </div>
+        </div>
+      </footer>
+    );
+  }
+
   return (
     <footer className="relative overflow-hidden bg-basalt text-paper">
       <div className="pointer-events-none absolute -bottom-24 right-0 text-[19rem] font-bold leading-none tracking-[-0.12em] text-white/[0.035]">revamp.</div>
