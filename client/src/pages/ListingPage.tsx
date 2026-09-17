@@ -30,7 +30,7 @@ const REVAMP_STANDARD = [
 ];
 
 export default function ListingPage({ params }: { params: { slug: string } }) {
-  const { listings } = useListings();
+  const { listings, loading } = useListings();
   const { isSaved, toggleSaved } = useSavedPlaces();
   const { format } = useCurrency();
   const listing = findListing(params.slug, listings);
@@ -40,11 +40,15 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   // Hook call must come before any early return (rules of hooks) — this
   // covers both the not-found and found cases with one call.
   useDocumentMeta({
-    title: listing ? `${listing.title} — ${typeLabels[listing.type]} in ${listing.city} | Revamp Vacations` : "Place not found | Revamp Vacations",
+    title: listing
+      ? `${listing.title} — ${typeLabels[listing.type]} in ${listing.city} | Revamp Vacations`
+      : loading
+        ? "Loading… | Revamp Vacations"
+        : "Place not found | Revamp Vacations",
     description: listing?.shortDescription ?? "This listing could not be found.",
     canonicalPath: `/listing/${params.slug}`,
     ogImage: listing?.image,
-    noindex: !listing,
+    noindex: !listing && !loading,
     jsonLd: listing
       ? [
           buildListingJsonLd(listing, window.location.origin),
@@ -59,6 +63,14 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   });
 
   if (!listing) {
+    // While the catalog is still loading (e.g. a hard refresh on this page,
+    // before the Supabase fetch resolves), don't flash the not-found state —
+    // the slug may well exist once listings arrive.
+    if (loading) {
+      return (
+        <div className="min-h-screen bg-paper"><SiteHeader /><div className="container flex items-center justify-center py-32" aria-busy="true"><span className="h-7 w-7 animate-spin rounded-full border-2 border-basalt/15 border-t-apricot" /></div></div>
+      );
+    }
     return (
       <div className="min-h-screen bg-paper"><SiteHeader /><div className="container py-24 text-center"><p className="eyebrow">Place not found</p><h1 className="mt-4 font-display text-6xl">This path ends here.</h1><Button asChild className="mt-7 rounded-none bg-apricot text-white"><Link href="/explore">Return to the marketplace</Link></Button></div></div>
     );
@@ -120,7 +132,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
               </div>
               <div>
                 <h2 className="font-display text-4xl leading-tight tracking-[-0.03em]">{listing.shortDescription}</h2>
-                <p className="mt-6 text-base leading-8 text-basalt/62">{listing.longDescription}</p>
+                <p className="mt-6 whitespace-pre-line text-base leading-8 text-basalt/62">{listing.longDescription}</p>
               </div>
             </div>
 

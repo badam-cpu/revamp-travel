@@ -358,8 +358,8 @@ ${escapeHtml(listing.title)}
 <p>${escapeHtml(listing.eyebrow)} — ${escapeHtml(listing.city)}, ${escapeHtml(listing.region)}</p>
 ${galleryHtml}
 <p>${escapeHtml(listing.shortDescription)}</p>
-<p>${escapeHtml(listing.longDescription)}</p>
-<p>${listing.price > 0 ? `${escapeHtml(listing.priceLabel)} / ${escapeHtml(listing.priceUnit)}` : escapeHtml(listing.priceLabel)} — online booking and payment are launching soon.</p>
+<p>${escapeHtml(listing.longDescription).replace(/\n/g, "<br>")}</p>
+<p>${listing.price > 0 ? `${escapeHtml(listing.priceLabel)} / ${escapeHtml(listing.priceUnit)}` : escapeHtml(listing.priceLabel)}</p>
 ${factsHtml}
 ${highlightsHtml}
 <h2>What's part of the experience</h2>

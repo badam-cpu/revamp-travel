@@ -147,7 +147,7 @@ export function TourDetail({ listing }: { listing: Listing }) {
           <div className="mt-8">
             <p className="eyebrow">Overview</p>
             <h2 className="mt-3 font-display text-2xl leading-snug tracking-[-0.02em] text-basalt/90">{listing.shortDescription}</h2>
-            <p className="mt-4 text-base leading-8 text-basalt/62">{listing.longDescription}</p>
+            <p className="mt-4 whitespace-pre-line text-base leading-8 text-basalt/62">{listing.longDescription}</p>
           </div>
 
           {!!listing.highlights?.length && (

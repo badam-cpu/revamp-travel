@@ -9,9 +9,9 @@
  * facts, see shared/seo.ts), and it surfaces options a host might not think
  * to type. Airbnb also groups amenities by category (Essentials, Bathroom,
  * Kitchen and dining, etc.) rather than one flat list — the categories below
- * follow that pattern, scaled down and reworded to match what this catalog's
- * `stay` and `tour` listings actually offer (see shared/listings.ts's seed
- * data, which every curated option here is drawn from).
+ * follow that pattern. `stay` uses the full property-facilities taxonomy
+ * operators expect from a PMS/channel-manager onboarding (12 categories);
+ * `tour`/`experience` are scaled to what those listings actually offer.
  *
  * "eat" listings aren't editable from this dashboard at all (they're seeded
  * directly — see ENVIRONMENT.md's SUPABASE_SERVICE_ROLE_KEY note and
@@ -54,13 +54,115 @@ import type { ListingType } from "@shared/listings";
 
 type AmenityGroup = { category: string; items: string[] };
 
+// Full stay-facilities taxonomy (operator-provided). "Floor" and "Size" are
+// omitted deliberately — they're numeric value fields in the source, not
+// on/off amenities. Kept as a categorized checklist so the values double as
+// filters and JSON-LD facts (see the file header + shared/seo.ts).
 const STAY_GROUPS: AmenityGroup[] = [
-  { category: "Essentials", items: ["Wi-Fi", "Breakfast", "Breakfast basket", "Kitchenette", "Parking", "Laundry"] },
   {
-    category: "Comfort & setting",
-    items: ["Wood stove", "Outdoor hearth", "Garden terrace", "Roof terrace", "Shared sauna", "Work tables", "Concierge notes"],
+    category: "Amenities",
+    items: [
+      "Air Conditioning", "Air Conditioning Central", "Air Conditioning Portable", "Air Conditioning Window",
+      "Breakfast included", "Elevator", "Family Friendly", "Fan", "Fire Pit", "Fireplace", "Fitness Room",
+      "Floor Carpet", "Floor Hardwood or parquet", "Floor Tile/marble", "Front Desk", "Front Desk 24/7",
+      "Game Room", "Heating", "Internet / Wi-Fi", "Iron", "Iron Board", "Living Room", "Meal Delivery",
+      "Mosquito net", "No Parking", "Parking", "Parking Garage", "Parking Indoor", "Parking Paid", "Safe",
+      "Sitting Area", "Sofa", "Wood Stove",
+    ],
   },
-  { category: "Getting around", items: ["Airport transfer", "Local transfers", "Bike hire", "Trail maps", "Lake access"] },
+  {
+    category: "Entertainment",
+    items: [
+      "Books", "Books and reading material", "Cable TV", "Games", "Laptop friendly space", "Satellite TV",
+      "Smart TV", "Streaming Apple TV", "Streaming Chromecast", "Streaming HBO Max", "Streaming Hulu",
+      "Streaming Netflix", "Television", "Video Games", "Workspace/Desk",
+    ],
+  },
+  {
+    category: "Kitchen",
+    items: [
+      "Blender", "Coffee Machine Espresso", "Coffee Machine Keurig", "Coffee Machine Nespresso", "Coffee Maker",
+      "Dining Room", "Dining Table", "Dining area", "Dishwasher", "Electric kettle", "High Chair",
+      "Hot Water Kettle", "Kitchen", "Kitchen Island", "Kitchenette", "Kitchenware", "Microwave", "Mini fridge",
+      "Mixer", "Oven", "Refrigerator", "Spices", "Stove", "Toaster", "Wine Glasses", "Wine Opener",
+    ],
+  },
+  {
+    category: "Sleeping",
+    items: [
+      "Closet Racks", "Closet Walk-in", "Crib", "Crib by Request", "Extra Pillow and Blanket", "Linens",
+      "Pack and Play", "Pack and Play by Request", "Room-darkening shades", "Towels", "Wardrobe",
+    ],
+  },
+  {
+    category: "Outdoor",
+    items: [
+      "Balcony", "Balcony Shared", "Children's Playground", "Courtyard", "Deck Patio", "Detached", "Garden",
+      "Grill/BBQ", "Kayak Canoe", "Lanai Gazebo Covered", "Outdoor Dining area", "Outdoor Kitchen",
+      "Outdoor furniture", "Semi-Detached", "Terrace", "Veranda",
+    ],
+  },
+  {
+    category: "Location type",
+    items: [
+      "Beach", "Beach Front", "Downtown", "Forest/Woods", "Golf Course Front", "Gulf Oriented", "Lake",
+      "Lake Front", "Mountain", "Near Ocean", "Ocean Front", "Resort", "River", "Rural", "Ski In", "Ski Out",
+      "Town", "Village", "Waterfront",
+    ],
+  },
+  {
+    category: "Suitability",
+    items: [
+      "0-2 years", "3-12 years", "13-17 years", "Accessibility Ask", "Business Center", "Children Not Allowed",
+      "Children Welcome", "Designated Smoking Area", "EV Charger", "Long Term Stays Allowed", "Must climb stairs",
+      "Other Events Allowed", "Pets Allowed", "Pets Not Allowed", "Private Condo in the Building",
+      "Private entrance", "Single level home", "Smoking Allowed", "Smoking Ask", "Smoking Not Allowed",
+      "Wheelchair Accessible", "Wheelchair Inaccessible",
+    ],
+  },
+  {
+    category: "Pool & beach",
+    items: [
+      "Beach Chairs", "Beach Essentials", "Beach access", "Community Pool", "Hot Tub Shared", "Indoor Pool",
+      "Kid's Pool", "Lazy River", "Massage", "Outdoor Pool (Heated) Shared", "Outdoor Pool (Private)",
+      "Outdoor Pool (Unheated) Shared", "Pool Towels", "Private Hot Tub", "Spa Private Pool", "Spa Sauna",
+    ],
+  },
+  {
+    category: "Cleaning & safety",
+    items: [
+      "Carbon monoxide detector", "Cleaning Disinfection", "Cleaning Products", "Daily Housekeeping (free)",
+      "Daily Housekeeping (paid)", "Enhanced Cleaning Practices", "Fire Extinguisher", "First Aid Kit",
+      "Guest Gap Period 24 Hours", "Guest Gap Period 48 Hours", "Guest Gap Period 72 Hours",
+      "Laundromat Coin-based", "Laundromat free of charge", "Luggage drop off Paid", "Luggage drop off FREE",
+      "Safety Fireplace guards", "Safety Outlet covers", "Safety Window guards",
+      "Security cameras/noise detecting devices", "Self Check-in/Check-out", "Smoke Detector",
+    ],
+  },
+  {
+    category: "View",
+    items: [
+      "Bay View", "Beach View", "Canal View", "City Skyline View", "City View", "Courtyard View", "Desert View",
+      "Garden View", "Golf Course View", "Lagoon View", "Lake View", "Marina View", "Monument View",
+      "Mountain View", "Ocean View", "Park View", "Partial Ocean View", "Pool View", "River View", "Sea View",
+      "Water View",
+    ],
+  },
+  {
+    category: "Adventure activities",
+    items: [
+      "Basketball", "Bicycle", "Bicycles Rental", "Boat", "Bowling", "Casino Nearby", "Foosball", "Golf",
+      "Horse Riding/Rental", "Karaoke Nearby", "Mountain Climbing Nearby", "Petanque", "Ping-Pong Table",
+      "Pool Table", "Skiing Nearby", "Snow Sports Gear", "Tennis", "Volleyball", "Water Sport Gear",
+    ],
+  },
+  {
+    category: "Bathroom amenities",
+    items: [
+      "Accessible Bathroom", "Bathtub", "Bidet", "Dryer", "Hair dryer", "Hot Water", "Private Bathroom",
+      "Private Toilet", "Shampoo", "Shower", "Soap", "Toilet Paper", "Washer",
+    ],
+  },
 ];
 
 const TOUR_GROUPS: AmenityGroup[] = [
