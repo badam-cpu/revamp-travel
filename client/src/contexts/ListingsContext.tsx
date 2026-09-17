@@ -120,8 +120,9 @@ function mapListingRow(row: ListingRow): LiveListing {
     shortDescription: row.short_description,
     longDescription: row.long_description,
     price,
-    // Never render "$0": a listing with no price set reads as "Rate on request".
-    priceLabel: price > 0 ? `$${price % 1 === 0 ? price : price.toFixed(2)}` : "Rate on request",
+    // Never render "֏0": a listing with no price set reads as "Rate on request".
+    // AMD-primary: prices are in Armenian dram, shown as whole drams.
+    priceLabel: price > 0 ? `֏${Math.round(price).toLocaleString()}` : "Rate on request",
     priceUnit: row.price_unit,
     tags: row.tags,
     facts: row.facts,

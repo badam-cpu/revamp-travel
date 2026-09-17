@@ -1,6 +1,6 @@
 /**
  * Terms of Service — a real, tailored starting document (not legal advice),
- * describing the marketplace, bookings/payments (PayLink, USD, tax, cleaning
+ * describing the marketplace, bookings/payments (PayLink, AMD, tax, cleaning
  * fee), cancellation policies, and operator obligations as the app actually
  * implements them. Have it reviewed by counsel before relying on it. Public +
  * indexable; the Google OAuth consent screen points its "Terms" link here.
@@ -50,8 +50,8 @@ export default function Terms() {
           </Section>
 
           <Section title="Bookings &amp; payment">
-            <p>Listing prices are shown in US dollars; a tax is added to the booking, and an operator may add a per-booking cleaning fee. Payment is processed securely by PayLink (Ameriabank). A booking is confirmed only once payment has cleared and we have verified it — arriving on a return page alone does not confirm a booking. You can view your bookings under your account.</p>
-            <p>Prices may be displayed in Armenian dram for convenience at an approximate rate; the amount actually charged is in the settlement currency shown at checkout.</p>
+            <p>Listing prices are shown in Armenian dram (AMD); a tax is added to the booking, and an operator may add a per-booking cleaning fee. Payment is processed securely by PayLink (Ameriabank) and charged in Armenian dram. A booking is confirmed only once payment has cleared and we have verified it — arriving on a return page alone does not confirm a booking. You can view your bookings under your account.</p>
+            <p>Prices may be displayed in US dollars for convenience at an approximate rate; the amount actually charged is always in Armenian dram, as shown at checkout.</p>
           </Section>
 
           <Section title="Cancellations &amp; refunds">

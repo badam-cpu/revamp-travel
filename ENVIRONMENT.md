@@ -17,7 +17,7 @@ Browsing, search, filtering, and the SVG atlas work with no secrets at all (they
 | `PAYLINK_PARTNER_ID` / `PAYLINK_PARTNER_KEY` | PayLink.am partner credentials (server-side only) for the booking checkout (`server/paylink.ts`). Without them `POST /api/start-checkout` returns 503 and the rest of the site is unaffected. Production has no sandbox — a completed payment is a real charge. | To take bookings. | none |
 | `PAYLINK_BASE_URL` | PayLink API base, e.g. `https://api.paylink.am` (production) — the code auto-detects the integration vs. production route scheme from the host. | With the PayLink credentials. | none |
 | `PAYLINK_REQUEST_TYPE` | `requestType` string on Request/Register. | No | `"1"` |
-| `PAYLINK_CURRENCY` | Charge currency. Listings are USD-priced, so `USD`. | No | `USD` |
+| `PAYLINK_CURRENCY` | Charge currency. AMD-primary marketplace, so `AMD`. | No | `AMD` |
 | `PAYLINK_LANGUAGE` | PayLink hosted checkout page language: `en` / `hy` / `ru` / `fr`. | No | `en` |
 | `RESEND_API_KEY` / `EMAIL_FROM` | Enable booking emails (confirmation to both sides, cancellation notice) via Resend (`server/email.ts`). `EMAIL_FROM` must be a sender on a domain verified in Resend, e.g. `Revamp Travel <bookings@yourdomain.com>`. **Without both, email is a silent no-op** — bookings still work. | No (recommended for production). | none |
 

@@ -108,7 +108,7 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
     shortDescription: get("shortDescription").trim(),
     longDescription: get("longDescription").trim(),
     price,
-    priceLabel: `$${price}`,
+    priceLabel: `֏${Math.round(price).toLocaleString()}`,
     priceUnit: get("priceUnit").trim() || (draft.type === "stay" ? "night" : "person"),
     tags,
     facts,
@@ -240,7 +240,7 @@ function ListingFormDialog({
       if (lat < 38 || lat > 42 || lng < 43 || lng > 47) return fail("Coordinates must be inside Armenia (lat 38–42, lng 43–47).");
     }
     if (s === 2 && (!fieldValue("shortDescription") || !fieldValue("longDescription"))) return fail("Add a short and a full description.");
-    if (s === 3 && !(Number(fieldValue("price")) > 0)) return fail("Set a price greater than $0.");
+    if (s === 3 && !(Number(fieldValue("price")) > 0)) return fail("Set a price greater than ֏0.");
     setStepError(null);
     return true;
   };
@@ -445,8 +445,8 @@ function ListingFormDialog({
 
                 <div className="grid gap-6 sm:grid-cols-3">
                   <div className="grid gap-2">
-                    <Label htmlFor="price" className="text-sm font-semibold">Price ({draft.type === "stay" ? "per night" : "per person"})</Label>
-                    <Input id="price" name="price" type="number" min={1} placeholder="e.g. 120" defaultValue={draft.price || ""} className={FIELD} />
+                    <Label htmlFor="price" className="text-sm font-semibold">Price in AMD ({draft.type === "stay" ? "per night" : "per person"})</Label>
+                    <Input id="price" name="price" type="number" min={1} placeholder="e.g. 45000" defaultValue={draft.price || ""} className={FIELD} />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="priceUnit" className="text-sm font-semibold">Price unit label</Label>
@@ -457,8 +457,8 @@ function ListingFormDialog({
                     <Input id="maxGuests" name="maxGuests" type="number" min={1} max={50} placeholder={draft.type === "stay" ? "e.g. 4" : "e.g. 8"} defaultValue={draft.maxGuests || ""} className={FIELD} />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="cleaningFee" className="text-sm font-semibold">Cleaning fee <span className="font-normal text-basalt/45">(optional, per booking)</span></Label>
-                    <Input id="cleaningFee" name="cleaningFee" type="number" min={0} placeholder="e.g. 25" defaultValue={draft.cleaningFeeCents ? draft.cleaningFeeCents / 100 : ""} className={FIELD} />
+                    <Label htmlFor="cleaningFee" className="text-sm font-semibold">Cleaning fee in AMD <span className="font-normal text-basalt/45">(optional, per booking)</span></Label>
+                    <Input id="cleaningFee" name="cleaningFee" type="number" min={0} placeholder="e.g. 10000" defaultValue={draft.cleaningFeeCents ? draft.cleaningFeeCents / 100 : ""} className={FIELD} />
                   </div>
                 </div>
 

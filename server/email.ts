@@ -22,7 +22,7 @@ function esc(s: unknown): string {
 function money(cents: number, currency: string): string {
   const major = cents / 100;
   const n = major % 1 === 0 ? major.toString() : major.toFixed(2);
-  return currency === "USD" ? `$${n}` : `${n} ${currency}`;
+  return currency === "USD" ? `$${n}` : currency === "AMD" ? `֏${n}` : `${n} ${currency}`;
 }
 
 function prettyDate(iso: string): string {

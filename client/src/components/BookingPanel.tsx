@@ -231,7 +231,7 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
         </Button>
       )}
       <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">
-        You'll pay securely via PayLink. Your dates are confirmed once payment clears.{displayCurrency === "AMD" ? " Charged in USD; AMD shown for reference." : ""}
+        You'll pay securely via PayLink. Your dates are confirmed once payment clears.{displayCurrency === "USD" ? " Charged in AMD; USD shown for reference." : ""}
       </p>
     </div>
   );

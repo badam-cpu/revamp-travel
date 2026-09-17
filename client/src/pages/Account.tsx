@@ -65,7 +65,7 @@ function fmtDate(iso: string): string {
 function fmtMoney(cents: number, currency: string): string {
   const major = cents / 100;
   const n = major % 1 === 0 ? major.toString() : major.toFixed(2);
-  return currency === "USD" ? `$${n}` : `${n} ${currency}`;
+  return currency === "USD" ? `$${n}` : currency === "AMD" ? `֏${n}` : `${n} ${currency}`;
 }
 
 const VALID_TABS = ["trips", "saved", "profile", "security"] as const;

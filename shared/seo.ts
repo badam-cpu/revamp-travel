@@ -60,8 +60,8 @@ export function buildListingJsonLd(listing: Listing, origin: string): JsonLd {
   if (listing.price > 0) {
     base.offers = {
       "@type": "Offer",
-      price: listing.price,
-      priceCurrency: "USD",
+      price: Math.round(listing.price),
+      priceCurrency: "AMD",
       url,
     };
     if (listing.type === "stay" || listing.type === "eat") {

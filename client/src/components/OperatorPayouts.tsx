@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 function money(cents: number, currency: string): string {
   const major = cents / 100;
   const n = major % 1 === 0 ? major.toLocaleString() : major.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return currency === "USD" ? `$${n}` : `${n} ${currency}`;
+  return currency === "USD" ? `$${n}` : currency === "AMD" ? `֏${n}` : `${n} ${currency}`;
 }
 function fmtDate(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);

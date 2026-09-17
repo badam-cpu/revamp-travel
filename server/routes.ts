@@ -268,8 +268,10 @@ export function registerApiRoutes(app: Express) {
     const currency = process.env.PAYLINK_CURRENCY || DEFAULT_CURRENCY;
     try {
       const pay = await registerPayment({
-        // PayLink's `amount` is in major currency units; charge the tax-inclusive total.
-        amount: charge.totalCents / 100,
+        // PayLink's `amount` is in major currency units; charge the tax-inclusive
+        // total. AMD (our settlement currency) has no minor unit, so round to a
+        // whole dram — every stored *_cents value is AMD hundredths.
+        amount: currency === "AMD" ? Math.round(charge.totalCents / 100) : charge.totalCents / 100,
         currency,
         returnUrl: `${site}/account?checkout=return`,
         info: `Revamp booking · ${listing.title}`,

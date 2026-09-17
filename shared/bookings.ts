@@ -95,12 +95,17 @@ export interface StartCheckoutParams {
 }
 
 /**
- * Fallback booking currency when PAYLINK_CURRENCY isn't set. Listings are priced
- * in USD, so the fallback is USD too — the server charges `amount_cents / 100` in
- * this currency, and BookingPanel previews it, so they must agree. Set
- * PAYLINK_CURRENCY=USD in the environment; this is only the safety net.
+ * Fallback booking currency when PAYLINK_CURRENCY isn't set. The marketplace is
+ * AMD-primary — listings are priced, and all accounting (commission, tax,
+ * payouts) is done, in Armenian dram; PayLink charges AMD. The server charges
+ * `amount_cents / 100` in this currency and BookingPanel previews it, so they
+ * must agree. USD is a display-only reference (see CurrencyContext). All
+ * `*_cents` money columns are hundredths of the currency unit, so for AMD they
+ * hold drams × 100 (AMD has no minor unit; the /100 convention is kept so the
+ * shared money math is currency-agnostic). Set PAYLINK_CURRENCY=AMD in the
+ * environment; this is only the safety net.
  */
-export const DEFAULT_CURRENCY = "USD";
+export const DEFAULT_CURRENCY = "AMD";
 
 // How a listing's unit price scales into a total. Grouped by the `priceUnit`
 // strings the seed data and the experience wizard actually produce.

@@ -236,7 +236,7 @@ function toListingInput(data: WizardData): ListingInput {
     shortDescription: data.shortDescription.trim(),
     longDescription: data.longDescription.trim(),
     price,
-    priceLabel: `$${price}`,
+    priceLabel: `֏${Math.round(price).toLocaleString()}`,
     priceUnit: data.priceUnit.trim() || "person",
     tags: data.tags,
     facts: buildFacts(data),
@@ -621,14 +621,14 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
 
                   {/* Step 8 — Pricing */}
                   <div className={cn("grid gap-4 sm:grid-cols-2", currentStep !== 8 && "hidden")}>
-                    <StepField label={`Price (per ${data.priceUnit || "person"})`}>
+                    <StepField label={`Price in AMD (per ${data.priceUnit || "person"})`}>
                       <Input
                         type="number"
                         min={1}
                         inputMode="decimal"
                         value={data.price || ""}
                         onChange={(e) => set("price", Number(e.target.value) || 0)}
-                        placeholder="e.g. 120"
+                        placeholder="e.g. 45000"
                       />
                     </StepField>
                     <StepField label="Charged per">
@@ -646,8 +646,8 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                         </SelectContent>
                       </Select>
                     </StepField>
-                    <StepField label="Cleaning fee (optional)" help="A flat fee added once per booking.">
-                      <Input type="number" min={0} value={data.cleaningFeeCents ? data.cleaningFeeCents / 100 : ""} onChange={(e) => set("cleaningFeeCents", Math.round((Number(e.target.value) || 0) * 100))} placeholder="e.g. 25" />
+                    <StepField label="Cleaning fee in AMD (optional)" help="A flat fee added once per booking.">
+                      <Input type="number" min={0} value={data.cleaningFeeCents ? data.cleaningFeeCents / 100 : ""} onChange={(e) => set("cleaningFeeCents", Math.round((Number(e.target.value) || 0) * 100))} placeholder="e.g. 10000" />
                     </StepField>
                     <div className="sm:col-span-2">
                       <StepField label="Cancellation policy" help="Flexible gives free cancellation up to a cutoff; non-refundable is cheaper but never refunds.">
@@ -680,7 +680,7 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                           <p className="text-basalt/55">{data.eyebrow || "No category label yet"}</p>
                         </div>
                         <p className="text-right text-basalt/55">
-                          ${data.price || 0} / {data.priceUnit || "person"}
+                          ֏{Math.round(data.price || 0).toLocaleString()} / {data.priceUnit || "person"}
                         </p>
                       </div>
                       <p className="text-basalt/60">{data.city && data.region ? `${data.city}, ${data.region}` : "No location yet"}</p>

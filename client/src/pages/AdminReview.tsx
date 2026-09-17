@@ -84,7 +84,7 @@ function ReviewCard({ listing, onDecided }: { listing: PendingListing; onDecided
     }
   };
 
-  const priceDisplay = listing.price_cents % 100 === 0 ? `$${listing.price_cents / 100}` : `$${(listing.price_cents / 100).toFixed(2)}`;
+  const priceDisplay = `֏${Math.round(listing.price_cents / 100).toLocaleString()}`;
 
   return (
     <div className="grid gap-4 border border-basalt/10 bg-paper p-5 sm:grid-cols-[140px_1fr]">

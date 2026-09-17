@@ -66,9 +66,9 @@ function mapCatalogRow(row: CatalogRow): PublicListing {
     shortDescription: row.short_description,
     longDescription: row.long_description,
     price,
-    // Mirror ListingsContext's client-side rule: a real price shows as "$X",
-    // no price shows as "Rate on request" — never "$0".
-    priceLabel: price > 0 ? `$${price % 1 === 0 ? price : price.toFixed(2)}` : "Rate on request",
+    // Mirror ListingsContext's client-side rule: AMD-primary, a real price shows
+    // as "֏X" (whole drams), no price shows as "Rate on request" — never "֏0".
+    priceLabel: price > 0 ? `֏${Math.round(price).toLocaleString()}` : "Rate on request",
     priceUnit: row.price_unit,
     tags: row.tags,
     facts: row.facts,
@@ -132,7 +132,7 @@ export async function listPublishedForPlanner(): Promise<CatalogEntry[]> {
     title: row.title,
     city: row.city,
     region: row.region,
-    priceLabel: `$${row.price_cents / 100}`,
+    priceLabel: `֏${Math.round(row.price_cents / 100).toLocaleString()}`,
     priceUnit: row.price_unit,
     shortDescription: row.short_description,
   }));
