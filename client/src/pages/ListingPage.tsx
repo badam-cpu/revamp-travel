@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { groupAmenitiesForDisplay } from "@/components/AmenityPicker";
 import { houseRuleIcon } from "@/lib/houseRules";
+import { nearbySights } from "@/lib/yerevanSights";
 import { findListing, typeLabels } from "@/data/listings";
 import { useListings } from "@/contexts/ListingsContext";
 import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
@@ -111,7 +112,9 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   const inlineAmenities = listing.amenities.slice(0, AMENITIES_INLINE_LIMIT);
   const hiddenAmenityCount = Math.max(0, listing.amenities.length - inlineAmenities.length);
   const houseRules = listing.houseRules ?? [];
-  const nearby = listing.nearby ?? [];
+  // Major central-Yerevan sights closest to this listing (curated list, English
+  // names, distances computed here) — empty for listings outside that radius.
+  const nearby = nearbySights(listing.coordinates.lat, listing.coordinates.lng);
   const cancellationText = describeCancellationPolicy(listing.cancellationPolicy, {
     freeCancelDays: listing.freeCancelDays,
     discountPercent: listing.nonrefundableDiscountPercent,
