@@ -26,9 +26,15 @@ interface IncomingBooking {
   currency: string;
   status: BookingStatus;
   created_at: string;
-  listings: { title: string; slug: string } | null;
+  listings: { title: string; slug: string; type: string } | null;
   profiles: { display_name: string } | null;
 }
+
+const TYPE_TABS: { type: string; label: string }[] = [
+  { type: "stay", label: "Stays" },
+  { type: "tour", label: "Tours" },
+  { type: "experience", label: "Experiences" },
+];
 
 const STATUS_STYLE: Partial<Record<BookingStatus, { label: string; className: string }>> = {
   pending_payment: { label: "Awaiting payment", className: "bg-tuff/15 text-tuff" },
@@ -52,6 +58,7 @@ export function OperatorBookings() {
   const { user } = useAuth();
   const [rows, setRows] = useState<IncomingBooking[] | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const [activeType, setActiveType] = useState<string>("");
 
   const todayIso = new Date().toISOString().slice(0, 10);
   const canCancel = (b: IncomingBooking) => (b.status === "pending_payment" || b.status === "confirmed") && b.start_date >= todayIso;
@@ -76,7 +83,7 @@ export function OperatorBookings() {
     supabase
       .from("bookings")
       .select(
-        "id, start_date, end_date, guests, amount_cents, currency, status, created_at, listings!inner(title, slug, operator_id), profiles!traveler_id(display_name)",
+        "id, start_date, end_date, guests, amount_cents, currency, status, created_at, listings!inner(title, slug, type, operator_id), profiles!traveler_id(display_name)",
       )
       .eq("listings.operator_id", user.id)
       .in("status", ["pending_payment", "confirmed", "completed", "cancelled", "refunded"])
@@ -96,17 +103,48 @@ export function OperatorBookings() {
     };
   }, [user]);
 
-  // Nothing yet, or table not migrated — stay quiet rather than showing an empty shell.
-  if (rows === null || rows.length === 0) return null;
+  if (rows === null) return <p className="text-sm text-basalt/50">Loading your bookings…</p>;
+
+  if (rows.length === 0) {
+    return (
+      <div className="border border-dashed border-basalt/20 bg-chalk px-6 py-14 text-center">
+        <CalendarCheck className="mx-auto h-7 w-7 text-basalt/30" />
+        <h3 className="mt-4 font-display text-2xl">No bookings yet.</h3>
+        <p className="mx-auto mt-2 max-w-sm text-sm text-basalt/55">When a traveler books one of your listings, it shows up here.</p>
+      </div>
+    );
+  }
+
+  // Only show category tabs for the listing types this operator actually has
+  // bookings in (an operator with only stays sees no Tours/Experiences tab).
+  const presentTypes = TYPE_TABS.filter((t) => rows.some((r) => r.listings?.type === t.type));
+  const current = activeType && presentTypes.some((t) => t.type === activeType) ? activeType : presentTypes[0]?.type ?? "";
+  const visible = presentTypes.length > 1 ? rows.filter((r) => r.listings?.type === current) : rows;
 
   return (
-    <section className="mb-12">
+    <section>
       <div className="mb-4 flex items-center gap-2">
         <CalendarCheck className="h-5 w-5 text-apricot" />
-        <h2 className="font-display text-2xl tracking-[-0.02em]">Incoming bookings</h2>
+        <h2 className="font-display text-2xl tracking-[-0.02em]">Bookings</h2>
       </div>
+      {presentTypes.length > 1 && (
+        <div className="mb-5 flex flex-wrap gap-1 border-b border-basalt/10">
+          {presentTypes.map((t) => (
+            <button
+              key={t.type}
+              type="button"
+              onClick={() => setActiveType(t.type)}
+              className={`border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
+                current === t.type ? "border-apricot text-basalt" : "border-transparent text-basalt/50 hover:text-basalt"
+              }`}
+            >
+              {t.label} <span className="text-basalt/35">{rows.filter((r) => r.listings?.type === t.type).length}</span>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="grid gap-2">
-        {rows.map((b) => {
+        {visible.map((b) => {
           const s = STATUS_STYLE[b.status] ?? STATUS_STYLE.pending_payment!;
           return (
             <div key={b.id} className="grid gap-2 border border-basalt/10 bg-paper p-4 sm:grid-cols-[1fr_auto] sm:items-center">

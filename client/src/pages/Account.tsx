@@ -71,7 +71,7 @@ function fmtMoney(cents: number, currency: string): string {
 const VALID_TABS = ["trips", "saved", "profile", "security"] as const;
 type TabKey = (typeof VALID_TABS)[number];
 
-function ProfileTab() {
+export function ProfileTab() {
   const { profile, user, updateProfile } = useAuth();
   const isOperator = profile?.role === "operator";
   const [displayName, setDisplayName] = useState(profile?.displayName ?? "");
@@ -140,7 +140,7 @@ function ProfileTab() {
   );
 }
 
-function SecurityTab() {
+export function SecurityTab() {
   const { updatePassword, signOut } = useAuth();
   const [, navigate] = useLocation();
   const [password, setPassword] = useState("");

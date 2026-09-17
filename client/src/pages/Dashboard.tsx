@@ -21,9 +21,9 @@
  * step stays mounted (just `hidden`), so FormData at submit reads them all;
  * step gating is handled by validateStep(), and the server still Zod-validates.
  */
-import { FormEvent, useEffect, useRef, useState } from "react";
-import { useLocation } from "wouter";
-import { AlertTriangle, ArrowLeft, CalendarClock, Link2, Pencil, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation, useSearch } from "wouter";
+import { AlertTriangle, ArrowLeft, ArrowRight, CalendarCheck, CalendarClock, Home, LayoutDashboard, Link2, List, Pencil, Plus, Settings, Sparkles, Trash2, Wallet, X } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -46,6 +46,7 @@ import { PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
 import { SearchableMultiSelect, SearchableMultiSelectHandle } from "@/components/SearchableMultiSelect";
 import { OperatorBookings } from "@/components/OperatorBookings";
 import { OperatorPayouts } from "@/components/OperatorPayouts";
+import { ProfileTab, SecurityTab } from "@/pages/Account";
 import { EXPERIENCE_PREFILL_STORAGE_KEY } from "@/pages/ExperienceOnboarding";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { toast } from "sonner";
@@ -798,9 +799,38 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
   );
 }
 
+type OperatorSection = "overview" | "listings" | "bookings" | "payouts" | "settings";
+const OPERATOR_SECTIONS: { key: OperatorSection; label: string; icon: typeof Home }[] = [
+  { key: "overview", label: "Dashboard", icon: LayoutDashboard },
+  { key: "listings", label: "Listings", icon: List },
+  { key: "bookings", label: "Bookings", icon: CalendarCheck },
+  { key: "payouts", label: "Payouts", icon: Wallet },
+  { key: "settings", label: "Settings", icon: Settings },
+];
+
+function SectionHead({ title, sub }: { title: string; sub: string }) {
+  return (
+    <div className="mb-8">
+      <h1 className="font-display text-4xl leading-[0.95] tracking-[-0.03em] sm:text-5xl">{title}</h1>
+      <p className="mt-3 max-w-xl text-base leading-7 text-basalt/60">{sub}</p>
+    </div>
+  );
+}
+
+function StatTile({ n, label }: { n: number; label: string }) {
+  return (
+    <div className="border border-basalt/10 bg-paper p-5">
+      <p className="font-display text-4xl font-normal tabular-nums">{n}</p>
+      <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-basalt/45">{label}</p>
+    </div>
+  );
+}
+
 function DashboardContent() {
-  const { profile } = useAuth();
-  const { offline } = useListings();
+  const { profile, user } = useAuth();
+  const { offline, listings } = useListings();
+  const [, navigate] = useLocation();
+  const search = useSearch();
 
   // Greet the operator by first name — the first word of their profile name
   // (person's display name preferred over a business name), lightly capitalized.
@@ -815,38 +845,117 @@ function DashboardContent() {
     noindex: true,
   });
 
+  // Section is driven by ?section= so it's deep-linkable (and the header's
+  // "Dashboard" link lands on the overview).
+  const initial = useMemo<OperatorSection>(() => {
+    const s = new URLSearchParams(search).get("section");
+    return OPERATOR_SECTIONS.some((x) => x.key === s) ? (s as OperatorSection) : "overview";
+  }, [search]);
+  const [section, setSectionState] = useState<OperatorSection>(initial);
+  useEffect(() => setSectionState(initial), [initial]);
+  const go = (s: OperatorSection) => {
+    setSectionState(s);
+    navigate(s === "overview" ? "/dashboard" : `/dashboard?section=${s}`);
+  };
+
+  const mine = useMemo(() => listings.filter((l) => l.operatorId === user?.id), [listings, user?.id]);
+  const published = mine.filter((l) => l.status === "published").length;
+  const pending = mine.filter((l) => l.status === "pending").length;
+
+  const offlineBanner = offline && (
+    <div className="mb-8 flex items-start gap-2 border border-tuff/40 bg-tuff/10 p-4 text-sm text-basalt">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-tuff" />
+      Can't reach the catalog right now — showing the built-in sample listings read-only. Adding, editing, and deleting will resume once the connection is back.
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-paper text-basalt">
       <SiteHeader />
-      <main className="container py-12 lg:py-16">
-        <p className="eyebrow">Operator dashboard</p>
-        <h1 className="mt-3 font-display text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl">
-          {firstName ? `Hi ${firstName}.` : "Your listings."}
-        </h1>
-        <p className="mt-4 max-w-xl text-base leading-7 text-basalt/60">
-          Add, edit, or remove your own stays and tours — nobody else can see or edit them but you. A new listing goes through a quick review before it's visible to travelers; edits to an already-live listing save immediately.
-        </p>
-        {offline && (
-          <div className="mt-6 flex items-start gap-2 border border-tuff/40 bg-tuff/10 p-4 text-sm text-basalt">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-tuff" />
-            Can't reach the catalog right now — showing the built-in sample listings read-only. Adding, editing, and deleting will resume once the connection is back.
+      <main className="container py-10 lg:py-14">
+        <div className="grid gap-8 lg:grid-cols-[210px_minmax(0,1fr)]">
+          <aside className="lg:sticky lg:top-[96px] lg:self-start">
+            <p className="hidden px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-basalt/40 lg:block">Operator</p>
+            <nav className="mt-0 flex gap-1 overflow-x-auto pb-1 lg:mt-3 lg:flex-col lg:overflow-visible lg:pb-0">
+              <Link href="/" className="flex items-center gap-2.5 whitespace-nowrap px-3 py-2.5 text-sm font-semibold text-basalt/60 transition-colors hover:bg-chalk hover:text-basalt">
+                <Home className="h-4 w-4" /> Homepage
+              </Link>
+              {OPERATOR_SECTIONS.map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => go(key)}
+                  aria-current={section === key}
+                  className={cn(
+                    "flex items-center gap-2.5 whitespace-nowrap px-3 py-2.5 text-sm font-semibold transition-colors",
+                    section === key ? "bg-basalt text-paper" : "text-basalt/60 hover:bg-chalk hover:text-basalt",
+                  )}
+                >
+                  <Icon className="h-4 w-4" /> {label}
+                </button>
+              ))}
+            </nav>
+          </aside>
+
+          <div>
+            {section === "overview" && (
+              <div>
+                <SectionHead title={firstName ? `Hi ${firstName}.` : "Welcome."} sub="Your listings, bookings, and payouts — all in one place." />
+                {offlineBanner}
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <StatTile n={mine.length} label="Listings" />
+                  <StatTile n={published} label="Published" />
+                  <StatTile n={pending} label="Pending review" />
+                </div>
+                <div className="mt-8 flex flex-wrap gap-3">
+                  <Button onClick={() => go("listings")} className="rounded-none bg-apricot text-white hover:bg-apricot/90">Manage listings</Button>
+                  <Button variant="outline" onClick={() => go("bookings")} className="rounded-none border-basalt/20 bg-paper">View bookings <ArrowRight className="ml-2 h-4 w-4" /></Button>
+                  <Button variant="outline" onClick={() => go("payouts")} className="rounded-none border-basalt/20 bg-paper">View payouts <ArrowRight className="ml-2 h-4 w-4" /></Button>
+                </div>
+              </div>
+            )}
+
+            {section === "listings" && (
+              <div>
+                <SectionHead title="Listings" sub="Add, edit, or remove your own stays, tours, and experiences. A new listing goes through a quick review before it's visible; edits to a live listing save immediately." />
+                {offlineBanner}
+                <DashboardSection type="stay" title="Stays" description="Guesthouses, cabins, and small hotels shown on /explore/stay and the home page." />
+                <DashboardSection type="tour" title="Tours" description="Guided routes shown on /explore/tour and the home page." />
+                <DashboardSection type="experience" title="Experiences" description="Hands-on classes and local activities shown on /explore/experience and the home page." wizardMode />
+              </div>
+            )}
+
+            {section === "bookings" && (
+              <div>
+                <SectionHead title="Bookings" sub="Reservations on your listings, grouped by type." />
+                <OperatorBookings />
+              </div>
+            )}
+
+            {section === "payouts" && (
+              <div>
+                <SectionHead title="Payouts" sub="What you're owed and what's already been paid out." />
+                <OperatorPayouts />
+              </div>
+            )}
+
+            {section === "settings" && (
+              <div>
+                <SectionHead title="Settings" sub="Your account, profile, and password." />
+                <div className="grid gap-12">
+                  <div>
+                    <p className="mb-5 text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Profile</p>
+                    <ProfileTab />
+                  </div>
+                  <div className="border-t border-basalt/10 pt-10">
+                    <p className="mb-5 text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Security</p>
+                    <SecurityTab />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-        )}
-
-        <div className="mt-10">
-          <OperatorBookings />
-          <OperatorPayouts />
         </div>
-
-        <DashboardSection type="stay" title="Stays" description="Guesthouses, cabins, and small hotels shown on /explore/stay and the home page." />
-        <DashboardSection type="tour" title="Tours" description="Guided routes shown on /explore/tour and the home page." />
-        <DashboardSection type="experience" title="Experiences" description="Hands-on classes and local activities shown on /explore/experience and the home page." wizardMode />
-
-        <section className="border-t border-basalt/10 py-12">
-          <div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-apricot" /><p className="eyebrow">Coming soon</p></div>
-          <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">Bookings & payouts.</h2>
-          <p className="mt-2 max-w-md text-sm text-basalt/55">Once real payments are live, confirmed bookings for your listings will show up here.</p>
-        </section>
       </main>
       <SiteFooter />
     </div>
