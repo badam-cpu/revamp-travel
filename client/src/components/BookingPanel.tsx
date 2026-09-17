@@ -262,7 +262,9 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
         </>
       )}
       <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">
-        You'll pay securely via PayLink. Your dates are confirmed once payment clears.{!user ? " No account needed — we'll email your confirmation." : ""}{displayCurrency === "USD" ? " Charged in AMD; USD shown for reference." : ""}
+        You'll pay securely via{" "}
+        <a href="https://paylink.am" target="_blank" rel="noreferrer" className="font-semibold text-basalt/55 underline underline-offset-2 hover:text-apricot">PayLink</a>
+        . Your dates are confirmed once payment clears.{!user ? " No account needed — we'll email your confirmation." : ""}{displayCurrency === "USD" ? " Charged in AMD; USD shown for reference." : ""}
       </p>
     </div>
   );
