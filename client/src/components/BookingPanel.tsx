@@ -15,12 +15,13 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { LogIn, Minus, Plus, Users } from "lucide-react";
+import { Minus, Plus, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import type { LiveListing, BlockedRange } from "@/contexts/ListingsContext";
 import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { startCheckout, ApiError } from "@/lib/api";
 import { computeBookingAmountCents, computeBookingCharge, describeBookingBasis, describeCancellationPolicy, isBookableType, TAX_PERCENT } from "@shared/bookings";
 import { useCurrency } from "@/contexts/CurrencyContext";
@@ -34,7 +35,7 @@ function addDays(iso: string, days: number): string {
 }
 
 export function BookingPanel({ listing }: { listing: LiveListing }) {
-  const { user, loading } = useAuth();
+  const { user, loading, signInAnonymously } = useAuth();
   const { format, currency: displayCurrency } = useCurrency();
   const bookable = isBookableType(listing.type);
   const isStay = listing.type === "stay";
@@ -45,6 +46,10 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
   const [range, setRange] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
   const [booked, setBooked] = useState<BlockedRange[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  // Guest checkout contact details (signed-out travelers).
+  const [guestName, setGuestName] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
+  const [guestPhone, setGuestPhone] = useState("");
 
   // Confirmed bookings for this listing (identity-free public view).
   useEffect(() => {
@@ -111,13 +116,28 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
       toast(isStay ? "Choose your check-in and check-out dates." : "Pick a date first.");
       return;
     }
+    // Signed-out travelers check out as a guest: validate their contact details,
+    // then sign in anonymously so the booking has an owner (no account needed).
+    const isGuest = !user;
+    if (isGuest) {
+      if (!guestName.trim() || !guestEmail.trim() || !guestPhone.trim()) {
+        toast("Add your name, email, and phone to continue.");
+        return;
+      }
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(guestEmail.trim())) {
+        toast("Enter a valid email address.");
+        return;
+      }
+    }
     setSubmitting(true);
     try {
+      if (isGuest) await signInAnonymously();
       const { redirectUrl } = await startCheckout({
         listingId: listing.id,
         startDate: selected.startDate,
         endDate: selected.endDate,
         guests,
+        ...(isGuest ? { guestName: guestName.trim(), guestEmail: guestEmail.trim(), guestPhone: guestPhone.trim() } : {}),
       });
       // Hand off to PayLink's hosted payment page.
       window.location.href = redirectUrl;
@@ -211,27 +231,38 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
       {/* Action */}
       {loading ? (
         <Button disabled className="mt-5 h-12 w-full rounded-none bg-basalt/10 text-basalt/40">…</Button>
-      ) : !user ? (
-        <Button asChild className="mt-5 h-12 w-full rounded-none bg-apricot text-white hover:bg-apricot/90">
-          <Link href={`/login?redirect=${encodeURIComponent(`/listing/${listing.slug}`)}`}>
-            <LogIn className="mr-2 h-4 w-4" /> Sign in to book
-          </Link>
-        </Button>
       ) : listing.price <= 0 ? (
         <Button disabled title="Rate on request" className="mt-5 h-12 w-full cursor-not-allowed rounded-none bg-basalt/10 text-basalt/45 hover:bg-basalt/10">
           Rate on request
         </Button>
       ) : (
-        <Button
-          onClick={book}
-          disabled={!selected || submitting}
-          className={cn("mt-5 h-12 w-full rounded-none bg-apricot text-white hover:bg-apricot/90", (!selected || submitting) && "opacity-60")}
-        >
-          {submitting ? "Starting checkout…" : selected ? `Request to book · ${format(amountCents)}` : "Select dates to book"}
-        </Button>
+        <>
+          {/* Guest checkout — no account required. */}
+          {!user && (
+            <div className="mt-5 grid gap-2.5 border-t border-basalt/10 pt-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.1em] text-basalt/45">Your details</p>
+              <Input value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="Full name" autoComplete="name" className="h-11 rounded-none" />
+              <Input type="email" value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} placeholder="Email address" autoComplete="email" className="h-11 rounded-none" />
+              <Input type="tel" value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} placeholder="Phone (e.g. +374 …)" autoComplete="tel" className="h-11 rounded-none" />
+            </div>
+          )}
+          <Button
+            onClick={book}
+            disabled={!selected || submitting}
+            className={cn("mt-4 h-12 w-full rounded-none bg-apricot text-white hover:bg-apricot/90", (!selected || submitting) && "opacity-60")}
+          >
+            {submitting ? "Starting checkout…" : selected ? `${user ? "Request to book" : "Continue to payment"} · ${format(amountCents)}` : "Select dates to book"}
+          </Button>
+          {!user && (
+            <p className="mt-2 text-center text-[11px] text-basalt/45">
+              Have an account?{" "}
+              <Link href={`/login?redirect=${encodeURIComponent(`/listing/${listing.slug}`)}`} className="font-semibold text-apricot hover:underline">Sign in</Link>
+            </p>
+          )}
+        </>
       )}
       <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">
-        You'll pay securely via PayLink. Your dates are confirmed once payment clears.{displayCurrency === "USD" ? " Charged in AMD; USD shown for reference." : ""}
+        You'll pay securely via PayLink. Your dates are confirmed once payment clears.{!user ? " No account needed — we'll email your confirmation." : ""}{displayCurrency === "USD" ? " Charged in AMD; USD shown for reference." : ""}
       </p>
     </div>
   );

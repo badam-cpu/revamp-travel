@@ -111,7 +111,7 @@ export function SupportWidget() {
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Chat with Revamp support"
-          className="fixed bottom-4 right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-apricot text-white shadow-[0_10px_30px_rgba(241,88,34,0.4)] transition-transform hover:scale-105"
+          className="fixed bottom-20 right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-apricot text-white shadow-[0_10px_30px_rgba(241,88,34,0.4)] transition-transform hover:scale-105 lg:bottom-4"
         >
           <MessageCircle className="h-6 w-6" />
         </button>

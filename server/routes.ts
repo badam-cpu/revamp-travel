@@ -51,6 +51,11 @@ const startCheckoutSchema = z.object({
   startDate: isoDate,
   endDate: isoDate,
   guests: z.number().int().min(1).max(50),
+  // Guest checkout: a signed-out traveler books anonymously and gives contact
+  // details here (optional — signed-in travelers omit them).
+  guestName: z.string().trim().max(120).optional(),
+  guestEmail: z.string().trim().email().max(200).optional(),
+  guestPhone: z.string().trim().max(40).optional(),
 });
 
 const cancelBookingSchema = z.object({
@@ -283,7 +288,7 @@ export function registerApiRoutes(app: Express) {
 
     const parsed = startCheckoutSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
-    const { listingId, startDate, endDate, guests } = parsed.data;
+    const { listingId, startDate, endDate, guests, guestName, guestEmail, guestPhone } = parsed.data;
 
     if (endDate <= startDate) return res.status(400).json({ error: "Check-out must be after check-in." });
     const today = new Date().toISOString().slice(0, 10);
@@ -372,6 +377,9 @@ export function registerApiRoutes(app: Express) {
         paylink_order_id: pay.orderId,
         cancellation_policy: listing.cancellation_policy ?? "flexible",
         free_cancel_days: listing.free_cancel_days ?? 7,
+        guest_name: guestName || null,
+        guest_email: guestEmail || null,
+        guest_phone: guestPhone || null,
       });
       if (insErr) {
         console.error("[start-checkout] insert failed", insErr.message);

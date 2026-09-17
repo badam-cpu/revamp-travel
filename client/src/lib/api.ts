@@ -100,7 +100,9 @@ export interface StartCheckoutParams {
  * and computed the amount itself (the client never sends a price). Confirmation
  * happens server-side after the traveler returns — see confirmCheckout.
  */
-export async function startCheckout(params: StartCheckoutParams): Promise<{ redirectUrl: string }> {
+export async function startCheckout(
+  params: StartCheckoutParams & { guestName?: string; guestEmail?: string; guestPhone?: string },
+): Promise<{ redirectUrl: string }> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new ApiError("Sign in to book.");

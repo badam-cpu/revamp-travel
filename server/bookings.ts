@@ -32,10 +32,12 @@ export interface BookingRow {
   paylink_request_id: string | null;
   paylink_order_id: string | null;
   created_at: string;
+  guest_name: string | null;
+  guest_email: string | null;
 }
 
 // Columns every confirm/reconcile query needs (row detail for the emails too).
-const BOOKING_COLS = "id, listing_id, traveler_id, status, start_date, end_date, guests, amount_cents, base_cents, currency, paylink_request_id, paylink_order_id, created_at";
+const BOOKING_COLS = "id, listing_id, traveler_id, status, start_date, end_date, guests, amount_cents, base_cents, currency, paylink_request_id, paylink_order_id, created_at, guest_name, guest_email";
 
 /**
  * Fire booking-confirmed emails (traveler + operator). Best-effort: any failure
@@ -89,9 +91,13 @@ async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promi
     admin.auth.admin.getUserById(listing.operator_id),
     admin.from("profiles").select("display_name").eq("id", row.traveler_id).maybeSingle(),
   ]);
+  // Guests book anonymously (no auth email) — fall back to the email/name they
+  // gave at checkout so they still get a confirmation.
+  const travelerEmail = traveler?.user?.email || row.guest_email || "";
+  const travelerName = travelerProfile?.display_name && travelerProfile.display_name !== "Guest" ? travelerProfile.display_name : row.guest_name || "A traveler";
   const tasks: Promise<unknown>[] = [];
-  if (traveler?.user?.email) tasks.push(sendTravelerConfirmation(traveler.user.email, info));
-  if (operator?.user?.email) tasks.push(sendOperatorNewBooking(operator.user.email, info, travelerProfile?.display_name ?? "A traveler"));
+  if (travelerEmail) tasks.push(sendTravelerConfirmation(travelerEmail, info));
+  if (operator?.user?.email) tasks.push(sendOperatorNewBooking(operator.user.email, info, travelerName));
   await Promise.allSettled(tasks);
 }
 
