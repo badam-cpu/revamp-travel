@@ -43,6 +43,7 @@ import { PlaceAutocomplete } from "@/components/PlaceAutocomplete";
 import { geocodeQuery } from "@/lib/googleMaps";
 import { AmenityPicker, AmenityPickerHandle } from "@/components/AmenityPicker";
 import { HouseRulesPicker, HouseRulesPickerHandle } from "@/components/HouseRulesPicker";
+import { RoomsEditor, RoomsEditorHandle } from "@/components/RoomsEditor";
 import { PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
 import { SearchableMultiSelect, SearchableMultiSelectHandle } from "@/components/SearchableMultiSelect";
 import { OperatorBookings } from "@/components/OperatorBookings";
@@ -84,6 +85,7 @@ interface RefLists {
   whatToBring: string[];
   notSuitableFor: string[];
   houseRules: string[];
+  rooms: import("@shared/listings").ListingRoom[];
 }
 
 function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLists): ListingInput {
@@ -93,7 +95,7 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
   // amenities/photos and the searchable lists (notIncluded/whatToBring/
   // notSuitableFor) come from their ref-based pickers, passed in via `lists`.
   // Highlights stays a free-text field; importantInfo a free-text note.
-  const { amenities, photos, notIncluded, whatToBring, notSuitableFor, houseRules } = lists;
+  const { amenities, photos, notIncluded, whatToBring, notSuitableFor, houseRules, rooms } = lists;
   const highlights = get("highlights").split(",").map((t) => t.trim()).filter(Boolean);
   const importantInfo = get("importantInfo").trim();
   const facts = [1, 2, 3, 4, 5, 6]
@@ -146,6 +148,7 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
       };
     })(),
     houseRules,
+    rooms,
     neighborhood: get("neighborhood").trim() || undefined,
   };
 }
@@ -223,6 +226,7 @@ function ListingFormDialog({
   const formRef = useRef<HTMLFormElement>(null);
   const amenitiesRef = useRef<AmenityPickerHandle>(null);
   const houseRulesRef = useRef<HouseRulesPickerHandle>(null);
+  const roomsRef = useRef<RoomsEditorHandle>(null);
   const photosRef = useRef<PhotoUploaderHandle>(null);
   const notIncludedRef = useRef<SearchableMultiSelectHandle>(null);
   const whatToBringRef = useRef<SearchableMultiSelectHandle>(null);
@@ -292,6 +296,7 @@ function ListingFormDialog({
         whatToBring: whatToBringRef.current?.getValue() ?? [],
         notSuitableFor: notSuitableForRef.current?.getValue() ?? [],
         houseRules: houseRulesRef.current?.getValue() ?? [],
+        rooms: roomsRef.current?.getValue() ?? [],
       });
 
       // Keep the map pin (and the nearby-sights it drives) in sync with the
@@ -461,7 +466,8 @@ function ListingFormDialog({
               <div hidden={step !== 3} className="mt-10 grid gap-8">
                 <AmenityPicker ref={amenitiesRef} type={draft.type} defaultValue={draft.amenities ?? []} />
 
-                {/* Stay-only house rules. */}
+                {/* Stay-only sleeping arrangement + house rules. */}
+                {draft.type === "stay" && <RoomsEditor ref={roomsRef} defaultValue={draft.rooms ?? []} />}
                 {draft.type === "stay" && <HouseRulesPicker ref={houseRulesRef} defaultValue={draft.houseRules ?? []} />}
 
                 {/* Tour & experience-only detail fields. */}

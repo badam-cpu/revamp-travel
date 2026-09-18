@@ -130,6 +130,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   const inlineAmenities = listing.amenities.slice(0, AMENITIES_INLINE_LIMIT);
   const hiddenAmenityCount = Math.max(0, listing.amenities.length - inlineAmenities.length);
   const houseRules = listing.houseRules ?? [];
+  const rooms = listing.rooms ?? [];
   // Major central-Yerevan sights closest to this listing (curated list, English
   // names, distances computed here) — empty for listings outside that radius.
   const nearby = nearbySights(listing.coordinates.lat, listing.coordinates.lng);
@@ -203,6 +204,25 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
                 <p className="mt-6 whitespace-pre-line text-base leading-8 text-basalt/62">{listing.longDescription}</p>
               </div>
             </div>
+
+            {rooms.length > 0 && (
+              <div className="border-b border-basalt/10 py-10">
+                <p className="eyebrow">Where you'll sleep</p>
+                <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {rooms.map((room, i) => (
+                    <div key={i} className="border border-basalt/12 bg-paper p-5">
+                      <div className="flex items-center gap-2 text-basalt">
+                        <BedDouble className="h-5 w-5 shrink-0 text-apricot" strokeWidth={1.75} />
+                        <p className="font-semibold">{room.name || `Room ${i + 1}`}</p>
+                      </div>
+                      <p className="mt-2 text-sm text-basalt/60">
+                        {room.beds.map((b) => `${b.count} ${b.type}${b.count > 1 ? "s" : ""}`).join(" · ") || "—"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {listing.type === "stay" && (
               <div className="my-10 brand-notch bg-apricot/10 p-7 sm:p-9">

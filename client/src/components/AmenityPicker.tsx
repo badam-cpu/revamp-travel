@@ -44,7 +44,7 @@
  * instead of pre-checking the matching box.
  */
 import { forwardRef, useImperativeHandle, useState, type KeyboardEvent } from "react";
-import { X } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -226,6 +226,12 @@ export const AmenityPicker = forwardRef<AmenityPickerHandle, { type: ListingType
 
     const [value, setValue] = useState<string[]>(() => defaultValue.map(canonicalize));
     const [customText, setCustomText] = useState("");
+    // The stay catalog is long (12 categories) — show the first few and tuck the
+    // rest behind a toggle so the form doesn't become a wall of checkboxes.
+    const [expanded, setExpanded] = useState(false);
+    const COLLAPSE_AFTER = 4;
+    const shownGroups = expanded ? groups : groups.slice(0, COLLAPSE_AFTER);
+    const hiddenCount = groups.length - shownGroups.length;
 
     useImperativeHandle(ref, () => ({ getValue: () => value }), [value]);
 
@@ -264,7 +270,7 @@ export const AmenityPicker = forwardRef<AmenityPickerHandle, { type: ListingType
     return (
       <div className="grid gap-4">
         <Label>{type === "stay" ? "Amenities" : "What's included"}</Label>
-        {groups.map((group) => (
+        {shownGroups.map((group) => (
           <div key={group.category}>
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-basalt/45">{group.category}</p>
             <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
@@ -281,6 +287,17 @@ export const AmenityPicker = forwardRef<AmenityPickerHandle, { type: ListingType
             </div>
           </div>
         ))}
+
+        {groups.length > COLLAPSE_AFTER && (
+          <button
+            type="button"
+            onClick={() => setExpanded((e) => !e)}
+            className="inline-flex items-center gap-1.5 self-start text-sm font-semibold text-apricot hover:underline"
+          >
+            <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} />
+            {expanded ? "Show fewer categories" : `Show ${hiddenCount} more ${hiddenCount === 1 ? "category" : "categories"}`}
+          </button>
+        )}
 
         {legacy.length > 0 && (
           <div>

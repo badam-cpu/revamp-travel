@@ -60,7 +60,7 @@ interface ListingsContextType {
 const ListingsContext = createContext<ListingsContextType | undefined>(undefined);
 
 const ROW_COLUMNS =
-  "id, operator_id, type, slug, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, amenities, facts, featured, accent, status, review_note, reviewed_at, ical_url, ical_synced_at, ical_error, blocked_ranges, seasonal_rates, max_guests, highlights, not_included, what_to_bring, important_info, not_suitable_for, cancellation_policy, free_cancel_days, nonrefundable_discount_percent, cleaning_fee_cents, house_rules, neighborhood, nearby, discount_type, discount_value, discount_start, discount_end";
+  "id, operator_id, type, slug, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, amenities, facts, featured, accent, status, review_note, reviewed_at, ical_url, ical_synced_at, ical_error, blocked_ranges, seasonal_rates, max_guests, highlights, not_included, what_to_bring, important_info, not_suitable_for, cancellation_policy, free_cancel_days, nonrefundable_discount_percent, cleaning_fee_cents, house_rules, neighborhood, nearby, discount_type, discount_value, discount_start, discount_end, rooms";
 
 interface ListingRow {
   id: string;
@@ -109,6 +109,7 @@ interface ListingRow {
   discount_value: number | null;
   discount_start: string | null;
   discount_end: string | null;
+  rooms: { name: string; beds: { type: string; count: number }[] }[] | null;
 }
 
 function mapListingRow(row: ListingRow): LiveListing {
@@ -162,6 +163,7 @@ function mapListingRow(row: ListingRow): LiveListing {
     discountValue: row.discount_value ?? 0,
     discountStart: row.discount_start ?? undefined,
     discountEnd: row.discount_end ?? undefined,
+    rooms: Array.isArray(row.rooms) ? row.rooms : [],
   };
 }
 
@@ -203,6 +205,7 @@ function toRow(input: ListingInput) {
     discount_value: input.discountValue ?? 0,
     discount_start: input.discountStart || null,
     discount_end: input.discountEnd || null,
+    rooms: input.rooms ?? [],
   };
 }
 

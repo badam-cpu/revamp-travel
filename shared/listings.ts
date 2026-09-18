@@ -34,6 +34,17 @@ export interface NearbyPlace {
   distanceM?: number;
 }
 
+/** A bed within a room (see ListingRoom) — a type and how many of it. */
+export interface RoomBed {
+  type: string;
+  count: number;
+}
+/** A room in a stay (bedroom, living room, …) and the beds assigned to it. */
+export interface ListingRoom {
+  name: string;
+  beds: RoomBed[];
+}
+
 export interface Listing {
   id: string;
   slug: string;
@@ -88,6 +99,8 @@ export interface Listing {
   /** Travel-date window the discount applies to (check-in within, inclusive). */
   discountStart?: string;
   discountEnd?: string;
+  /** Stay sleeping arrangement — rooms and the beds in each. */
+  rooms?: ListingRoom[];
 }
 
 // Deployment note: this fork replaces the Manus-managed `/manus-storage/...`
@@ -499,4 +512,6 @@ export interface ListingInput {
   /** Travel-date window the discount applies to (check-in within, inclusive). */
   discountStart?: string;
   discountEnd?: string;
+  /** Stay sleeping arrangement — rooms and the beds in each. */
+  rooms?: ListingRoom[];
 }
