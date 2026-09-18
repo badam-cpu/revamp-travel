@@ -1,6 +1,6 @@
 /** Revamp brandbook: bold sans hierarchy, white/orange/charcoal surfaces, rounded media, cropped logo patterns, and Armenian photography. */
-import { useEffect, useState } from "react";
-import { ArrowDown, ArrowRight, Compass, MapPin, MoveUpRight } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowDown, ArrowRight, ChevronLeft, ChevronRight, Compass, MapPin, MoveUpRight } from "lucide-react";
 import { Link } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -36,6 +36,11 @@ export default function Home() {
   // with only one image it's a plain hero (no motion).
   const heroSlides = settings.heroImages.length ? settings.heroImages : [heroImage];
   const [heroIdx, setHeroIdx] = useState(0);
+  const regionScrollRef = useRef<HTMLDivElement>(null);
+  const scrollRegions = (dir: 1 | -1) => {
+    const el = regionScrollRef.current;
+    if (el) el.scrollBy({ left: dir * el.clientWidth * 0.8, behavior: "smooth" });
+  };
   useEffect(() => {
     setHeroIdx(0);
     if (heroSlides.length < 2) return;
@@ -169,7 +174,7 @@ export default function Home() {
               <div><p className="eyebrow text-apricot">{regionsEyebrow}</p><h2 className="mt-3 whitespace-pre-line font-display text-5xl leading-[0.94] tracking-[-0.04em] sm:text-6xl">{regionsTitle}</h2></div>
               <p className="max-w-xl whitespace-pre-line text-base leading-7 text-paper/52 lg:justify-self-end">{regionsIntro}</p>
             </div>
-            <div className="mt-12 flex snap-x snap-mandatory gap-5 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div ref={regionScrollRef} className="mt-12 flex snap-x snap-mandatory gap-5 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {regionCards.map((region, index) => (
                 <Link key={`${region.name}-${index}`} href={`/explore?query=${encodeURIComponent(region.query)}`} className="region-card group relative w-[82%] shrink-0 snap-start overflow-hidden sm:w-[calc((100%-1.25rem)/2)] lg:w-[calc((100%-2.5rem)/3)]">
                   <img src={region.image} alt={region.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.025]" />
@@ -178,6 +183,17 @@ export default function Home() {
                 </Link>
               ))}
             </div>
+            {regionCards.length > 1 && (
+              <div className="mt-8 flex items-center justify-center gap-4">
+                <button type="button" onClick={() => scrollRegions(-1)} aria-label="Previous regions" className="grid h-11 w-11 place-items-center rounded-full border border-white/20 text-paper transition-colors hover:border-apricot hover:text-apricot">
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-paper/45">Scroll for more</span>
+                <button type="button" onClick={() => scrollRegions(1)} aria-label="More regions" className="grid h-11 w-11 place-items-center rounded-full border border-white/20 text-paper transition-colors hover:border-apricot hover:text-apricot">
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              </div>
+            )}
           </div>
         </section>
 
