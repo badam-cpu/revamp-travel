@@ -30,17 +30,27 @@ function prettyDate(iso: string): string {
   return new Date(y, (m ?? 1) - 1, d ?? 1).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 }
 
+// Brand tokens (inline — email clients don't share the app's CSS): apricot
+// #F15822, charcoal #212121, paper #FFFFFF, chalk #F6F3EC.
 function shell(title: string, bodyHtml: string, siteUrl: string): string {
   return `
-    <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;color:#212121;">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px;">
-        <tr><td style="font-weight:800;font-size:20px;color:#212121;letter-spacing:-.02em;">revamp<span style="color:#F15822;">.</span></td></tr>
-      </table>
-      <h1 style="font-size:21px;line-height:1.25;margin:0 0 14px;">${esc(title)}</h1>
-      ${bodyHtml}
-      <p style="font-size:12px;color:#8B8478;margin-top:28px;line-height:1.5;border-top:1px solid #eee;padding-top:14px;">
-        <a href="${esc(siteUrl)}" style="color:#8B8478;">Revamp Vacations</a> · Armenia's travel marketplace.
-      </p>
+    <div style="background:#f6f3ec;padding:24px 12px;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;">
+      <div style="max-width:544px;margin:0 auto;background:#ffffff;border:1px solid #e4ded3;border-radius:16px;overflow:hidden;">
+        <div style="height:4px;background:#F15822;"></div>
+        <div style="padding:30px 30px 0;">
+          <span style="font-weight:800;font-size:22px;letter-spacing:-.03em;color:#212121;">revamp.</span>
+        </div>
+        <div style="padding:6px 30px 30px;color:#212121;">
+          <h1 style="font-size:23px;line-height:1.22;letter-spacing:-.02em;margin:14px 0 16px;">${esc(title)}</h1>
+          ${bodyHtml}
+        </div>
+        <div style="padding:18px 30px;border-top:1px solid #eee;background:#faf9f5;">
+          <p style="font-size:12px;color:#8B8478;margin:0;line-height:1.6;">
+            <a href="${esc(siteUrl)}" style="color:#8B8478;text-decoration:none;font-weight:700;">Revamp Vacations</a> · Armenia's travel marketplace<br />
+            © 2026 Revamp Hospitality LLC
+          </p>
+        </div>
+      </div>
     </div>`;
 }
 
@@ -141,4 +151,17 @@ export function sendCancellation(to: string, b: BookingEmailInfo, opts: { toRole
     site,
   );
   return send(to, `Cancelled: ${b.listingTitle}`, html);
+}
+
+/** Alert an admin that a support chat needs a human reply. */
+export function sendSupportAlert(to: string, opts: { travelerName: string; message: string }) {
+  const site = SITE();
+  const html = shell(
+    "A traveler needs a hand 💬",
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 10px;"><strong>${esc(opts.travelerName || "A traveler")}</strong> sent a message the assistant couldn't fully handle:</p>
+     <blockquote style="margin:0 0 16px;padding:12px 16px;border-left:3px solid #F15822;background:#faf9f5;font-size:14px;line-height:1.6;color:#3f3b36;">${esc(opts.message)}</blockquote>
+     <p style="margin:0 0 8px;"><a href="${esc(site)}/admin" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Open the support inbox</a></p>`,
+    site,
+  );
+  return send(to, "Support: a traveler needs a reply", html);
 }

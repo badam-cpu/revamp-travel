@@ -18,7 +18,7 @@ import { reconcileUserBookings } from "./bookings.js";
 import { generateSupportReply, type SupportTurn } from "./support.js";
 import { generateOperatorReply, type OperatorTurn } from "./operatorAssistant.js";
 import { payoutState } from "../shared/payouts.js";
-import { sendCancellation, type BookingEmailInfo } from "./email.js";
+import { sendCancellation, sendSupportAlert, type BookingEmailInfo } from "./email.js";
 import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, promoDiscount, DEFAULT_CURRENCY } from "../shared/bookings.js";
 import { planTrip, PlannerError } from "./planner.js";
 import { fetchPrefill, PrefillError } from "./urlPrefill.js";
@@ -584,6 +584,23 @@ export function registerApiRoutes(app: Express) {
         .from("support_threads")
         .update({ status: needsHuman || thread.status === "needs_human" ? "needs_human" : "open", last_message_at: new Date().toISOString() })
         .eq("id", thread.id);
+
+      // Email the admin(s) when a chat newly escalates to a human (best-effort).
+      if (needsHuman && thread.status !== "needs_human") {
+        try {
+          const emails = new Set<string>();
+          if (process.env.ADMIN_EMAIL) emails.add(process.env.ADMIN_EMAIL);
+          const { data: admins } = await admin.from("profiles").select("id").eq("role", "admin");
+          for (const a of admins ?? []) {
+            const { data: u } = await admin.auth.admin.getUserById(a.id);
+            if (u?.user?.email) emails.add(u.user.email);
+          }
+          const { data: prof } = await admin.from("profiles").select("display_name").eq("id", userId).maybeSingle();
+          for (const email of Array.from(emails)) await sendSupportAlert(email, { travelerName: prof?.display_name ?? "A traveler", message: parsed.data.message });
+        } catch (alertErr) {
+          console.error("[support-chat] admin alert failed", alertErr);
+        }
+      }
 
       res.json({ reply, needsHuman });
     } catch (err) {
