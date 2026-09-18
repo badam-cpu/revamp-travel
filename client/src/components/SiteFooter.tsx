@@ -15,7 +15,7 @@ export function SiteFooter({ minimal = false }: { minimal?: boolean } = {}) {
     return (
       <footer className="border-t border-basalt/10 bg-paper text-basalt">
         <div className="container flex flex-col gap-3 py-6 text-[13px] text-basalt/55 sm:flex-row sm:items-center sm:justify-between">
-          <span className="font-display text-lg tracking-tight text-basalt">revamp<span className="text-apricot">.</span></span>
+          <BrandMark />
           <span>© 2026 Revamp Vacations.</span>
           <div className="flex items-center gap-4">
             <Link href="/privacy" className="hover:text-basalt">Privacy Policy</Link>
