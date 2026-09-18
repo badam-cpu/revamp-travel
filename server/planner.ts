@@ -149,13 +149,19 @@ function validateItinerary(value: unknown): Itinerary {
 
 export async function planTrip(params: PlanTripParams, listings: CatalogEntry[]): Promise<Itinerary> {
   const anthropic = getClient();
-  const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5";
+  // Default to Haiku so a full itinerary generates well within the serverless
+  // function's timeout (Sonnet + 4000 tokens overran it and returned a 504).
+  // Override with ANTHROPIC_MODEL to trade latency for richer plans post-launch.
+  const model = process.env.ANTHROPIC_MODEL || "claude-haiku-4-5";
+  // Cap output to what the trip length actually needs — fewer tokens = faster
+  // response, which is the main lever on the timeout.
+  const maxTokens = Math.min(4000, 900 + Math.max(1, params.days) * 300);
 
   let response;
   try {
     response = await anthropic.messages.create({
       model,
-      max_tokens: 4000,
+      max_tokens: maxTokens,
       messages: [{ role: "user", content: buildPrompt(params, listings) }],
     });
   } catch (err: unknown) {
