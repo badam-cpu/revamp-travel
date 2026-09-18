@@ -37,9 +37,11 @@ export default function Privacy() {
           <p className="mt-4 text-sm text-basalt/50">Last updated {UPDATED}</p>
 
           <p className="mt-8 text-[15px] leading-7 text-basalt/70">
-            Revamp Vacations ("Revamp," "we," "us") operates an Armenia-focused travel marketplace connecting travelers
-            with local operators. This policy explains what we collect, how we use it, and the choices you have. It is a
-            starting document and not legal advice; please have it reviewed by qualified counsel for your jurisdiction.
+            Revamp Vacations, operated by <strong className="text-basalt">Revamp Hospitality LLC</strong> ("Revamp," "we," "us"), runs an
+            Armenia-focused travel marketplace connecting travelers with local operators. Revamp Hospitality LLC is the data
+            controller for the personal information described here. This policy explains what we collect, how we use it, and
+            the choices you have. It is a starting document and not legal advice; please have it reviewed by qualified counsel
+            for your jurisdiction.
           </p>
 
           <Section title="Information we collect">

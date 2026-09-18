@@ -9,15 +9,32 @@ import { supabase } from "@/lib/supabase";
 
 export class ApiError extends Error {}
 
+/** Friendly fallback message by HTTP status, when the server didn't send its own. */
+function friendlyError(status: number): string {
+  if (status === 429) return "You're going a bit fast — give it a few seconds and try again.";
+  if (status === 408 || status === 502 || status === 503 || status === 504) return "That took longer than usual. Please try again in a moment.";
+  if (status === 401 || status === 403) return "Please sign in and try again.";
+  if (status >= 500) return "Something went wrong on our end. Please try again in a moment.";
+  return "Something went wrong. Please try again.";
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
-  });
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      ...init,
+      headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
+    });
+  } catch {
+    // Network/offline/aborted — never surface the raw error to a traveler.
+    throw new ApiError("We couldn't reach the server. Check your connection and try again.");
+  }
   if (res.status === 204) return undefined as T;
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new ApiError(body?.error || `Request failed (${res.status}).`);
+    // Prefer the server's own friendly message; otherwise a human-readable
+    // fallback by status — never "Request failed (504)".
+    throw new ApiError(body?.error || friendlyError(res.status));
   }
   return body as T;
 }
