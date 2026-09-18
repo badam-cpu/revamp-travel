@@ -107,6 +107,10 @@ interface WizardData {
   freeCancelDays: number;
   nonrefundableDiscountPercent: number;
   cleaningFeeCents: number;
+  discountType: "none" | "percent" | "amount";
+  discountValue: number;
+  discountStart: string;
+  discountEnd: string;
   featured: boolean;
   status?: LiveListing["status"];
   reviewNote?: string | null;
@@ -140,6 +144,10 @@ function emptyWizardData(): WizardData {
     freeCancelDays: 7,
     nonrefundableDiscountPercent: 5,
     cleaningFeeCents: 0,
+    discountType: "none",
+    discountValue: 0,
+    discountStart: "",
+    discountEnd: "",
     featured: false,
   };
 }
@@ -205,6 +213,10 @@ function listingToWizardData(listing: LiveListing): WizardData {
     freeCancelDays: listing.freeCancelDays ?? 7,
     nonrefundableDiscountPercent: listing.nonrefundableDiscountPercent ?? 5,
     cleaningFeeCents: listing.cleaningFeeCents ?? 0,
+    discountType: listing.discountType === "percent" || listing.discountType === "amount" ? listing.discountType : "none",
+    discountValue: listing.discountType === "amount" ? (listing.discountValue ?? 0) / 100 : listing.discountValue ?? 0,
+    discountStart: listing.discountStart ?? "",
+    discountEnd: listing.discountEnd ?? "",
     featured: listing.featured ?? false,
     status: listing.status,
     reviewNote: listing.reviewNote,
@@ -251,6 +263,17 @@ function toListingInput(data: WizardData): ListingInput {
     freeCancelDays: data.freeCancelDays,
     nonrefundableDiscountPercent: data.nonrefundableDiscountPercent,
     cleaningFeeCents: data.cleaningFeeCents,
+    ...(() => {
+      const type = data.discountType === "percent" || data.discountType === "amount" ? data.discountType : null;
+      const value = type === "amount" ? Math.round(data.discountValue * 100) : Math.round(data.discountValue);
+      const on = !!(type && value > 0 && data.discountStart && data.discountEnd);
+      return {
+        discountType: on ? type : null,
+        discountValue: on ? value : 0,
+        discountStart: on ? data.discountStart : undefined,
+        discountEnd: on ? data.discountEnd : undefined,
+      };
+    })(),
     // Experiences don't expose the stay/tour marker-color picker — every
     // experience pin uses the same accent as the rest of the type
     // (Dashboard.tsx's emptyDraft default for type: "experience").
@@ -669,6 +692,28 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                         <Input type="number" min={0} max={90} value={data.nonrefundableDiscountPercent} onChange={(e) => set("nonrefundableDiscountPercent", Number(e.target.value) || 0)} placeholder="5" />
                       </StepField>
                     )}
+                    <div className="grid gap-4 border-t border-basalt/10 pt-4 sm:col-span-2 sm:grid-cols-2">
+                      <p className="text-sm font-semibold sm:col-span-2">Discount <span className="font-normal text-basalt/45">(optional sale for a travel-date window — shows an "on sale" badge)</span></p>
+                      <StepField label="Type">
+                        <Select value={data.discountType} onValueChange={(v) => set("discountType", v as WizardData["discountType"])}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No discount</SelectItem>
+                            <SelectItem value="percent">Percentage off (%)</SelectItem>
+                            <SelectItem value="amount">Amount off (AMD)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </StepField>
+                      <StepField label="Amount (% or AMD)">
+                        <Input type="number" min={0} value={data.discountValue || ""} onChange={(e) => set("discountValue", Number(e.target.value) || 0)} placeholder="e.g. 15 or 10000" />
+                      </StepField>
+                      <StepField label="Sale starts">
+                        <Input type="date" value={data.discountStart} onChange={(e) => set("discountStart", e.target.value)} />
+                      </StepField>
+                      <StepField label="Sale ends">
+                        <Input type="date" value={data.discountEnd} onChange={(e) => set("discountEnd", e.target.value)} />
+                      </StepField>
+                    </div>
                   </div>
 
                   {/* Step 9 — Review & submit */}
