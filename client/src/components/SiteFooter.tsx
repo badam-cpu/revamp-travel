@@ -16,7 +16,7 @@ export function SiteFooter({ minimal = false }: { minimal?: boolean } = {}) {
       <footer className="border-t border-basalt/10 bg-paper text-basalt">
         <div className="container flex flex-col gap-3 py-6 text-[13px] text-basalt/55 sm:flex-row sm:items-center sm:justify-between">
           <BrandMark />
-          <span>© 2026 Revamp Vacations.</span>
+          <span>© 2026 Revamp Hospitality.</span>
           <div className="flex items-center gap-4">
             <Link href="/privacy" className="hover:text-basalt">Privacy Policy</Link>
             <Link href="/terms" className="hover:text-basalt">Terms of Service</Link>
@@ -61,7 +61,7 @@ export function SiteFooter({ minimal = false }: { minimal?: boolean } = {}) {
       </div>
       <div className="border-t border-white/10">
         <div className="container flex flex-col gap-3 py-5 text-[11px] text-paper/40 sm:flex-row sm:items-center sm:justify-between">
-          <span>© 2026 Revamp Vacations.</span>
+          <span>© 2026 Revamp Hospitality.</span>
           <div className="flex items-center gap-4">
             <Link href="/privacy" className="hover:text-white">Privacy Policy</Link>
             <Link href="/terms" className="hover:text-white">Terms of Service</Link>
