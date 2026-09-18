@@ -15,7 +15,7 @@
  * intentionally outside tsconfig's include, so it isn't part of `pnpm check`.
  */
 import { supabaseAdmin, adminConfigured } from "../../server/supabaseAdmin.js";
-import { reconcileAllPendingBookings } from "../../server/bookings.js";
+import { reconcileAllPendingBookings, requestReviewsForCompleted } from "../../server/bookings.js";
 
 export const handler = async () => {
   if (!adminConfigured()) {
@@ -26,8 +26,10 @@ export const handler = async () => {
   if (!admin) return { statusCode: 200, body: JSON.stringify({ skipped: "no_client" }) };
   try {
     const result = await reconcileAllPendingBookings(admin, { limit: 200 });
-    console.log("[reconcile-bookings]", result);
-    return { statusCode: 200, body: JSON.stringify(result) };
+    // Also email travelers whose trip has ended, asking for a review (once each).
+    const reviews = await requestReviewsForCompleted(admin, { limit: 200 });
+    console.log("[reconcile-bookings]", { ...result, reviewEmails: reviews.sent });
+    return { statusCode: 200, body: JSON.stringify({ ...result, reviewEmails: reviews.sent }) };
   } catch (err) {
     console.error("[reconcile-bookings] failed", err);
     return { statusCode: 500, body: JSON.stringify({ error: String(err).slice(0, 200) }) };

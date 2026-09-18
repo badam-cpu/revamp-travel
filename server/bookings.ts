@@ -13,7 +13,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkPayment } from "./paylink.js";
-import { sendTravelerConfirmation, sendOperatorNewBooking, type BookingEmailInfo } from "./email.js";
+import { sendTravelerConfirmation, sendOperatorNewBooking, sendReviewRequest, type BookingEmailInfo } from "./email.js";
 import { payoutDueDate } from "../shared/payouts.js";
 import { computeBookingCharge } from "../shared/bookings.js";
 import type { ListingType } from "../shared/listings.js";
@@ -237,4 +237,38 @@ export async function reconcileAllPendingBookings(
     }
   }
   return { polled: data.length, confirmed, expired };
+}
+
+/**
+ * Daily sweep: for confirmed bookings whose trip has ended, mark them completed
+ * and email the traveler once to ask for a review (guarded by review_requested_at
+ * so it never re-sends). Uses the auth email, falling back to a guest's email.
+ * Best-effort — a failure on one booking never blocks the rest.
+ */
+export async function requestReviewsForCompleted(admin: SupabaseClient, { limit = 200 }: { limit?: number } = {}): Promise<{ sent: number }> {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data, error } = await admin
+    .from("bookings")
+    .select("id, traveler_id, end_date, status, guest_email, listings!inner(title, slug)")
+    .in("status", ["confirmed", "completed"])
+    .lt("end_date", today)
+    .is("review_requested_at", null)
+    .limit(limit);
+  if (error || !data) return { sent: 0 };
+
+  let sent = 0;
+  for (const row of data as unknown as { id: string; traveler_id: string; guest_email: string | null; listings: { title?: string; slug?: string } | null }[]) {
+    try {
+      const { data: traveler } = await admin.auth.admin.getUserById(row.traveler_id);
+      const to = traveler?.user?.email || row.guest_email || "";
+      if (to) {
+        await sendReviewRequest(to, { listingTitle: row.listings?.title ?? "your trip", slug: row.listings?.slug, bookingId: row.id });
+        sent++;
+      }
+      await admin.from("bookings").update({ status: "completed", review_requested_at: new Date().toISOString() }).eq("id", row.id);
+    } catch (err) {
+      console.error("[bookings] review request failed", row.id, err);
+    }
+  }
+  return { sent };
 }

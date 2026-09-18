@@ -16,7 +16,7 @@
  */
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { Bookmark, LogOut, MapPin, ShieldCheck, Ticket, User as UserIcon } from "lucide-react";
+import { Bookmark, LogOut, MapPin, ShieldCheck, Star, Ticket, User as UserIcon } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { ListingCard } from "@/components/ListingCard";
@@ -45,6 +45,7 @@ interface TripRow {
   currency: string;
   status: BookingStatus;
   created_at: string;
+  listing_id: string;
   listings: { slug: string; title: string; image: string; city: string; region: string; type: string } | null;
 }
 
@@ -239,11 +240,59 @@ function SavedTab() {
 
 function TripsTab({ reloadKey }: { reloadKey: number }) {
   const { user } = useAuth();
+  const search = useSearch();
   const [trips, setTrips] = useState<TripRow[] | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());
+  const [openReview, setOpenReview] = useState<string | null>(null);
+  const [rating, setRating] = useState(5);
+  const [body, setBody] = useState("");
+  const [savingReview, setSavingReview] = useState(false);
 
   const todayIso = new Date().toISOString().slice(0, 10);
   const canCancel = (t: TripRow) => (t.status === "pending_payment" || t.status === "confirmed") && t.start_date >= todayIso;
+  // Reviewable once the trip has ended (and paid), one per booking.
+  const canReview = (t: TripRow) => (t.status === "completed" || (t.status === "confirmed" && t.end_date < todayIso)) && !reviewedIds.has(t.id);
+
+  // Which of this traveler's bookings already have a review.
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    supabase
+      .from("reviews")
+      .select("booking_id")
+      .eq("traveler_id", user.id)
+      .then(({ data }) => {
+        if (active) setReviewedIds(new Set((data ?? []).map((r) => r.booking_id as string)));
+      });
+    return () => {
+      active = false;
+    };
+  }, [user, reloadKey]);
+
+  // Deep link from the review-request email: /account?tab=trips&review=<bookingId>.
+  useEffect(() => {
+    const id = new URLSearchParams(search).get("review");
+    if (id) setOpenReview(id);
+  }, [search]);
+
+  const submitReview = async (t: TripRow) => {
+    if (!user) return;
+    setSavingReview(true);
+    try {
+      const { error } = await supabase.from("reviews").insert({ booking_id: t.id, listing_id: t.listing_id, traveler_id: user.id, rating, body: body.trim() });
+      if (error) throw new Error(error.message);
+      setReviewedIds((prev) => new Set(prev).add(t.id));
+      setOpenReview(null);
+      setBody("");
+      setRating(5);
+      toast("Thanks for your review!");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Couldn't save your review.");
+    } finally {
+      setSavingReview(false);
+    }
+  };
 
   const cancel = async (t: TripRow) => {
     if (!window.confirm(`Cancel your booking for ${t.listings?.title ?? "this listing"}? This frees the dates.`)) return;
@@ -264,7 +313,7 @@ function TripsTab({ reloadKey }: { reloadKey: number }) {
     let active = true;
     supabase
       .from("bookings")
-      .select("id, start_date, end_date, guests, amount_cents, currency, status, created_at, listings(slug, title, image, city, region, type)")
+      .select("id, start_date, end_date, guests, amount_cents, currency, status, created_at, listing_id, listings(slug, title, image, city, region, type)")
       .eq("traveler_id", user.id)
       .order("start_date", { ascending: false })
       .then(({ data, error }) => {
@@ -303,7 +352,8 @@ function TripsTab({ reloadKey }: { reloadKey: number }) {
       {trips.map((t) => {
         const s = STATUS_STYLE[t.status] ?? STATUS_STYLE.pending_payment;
         return (
-          <div key={t.id} className="grid gap-4 border border-basalt/10 bg-paper p-4 sm:grid-cols-[96px_1fr_auto] sm:items-center">
+          <div key={t.id} className="border border-basalt/10 bg-paper p-4">
+          <div className="grid gap-4 sm:grid-cols-[96px_1fr_auto] sm:items-center">
             {t.listings ? (
               <Link href={`/listing/${t.listings.slug}`} className="block">
                 <img src={t.listings.image} alt="" className="h-20 w-full rounded object-cover sm:h-24" />
@@ -337,7 +387,30 @@ function TripsTab({ reloadKey }: { reloadKey: number }) {
                   {cancelling === t.id ? "Cancelling…" : "Cancel"}
                 </button>
               )}
+              {reviewedIds.has(t.id) && <span className="inline-flex items-center gap-1 text-xs font-semibold text-basalt/45"><Star className="h-3.5 w-3.5 fill-apricot text-apricot" /> Reviewed</span>}
+              {canReview(t) && openReview !== t.id && (
+                <button type="button" onClick={() => setOpenReview(t.id)} className="text-xs font-semibold text-apricot underline-offset-2 hover:underline">Leave a review</button>
+              )}
             </div>
+          </div>
+
+          {canReview(t) && openReview === t.id && (
+            <div className="mt-4 border-t border-basalt/10 pt-4">
+              <p className="text-sm font-semibold">How was your stay?</p>
+              <div className="mt-2 flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button key={n} type="button" aria-label={`${n} star${n === 1 ? "" : "s"}`} onClick={() => setRating(n)} className="p-0.5">
+                    <Star className={`h-6 w-6 ${n <= rating ? "fill-apricot text-apricot" : "text-basalt/25"}`} />
+                  </button>
+                ))}
+              </div>
+              <Textarea rows={3} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Share a little about your experience (optional)." className="mt-3 rounded-none text-base" />
+              <div className="mt-3 flex items-center gap-3">
+                <Button onClick={() => submitReview(t)} disabled={savingReview} className="rounded-none bg-apricot text-white hover:bg-apricot/90">{savingReview ? "Posting…" : "Post review"}</Button>
+                <button type="button" onClick={() => setOpenReview(null)} className="text-sm font-semibold text-basalt/45 hover:text-basalt">Cancel</button>
+              </div>
+            </div>
+          )}
           </div>
         );
       })}
