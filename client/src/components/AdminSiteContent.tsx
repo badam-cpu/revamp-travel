@@ -6,7 +6,7 @@
  * Reads/refreshes through SiteSettingsContext so the change shows up live.
  */
 import { useEffect, useRef, useState } from "react";
-import { Save } from "lucide-react";
+import { Minus, Plus, Save } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { useListings } from "@/contexts/ListingsContext";
@@ -40,13 +40,14 @@ const EMPTY_HOME = {
   regionsEyebrow: "",
   regionsTitle: "",
   regionsIntro: "",
-  regions: {} as Record<string, { name: string; label: string }>,
   mapEyebrow: "",
   mapTitle: "",
   mapIntro: "",
   footerTagline: "",
   footerSubcopy: "",
 };
+
+type RegionCard = { id: string; name: string; label: string; image: string };
 
 export function AdminSiteContent() {
   const { settings, loading, refresh } = useSiteSettings();
@@ -65,6 +66,8 @@ export function AdminSiteContent() {
   const [catTitle, setCatTitle] = useState("");
   const [homeCats, setHomeCats] = useState<Record<string, { title: string; label: string }>>({});
   const [home, setHome] = useState(EMPTY_HOME);
+  const [regionCards, setRegionCards] = useState<RegionCard[]>([]);
+  const regionPhotoRefs = useRef<Map<string, PhotoUploaderHandle | null>>(new Map());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -90,13 +93,14 @@ export function AdminSiteContent() {
       regionsEyebrow: h.regionsEyebrow ?? "",
       regionsTitle: h.regionsTitle ?? "",
       regionsIntro: h.regionsIntro ?? "",
-      regions: Object.fromEntries(HOME_REGIONS.map((r) => [r.query, { name: h.regions?.[r.query]?.name ?? "", label: h.regions?.[r.query]?.label ?? "" }])),
       mapEyebrow: h.mapEyebrow ?? "",
       mapTitle: h.mapTitle ?? "",
       mapIntro: h.mapIntro ?? "",
       footerTagline: h.footerTagline ?? "",
       footerSubcopy: h.footerSubcopy ?? "",
     });
+    const seedRegions = h.regionCards && h.regionCards.length ? h.regionCards : HOME_REGIONS;
+    setRegionCards(seedRegions.map((r) => ({ id: crypto.randomUUID(), name: r.name ?? "", label: r.label ?? "", image: (r as { image?: string }).image ?? "" })));
     setHydrated(true);
   }, [loading, hydrated, settings]);
 
@@ -104,6 +108,14 @@ export function AdminSiteContent() {
 
   const toggleFeatured = (slug: string) =>
     setFeaturedSlugs((prev) => (prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]));
+
+  const updateRegion = (id: string, key: "name" | "label", val: string) =>
+    setRegionCards((prev) => prev.map((c) => (c.id === id ? { ...c, [key]: val } : c)));
+  const removeRegion = (id: string) => {
+    regionPhotoRefs.current.delete(id);
+    setRegionCards((prev) => prev.filter((c) => c.id !== id));
+  };
+  const addRegion = () => setRegionCards((prev) => [...prev, { id: crypto.randomUUID(), name: "", label: "", image: "" }]);
 
   const save = async () => {
     setSaving(true);
@@ -135,9 +147,12 @@ export function AdminSiteContent() {
             regionsEyebrow: home.regionsEyebrow.trim(),
             regionsTitle: home.regionsTitle.trim(),
             regionsIntro: home.regionsIntro.trim(),
-            regions: Object.fromEntries(
-              HOME_REGIONS.map((r) => [r.query, { name: (home.regions[r.query]?.name ?? "").trim(), label: (home.regions[r.query]?.label ?? "").trim() }]),
-            ),
+            regionCards: regionCards
+              .map((c) => {
+                const img = regionPhotoRefs.current.get(c.id)?.getValue()[0] ?? c.image;
+                return { name: c.name.trim(), label: c.label.trim(), image: img || "", query: c.name.trim() };
+              })
+              .filter((c) => c.name || c.label || c.image),
             mapEyebrow: home.mapEyebrow.trim(),
             mapTitle: home.mapTitle.trim(),
             mapIntro: home.mapIntro.trim(),
@@ -300,23 +315,28 @@ export function AdminSiteContent() {
             <Label className="text-sm font-semibold">Intro paragraph</Label>
             <Textarea rows={2} value={home.regionsIntro} onChange={(e) => setHome((p) => ({ ...p, regionsIntro: e.target.value }))} placeholder="From Tavush forest to the high blue of Sevan…" className="rounded-none text-base" />
           </div>
-          {HOME_REGIONS.map((r) => (
-            <div key={r.query} className="grid gap-2 border-t border-basalt/10 pt-4">
-              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-apricot">{r.name} card</p>
-              <Input
-                value={home.regions[r.query]?.name ?? ""}
-                onChange={(e) => setHome((p) => ({ ...p, regions: { ...p.regions, [r.query]: { ...(p.regions[r.query] ?? { name: "", label: "" }), name: e.target.value } } }))}
-                placeholder={r.name}
-                className="h-11 rounded-none"
-              />
-              <Input
-                value={home.regions[r.query]?.label ?? ""}
-                onChange={(e) => setHome((p) => ({ ...p, regions: { ...p.regions, [r.query]: { ...(p.regions[r.query] ?? { name: "", label: "" }), label: e.target.value } } }))}
-                placeholder={r.label}
-                className="h-11 rounded-none"
+          {regionCards.map((c, i) => (
+            <div key={c.id} className="grid gap-2 border-t border-basalt/10 pt-4">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-apricot">Region {i + 1}</p>
+                <button type="button" onClick={() => removeRegion(c.id)} className="inline-flex items-center gap-1 text-xs font-semibold text-basalt/45 transition-colors hover:text-destructive">
+                  <Minus className="h-3.5 w-3.5" /> Remove
+                </button>
+              </div>
+              <Input value={c.name} onChange={(e) => updateRegion(c.id, "name", e.target.value)} placeholder="Region name (e.g. Tavush)" className="h-11 rounded-none" />
+              <Input value={c.label} onChange={(e) => updateRegion(c.id, "label", e.target.value)} placeholder="Short label (e.g. Forest & craft)" className="h-11 rounded-none" />
+              <PhotoUploader
+                ref={(el) => {
+                  if (el) regionPhotoRefs.current.set(c.id, el);
+                  else regionPhotoRefs.current.delete(c.id);
+                }}
+                defaultValue={c.image ? [c.image] : []}
               />
             </div>
           ))}
+          <button type="button" onClick={addRegion} className="mt-2 inline-flex items-center gap-1.5 self-start rounded-none border border-basalt/20 bg-paper px-4 py-2 text-sm font-semibold text-basalt transition-colors hover:border-apricot">
+            <Plus className="h-4 w-4" /> Add region
+          </button>
         </div>
 
         {/* Home map section */}

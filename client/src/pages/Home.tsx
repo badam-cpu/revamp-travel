@@ -67,11 +67,17 @@ export default function Home() {
   const regionsIntro =
     hc.regionsIntro?.trim() ||
     "From Tavush forest to the high blue of Sevan and the deep southern folds of Syunik, Armenia rewards the detour.";
-  const regionCards = regions.map((r) => ({
-    ...r,
-    name: hc.regions?.[r.query]?.name?.trim() || r.name,
-    label: hc.regions?.[r.query]?.label?.trim() || r.label,
-  }));
+  // Regions are a fully admin-managed list (add/remove). Fall back to the
+  // built-in three when the admin hasn't set any; a card with no uploaded image
+  // borrows a built-in region illustration so it never renders blank.
+  const regionCards = (hc.regionCards && hc.regionCards.length
+    ? hc.regionCards.map((r, i) => ({
+        name: r.name?.trim() || "Region",
+        label: r.label?.trim() || "",
+        image: r.image?.trim() || regions[i % regions.length]?.image || brandAssets.hero,
+        query: (r.query?.trim() || r.name?.trim() || "").trim(),
+      }))
+    : regions.map((r) => ({ name: r.name, label: r.label, image: r.image, query: r.query })));
   const mapEyebrow = hc.mapEyebrow?.trim() || "Move through the map";
   const mapTitle = hc.mapTitle?.trim() || "See what’s\naround the bend.";
   const mapIntro =
@@ -162,9 +168,9 @@ export default function Home() {
               <div><p className="eyebrow text-apricot">{regionsEyebrow}</p><h2 className="mt-3 whitespace-pre-line font-display text-5xl leading-[0.94] tracking-[-0.04em] sm:text-6xl">{regionsTitle}</h2></div>
               <p className="max-w-xl whitespace-pre-line text-base leading-7 text-paper/52 lg:justify-self-end">{regionsIntro}</p>
             </div>
-            <div className="mt-12 grid gap-5 md:grid-cols-[1.1fr_0.9fr_1.1fr]">
+            <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {regionCards.map((region, index) => (
-                <Link key={region.name} href={`/explore?query=${region.query}`} className={`region-card group relative overflow-hidden ${index === 1 ? "md:mt-14" : ""}`}>
+                <Link key={`${region.name}-${index}`} href={`/explore?query=${encodeURIComponent(region.query)}`} className="region-card group relative overflow-hidden">
                   <img src={region.image} alt={region.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.025]" />
                   <div className="absolute inset-0 bg-gradient-to-t from-basalt/78 via-transparent to-transparent" />
                   <div className="absolute inset-x-0 bottom-0 p-6"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-apricot">{region.label}</p><h3 className="mt-1 font-display text-4xl">{region.name}</h3></div>

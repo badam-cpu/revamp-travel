@@ -23,6 +23,13 @@ export interface HomeRegionContent {
   name?: string;
   label?: string;
 }
+/** A fully admin-managed region card (name, label, image, and search link). */
+export interface HomeRegionCard {
+  name: string;
+  label: string;
+  image?: string;
+  query?: string;
+}
 /** Admin-editable home editorial copy (see migration 0023). All optional —
  * blank fields fall back to the app's built-in defaults in Home.tsx. */
 export interface HomeContent {
@@ -36,6 +43,7 @@ export interface HomeContent {
   regionsTitle?: string;
   regionsIntro?: string;
   regions?: Record<string, HomeRegionContent>;
+  regionCards?: HomeRegionCard[];
   mapEyebrow?: string;
   mapTitle?: string;
   mapIntro?: string;
