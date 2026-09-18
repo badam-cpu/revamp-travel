@@ -1,5 +1,5 @@
 /** Revamp brandbook: bold sans hierarchy, white/orange/charcoal surfaces, rounded media, cropped logo patterns, and Armenian photography. */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowDown, ArrowRight, Compass, MapPin, MoveUpRight } from "lucide-react";
 import { Link } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -32,6 +32,17 @@ export default function Home() {
 
   // Admin-editable home content, each with a fallback to the built-in default.
   const heroImage = settings.heroImage || brandAssets.hero;
+  // Hero slideshow: the admin's uploaded hero photos cross-fade automatically;
+  // with only one image it's a plain hero (no motion).
+  const heroSlides = settings.heroImages.length ? settings.heroImages : [heroImage];
+  const [heroIdx, setHeroIdx] = useState(0);
+  useEffect(() => {
+    setHeroIdx(0);
+    if (heroSlides.length < 2) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const t = setInterval(() => setHeroIdx((i) => (i + 1) % heroSlides.length), 5000);
+    return () => clearInterval(t);
+  }, [heroSlides.length]);
   const heroSubcopy =
     settings.heroSubcopy ||
     "Exceptional stays, Armenian tables, and local routes—carefully gathered for travelers who want to feel the country, not just pass through it.";
@@ -89,7 +100,15 @@ export default function Home() {
       <SiteHeader />
       <main>
         <section className="hero-field relative min-h-[660px] overflow-hidden border-b border-basalt/10 sm:min-h-[720px]">
-          <img src={heroImage} alt="Armenian highlands at morning light" className="absolute inset-0 h-full w-full object-cover object-center" />
+          {heroSlides.map((src, i) => (
+            <img
+              key={`${src}-${i}`}
+              src={src}
+              alt={i === 0 ? "Armenian highlands at morning light" : ""}
+              aria-hidden={i === heroIdx ? undefined : true}
+              className={`absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-[1200ms] ${i === heroIdx ? "opacity-100" : "opacity-0"}`}
+            />
+          ))}
           <div className="hero-image-overlay absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.98)_0%,rgba(255,255,255,0.88)_36%,rgba(255,255,255,0.18)_67%,rgba(33,33,33,0.12)_100%)]" />
           <div className="brand-pattern-hero pointer-events-none absolute -left-8 top-14 text-[15rem] font-bold leading-none tracking-[-0.12em] text-apricot/10">re.</div>
           <div className="container relative z-10 flex min-h-[660px] flex-col justify-center pb-28 pt-16 sm:min-h-[720px]">

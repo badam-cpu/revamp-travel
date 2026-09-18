@@ -45,6 +45,7 @@ export interface HomeContent {
 
 export interface SiteSettings {
   heroImage: string;
+  heroImages: string[];
   heroHeadline: string;
   heroSubcopy: string;
   featuredSlugs: string[];
@@ -59,6 +60,7 @@ export interface SiteSettings {
 
 export const EMPTY_SITE_SETTINGS: SiteSettings = {
   heroImage: "",
+  heroImages: [],
   heroHeadline: "",
   heroSubcopy: "",
   featuredSlugs: [],
@@ -70,10 +72,11 @@ export const EMPTY_SITE_SETTINGS: SiteSettings = {
 };
 
 export const SITE_SETTINGS_COLUMNS =
-  "hero_image, hero_headline, hero_subcopy, featured_slugs, announcement_enabled, announcement_message, announcement_href, usd_to_amd_rate, home_content";
+  "hero_image, hero_images, hero_headline, hero_subcopy, featured_slugs, announcement_enabled, announcement_message, announcement_href, usd_to_amd_rate, home_content";
 
 interface SiteSettingsRow {
   hero_image: string | null;
+  hero_images: string[] | null;
   hero_headline: string | null;
   hero_subcopy: string | null;
   featured_slugs: string[] | null;
@@ -87,6 +90,7 @@ interface SiteSettingsRow {
 export function mapSiteSettingsRow(row: SiteSettingsRow): SiteSettings {
   return {
     heroImage: row.hero_image ?? "",
+    heroImages: Array.isArray(row.hero_images) ? row.hero_images.filter(Boolean) : [],
     heroHeadline: row.hero_headline ?? "",
     heroSubcopy: row.hero_subcopy ?? "",
     featuredSlugs: Array.isArray(row.featured_slugs) ? row.featured_slugs : [],

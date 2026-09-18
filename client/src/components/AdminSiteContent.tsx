@@ -109,11 +109,13 @@ export function AdminSiteContent() {
     setSaving(true);
     setError(null);
     try {
-      const heroImage = photosRef.current?.getValue()[0] ?? settings.heroImage;
+      const heroImages = photosRef.current?.getValue() ?? [];
+      const heroImage = heroImages[0] ?? settings.heroImage;
       const { error: err } = await supabase
         .from("site_settings")
         .update({
           hero_image: heroImage || "",
+          hero_images: heroImages,
           hero_headline: headline.trim(),
           hero_subcopy: subcopy.trim(),
           featured_slugs: featuredSlugs,
@@ -167,8 +169,12 @@ export function AdminSiteContent() {
         <div className="grid gap-4 border border-basalt/10 bg-paper p-5">
           <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Home hero</p>
           <div className="grid gap-2">
-            <Label className="text-sm font-semibold">Hero photo <span className="font-normal text-basalt/45">(first photo is used)</span></Label>
-            <PhotoUploader key={hydrated ? "ready" : "loading"} ref={photosRef} defaultValue={settings.heroImage ? [settings.heroImage] : []} />
+            <Label className="text-sm font-semibold">Hero photos <span className="font-normal text-basalt/45">(add several — they cross-fade automatically)</span></Label>
+            <PhotoUploader
+              key={hydrated ? "ready" : "loading"}
+              ref={photosRef}
+              defaultValue={settings.heroImages.length ? settings.heroImages : settings.heroImage ? [settings.heroImage] : []}
+            />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="heroHeadline" className="text-sm font-semibold">Headline <span className="font-normal text-basalt/45">(blank = “Stay. Experience. Repeat.”)</span></Label>
