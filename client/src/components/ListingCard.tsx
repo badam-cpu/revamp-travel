@@ -5,6 +5,7 @@ import { Listing, typeLabels } from "@/data/listings";
 import { cn } from "@/lib/utils";
 import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { DiscountBadge } from "@/components/DiscountBadge";
 
 export function ListingCard({ listing, large = false, active = false, onHover }: { listing: Listing; large?: boolean; active?: boolean; onHover?: (id?: string) => void }) {
   const { isSaved, toggleSaved } = useSavedPlaces();
@@ -24,6 +25,7 @@ export function ListingCard({ listing, large = false, active = false, onHover }:
           <span className="absolute left-4 top-4 bg-paper px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.17em] text-basalt">
             {typeLabels[listing.type]}
           </span>
+          <DiscountBadge listing={listing} className="absolute left-4 top-14" />
           <button
             type="button"
             aria-label={saved ? `Remove ${listing.title} from saved` : `Save ${listing.title}`}

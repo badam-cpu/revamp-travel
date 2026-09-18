@@ -152,6 +152,38 @@ export function computeBookingAmountCents(
   return total;
 }
 
+/** The promotional-discount shape carried on a listing (see shared/listings.ts). */
+export interface ListingDiscount {
+  discountType?: "percent" | "amount" | null;
+  discountValue?: number;
+  discountStart?: string;
+  discountEnd?: string;
+}
+
+/**
+ * The promo discount for a booking: applies when the listing has a discount and
+ * the booking's check-in date falls within [discountStart, discountEnd]. Returns
+ * the amount off (cents) and the discounted accommodation. Single source of truth
+ * — server charge and client preview both call it, so they can't diverge.
+ */
+export function promoDiscount(accommodationCents: number, listing: ListingDiscount, startDate: string): { active: boolean; discountCents: number; netCents: number } {
+  const { discountType, discountValue, discountStart, discountEnd } = listing;
+  const base = Math.max(0, Math.round(accommodationCents));
+  if (!discountType || !discountValue || discountValue <= 0 || !discountStart || !discountEnd || startDate < discountStart || startDate > discountEnd) {
+    return { active: false, discountCents: 0, netCents: base };
+  }
+  const off =
+    discountType === "percent"
+      ? Math.floor((base * Math.min(90, Math.max(0, discountValue))) / 100)
+      : Math.min(base, Math.max(0, Math.round(discountValue)));
+  return { active: off > 0, discountCents: off, netCents: Math.max(0, base - off) };
+}
+
+/** Whether a discount is worth showing a badge for (configured and not fully past). */
+export function isDiscountLive(listing: ListingDiscount, todayIso: string): boolean {
+  return !!(listing.discountType && listing.discountValue && listing.discountValue > 0 && listing.discountEnd && listing.discountEnd >= todayIso);
+}
+
 /**
  * How much of a booking is refundable if cancelled now. Refunds are computed
  * from the policy SNAPSHOT stored on the booking (so a later listing change

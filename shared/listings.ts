@@ -81,6 +81,13 @@ export interface Listing {
   neighborhood?: string;
   /** Real nearby points of interest (Google Places), stored at save time. */
   nearby?: NearbyPlace[];
+  /** Promotional discount: percentage off, or a flat amount off (AMD cents). */
+  discountType?: "percent" | "amount" | null;
+  /** Percent (1–90) when discountType='percent', else AMD cents off. */
+  discountValue?: number;
+  /** Travel-date window the discount applies to (check-in within, inclusive). */
+  discountStart?: string;
+  discountEnd?: string;
 }
 
 // Deployment note: this fork replaces the Manus-managed `/manus-storage/...`
@@ -485,4 +492,11 @@ export interface ListingInput {
   neighborhood?: string;
   /** Real nearby points of interest (Google Places), stored at save time. */
   nearby?: NearbyPlace[];
+  /** Promotional discount: percentage off, or a flat amount off (AMD cents). */
+  discountType?: "percent" | "amount" | null;
+  /** Percent (1–90) when discountType='percent', else AMD cents off. */
+  discountValue?: number;
+  /** Travel-date window the discount applies to (check-in within, inclusive). */
+  discountStart?: string;
+  discountEnd?: string;
 }

@@ -14,6 +14,7 @@ import { factValue } from "@/lib/tourFacts";
 import { cn } from "@/lib/utils";
 import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { DiscountBadge } from "@/components/DiscountBadge";
 
 export function TourCard({ listing }: { listing: Listing }) {
   const images = listing.gallery.length ? listing.gallery : [listing.image];
@@ -51,6 +52,7 @@ export function TourCard({ listing }: { listing: Listing }) {
               Revamp pick
             </span>
           )}
+          <DiscountBadge listing={listing} className="absolute bottom-3 left-3" />
 
           <button
             type="button"

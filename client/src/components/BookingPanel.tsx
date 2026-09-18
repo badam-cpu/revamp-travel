@@ -23,7 +23,7 @@ import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { startCheckout, ApiError } from "@/lib/api";
-import { computeBookingAmountCents, computeBookingCharge, describeBookingBasis, describeCancellationPolicy, isBookableType, TAX_PERCENT } from "@shared/bookings";
+import { computeBookingAmountCents, computeBookingCharge, describeBookingBasis, describeCancellationPolicy, isBookableType, promoDiscount, TAX_PERCENT } from "@shared/bookings";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -86,11 +86,14 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
         { ...selected, guests },
       )
     : 0;
-  // Base = accommodation + flat cleaning fee; guest pays base + tax on top
-  // (same helper the server charges with).
+  // Promo discount (applies when the check-in date is in the sale window).
+  const promo = promoDiscount(accommodationCents, listing, selected?.startDate ?? "");
+  const netAccommodationCents = promo.netCents;
+  // Base = discounted accommodation + flat cleaning fee; guest pays base + tax on
+  // top (same helper the server charges with).
   const cleaningCents = accommodationCents > 0 ? listing.cleaningFeeCents ?? 0 : 0;
-  const charge = computeBookingCharge(accommodationCents + cleaningCents);
-  const amountCents = charge.totalCents; // what the guest is actually charged (USD, settlement)
+  const charge = computeBookingCharge(netAccommodationCents + cleaningCents);
+  const amountCents = charge.totalCents; // what the guest is actually charged (AMD, settlement)
   const policyText = describeCancellationPolicy(listing.cancellationPolicy, {
     freeCancelDays: listing.freeCancelDays,
     startDate: selected?.startDate,
@@ -205,6 +208,12 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
             <span>{describeBookingBasis(listing, { ...selected, guests }, format(Math.round(listing.price * 100)))}</span>
             <span>{format(accommodationCents)}</span>
           </div>
+          {promo.active && (
+            <div className="flex items-center justify-between font-semibold text-apricot">
+              <span>Discount{listing.discountType === "percent" ? ` (${listing.discountValue}% off)` : " (sale)"}</span>
+              <span>−{format(promo.discountCents)}</span>
+            </div>
+          )}
           {cleaningCents > 0 && (
             <div className="flex items-center justify-between text-basalt/55">
               <span>Cleaning fee</span>

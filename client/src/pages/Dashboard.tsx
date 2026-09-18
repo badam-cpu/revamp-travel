@@ -130,6 +130,21 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
     freeCancelDays: Number(get("freeCancelDays")) >= 0 && get("freeCancelDays") !== "" ? Number(get("freeCancelDays")) : 7,
     nonrefundableDiscountPercent: Number(get("nonrefundableDiscountPercent")) >= 0 && get("nonrefundableDiscountPercent") !== "" ? Number(get("nonrefundableDiscountPercent")) : 5,
     cleaningFeeCents: Number(get("cleaningFee")) > 0 ? Math.round(Number(get("cleaningFee")) * 100) : 0,
+    ...(() => {
+      const t = get("discountType");
+      const type = t === "percent" || t === "amount" ? t : null;
+      const raw = Number(get("discountValue")) || 0;
+      const value = type === "amount" ? Math.round(raw * 100) : Math.round(raw);
+      const start = get("discountStart").trim();
+      const end = get("discountEnd").trim();
+      const on = !!(type && value > 0 && start && end);
+      return {
+        discountType: on ? type : null,
+        discountValue: on ? value : 0,
+        discountStart: on ? start : undefined,
+        discountEnd: on ? end : undefined,
+      };
+    })(),
     houseRules,
     neighborhood: get("neighborhood").trim() || undefined,
   };
@@ -515,6 +530,38 @@ function ListingFormDialog({
                       <Label htmlFor="nonrefundableDiscountPercent" className="text-sm font-semibold">Non-refundable discount % <span className="font-normal text-basalt/45">(incentive)</span></Label>
                       <Input id="nonrefundableDiscountPercent" name="nonrefundableDiscountPercent" type="number" min={0} max={90} placeholder="5" defaultValue={draft.nonrefundableDiscountPercent ?? 5} className={FIELD} />
                       <p className="text-xs text-basalt/45">Applied only when the policy is non-refundable.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 border border-basalt/10 bg-chalk/60 p-4">
+                  <div>
+                    <Label className="text-sm font-semibold">Discount <span className="font-normal text-basalt/45">(optional sale for a travel-date window)</span></Label>
+                    <p className="mt-1 text-xs text-basalt/45">Applies when a guest's check-in falls within the dates below. Shows an "on sale" badge on your listing.</p>
+                  </div>
+                  <div className="grid gap-6 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="discountType" className="text-sm font-semibold">Type</Label>
+                      <Select name="discountType" defaultValue={draft.discountType ?? "none"}>
+                        <SelectTrigger id="discountType" className="h-12 rounded-none text-base"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No discount</SelectItem>
+                          <SelectItem value="percent">Percentage off (%)</SelectItem>
+                          <SelectItem value="amount">Amount off (AMD)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="discountValue" className="text-sm font-semibold">Amount <span className="font-normal text-basalt/45">(% or AMD)</span></Label>
+                      <Input id="discountValue" name="discountValue" type="number" min={0} placeholder="e.g. 15 or 10000" defaultValue={draft.discountValue ? (draft.discountType === "amount" ? draft.discountValue / 100 : draft.discountValue) : ""} className={FIELD} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="discountStart" className="text-sm font-semibold">Sale starts</Label>
+                      <Input id="discountStart" name="discountStart" type="date" defaultValue={draft.discountStart ?? ""} className={FIELD} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="discountEnd" className="text-sm font-semibold">Sale ends</Label>
+                      <Input id="discountEnd" name="discountEnd" type="date" defaultValue={draft.discountEnd ?? ""} className={FIELD} />
                     </div>
                   </div>
                 </div>

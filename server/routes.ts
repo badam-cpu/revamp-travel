@@ -19,7 +19,7 @@ import { generateSupportReply, type SupportTurn } from "./support.js";
 import { generateOperatorReply, type OperatorTurn } from "./operatorAssistant.js";
 import { payoutState } from "../shared/payouts.js";
 import { sendCancellation, type BookingEmailInfo } from "./email.js";
-import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, DEFAULT_CURRENCY } from "../shared/bookings.js";
+import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, promoDiscount, DEFAULT_CURRENCY } from "../shared/bookings.js";
 import { planTrip, PlannerError } from "./planner.js";
 import { fetchPrefill, PrefillError } from "./urlPrefill.js";
 import { fetchIcalBlockedRanges } from "./ical.js";
@@ -300,7 +300,7 @@ export function registerApiRoutes(app: Express) {
     // Read the listing under RLS — published listings are publicly readable.
     const { data: listing, error: readErr } = await supa
       .from("listings")
-      .select("id, type, title, status, price_cents, price_unit, blocked_ranges, cancellation_policy, free_cancel_days, nonrefundable_discount_percent, cleaning_fee_cents")
+      .select("id, type, title, status, price_cents, price_unit, blocked_ranges, cancellation_policy, free_cancel_days, nonrefundable_discount_percent, cleaning_fee_cents, discount_type, discount_value, discount_start, discount_end")
       .eq("id", listingId)
       .maybeSingle();
     if (readErr || !listing) return res.status(404).json({ error: "Listing not found." });
@@ -320,7 +320,13 @@ export function registerApiRoutes(app: Express) {
       { startDate, endDate, guests },
     );
     if (accommodationCents <= 0) return res.status(400).json({ error: "This listing is rate-on-request — contact the operator to book." });
-    const charge = computeBookingCharge(accommodationCents + (listing.cleaning_fee_cents ?? 0)); // base + tax = total the guest pays
+    // Apply the operator's promo discount when the check-in date is in the sale window.
+    const { netCents: netAccommodationCents } = promoDiscount(
+      accommodationCents,
+      { discountType: listing.discount_type, discountValue: listing.discount_value, discountStart: listing.discount_start, discountEnd: listing.discount_end },
+      startDate,
+    );
+    const charge = computeBookingCharge(netAccommodationCents + (listing.cleaning_fee_cents ?? 0)); // base + tax = total the guest pays
 
     // Availability: reject if the dates clash with the listing's iCal blocked
     // ranges, an existing confirmed booking, or a live (recent) pending hold.

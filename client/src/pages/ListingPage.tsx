@@ -11,6 +11,7 @@ import { BookingPanel } from "@/components/BookingPanel";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { groupAmenitiesForDisplay } from "@/components/AmenityPicker";
+import { DiscountBadge } from "@/components/DiscountBadge";
 import { houseRuleIcon } from "@/lib/houseRules";
 import { nearbySights } from "@/lib/yerevanSights";
 import { findListing, typeLabels } from "@/data/listings";
@@ -163,6 +164,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
             <img src={listing.gallery[0]} alt={listing.title} className="h-full w-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-basalt/60 via-transparent to-transparent" />
             <div className="absolute bottom-7 left-7 max-w-xl text-white">
+              <DiscountBadge listing={listing} className="mb-3" />
               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/70">{typeLabels[listing.type]} · {listing.city}</p>
               <h1 className="mt-2 font-display text-5xl leading-[0.92] tracking-[-0.04em] sm:text-6xl lg:text-7xl">{listing.title}</h1>
             </div>

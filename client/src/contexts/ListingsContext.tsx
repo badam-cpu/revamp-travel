@@ -60,7 +60,7 @@ interface ListingsContextType {
 const ListingsContext = createContext<ListingsContextType | undefined>(undefined);
 
 const ROW_COLUMNS =
-  "id, operator_id, type, slug, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, amenities, facts, featured, accent, status, review_note, reviewed_at, ical_url, ical_synced_at, ical_error, blocked_ranges, seasonal_rates, max_guests, highlights, not_included, what_to_bring, important_info, not_suitable_for, cancellation_policy, free_cancel_days, nonrefundable_discount_percent, cleaning_fee_cents, house_rules, neighborhood, nearby";
+  "id, operator_id, type, slug, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, amenities, facts, featured, accent, status, review_note, reviewed_at, ical_url, ical_synced_at, ical_error, blocked_ranges, seasonal_rates, max_guests, highlights, not_included, what_to_bring, important_info, not_suitable_for, cancellation_policy, free_cancel_days, nonrefundable_discount_percent, cleaning_fee_cents, house_rules, neighborhood, nearby, discount_type, discount_value, discount_start, discount_end";
 
 interface ListingRow {
   id: string;
@@ -105,6 +105,10 @@ interface ListingRow {
   house_rules: string[] | null;
   neighborhood: string | null;
   nearby: { name: string; category?: string; distanceM?: number }[] | null;
+  discount_type: "percent" | "amount" | null;
+  discount_value: number | null;
+  discount_start: string | null;
+  discount_end: string | null;
 }
 
 function mapListingRow(row: ListingRow): LiveListing {
@@ -154,6 +158,10 @@ function mapListingRow(row: ListingRow): LiveListing {
     houseRules: row.house_rules ?? [],
     neighborhood: row.neighborhood ?? undefined,
     nearby: row.nearby ?? [],
+    discountType: row.discount_type ?? null,
+    discountValue: row.discount_value ?? 0,
+    discountStart: row.discount_start ?? undefined,
+    discountEnd: row.discount_end ?? undefined,
   };
 }
 
@@ -191,6 +199,10 @@ function toRow(input: ListingInput) {
     house_rules: input.houseRules ?? [],
     neighborhood: input.neighborhood ?? null,
     nearby: input.nearby ?? [],
+    discount_type: input.discountType ?? null,
+    discount_value: input.discountValue ?? 0,
+    discount_start: input.discountStart || null,
+    discount_end: input.discountEnd || null,
   };
 }
 
