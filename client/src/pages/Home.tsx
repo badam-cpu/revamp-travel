@@ -169,9 +169,9 @@ export default function Home() {
               <div><p className="eyebrow text-apricot">{regionsEyebrow}</p><h2 className="mt-3 whitespace-pre-line font-display text-5xl leading-[0.94] tracking-[-0.04em] sm:text-6xl">{regionsTitle}</h2></div>
               <p className="max-w-xl whitespace-pre-line text-base leading-7 text-paper/52 lg:justify-self-end">{regionsIntro}</p>
             </div>
-            <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-12 flex snap-x snap-mandatory gap-5 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {regionCards.map((region, index) => (
-                <Link key={`${region.name}-${index}`} href={`/explore?query=${encodeURIComponent(region.query)}`} className="region-card group relative overflow-hidden">
+                <Link key={`${region.name}-${index}`} href={`/explore?query=${encodeURIComponent(region.query)}`} className="region-card group relative w-[82%] shrink-0 snap-start overflow-hidden sm:w-[calc((100%-1.25rem)/2)] lg:w-[calc((100%-2.5rem)/3)]">
                   <img src={region.image} alt={region.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.025]" />
                   <div className="absolute inset-0 bg-gradient-to-t from-basalt/95 via-basalt/40 to-transparent" />
                   <div className="absolute inset-x-0 bottom-0 p-6 text-white [text-shadow:0_2px_14px_rgba(15,15,15,0.55)]"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-apricot">{region.label}</p><h3 className="mt-1 font-display text-4xl">{region.name}</h3></div>
