@@ -68,6 +68,7 @@ export function AdminSiteContent() {
   const [home, setHome] = useState(EMPTY_HOME);
   const [regionCards, setRegionCards] = useState<RegionCard[]>([]);
   const regionPhotoRefs = useRef<Map<string, PhotoUploaderHandle | null>>(new Map());
+  const catPhotoRefs = useRef<Map<string, PhotoUploaderHandle | null>>(new Map());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -140,7 +141,14 @@ export function AdminSiteContent() {
             categoriesTitle: catTitle.trim(),
             categoriesIntro: home.categoriesIntro.trim(),
             categories: Object.fromEntries(
-              HOME_CATS.map((c) => [c.type, { title: (homeCats[c.type]?.title ?? "").trim(), label: (homeCats[c.type]?.label ?? "").trim() }]),
+              HOME_CATS.map((c) => [
+                c.type,
+                {
+                  title: (homeCats[c.type]?.title ?? "").trim(),
+                  label: (homeCats[c.type]?.label ?? "").trim(),
+                  image: catPhotoRefs.current.get(c.type)?.getValue()[0] ?? settings.homeContent.categories?.[c.type]?.image ?? "",
+                },
+              ]),
             ),
             editEyebrow: home.editEyebrow.trim(),
             editTitle: home.editTitle.trim(),
@@ -282,6 +290,15 @@ export function AdminSiteContent() {
                 onChange={(e) => setHomeCats((p) => ({ ...p, [c.type]: { ...(p[c.type] ?? { title: "", label: "" }), label: e.target.value } }))}
                 placeholder={c.label}
                 className="h-11 rounded-none"
+              />
+              <p className="mt-1 text-xs text-basalt/45">Photo <span className="text-basalt/35">(optional — blank keeps the built-in illustration)</span></p>
+              <PhotoUploader
+                key={hydrated ? `cat-${c.type}` : `cat-${c.type}-loading`}
+                ref={(el) => {
+                  if (el) catPhotoRefs.current.set(c.type, el);
+                  else catPhotoRefs.current.delete(c.type);
+                }}
+                defaultValue={settings.homeContent.categories?.[c.type]?.image ? [settings.homeContent.categories[c.type].image as string] : []}
               />
             </div>
           ))}

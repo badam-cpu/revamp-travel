@@ -59,6 +59,7 @@ export default function Home() {
     ...c,
     title: hc.categories?.[c.type]?.title?.trim() || c.title,
     label: hc.categories?.[c.type]?.label?.trim() || c.label,
+    image: hc.categories?.[c.type]?.image?.trim() || c.image,
   }));
   const editEyebrow = hc.editEyebrow?.trim() || "The revamp. edit";
   const editTitle = hc.editTitle?.trim() || "Worth taking the long way.";

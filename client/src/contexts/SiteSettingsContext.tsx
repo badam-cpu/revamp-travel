@@ -17,6 +17,7 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 export interface HomeCategoryContent {
   title?: string;
   label?: string;
+  image?: string;
 }
 /** Per-region editorial override (keyed by the region's `query` slug). */
 export interface HomeRegionContent {
