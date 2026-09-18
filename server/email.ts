@@ -92,7 +92,10 @@ export interface BookingEmailInfo {
 }
 
 function detailRows(b: BookingEmailInfo): string {
-  const where = [b.city, b.region].filter(Boolean).join(", ");
+  // City, then region only when it differs from the city (avoids "Yerevan,
+  // Yerevan"), then the country. Armenia's code is AM (AR is Argentina).
+  const parts = [b.city, b.region && b.region !== b.city ? b.region : null].filter(Boolean);
+  const where = [...parts, "Armenia"].join(", ");
   return `
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;font-size:14px;line-height:1.5;border:1px solid #eee;border-radius:8px;padding:4px 0;margin:8px 0 18px;">
       <tr><td style="padding:8px 14px;color:#6B6357;">Dates</td><td style="padding:8px 14px;text-align:right;font-weight:600;">${esc(prettyDate(b.startDate))} → ${esc(prettyDate(b.endDate))}</td></tr>
