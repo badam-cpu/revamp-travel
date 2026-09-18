@@ -21,7 +21,7 @@ function esc(s: unknown): string {
 
 function money(cents: number, currency: string): string {
   const major = cents / 100;
-  const n = major % 1 === 0 ? major.toString() : major.toFixed(2);
+  const n = major % 1 === 0 ? major.toLocaleString("en-US") : major.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return currency === "USD" ? `$${n}` : currency === "AMD" ? `֏${n}` : `${n} ${currency}`;
 }
 
