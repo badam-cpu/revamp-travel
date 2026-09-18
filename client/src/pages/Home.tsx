@@ -142,9 +142,9 @@ export default function Home() {
             {cards.map((category) => (
               <Link key={category.type} href={`/explore/${category.type}`} className="category-panel group relative overflow-hidden">
                 <img src={category.image} alt="" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.025]" />
-                <div className="absolute inset-0 bg-gradient-to-t from-basalt/78 via-basalt/8 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-basalt/95 via-basalt/45 to-transparent" />
                 <span className="absolute left-5 top-5 grid h-9 w-9 place-items-center bg-paper text-[10px] font-bold text-basalt">{category.number}</span>
-                <div className="absolute inset-x-0 bottom-0 p-6 text-white"><p className="text-[10px] font-bold uppercase tracking-[0.17em]"><span className="text-apricot">{category.name}</span><span className="text-white/55"> · {category.label}</span></p><h3 className="mt-2 max-w-[260px] font-display text-4xl leading-[0.96] tracking-[-0.03em]">{category.title}</h3><MoveUpRight className="mt-5 h-5 w-5 text-apricot transition-transform group-hover:-translate-y-1 group-hover:translate-x-1" /></div>
+                <div className="absolute inset-x-0 bottom-0 p-6 text-white [text-shadow:0_2px_14px_rgba(15,15,15,0.55)]"><p className="text-[10px] font-bold uppercase tracking-[0.17em]"><span className="text-apricot">{category.name}</span><span className="text-white/80"> · {category.label}</span></p><h3 className="mt-2 max-w-[260px] font-display text-4xl leading-[0.96] tracking-[-0.03em]">{category.title}</h3><MoveUpRight className="mt-5 h-5 w-5 text-apricot transition-transform group-hover:-translate-y-1 group-hover:translate-x-1" /></div>
               </Link>
             ))}
           </div>
@@ -173,8 +173,8 @@ export default function Home() {
               {regionCards.map((region, index) => (
                 <Link key={`${region.name}-${index}`} href={`/explore?query=${encodeURIComponent(region.query)}`} className="region-card group relative overflow-hidden">
                   <img src={region.image} alt={region.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.025]" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-basalt/78 via-transparent to-transparent" />
-                  <div className="absolute inset-x-0 bottom-0 p-6"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-apricot">{region.label}</p><h3 className="mt-1 font-display text-4xl">{region.name}</h3></div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-basalt/95 via-basalt/40 to-transparent" />
+                  <div className="absolute inset-x-0 bottom-0 p-6 text-white [text-shadow:0_2px_14px_rgba(15,15,15,0.55)]"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-apricot">{region.label}</p><h3 className="mt-1 font-display text-4xl">{region.name}</h3></div>
                 </Link>
               ))}
             </div>
