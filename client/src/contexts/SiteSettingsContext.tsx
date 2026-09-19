@@ -120,12 +120,21 @@ export function mapSiteSettingsRow(row: SiteSettingsRow): SiteSettings {
 interface SiteSettingsContextValue {
   settings: SiteSettings;
   loading: boolean;
+  /**
+   * True only after a fetch that actually SUCCEEDED (the query returned without
+   * error). Distinct from `!loading`, which is also false after a *failed*
+   * attempt. The admin editor must gate both hydration and saving on this, so a
+   * failed load can never seed the form with defaults and then overwrite real
+   * DB content on Save — the "content disappeared" class of bug.
+   */
+  loaded: boolean;
   refresh: () => Promise<void>;
 }
 
 const SiteSettingsContext = createContext<SiteSettingsContextValue>({
   settings: EMPTY_SITE_SETTINGS,
   loading: true,
+  loaded: false,
   refresh: async () => {},
 });
 
@@ -134,6 +143,7 @@ export const useSiteSettings = () => useContext(SiteSettingsContext);
 export function SiteSettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<SiteSettings>(EMPTY_SITE_SETTINGS);
   const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!isSupabaseConfigured) {
@@ -146,9 +156,15 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
       // the whole query and wipe all admin content back to defaults. Missing
       // columns simply come back undefined and fall back in mapSiteSettingsRow.
       const { data, error } = await supabase.from("site_settings").select("*").eq("id", 1).maybeSingle();
-      if (!error && data) setSettings(mapSiteSettingsRow(data as SiteSettingsRow));
+      if (error) {
+        // Fetch failed (table missing, RLS, offline). Keep whatever we have and
+        // leave `loaded` false so the editor won't hydrate/overwrite from it.
+        return;
+      }
+      setLoaded(true); // query succeeded, even if the row is empty (fresh install)
+      if (data) setSettings(mapSiteSettingsRow(data as SiteSettingsRow));
     } catch {
-      // Table missing / offline — keep defaults.
+      // Network/other error — keep current settings, stay not-loaded.
     } finally {
       setLoading(false);
     }
@@ -158,5 +174,5 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
     refresh();
   }, [refresh]);
 
-  return <SiteSettingsContext.Provider value={{ settings, loading, refresh }}>{children}</SiteSettingsContext.Provider>;
+  return <SiteSettingsContext.Provider value={{ settings, loading, loaded, refresh }}>{children}</SiteSettingsContext.Provider>;
 }

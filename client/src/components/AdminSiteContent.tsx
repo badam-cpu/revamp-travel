@@ -52,7 +52,7 @@ const EMPTY_HOME = {
 type RegionCard = { id: string; name: string; label: string; image: string };
 
 export function AdminSiteContent() {
-  const { settings, loading, refresh } = useSiteSettings();
+  const { settings, loading, loaded, refresh } = useSiteSettings();
   const { listings } = useListings();
   const photosRef = useRef<PhotoUploaderHandle>(null);
 
@@ -76,9 +76,11 @@ export function AdminSiteContent() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Seed the form once the settings row has loaded.
+  // Seed the form only after a SUCCESSFUL load (loaded), never merely when
+  // loading finished — a failed load must not seed defaults into the form, or a
+  // subsequent Save would overwrite real DB content with them.
   useEffect(() => {
-    if (loading || hydrated) return;
+    if (!loaded || hydrated) return;
     setHeadline(settings.heroHeadline);
     setSubcopy(settings.heroSubcopy);
     setFeaturedSlugs(settings.featuredSlugs);
@@ -128,6 +130,12 @@ export function AdminSiteContent() {
   const addAddon = () => setAddons((prev) => [...prev, { id: crypto.randomUUID(), name: "", description: "", image: "", priceCents: 0, unit: "flat", onRequest: false, enabled: true }]);
 
   const save = async () => {
+    // Hard guard: never write when the current content wasn't successfully
+    // loaded (the form would be defaults) — that's how content gets wiped.
+    if (!loaded || !hydrated) {
+      setError("Site content hasn't loaded yet — refresh before saving so you don't overwrite existing content.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -204,6 +212,17 @@ export function AdminSiteContent() {
       <p className="mt-2 max-w-xl text-sm text-basalt/55">
         Everything here is optional — leave a field blank to keep the built-in default. Changes go live immediately.
       </p>
+
+      {/* Safety banner: if the current content couldn't be loaded, saving would
+          overwrite it with defaults — block editing until a refresh succeeds. */}
+      {!loading && !loaded && (
+        <div className="mt-6 flex items-start gap-2 border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          <span>
+            Couldn't load the current site content, so editing is disabled to protect it. Don't save — click{" "}
+            <button type="button" onClick={() => refresh()} className="font-semibold underline">retry</button> or reload the page first.
+          </span>
+        </div>
+      )}
 
       <div className="mt-8 grid max-w-3xl gap-8">
         {/* Hero */}
@@ -464,7 +483,7 @@ export function AdminSiteContent() {
 
         {error && <p className="text-sm text-destructive">{error}</p>}
         <div>
-          <Button onClick={save} disabled={saving || loading} className="rounded-none bg-apricot text-white hover:bg-apricot/90">
+          <Button onClick={save} disabled={saving || loading || !loaded || !hydrated} className="rounded-none bg-apricot text-white hover:bg-apricot/90">
             <Save className="mr-2 h-4 w-4" /> {saving ? "Saving…" : "Save site content"}
           </Button>
         </div>
