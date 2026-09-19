@@ -176,8 +176,8 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
           const grid = photos.slice(1, 5);
           return (
             <section className="container mt-4">
-              <div className="relative grid gap-2 overflow-hidden rounded-[14px] md:grid-cols-2 md:h-[460px]">
-                <button type="button" onClick={() => setGalleryOpen(true)} className="relative block h-64 w-full overflow-hidden sm:h-96 md:h-full">
+              <div className="relative grid gap-2 overflow-hidden rounded-[14px] md:aspect-[2/1] md:grid-cols-2">
+                <button type="button" onClick={() => setGalleryOpen(true)} className="relative block aspect-[4/3] w-full overflow-hidden md:aspect-auto md:h-full">
                   <img src={photos[0]} alt={listing.title} className="h-full w-full object-cover transition-transform duration-500 hover:scale-[1.02]" />
                   <DiscountBadge listing={listing} className="absolute left-4 top-4" />
                 </button>
