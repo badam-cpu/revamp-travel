@@ -55,8 +55,8 @@ export function SiteFooter({ minimal = false }: { minimal?: boolean } = {}) {
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Keep close</p>
           <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
-            <a href="mailto:hello@revamp.travel" className="inline-flex items-center gap-2 hover:text-white"><Mail className="h-4 w-4" /> hello@revamp.travel</a>
-            <a href="https://www.instagram.com/explore/tags/armenia/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 hover:text-white"><Instagram className="h-4 w-4" /> Field notes <ArrowUpRight className="h-3 w-3" /></a>
+            <a href="mailto:hello@revampvacations.com" className="inline-flex items-center gap-2 hover:text-white"><Mail className="h-4 w-4" /> hello@revampvacations.com</a>
+            <a href="https://www.instagram.com/revamphomes_yerevan/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 hover:text-white"><Instagram className="h-4 w-4" /> Field notes <ArrowUpRight className="h-3 w-3" /></a>
           </div>
         </div>
       </div>
