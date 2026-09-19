@@ -119,7 +119,7 @@ export function OperatorBookingsTimeline() {
       <div className="mb-3 flex flex-wrap items-center gap-4 text-xs text-basalt/55">
         <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-sevan" /> Confirmed</span>
         <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-tuff" /> Awaiting payment</span>
-        <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border border-basalt/20 bg-[repeating-linear-gradient(45deg,#0000000d,#0000000d_3px,transparent_3px,transparent_6px)]" /> Blocked (calendar sync)</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border border-blue-500/40 bg-[repeating-linear-gradient(45deg,#3b82f640,#3b82f640_3px,transparent_3px,transparent_6px)]" /> External booking (synced)</span>
       </div>
 
       {/* Grid */}
@@ -164,7 +164,7 @@ export function OperatorBookingsTimeline() {
                   })}
                   {/* blocked overlays */}
                   {blocked.map((b, i) => (
-                    <div key={`blk-${i}`} className="absolute top-1.5 bottom-1.5 rounded-sm border border-basalt/15 bg-[repeating-linear-gradient(45deg,#0000000d,#0000000d_3px,transparent_3px,transparent_6px)]" style={{ left: b.left + 1, width: Math.max(0, b.width - 2) }} />
+                    <div key={`blk-${i}`} title="External booking (synced from a connected calendar)" className="absolute top-1.5 bottom-1.5 rounded-sm border border-blue-500/40 bg-blue-500/[0.08] bg-[repeating-linear-gradient(45deg,#3b82f640,#3b82f640_4px,transparent_4px,transparent_8px)]" style={{ left: b.left + 1, width: Math.max(0, b.width - 2) }} />
                   ))}
                   {/* booking bars */}
                   {bookings.map((b) => {
