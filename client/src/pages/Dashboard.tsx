@@ -37,6 +37,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useListings, LiveListing } from "@/contexts/ListingsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import type { ListingInput, ListingType } from "@shared/listings";
+import { LISTING_LIMITS } from "@shared/listings";
 import { ApiError, importListingPrefill, syncIcal } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { PlaceAutocomplete } from "@/components/PlaceAutocomplete";
@@ -391,12 +392,12 @@ function ListingFormDialog({
                 )}
                 <div className="grid gap-2">
                   <Label htmlFor="title" className="text-sm font-semibold">Title</Label>
-                  <Input id="title" name="title" placeholder="e.g. Forest House Dilijan" defaultValue={draft.title} className={FIELD} />
+                  <Input id="title" name="title" maxLength={LISTING_LIMITS.title} placeholder="e.g. Forest House Dilijan" defaultValue={draft.title} className={FIELD} />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="eyebrow" className="text-sm font-semibold">Eyebrow label</Label>
-                  <Input id="eyebrow" name="eyebrow" placeholder="e.g. Timber hideaway" defaultValue={draft.eyebrow} className={FIELD} />
-                  <p className="text-xs text-basalt/45">A short kicker shown above the title on cards and the listing page.</p>
+                  <Input id="eyebrow" name="eyebrow" maxLength={LISTING_LIMITS.eyebrow} placeholder="e.g. Timber hideaway" defaultValue={draft.eyebrow} className={FIELD} />
+                  <p className="text-xs text-basalt/45">A short kicker (max {LISTING_LIMITS.eyebrow} characters) shown above the title on cards — not a full sentence.</p>
                 </div>
                 <div className="grid gap-2 sm:max-w-[16rem]">
                   <Label htmlFor="accent" className="text-sm font-semibold">Map marker color</Label>
@@ -463,7 +464,8 @@ function ListingFormDialog({
               <div hidden={step !== 2} className="mt-10 grid gap-6">
                 <div className="grid gap-2">
                   <Label htmlFor="shortDescription" className="text-sm font-semibold">Short description</Label>
-                  <Textarea id="shortDescription" name="shortDescription" rows={2} placeholder="One or two lines shown on cards." defaultValue={draft.shortDescription} className="rounded-none text-base" />
+                  <Textarea id="shortDescription" name="shortDescription" maxLength={LISTING_LIMITS.shortDescription} rows={2} placeholder="One or two lines shown on cards." defaultValue={draft.shortDescription} className="rounded-none text-base" />
+                  <p className="text-xs text-basalt/45">Max {LISTING_LIMITS.shortDescription} characters — a tight one or two lines for cards.</p>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="longDescription" className="text-sm font-semibold">Full description</Label>

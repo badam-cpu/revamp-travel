@@ -479,6 +479,17 @@ export const ARMENIA_REGIONS = [
   "Vayots Dzor",
 ];
 
+/**
+ * Character limits for the card-facing text fields, so operator input can't
+ * break the listing-card / detail design. Enforced in the operator forms
+ * (maxLength + counters) and clamped on display as a safety net.
+ */
+export const LISTING_LIMITS = {
+  eyebrow: 40, // small uppercase kicker (one line)
+  title: 60, // ~2 lines on a card
+  shortDescription: 160, // ~2 lines; also a good SEO meta length
+} as const;
+
 export const typeLabels: Record<ListingType, string> = {
   stay: "Stay",
   eat: "Eat",

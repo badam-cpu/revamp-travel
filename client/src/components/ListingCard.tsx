@@ -52,8 +52,8 @@ export function ListingCard({ listing, large = false, active = false, onHover }:
         </div>
         <div className="flex items-start justify-between gap-4 pt-4">
           <div>
-            <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.17em] text-tuff">{listing.eyebrow}</p>
-            <h3 className={cn("font-display leading-[1.05] tracking-[-0.025em] text-basalt transition-colors group-hover:text-apricot", large ? "text-[2rem]" : "text-[1.55rem]")}>{listing.title}</h3>
+            <p className="mb-1 line-clamp-1 text-[10px] font-bold uppercase tracking-[0.17em] text-tuff">{listing.eyebrow}</p>
+            <h3 className={cn("line-clamp-2 font-display leading-[1.05] tracking-[-0.025em] text-basalt transition-colors group-hover:text-apricot", large ? "text-[2rem]" : "text-[1.55rem]")}>{listing.title}</h3>
             <p className="mt-2 line-clamp-2 max-w-xl text-sm leading-6 text-basalt/58">{listing.shortDescription}</p>
           </div>
           <MoveUpRight className="mt-1 h-5 w-5 shrink-0 text-basalt/35 transition-all group-hover:-translate-y-1 group-hover:translate-x-1 group-hover:text-apricot" />
