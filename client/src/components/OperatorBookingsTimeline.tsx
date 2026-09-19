@@ -15,6 +15,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useListings } from "@/contexts/ListingsContext";
 import type { BookingStatus } from "@shared/bookings";
+import { BookingDetailDialog } from "@/components/BookingDetailDialog";
 import { cn } from "@/lib/utils";
 
 const DAY_MS = 86_400_000;
@@ -55,6 +56,7 @@ export function OperatorBookingsTimeline() {
   const { listings } = useListings();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [startDate, setStartDate] = useState(() => todayIso());
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const mine = useMemo(
     () => listings.filter((l) => l.operatorId === user?.id).sort((a, b) => a.title.localeCompare(b.title)),
@@ -170,14 +172,16 @@ export function OperatorBookingsTimeline() {
                     if (!box) return null;
                     const name = b.profiles?.display_name || b.guest_name || "Guest";
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={b.id}
+                        onClick={() => setOpenId(b.id)}
                         title={`${name} · ${b.start_date} → ${b.end_date} · ${b.guests} guest${b.guests === 1 ? "" : "s"}`}
-                        className={cn("absolute top-2 bottom-2 flex items-center overflow-hidden rounded px-2 text-[11px] font-semibold shadow-sm", BAR_STYLE[b.status] ?? "bg-basalt text-white")}
+                        className={cn("absolute top-2 bottom-2 flex items-center overflow-hidden rounded px-2 text-[11px] font-semibold shadow-sm transition-[filter] hover:brightness-95", BAR_STYLE[b.status] ?? "bg-basalt text-white")}
                         style={{ left: box.left + 1, width: Math.max(0, box.width - 2) }}
                       >
                         <span className="truncate">{name}</span>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -186,7 +190,8 @@ export function OperatorBookingsTimeline() {
           })}
         </div>
       </div>
-      <p className="mt-3 text-xs text-basalt/45">Showing {startDate} → {addDaysIso(windowEnd, -1)}. Bars are your bookings; hatched blocks are dates synced as unavailable from a connected calendar.</p>
+      <p className="mt-3 text-xs text-basalt/45">Showing {startDate} → {addDaysIso(windowEnd, -1)}. Bars are your bookings; hatched blocks are dates synced as unavailable from a connected calendar. Tap a booking for full details.</p>
+      <BookingDetailDialog bookingId={openId} onClose={() => setOpenId(null)} />
     </div>
   );
 }

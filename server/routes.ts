@@ -14,7 +14,7 @@ import { z } from "zod";
 import { listPublishedForPlanner, verifyUser, userClient } from "./supabase.js";
 import { supabaseAdmin, adminConfigured } from "./supabaseAdmin.js";
 import { paylinkConfigured, registerPayment } from "./paylink.js";
-import { reconcileUserBookings } from "./bookings.js";
+import { reconcileUserBookings, logBookingEvent } from "./bookings.js";
 import { generateSupportReply, type SupportTurn } from "./support.js";
 import { generateOperatorReply, type OperatorTurn } from "./operatorAssistant.js";
 import { payoutState } from "../shared/payouts.js";
@@ -470,7 +470,7 @@ export function registerApiRoutes(app: Express) {
 
     const { data: booking } = await admin
       .from("bookings")
-      .select("id, listing_id, traveler_id, status, start_date, end_date, guests, amount_cents, currency, paid_at, cancellation_policy, free_cancel_days")
+      .select("id, listing_id, traveler_id, status, start_date, end_date, guests, amount_cents, currency, paid_at, cancellation_policy, free_cancel_days, guest_email")
       .eq("id", parsed.data.bookingId)
       .maybeSingle();
     if (!booking) return res.status(404).json({ error: "Booking not found." });
@@ -522,6 +522,7 @@ export function registerApiRoutes(app: Express) {
 
     // Void the operator payout for this booking (unless it was already paid out).
     await admin.from("payouts").update({ status: "cancelled" }).eq("booking_id", booking.id).neq("status", "paid");
+    await logBookingEvent(admin, booking.id, "status_cancelled", isTraveler ? "Cancelled by guest" : isOperator ? "Cancelled by operator" : "Cancelled by admin");
 
     // Notify the counterparty (best-effort). Traveler cancels → tell operator; operator/admin cancels → tell traveler.
     if (listing) {
@@ -539,10 +540,17 @@ export function registerApiRoutes(app: Express) {
       try {
         if (isTraveler) {
           const { data: op } = await admin.auth.admin.getUserById(listing.operator_id);
-          if (op?.user?.email) await sendCancellation(op.user.email, info, { toRole: "operator", refundCents });
+          if (op?.user?.email) {
+            await sendCancellation(op.user.email, info, { toRole: "operator", refundCents });
+            await logBookingEvent(admin, booking.id, "email_cancellation", op.user.email);
+          }
         } else {
           const { data: tr } = await admin.auth.admin.getUserById(booking.traveler_id);
-          if (tr?.user?.email) await sendCancellation(tr.user.email, info, { toRole: "traveler", refundCents });
+          const to = tr?.user?.email || booking.guest_email || "";
+          if (to) {
+            await sendCancellation(to, info, { toRole: "traveler", refundCents });
+            await logBookingEvent(admin, booking.id, "email_cancellation", to);
+          }
         }
       } catch (err) {
         console.error("[cancel-booking] email failed", err);

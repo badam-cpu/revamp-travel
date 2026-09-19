@@ -101,6 +101,23 @@ async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promi
   if (travelerEmail) tasks.push(sendTravelerConfirmation(travelerEmail, info));
   if (operator?.user?.email) tasks.push(sendOperatorNewBooking(operator.user.email, info, travelerName));
   await Promise.allSettled(tasks);
+  // Record the activity for the booking's History log (best-effort).
+  await logBookingEvent(admin, row.id, "status_confirmed");
+  if (travelerEmail) await logBookingEvent(admin, row.id, "email_traveler_confirmation", travelerEmail);
+  if (operator?.user?.email) await logBookingEvent(admin, row.id, "email_operator_new_booking", operator.user.email);
+}
+
+/**
+ * Append one entry to a booking's activity/communication log (booking_events,
+ * migration 0032). Best-effort: never throws, and no-ops if the table isn't
+ * there yet. Written with the service role, so it's exempt from RLS.
+ */
+export async function logBookingEvent(admin: SupabaseClient, bookingId: string, type: string, detail?: string): Promise<void> {
+  try {
+    await admin.from("booking_events").insert({ booking_id: bookingId, type, detail: detail ?? null });
+  } catch {
+    /* table missing / transient — history is non-critical */
+  }
 }
 
 export interface ConfirmResult {
@@ -265,6 +282,7 @@ export async function requestReviewsForCompleted(admin: SupabaseClient, { limit 
       const to = traveler?.user?.email || row.guest_email || "";
       if (to) {
         await sendReviewRequest(to, { listingTitle: row.listings?.title ?? "your trip", slug: row.listings?.slug, bookingId: row.id });
+        await logBookingEvent(admin, row.id, "email_review_request", to);
         sent++;
       }
       await admin.from("bookings").update({ status: "completed", review_requested_at: new Date().toISOString() }).eq("id", row.id);
