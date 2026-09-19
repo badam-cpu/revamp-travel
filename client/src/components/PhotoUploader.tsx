@@ -40,6 +40,8 @@ export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: st
   const [pending, setPending] = useState<Pending[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [urlDraft, setUrlDraft] = useState("");
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useImperativeHandle(ref, () => ({ getValue: () => photos.map((p) => p.url) }), [photos]);
@@ -85,6 +87,17 @@ export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: st
   };
 
   const remove = (id: string) => setPhotos((prev) => prev.filter((p) => p.id !== id));
+
+  // Drag-to-reorder anywhere in the grid (drag a thumbnail onto another).
+  const reorder = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0) return;
+    setPhotos((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  };
 
   const addUrl = () => {
     const url = urlDraft.trim();
@@ -150,8 +163,36 @@ export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: st
       {(photos.length > 0 || pending.length > 0) && (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {photos.map((photo, i) => (
-            <div key={photo.id} className="group relative aspect-[4/3] overflow-hidden border border-basalt/15 bg-basalt/5">
-              <img src={photo.url} alt={`Listing photo ${i + 1}`} className="h-full w-full object-cover" />
+            <div
+              key={photo.id}
+              draggable
+              onDragStart={(e) => {
+                setDragIndex(i);
+                e.dataTransfer.effectAllowed = "move";
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (dragIndex !== null && i !== overIndex) setOverIndex(i);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (dragIndex !== null) reorder(dragIndex, i);
+                setDragIndex(null);
+                setOverIndex(null);
+              }}
+              onDragEnd={() => {
+                setDragIndex(null);
+                setOverIndex(null);
+              }}
+              className={cn(
+                "group relative aspect-[4/3] cursor-move overflow-hidden border border-basalt/15 bg-basalt/5 transition-[opacity,box-shadow]",
+                dragIndex === i && "opacity-40",
+                overIndex === i && dragIndex !== i && "ring-2 ring-apricot",
+              )}
+            >
+              <img src={photo.url} alt={`Listing photo ${i + 1}`} draggable={false} className="h-full w-full object-cover" />
               {i === 0 && (
                 <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 bg-apricot px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-white">
                   <Star className="h-2.5 w-2.5" /> Cover
