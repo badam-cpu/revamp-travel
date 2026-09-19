@@ -142,7 +142,7 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
         </span>
         <AvailabilityCalendar
           mode={isStay ? "range" : "single"}
-          blockedRanges={listing.blockedRanges ?? []}
+          blockedRanges={[...(listing.blockedRanges ?? []), ...(listing.manualBlockedRanges ?? [])]}
           bookedRanges={booked}
           onChange={setRange}
         />

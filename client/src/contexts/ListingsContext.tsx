@@ -41,6 +41,8 @@ export type LiveListing = Listing & {
   icalSyncedAt: string | null;
   icalError: string | null;
   blockedRanges: BlockedRange[];
+  /** Operator-set manual unavailability (end EXCLUSIVE), separate from iCal blocked_ranges. */
+  manualBlockedRanges: BlockedRange[];
   seasonalRates: SeasonalRate[];
 };
 
@@ -58,6 +60,8 @@ interface ListingsContextType {
   /** Save the calendar export URL on a listing (the actual sync is POST /api/sync-ical). */
   setIcalUrl: (id: string, icalUrl: string | null) => Promise<LiveListing>;
   setSeasonalRates: (id: string, rates: SeasonalRate[]) => Promise<LiveListing>;
+  /** Save the operator's manual availability blocks (content-only; status untouched). */
+  setManualBlocks: (id: string, ranges: BlockedRange[]) => Promise<LiveListing>;
 }
 
 const ListingsContext = createContext<ListingsContextType | undefined>(undefined);
@@ -97,6 +101,7 @@ interface ListingRow {
   ical_synced_at: string | null;
   ical_error: string | null;
   blocked_ranges: BlockedRange[] | null;
+  manual_blocked_ranges: BlockedRange[] | null;
   seasonal_rates: SeasonalRate[] | null;
   max_guests: number | null;
   highlights: string[] | null;
@@ -151,6 +156,7 @@ function mapListingRow(row: ListingRow): LiveListing {
     icalSyncedAt: row.ical_synced_at,
     icalError: row.ical_error,
     blockedRanges: Array.isArray(row.blocked_ranges) ? row.blocked_ranges : [],
+    manualBlockedRanges: Array.isArray(row.manual_blocked_ranges) ? row.manual_blocked_ranges : [],
     seasonalRates: Array.isArray(row.seasonal_rates) ? row.seasonal_rates : [],
     maxGuests: row.max_guests ?? undefined,
     highlights: row.highlights ?? [],
@@ -227,6 +233,7 @@ function fallbackListings(): LiveListing[] {
     icalSyncedAt: null,
     icalError: null,
     blockedRanges: [],
+    manualBlockedRanges: [],
     seasonalRates: [],
   }));
 }
@@ -349,8 +356,23 @@ export function ListingsProvider({ children }: { children: React.ReactNode }) {
     return listing;
   }, []);
 
+  // Update only a listing's manual availability blocks (from the calendar
+  // block/open controls). Content-only — doesn't touch status.
+  const setManualBlocks = useCallback(async (id: string, ranges: BlockedRange[]): Promise<LiveListing> => {
+    const { data, error } = await supabase
+      .from("listings")
+      .update({ manual_blocked_ranges: ranges })
+      .eq("id", id)
+      .select(ROW_COLUMNS)
+      .single();
+    if (error) throw new Error(error.message);
+    const listing = mapListingRow(data);
+    setListings((prev) => prev.map((item) => (item.id === id ? listing : item)));
+    return listing;
+  }, []);
+
   return (
-    <ListingsContext.Provider value={{ listings, loading, offline, refresh, createListing, updateListing, deleteListing, setIcalUrl, setSeasonalRates }}>
+    <ListingsContext.Provider value={{ listings, loading, offline, refresh, createListing, updateListing, deleteListing, setIcalUrl, setSeasonalRates, setManualBlocks }}>
       {children}
     </ListingsContext.Provider>
   );

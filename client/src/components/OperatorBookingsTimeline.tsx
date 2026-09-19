@@ -135,6 +135,7 @@ export function OperatorBookingsTimeline() {
         <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-sevan" /> Confirmed</span>
         <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-tuff" /> Awaiting payment</span>
         <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border border-blue-500/40 bg-[repeating-linear-gradient(45deg,#3b82f640,#3b82f640_3px,transparent_3px,transparent_6px)]" /> External booking (synced)</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border border-basalt/25 bg-basalt/[0.15]" /> Blocked (you)</span>
       </div>
 
       {/* Grid */}
@@ -160,6 +161,7 @@ export function OperatorBookingsTimeline() {
           {mine.map((listing) => {
             const bookings = byListing.get(listing.id) ?? [];
             const blocked = (listing.blockedRanges ?? []).map((b) => spanBox(b.start, addDaysIso(b.end, 1))).filter(Boolean) as { left: number; width: number }[];
+            const manualBlk = (listing.manualBlockedRanges ?? []).map((b) => spanBox(b.start, b.end)).filter(Boolean) as { left: number; width: number }[];
             const rBase = Math.round(listing.price * 100);
             const rRates = listing.seasonalRates ?? [];
             const priceOn = (d: string) => {
@@ -192,6 +194,10 @@ export function OperatorBookingsTimeline() {
                   {/* blocked overlays (top band, above the price row) */}
                   {blocked.map((b, i) => (
                     <div key={`blk-${i}`} title="External booking (synced from a connected calendar)" className="absolute top-1.5 h-[30px] rounded-sm border border-blue-500/40 bg-blue-500/[0.08] bg-[repeating-linear-gradient(45deg,#3b82f640,#3b82f640_4px,transparent_4px,transparent_8px)]" style={{ left: b.left + 1, width: Math.max(0, b.width - 2) }} />
+                  ))}
+                  {/* manual availability blocks (operator-set) */}
+                  {manualBlk.map((b, i) => (
+                    <div key={`mb-${i}`} title="Blocked by you" className="absolute top-1.5 h-[30px] rounded-sm border border-basalt/25 bg-basalt/[0.15]" style={{ left: b.left + 1, width: Math.max(0, b.width - 2) }} />
                   ))}
                   {/* booking bars (top band, above the price row) */}
                   {bookings.map((b) => {

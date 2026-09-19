@@ -974,7 +974,7 @@ const OPERATOR_SECTIONS: { key: OperatorSection; label: string; icon: typeof Hom
 
 const BOOKINGS_VIEWS = [
   { key: "timeline", label: "Timeline", blurb: "Your listings across the calendar — bookings and synced-blocked dates at a glance." },
-  { key: "calendar", label: "Calendar", blurb: "Open a single stay's calendar to see its bookings and set nightly prices." },
+  { key: "calendar", label: "Calendar", blurb: "Open a single offer's calendar to see its bookings, set per-date prices, and block or open availability." },
   { key: "list", label: "List", blurb: "Reservations on your listings, grouped by type." },
 ] as const;
 type BookingsView = (typeof BOOKINGS_VIEWS)[number]["key"];

@@ -157,8 +157,14 @@ export function computeBookingAmountCents(
       sum += Math.max(0, Math.round(match ? match.priceCents : base));
     }
     total = sum;
-  } else if (PER_PERSON_UNITS.has(unit)) total = base * Math.max(1, params.guests);
-  else total = base;
+  } else if (PER_PERSON_UNITS.has(unit)) {
+    // Per-person activity: the date's rate (a per-date override if the operator
+    // set one for the activity date, else the base) × guests.
+    const rates = listing.seasonalRates ?? [];
+    const match = rates.filter((r) => r.start <= params.startDate && params.startDate <= r.end).pop();
+    const unitPrice = Math.max(0, Math.round(match ? match.priceCents : base));
+    total = unitPrice * Math.max(1, params.guests);
+  } else total = base;
   // Non-refundable rate is offered at a discount as the incentive.
   if (listing.cancellationPolicy === "non_refundable") {
     const pct = Math.min(90, Math.max(0, Math.round(listing.nonrefundableDiscountPercent ?? 0)));
