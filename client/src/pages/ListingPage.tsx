@@ -67,18 +67,22 @@ function HeroCarousel({ photos, title, onOpen, badge }: { photos: string[]; titl
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
-      {photos.map((src, idx) => (
-        <button
-          key={src + idx}
-          type="button"
-          tabIndex={idx === i ? 0 : -1}
-          aria-hidden={idx !== i}
-          onClick={() => onOpen(i)}
-          className={cn("absolute inset-0 h-full w-full transition-opacity duration-700 ease-out", idx === i ? "opacity-100" : "pointer-events-none opacity-0")}
-        >
-          <img src={src} alt={idx === 0 ? title : ""} className="h-full w-full object-cover" />
-        </button>
-      ))}
+      {/* Sliding track — one photo fully covers the frame at a time (no
+          cross-fade ghosting). */}
+      <div className="flex h-full transition-transform duration-500 ease-out" style={{ transform: `translateX(-${i * 100}%)` }}>
+        {photos.map((src, idx) => (
+          <button
+            key={src + idx}
+            type="button"
+            tabIndex={idx === i ? 0 : -1}
+            aria-hidden={idx !== i}
+            onClick={() => onOpen(i)}
+            className="h-full w-full shrink-0"
+          >
+            <img src={src} alt={idx === 0 ? title : ""} className="h-full w-full object-cover" />
+          </button>
+        ))}
+      </div>
       {badge}
 
       {total > 1 && (
