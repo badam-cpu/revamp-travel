@@ -36,7 +36,10 @@ export const handler = async () => {
   }
 };
 
-// Once a day. Netlify reads this export to schedule the function.
-export const config = { schedule: "@daily" };
+// Every hour. Hourly (not daily) so an unpaid "awaiting payment" hold is
+// released within ~1h of its 24h expiry window, and paid bookings whose
+// confirm-checkout never fired get confirmed promptly. Netlify reads this
+// export to schedule the function.
+export const config = { schedule: "0 * * * *" };
 
 export default handler;

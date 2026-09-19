@@ -51,6 +51,7 @@ const EVENT_LABEL: Record<string, string> = {
   email_review_request: "Review-request email sent to guest",
   status_confirmed: "Booking confirmed",
   status_cancelled: "Booking cancelled",
+  status_expired: "Unpaid hold expired (auto-cancelled)",
 };
 
 function money(cents: number | null | undefined, currency: string): string {

@@ -249,7 +249,10 @@ export async function reconcileAllPendingBookings(
           .eq("id", row.id)
           .eq("status", "pending_payment")
           .select("id");
-        if (upd && upd.length) expired++;
+        if (upd && upd.length) {
+          expired++;
+          await logBookingEvent(admin, row.id, "status_expired", `Unpaid hold expired after ${expireAfterHours}h`);
+        }
       }
     } catch (err) {
       console.error("[bookings] reconcile row failed", row.id, err);
