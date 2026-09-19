@@ -8,9 +8,10 @@
  * bucket `listing-photos` (see supabase/migrations/0005_listing_photos_storage.sql),
  * scoped by RLS to the signed-in user's own `<uid>/…` folder — the same
  * anon-key-plus-RLS trust model as everything else the client writes. Uploads
- * are downscaled/compressed in-browser first (max 1600px wide, JPEG q≈0.82) so
- * hosts don't fight file-size limits and pages stay fast. HEIC or anything the
- * canvas can't decode is uploaded as-is.
+ * are downscaled/re-encoded in-browser first (max 2560px long edge, WebP q≈0.9)
+ * so photos stay crisp on full-width galleries and the lightbox without shipping
+ * raw multi-MB originals. HEIC or anything the canvas can't decode is uploaded
+ * as-is. See client/src/lib/imageUpload.ts.
  *
  * Uncontrolled like AmenityPicker: it owns its ordered list and exposes it via
  * `ref.getValue()` (an array of public URLs), read once at submit time. A

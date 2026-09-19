@@ -1,16 +1,33 @@
 /**
  * Browser → Supabase Storage image upload, shared by PhotoUploader (listing
  * photos) and AdminBlog (blog body/cover images). Images are downscaled/
- * re-encoded in-browser first (max 1600px, JPEG q≈0.82) so hosts don't fight
- * file-size limits. Uploads go to the public `listing-photos` bucket, scoped by
- * RLS to the signed-in user's own `<uid>/…` folder (see
+ * re-encoded in-browser first (max 2560px long edge, WebP q≈0.9 — JPEG q≈0.92
+ * where WebP encoding isn't available) so they stay crisp on full-width galleries
+ * and the full-screen lightbox, including retina/2× displays, without shipping
+ * raw multi-MB originals. Uploads go to the public `listing-photos` bucket,
+ * scoped by RLS to the signed-in user's own `<uid>/…` folder (see
  * supabase/migrations/0005_listing_photos_storage.sql).
  */
 import { supabase } from "@/lib/supabase";
 
 const BUCKET = "listing-photos";
-const MAX_DIMENSION = 1600;
-const JPEG_QUALITY = 0.82;
+// 2560px covers a full-width gallery/lightbox at 2× device pixel ratio; below
+// this photos get upscaled on screen and look soft/pixelated.
+const MAX_DIMENSION = 2560;
+const WEBP_QUALITY = 0.9;
+const JPEG_QUALITY = 0.92;
+
+/** WebP re-encodes sharper per byte than JPEG; use it when the browser can encode it. */
+function pickEncoding(): { type: string; ext: string; quality: number } {
+  try {
+    const c = document.createElement("canvas");
+    c.width = c.height = 1;
+    if (c.toDataURL("image/webp").startsWith("data:image/webp")) return { type: "image/webp", ext: "webp", quality: WEBP_QUALITY };
+  } catch {
+    /* fall through to JPEG */
+  }
+  return { type: "image/jpeg", ext: "jpg", quality: JPEG_QUALITY };
+}
 
 /** Downscale + re-encode an image; falls back to the original if the canvas can't decode it (e.g. HEIC). */
 export async function compressImage(file: File): Promise<{ blob: Blob; ext: string; contentType: string }> {
@@ -26,11 +43,16 @@ export async function compressImage(file: File): Promise<{ blob: Blob; ext: stri
     canvas.height = h;
     const ctx = canvas.getContext("2d");
     if (!ctx) return fallback;
+    // High-quality resampling for the downscale (default is often bilinear/soft).
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
     ctx.drawImage(bitmap, 0, 0, w, h);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", JPEG_QUALITY));
+    const { type, ext, quality } = pickEncoding();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
     if (!blob) return fallback;
+    // Only keep the original when we didn't resize AND re-encoding didn't help.
     if (blob.size >= file.size && scale === 1) return fallback;
-    return { blob, ext: "jpg", contentType: "image/jpeg" };
+    return { blob, ext, contentType: type };
   } catch {
     return fallback;
   }
