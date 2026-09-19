@@ -23,7 +23,7 @@
  */
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, ArrowLeft, ArrowRight, CalendarCheck, CalendarClock, ChevronDown, Home, LayoutDashboard, Link2, List, Pencil, Plus, Settings, Sparkles, Trash2, Wallet, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, CalendarCheck, CalendarClock, Check, ChevronDown, Home, LayoutDashboard, Link2, List, Pencil, Plus, Settings, Sparkles, Trash2, Wallet, X } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -716,17 +716,19 @@ function AvailabilityRow({ listing }: { listing: LiveListing }) {
     }
   };
 
-  const status = err ? (
-    <span className="text-destructive">{err}</span>
-  ) : msg ? (
-    msg
-  ) : listing.icalError ? (
-    <span className="text-destructive">Last sync failed: {listing.icalError}</span>
-  ) : listing.icalSyncedAt ? (
-    `${listing.blockedRanges.length} blocked date ${listing.blockedRanges.length === 1 ? "range" : "ranges"} · last synced ${new Date(listing.icalSyncedAt).toLocaleString()}`
-  ) : (
-    `Paste your ${source.name} calendar-export (.ics) link to show its unavailable dates on Revamp — any iCal feed works. One-way, availability only, so double-bookings are blocked; no prices imported.`
-  );
+  // A successful sync (this session's msg, or a prior synced-at with no error)
+  // reads green; a failure reads red; everything else is muted.
+  const isError = !!err || (!msg && !!listing.icalError);
+  const isSynced = (!!msg && msg.startsWith("Synced")) || (!err && !msg && !!listing.icalSyncedAt && !listing.icalError);
+  const statusText = err
+    ? err
+    : msg
+      ? msg
+      : listing.icalError
+        ? `Last sync failed: ${listing.icalError}`
+        : listing.icalSyncedAt
+          ? `${listing.blockedRanges.length} blocked date ${listing.blockedRanges.length === 1 ? "range" : "ranges"} · last synced ${new Date(listing.icalSyncedAt).toLocaleString()}`
+          : `Paste your ${source.name} calendar-export (.ics) link to show its unavailable dates on Revamp — any iCal feed works. One-way, availability only, so double-bookings are blocked; no prices imported.`;
 
   return (
     <div className="mt-3 border-t border-basalt/10 pt-3">
@@ -737,15 +739,29 @@ function AvailabilityRow({ listing }: { listing: LiveListing }) {
         <Input
           type="url"
           value={url}
-          onChange={(e) => setUrl(e.target.value)}
+          onChange={(e) => {
+            setUrl(e.target.value);
+            setMsg(null);
+            setErr(null);
+          }}
           placeholder={source.placeholder}
           className="h-9 min-w-0 flex-1 rounded-none text-xs"
         />
-        <Button type="button" variant="outline" size="sm" className="h-9 shrink-0 rounded-none border-basalt/15 text-xs" disabled={busy} onClick={save}>
-          {busy ? "Syncing…" : url.trim() ? "Save & sync" : "Save"}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className={cn("h-9 shrink-0 rounded-none border-basalt/15 text-xs", isSynced && "border-green-600/40 bg-green-600/10 text-green-700 hover:bg-green-600/15")}
+          disabled={busy}
+          onClick={save}
+        >
+          {busy ? "Syncing…" : isSynced ? <><Check className="mr-1.5 h-3.5 w-3.5" /> Synced</> : url.trim() ? "Save & sync" : "Save"}
         </Button>
       </div>
-      <p className="mt-1.5 text-xs text-basalt/45">{status}</p>
+      <p className={cn("mt-1.5 flex items-center gap-1.5 text-xs", isError ? "text-destructive" : isSynced ? "font-semibold text-green-700" : "text-basalt/45")}>
+        {isSynced && <Check className="h-3.5 w-3.5 shrink-0" />}
+        {statusText}
+      </p>
     </div>
   );
 }
