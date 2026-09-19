@@ -20,8 +20,10 @@ const baseLinks = [
 ];
 
 /** `minimal` drops the public browse nav + "field guide" CTA — used in the
- * operator dashboard, which has its own sidebar and its own "Homepage" link. */
-export function SiteHeader({ minimal = false }: { minimal?: boolean } = {}) {
+ * operator dashboard, which has its own sidebar and its own "Homepage" link.
+ * `flush` swaps the centered container for full-width padding (matching a
+ * full-bleed page like the map, so the wordmark lines up with the content). */
+export function SiteHeader({ minimal = false, flush = false }: { minimal?: boolean; flush?: boolean } = {}) {
   const [location] = useLocation();
   const { user, profile, signOut } = useAuth();
 
@@ -43,7 +45,7 @@ export function SiteHeader({ minimal = false }: { minimal?: boolean } = {}) {
 
   return (
     <header className="sticky top-0 z-50 border-b border-basalt/10 bg-paper/94 text-basalt backdrop-blur-xl">
-      <div className="container flex h-[76px] items-center justify-between gap-5">
+      <div className={cn("flex h-[76px] items-center justify-between gap-5", flush ? "w-full px-5 lg:px-7" : "container")}>
         <BrandMark />
         <nav className="hidden items-center gap-6 xl:flex" aria-label="Primary navigation">
           {links.map((link) => (
