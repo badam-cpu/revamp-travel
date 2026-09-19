@@ -116,6 +116,15 @@ export function AdminSiteContent() {
 
   const toggleFeatured = (slug: string) =>
     setFeaturedSlugs((prev) => (prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]));
+  // Reorder the selected featured listings — index 0 is the large hero card.
+  const moveFeatured = (index: number, dir: -1 | 1) =>
+    setFeaturedSlugs((prev) => {
+      const next = [...prev];
+      const target = index + dir;
+      if (target < 0 || target >= next.length) return prev;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
 
   const updateRegion = (id: string, key: "name" | "label", val: string) =>
     setRegionCards((prev) => prev.map((c) => (c.id === id ? { ...c, [key]: val } : c)));
@@ -286,6 +295,35 @@ export function AdminSiteContent() {
                   <span className="ml-auto shrink-0 text-[10px] font-bold uppercase tracking-[0.1em] text-basalt/40">{l.type}</span>
                 </label>
               ))}
+            </div>
+          )}
+
+          {/* Order of the featured row — index 0 is the large hero card. */}
+          {featuredSlugs.length > 0 && (
+            <div className="mt-1 grid gap-1.5 border-t border-basalt/10 pt-3">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-basalt/45">Order shown on the home page</p>
+              {featuredSlugs.map((slug, i) => {
+                const l = published.find((p) => p.slug === slug);
+                return (
+                  <div key={slug} className="flex items-center gap-2 text-sm">
+                    <span className="w-5 shrink-0 text-center text-xs font-bold tabular-nums text-basalt/40">{i + 1}</span>
+                    <span className="min-w-0 flex-1 truncate">
+                      {l ? l.title : slug}
+                      {i === 0 && <span className="ml-2 text-[10px] font-bold uppercase tracking-[0.1em] text-apricot">Hero</span>}
+                      {!l && <span className="ml-2 text-[10px] uppercase tracking-[0.1em] text-basalt/35">(unpublished)</span>}
+                    </span>
+                    <button type="button" onClick={() => moveFeatured(i, -1)} disabled={i === 0} aria-label="Move up" title="Move up" className="grid h-7 w-7 place-items-center border border-basalt/15 text-basalt/60 transition-colors hover:border-apricot hover:text-apricot disabled:opacity-30 disabled:hover:border-basalt/15 disabled:hover:text-basalt/60">
+                      <ArrowUp className="h-3.5 w-3.5" />
+                    </button>
+                    <button type="button" onClick={() => moveFeatured(i, 1)} disabled={i === featuredSlugs.length - 1} aria-label="Move down" title="Move down" className="grid h-7 w-7 place-items-center border border-basalt/15 text-basalt/60 transition-colors hover:border-apricot hover:text-apricot disabled:opacity-30 disabled:hover:border-basalt/15 disabled:hover:text-basalt/60">
+                      <ArrowDown className="h-3.5 w-3.5" />
+                    </button>
+                    <button type="button" onClick={() => toggleFeatured(slug)} aria-label="Remove from featured" title="Remove" className="grid h-7 w-7 place-items-center text-basalt/45 transition-colors hover:text-destructive">
+                      <Minus className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
           {sectionSave()}
