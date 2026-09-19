@@ -124,3 +124,34 @@ function absoluteUrl(src: string, origin: string): string {
   if (/^https?:\/\//i.test(src)) return src;
   return `${origin}${src.startsWith("/") ? "" : "/"}${src}`;
 }
+
+/** Structured data for a single blog post (no rating/review fields — see header). */
+export function buildArticleJsonLd(
+  post: { slug: string; title: string; excerpt: string; coverImage: string; publishedAt: string | null; updatedAt: string },
+  origin: string,
+): JsonLd {
+  const jsonLd: JsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    headline: post.title,
+    url: `${origin}/blog/${post.slug}`,
+    mainEntityOfPage: `${origin}/blog/${post.slug}`,
+    publisher: { "@type": "Organization", name: "Revamp Vacations" },
+  };
+  if (post.excerpt) jsonLd.description = post.excerpt;
+  if (post.coverImage) jsonLd.image = absoluteUrl(post.coverImage, origin);
+  if (post.publishedAt) jsonLd.datePublished = post.publishedAt;
+  if (post.updatedAt) jsonLd.dateModified = post.updatedAt;
+  return jsonLd;
+}
+
+/** Structured data for the blog index (list of posts). */
+export function buildBlogListJsonLd(origin: string, posts: { slug: string; title: string }[]): JsonLd {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Blog",
+    name: "The Revamp Journal",
+    url: `${origin}/blog`,
+    blogPost: posts.map((p) => ({ "@type": "BlogPosting", headline: p.title, url: `${origin}/blog/${p.slug}` })),
+  };
+}

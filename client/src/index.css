@@ -163,3 +163,81 @@
   font-family: inherit;
   pointer-events: auto;
 }
+
+/* Blog post body (Markdown-rendered HTML from shared/markdown.ts). Scoped so it
+   never leaks into the rest of the app. */
+.prose-blog > :first-child {
+  margin-top: 0;
+}
+.prose-blog h1,
+.prose-blog h2,
+.prose-blog h3 {
+  font-family: var(--font-display, inherit);
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin: 1.8em 0 0.5em;
+}
+.prose-blog h2 {
+  font-size: 1.6rem;
+}
+.prose-blog h3 {
+  font-size: 1.3rem;
+}
+.prose-blog p {
+  margin: 0 0 1.1em;
+}
+.prose-blog a {
+  color: var(--apricot, #f15822);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prose-blog ul,
+.prose-blog ol {
+  margin: 0 0 1.1em;
+  padding-left: 1.4em;
+}
+.prose-blog ul {
+  list-style: disc;
+}
+.prose-blog ol {
+  list-style: decimal;
+}
+.prose-blog li {
+  margin: 0.3em 0;
+}
+.prose-blog blockquote {
+  margin: 1.3em 0;
+  padding-left: 1.1em;
+  border-left: 3px solid var(--apricot, #f15822);
+  color: rgba(33, 33, 33, 0.65);
+  font-style: italic;
+}
+.prose-blog img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+  margin: 1.3em 0;
+}
+.prose-blog code {
+  background: rgba(33, 33, 33, 0.06);
+  padding: 0.12em 0.4em;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+.prose-blog pre {
+  background: rgba(33, 33, 33, 0.05);
+  padding: 1em 1.2em;
+  border-radius: 10px;
+  overflow-x: auto;
+  margin: 1.3em 0;
+}
+.prose-blog pre code {
+  background: none;
+  padding: 0;
+}
+.prose-blog hr {
+  border: 0;
+  border-top: 1px solid rgba(33, 33, 33, 0.12);
+  margin: 2em 0;
+}

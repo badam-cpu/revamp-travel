@@ -44,6 +44,7 @@ export function SiteFooter({ minimal = false }: { minimal?: boolean } = {}) {
             <Link href="/explore/experience" className="hover:text-white">Experiences</Link>
             <Link href="/map" className="hover:text-white">Open the map</Link>
             <Link href="/plan" className="hover:text-white">AI trip planner</Link>
+            <Link href="/blog" className="hover:text-white">Blog</Link>
             {profile?.role === "operator" ? (
               <Link href="/dashboard" className="hover:text-white">Your dashboard</Link>
             ) : (

@@ -1,31 +1,35 @@
 /**
- * Admin review queue — approve or send back a pending listing before it
- * goes live (see supabase/migrations/0002_review_gate_and_admin.sql for
- * the schema/RLS/trigger this depends on, and Dashboard.tsx for the
- * operator side of the same workflow). Wrapped in the existing
- * RequireRole role="admin" — there's no self-serve admin signup; the
- * migration's header comment documents the one-line SQL to promote an
- * account after it's signed up normally.
+ * Admin console (/admin) — a sectioned back-office mirroring the operator
+ * dashboard's sidebar layout (see Dashboard.tsx). Sections are driven by
+ * ?section= so each is deep-linkable:
+ *   Overview     — at-a-glance counts + shortcuts
+ *   Reviews      — approve / send back pending operator listings
+ *   Support      — the support inbox (AdminSupportInbox)
+ *   Payouts      — operator payouts (AdminPayouts)
+ *   Blog         — author & publish blog posts (AdminBlog)
+ *   Site content — home CMS, add-ons, announcement, USD rate (AdminSiteContent)
  *
- * Queries Supabase directly rather than through ListingsContext: this view
- * needs every pending listing regardless of owner (granted by the
- * "admins can read every listing" RLS policy) plus the submitting
- * operator's name embedded in the same query — ListingsContext's shared
- * fetch is scoped to what browsing pages need and doesn't carry that join.
+ * The review workflow itself is unchanged (see 0002_review_gate_and_admin.sql
+ * for the schema/RLS/trigger, and Dashboard.tsx for the operator side).
+ * Wrapped in RequireRole role="admin" — there's no self-serve admin signup;
+ * that migration's header documents the one-line SQL to promote an account.
  */
-import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Check, MapPin, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useLocation, useSearch } from "wouter";
+import { AlertTriangle, Check, Home, LayoutDashboard, ListChecks, MapPin, MessageSquare, Newspaper, Palette, Wallet, X } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { AdminSiteContent } from "@/components/AdminSiteContent";
 import { AdminSupportInbox } from "@/components/AdminSupportInbox";
 import { AdminPayouts } from "@/components/AdminPayouts";
+import { AdminBlog } from "@/components/AdminBlog";
 import { RequireRole } from "@/components/RequireRole";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/lib/supabase";
 import { typeLabels, ListingType } from "@shared/listings";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 interface PendingListing {
@@ -144,16 +148,10 @@ function ReviewCard({ listing, onDecided }: { listing: PendingListing; onDecided
   );
 }
 
-function AdminReviewContent() {
+/** The pending-listing review queue (unchanged behavior, now its own panel). */
+function ReviewsPanel({ onCount }: { onCount?: (n: number) => void }) {
   const [items, setItems] = useState<PendingListing[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  useDocumentMeta({
-    title: "Review queue | Revamp Vacations",
-    description: "Approve or send back pending operator listings.",
-    canonicalPath: "/admin",
-    noindex: true,
-  });
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
@@ -165,44 +163,155 @@ function AdminReviewContent() {
       setError(error.message);
       return;
     }
-    setItems((data ?? []) as unknown as PendingListing[]);
+    const rows = (data ?? []) as unknown as PendingListing[];
+    setItems(rows);
     setError(null);
-  }, []);
+    onCount?.(rows.length);
+  }, [onCount]);
 
   useEffect(() => {
     load();
   }, [load]);
 
   return (
+    <div>
+      <SectionHead title="Pending listings." sub="New stay, tour, and experience listings wait here until approved. Approving publishes a listing immediately; sending it back notifies the operator with your note so they can fix it and resubmit." />
+      {error && (
+        <div className="mb-6 flex items-start gap-2 border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {error}
+        </div>
+      )}
+      {items === null ? (
+        <p className="text-sm text-basalt/50">Loading…</p>
+      ) : items.length === 0 ? (
+        <p className="border border-dashed border-basalt/20 bg-chalk px-6 py-10 text-center text-sm text-basalt/55">Nothing waiting for review.</p>
+      ) : (
+        <div className="grid gap-4">
+          {items.map((listing) => (
+            <ReviewCard key={listing.id} listing={listing} onDecided={load} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SectionHead({ title, sub }: { title: string; sub: string }) {
+  return (
+    <div className="mb-8">
+      <h1 className="font-display text-4xl leading-[0.95] tracking-[-0.03em] sm:text-5xl">{title}</h1>
+      <p className="mt-3 max-w-xl text-base leading-7 text-basalt/60">{sub}</p>
+    </div>
+  );
+}
+
+function StatTile({ n, label, onClick }: { n: number | string; label: string; onClick?: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="border border-basalt/10 bg-paper p-5 text-left transition-colors hover:border-apricot/50">
+      <p className="font-display text-4xl font-normal tabular-nums">{n}</p>
+      <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-basalt/45">{label}</p>
+    </button>
+  );
+}
+
+type AdminSection = "overview" | "reviews" | "support" | "payouts" | "blog" | "site";
+const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: typeof Home }[] = [
+  { key: "overview", label: "Overview", icon: LayoutDashboard },
+  { key: "reviews", label: "Reviews", icon: ListChecks },
+  { key: "support", label: "Support", icon: MessageSquare },
+  { key: "payouts", label: "Payouts", icon: Wallet },
+  { key: "blog", label: "Blog", icon: Newspaper },
+  { key: "site", label: "Site content", icon: Palette },
+];
+
+function OverviewPanel({ go }: { go: (s: AdminSection) => void }) {
+  const [pending, setPending] = useState<number | null>(null);
+  const [published, setPublished] = useState<number | null>(null);
+  const [drafts, setDrafts] = useState<number | null>(null);
+
+  useEffect(() => {
+    supabase.from("listings").select("id", { count: "exact", head: true }).eq("status", "pending").then(({ count }) => setPending(count ?? 0));
+    supabase.from("listings").select("id", { count: "exact", head: true }).eq("status", "published").then(({ count }) => setPublished(count ?? 0));
+    // Blog drafts (table may not exist yet until migration 0030 is run — degrade quietly).
+    supabase.from("posts").select("id", { count: "exact", head: true }).eq("status", "draft").then(({ count, error }) => setDrafts(error ? 0 : count ?? 0));
+  }, []);
+
+  return (
+    <div>
+      <SectionHead title="Admin overview." sub="A snapshot of what needs your attention. Jump into any area from here." />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <StatTile n={pending ?? "—"} label="Pending reviews" onClick={() => go("reviews")} />
+        <StatTile n={published ?? "—"} label="Published listings" onClick={() => go("reviews")} />
+        <StatTile n={drafts ?? "—"} label="Blog drafts" onClick={() => go("blog")} />
+      </div>
+      <div className="mt-8 flex flex-wrap gap-2">
+        <Button onClick={() => go("blog")} className="rounded-none bg-apricot text-white hover:bg-apricot/90">Write a blog post</Button>
+        <Button onClick={() => go("support")} variant="outline" className="rounded-none">Open support inbox</Button>
+        <Button onClick={() => go("payouts")} variant="outline" className="rounded-none">Review payouts</Button>
+      </div>
+    </div>
+  );
+}
+
+function AdminConsole() {
+  const [, navigate] = useLocation();
+  const search = useSearch();
+
+  useDocumentMeta({
+    title: "Admin | Revamp Vacations",
+    description: "Revamp Vacations admin console.",
+    canonicalPath: "/admin",
+    noindex: true,
+  });
+
+  const initial = useMemo<AdminSection>(() => {
+    const s = new URLSearchParams(search).get("section");
+    return ADMIN_SECTIONS.some((x) => x.key === s) ? (s as AdminSection) : "overview";
+  }, [search]);
+  const [section, setSectionState] = useState<AdminSection>(initial);
+  useEffect(() => setSectionState(initial), [initial]);
+  const go = (s: AdminSection) => {
+    setSectionState(s);
+    navigate(s === "overview" ? "/admin" : `/admin?section=${s}`);
+  };
+
+  return (
     <div className="min-h-screen bg-paper text-basalt">
-      <SiteHeader />
-      <main className="container py-12 lg:py-16">
-        <p className="eyebrow">Review queue</p>
-        <h1 className="mt-3 font-display text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl">Pending listings.</h1>
-        <p className="mt-4 max-w-xl text-base leading-7 text-basalt/60">
-          New stay, tour, and experience listings wait here until approved. Approving publishes a listing immediately; sending it back notifies the operator with your note so they can fix it and resubmit.
-        </p>
+      <SiteHeader minimal />
+      <main className="container py-10 lg:py-14">
+        <div className="grid gap-8 lg:grid-cols-[210px_minmax(0,1fr)]">
+          <aside className="lg:sticky lg:top-[96px] lg:self-start">
+            <p className="hidden px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-basalt/40 lg:block">Admin</p>
+            <nav className="mt-0 flex gap-1 overflow-x-auto pb-1 lg:mt-3 lg:flex-col lg:overflow-visible lg:pb-0">
+              <Link href="/" className="flex items-center gap-2.5 whitespace-nowrap px-3 py-2.5 text-sm font-semibold text-basalt/60 transition-colors hover:bg-chalk hover:text-basalt">
+                <Home className="h-4 w-4" /> Homepage
+              </Link>
+              {ADMIN_SECTIONS.map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => go(key)}
+                  aria-current={section === key}
+                  className={cn(
+                    "flex items-center gap-2.5 whitespace-nowrap px-3 py-2.5 text-sm font-semibold transition-colors",
+                    section === key ? "bg-basalt text-paper" : "text-basalt/60 hover:bg-chalk hover:text-basalt",
+                  )}
+                >
+                  <Icon className="h-4 w-4" /> {label}
+                </button>
+              ))}
+            </nav>
+          </aside>
 
-        {error && (
-          <div className="mt-6 flex items-start gap-2 border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {error}
+          <div className="min-w-0">
+            {section === "overview" && <OverviewPanel go={go} />}
+            {section === "reviews" && <ReviewsPanel />}
+            {section === "support" && <AdminSupportInbox />}
+            {section === "payouts" && <AdminPayouts />}
+            {section === "blog" && <AdminBlog />}
+            {section === "site" && <AdminSiteContent />}
           </div>
-        )}
-
-        {items === null ? (
-          <p className="mt-8 text-sm text-basalt/50">Loading…</p>
-        ) : items.length === 0 ? (
-          <p className="mt-8 border border-dashed border-basalt/20 bg-chalk px-6 py-10 text-center text-sm text-basalt/55">Nothing waiting for review.</p>
-        ) : (
-          <div className="mt-8 grid gap-4">
-            {items.map((listing) => (
-              <ReviewCard key={listing.id} listing={listing} onDecided={load} />
-            ))}
-          </div>
-        )}
-        <AdminPayouts />
-        <AdminSupportInbox />
-        <AdminSiteContent />
+        </div>
       </main>
       <SiteFooter />
     </div>
@@ -212,7 +321,7 @@ function AdminReviewContent() {
 export default function AdminReview() {
   return (
     <RequireRole role="admin">
-      <AdminReviewContent />
+      <AdminConsole />
     </RequireRole>
   );
 }

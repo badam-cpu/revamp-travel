@@ -7,23 +7,27 @@
  * var to configure, correct under any domain.
  */
 import type { Request, Response } from "express";
-import { getPublishedCatalog } from "./supabase.js";
+import { getPublishedCatalog, getPublishedPosts } from "./supabase.js";
 
-const STATIC_ROUTES = ["/", "/explore", "/explore/stay", "/explore/eat", "/explore/tour", "/explore/experience", "/map", "/plan", "/login", "/signup"];
+const STATIC_ROUTES = ["/", "/explore", "/explore/stay", "/explore/eat", "/explore/tour", "/explore/experience", "/map", "/plan", "/blog", "/login", "/signup"];
 
 export async function sitemapHandler(req: Request, res: Response): Promise<void> {
   const origin = `${req.protocol}://${req.get("host")}`;
-  const catalog = await getPublishedCatalog();
+  const [catalog, posts] = await Promise.all([getPublishedCatalog(), getPublishedPosts()]);
 
   const staticUrls = STATIC_ROUTES.map((path) => `<url><loc>${origin}${path}</loc></url>`);
   const listingUrls = catalog.map((listing) => {
     const lastmod = listing.updatedAt ? listing.updatedAt.slice(0, 10) : undefined;
     return `<url><loc>${origin}/listing/${listing.slug}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ""}</url>`;
   });
+  const postUrls = posts.map((post) => {
+    const lastmod = post.updatedAt ? post.updatedAt.slice(0, 10) : undefined;
+    return `<url><loc>${origin}/blog/${post.slug}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ""}</url>`;
+  });
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${[...staticUrls, ...listingUrls].join("\n")}
+${[...staticUrls, ...listingUrls, ...postUrls].join("\n")}
 </urlset>`;
 
   res.type("application/xml").send(xml);

@@ -18,10 +18,11 @@
  * the JSON-LD block gets its own separate escaping (see jsonLdScript()).
  */
 import type { PublicListing } from "./supabase.js";
-import { getPublishedCatalog } from "./supabase.js";
+import { getPublishedCatalog, getPublishedPosts, getPublishedPostBySlug, type PublicPost } from "./supabase.js";
 import { brandAssets, regions, typeLabels } from "../shared/listings.js";
 import type { ListingType } from "../shared/listings.js";
-import { buildBreadcrumbJsonLd, buildCollectionPageJsonLd, buildListingJsonLd, buildWebsiteJsonLd } from "../shared/seo.js";
+import { buildArticleJsonLd, buildBlogListJsonLd, buildBreadcrumbJsonLd, buildCollectionPageJsonLd, buildListingJsonLd, buildWebsiteJsonLd } from "../shared/seo.js";
+import { renderMarkdown, markdownToPlain } from "../shared/markdown.js";
 
 export type PageKind =
   | "home"
@@ -31,6 +32,8 @@ export type PageKind =
   | "map"
   | "plan"
   | "listing-detail"
+  | "blog"
+  | "blog-post"
   | "login"
   | "signup"
   | "not-found";
@@ -58,6 +61,9 @@ export function matchRoute(pathname: string): MatchedRoute {
   if (path === "/plan") return { kind: "plan" };
   if (path === "/login") return { kind: "login" };
   if (path === "/signup") return { kind: "signup" };
+  if (path === "/blog") return { kind: "blog" };
+  const postMatch = path.match(/^\/blog\/([^/]+)$/);
+  if (postMatch) return { kind: "blog-post", slug: decodeURIComponent(postMatch[1]) };
   const listingMatch = path.match(/^\/listing\/([^/]+)$/);
   if (listingMatch) return { kind: "listing-detail", slug: decodeURIComponent(listingMatch[1]) };
 
@@ -94,6 +100,15 @@ export async function renderForBot(pathname: string, origin: string): Promise<Re
       const listing = catalog.find((item) => item.slug === route.slug);
       if (!listing) return { status: 404, body: renderNotFound(origin) };
       return { status: 200, body: renderListingDetail(listing, catalog, origin) };
+    }
+    case "blog": {
+      const posts = await getPublishedPosts();
+      return { status: 200, body: renderBlogIndex(posts, origin) };
+    }
+    case "blog-post": {
+      const post = route.slug ? await getPublishedPostBySlug(route.slug) : null;
+      if (!post) return { status: 404, body: renderNotFound(origin) };
+      return { status: 200, body: renderBlogPost(post, origin) };
     }
     case "not-found":
     default:
@@ -388,6 +403,66 @@ ${
         { name: "Explore", path: "/explore" },
         { name: typeLabels[listing.type], path: categoryPath },
         { name: listing.title, path: canonicalPath },
+      ]),
+    ],
+    bodyHtml,
+  });
+}
+
+function renderBlogIndex(posts: PublicPost[], origin: string): string {
+  const cardsHtml =
+    posts.length > 0
+      ? posts
+          .map(
+            (p) => `<article>
+<h2><a href="${origin}/blog/${escapeHtml(p.slug)}">${escapeHtml(p.title)}</a></h2>
+${p.coverImage ? `<img src="${escapeHtml(imgUrl(p.coverImage, origin))}" alt="${escapeHtml(p.title)}" />` : ""}
+<p>${escapeHtml(p.excerpt || markdownToPlain(p.body))}</p>
+</article>`,
+          )
+          .join("\n")
+      : "<p>No posts yet — check back soon.</p>";
+
+  const bodyHtml = `<h1>The Revamp Journal</h1>
+<p>Stories, guides, and field notes from across Armenia.</p>
+${cardsHtml}`;
+
+  return renderPageShell({
+    title: "The Revamp Journal | Revamp Vacations",
+    description: "Stories, guides, and field notes from across Armenia — from the Revamp Vacations team.",
+    canonical: `${origin}/blog`,
+    ogImage: `${origin}${brandAssets.hero}`,
+    jsonLd: [buildBlogListJsonLd(origin, posts)],
+    bodyHtml,
+  });
+}
+
+function renderBlogPost(post: PublicPost, origin: string): string {
+  const canonicalPath = `/blog/${post.slug}`;
+  const description = post.excerpt || markdownToPlain(post.body);
+  // renderMarkdown() HTML-escapes its input before emitting a fixed set of
+  // tags, so its output is safe to embed directly (same guarantee the React
+  // page relies on) — no additional escaping here.
+  const bodyHtml = `<nav aria-label="Breadcrumb"><a href="${origin}/">Home</a> &gt; <a href="${origin}/blog">Blog</a> &gt; ${escapeHtml(post.title)}</nav>
+<article>
+<h1>${escapeHtml(post.title)}</h1>
+${post.publishedAt ? `<p><time datetime="${escapeHtml(post.publishedAt)}">${escapeHtml(new Date(post.publishedAt).toISOString().slice(0, 10))}</time></p>` : ""}
+${post.coverImage ? `<img src="${escapeHtml(imgUrl(post.coverImage, origin))}" alt="${escapeHtml(post.title)}" />` : ""}
+${renderMarkdown(post.body)}
+</article>
+<a href="${origin}/blog">Back to the blog</a>`;
+
+  return renderPageShell({
+    title: `${post.title} | Revamp Vacations`,
+    description,
+    canonical: `${origin}${canonicalPath}`,
+    ogImage: post.coverImage ? imgUrl(post.coverImage, origin) : `${origin}${brandAssets.hero}`,
+    jsonLd: [
+      buildArticleJsonLd(post, origin),
+      buildBreadcrumbJsonLd(origin, [
+        { name: "Home", path: "/" },
+        { name: "Blog", path: "/blog" },
+        { name: post.title, path: canonicalPath },
       ]),
     ],
     bodyHtml,

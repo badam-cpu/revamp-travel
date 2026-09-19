@@ -26,6 +26,8 @@ import Signup from "./pages/Signup";
 import ResetPassword from "./pages/ResetPassword";
 import Account from "./pages/Account";
 import Checkout from "./pages/Checkout";
+import Blog from "./pages/Blog";
+import BlogPost from "./pages/BlogPost";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import Plan from "./pages/Plan";
@@ -49,6 +51,8 @@ function Router() {
       <Route path="/account" component={Account} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
+      <Route path="/blog" component={Blog} />
+      <Route path="/blog/:slug">{(params) => <BlogPost params={params} />}</Route>
       <Route path="/checkout/:slug">{(params) => <Checkout slug={params.slug} />}</Route>
       <Route path="/listing/:slug">{(params) => <ListingPage params={params} />}</Route>
       <Route path="/404" component={NotFound} />

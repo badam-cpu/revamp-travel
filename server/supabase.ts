@@ -109,6 +109,66 @@ export async function getPublishedCatalog(): Promise<PublicListing[]> {
   return rows;
 }
 
+/** Published blog post projection for the prerenderer + sitemap. */
+export interface PublicPost {
+  slug: string;
+  title: string;
+  excerpt: string;
+  coverImage: string;
+  body: string;
+  tags: string[];
+  publishedAt: string | null;
+  updatedAt: string;
+}
+
+interface PostRow {
+  slug: string;
+  title: string;
+  excerpt: string | null;
+  cover_image: string | null;
+  body: string | null;
+  tags: string[] | null;
+  published_at: string | null;
+  updated_at: string;
+}
+
+let postsCache: { data: PublicPost[]; expiresAt: number } | null = null;
+
+/**
+ * Published blog posts (RLS: published is public), newest first, 5-minute
+ * cached like the catalog. Degrades to [] if the `posts` table isn't there yet
+ * (migration 0030 not run) so the site never errors before it's applied.
+ */
+export async function getPublishedPosts(): Promise<PublicPost[]> {
+  if (postsCache && postsCache.expiresAt > Date.now()) return postsCache.data;
+  if (!client) return [];
+  const { data, error } = await client
+    .from("posts")
+    .select("slug, title, excerpt, cover_image, body, tags, published_at, updated_at")
+    .eq("status", "published")
+    .order("published_at", { ascending: false });
+  const rows: PublicPost[] =
+    error || !data
+      ? []
+      : (data as PostRow[]).map((r) => ({
+          slug: r.slug,
+          title: r.title,
+          excerpt: r.excerpt ?? "",
+          coverImage: r.cover_image ?? "",
+          body: r.body ?? "",
+          tags: Array.isArray(r.tags) ? r.tags : [],
+          publishedAt: r.published_at,
+          updatedAt: r.updated_at,
+        }));
+  postsCache = { data: rows, expiresAt: Date.now() + CATALOG_TTL_MS };
+  return rows;
+}
+
+export async function getPublishedPostBySlug(slug: string): Promise<PublicPost | null> {
+  const posts = await getPublishedPosts();
+  return posts.find((p) => p.slug === slug) ?? null;
+}
+
 interface ListingRow {
   type: Listing["type"];
   title: string;
