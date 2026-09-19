@@ -183,7 +183,7 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
             // the plain per-night rate. Either way it reconciles to the total.
             const n = nightsBetween(selected.startDate, selected.endDate);
             const perNight = n > 0 ? Math.round(accommodationCents / n) : Math.round(listing.price * 100);
-            const label = (listing.seasonalRates?.length ?? 0) > 0 ? `avg ${format(perNight)}` : format(perNight);
+            const label = format(perNight);
             return (
               <div className="flex items-center justify-between text-basalt/55">
                 <span>{describeBookingBasis(listing, { ...selected, guests }, label)}</span>
