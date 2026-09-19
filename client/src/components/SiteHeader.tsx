@@ -31,7 +31,7 @@ export function SiteHeader({ minimal = false }: { minimal?: boolean } = {}) {
       return [...baseLinks, { href: "/dashboard", label: "Dashboard" }];
     }
     if (profile?.role === "admin") {
-      return [...baseLinks, { href: "/admin", label: "Review queue" }];
+      return [...baseLinks, { href: "/admin", label: "Admin" }];
     }
     return baseLinks;
   }, [profile?.role, minimal]);
