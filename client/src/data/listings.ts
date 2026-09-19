@@ -6,7 +6,7 @@
  * `@/contexts/ListingsContext` instead of importing `listings` directly.
  */
 export type { Listing, ListingFact, ListingType, ListingInput } from "@shared/listings";
-export { brandAssets, placeholderImage, regions, typeLabels, EDITABLE_LISTING_TYPES, seedListings as listings } from "@shared/listings";
+export { brandAssets, placeholderImage, regions, ARMENIA_REGIONS, typeLabels, EDITABLE_LISTING_TYPES, seedListings as listings } from "@shared/listings";
 
 import type { Listing } from "@shared/listings";
 import { seedListings, findListingIn } from "@shared/listings";

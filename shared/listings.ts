@@ -459,6 +459,26 @@ export const regions = [
   { name: "Syunik", label: "Canyons & monasteries", image: assets.tatev, query: "Syunik" },
 ];
 
+/**
+ * Every Armenian administrative region (10 marzes) plus the capital — the full,
+ * stable set for region filters, independent of which regions currently have
+ * listings. Region filters union this with any region present in the live
+ * catalog so nothing is ever hidden just because it has no listing yet.
+ */
+export const ARMENIA_REGIONS = [
+  "Yerevan",
+  "Aragatsotn",
+  "Ararat",
+  "Armavir",
+  "Gegharkunik",
+  "Kotayk",
+  "Lori",
+  "Shirak",
+  "Syunik",
+  "Tavush",
+  "Vayots Dzor",
+];
+
 export const typeLabels: Record<ListingType, string> = {
   stay: "Stay",
   eat: "Eat",

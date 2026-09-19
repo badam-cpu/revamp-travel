@@ -9,7 +9,7 @@ import { ListingCard } from "@/components/ListingCard";
 import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { ListingType, typeLabels } from "@/data/listings";
+import { ListingType, typeLabels, ARMENIA_REGIONS } from "@/data/listings";
 import { useListings } from "@/contexts/ListingsContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { buildCollectionPageJsonLd } from "@shared/seo";
@@ -26,7 +26,12 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
   const [type, setType] = useState(validTypes.has(urlType) ? urlType : "all");
   const [region, setRegion] = useState("all");
   const [selectedId, setSelectedId] = useState<string | undefined>();
-  const regions = Array.from(new Set(listings.map((listing) => listing.region))).sort();
+  // Show every Armenian region, not only those that currently have listings,
+  // plus any extra region a listing might use that isn't in the canonical set.
+  const extraRegions = Array.from(new Set(listings.map((listing) => listing.region)))
+    .filter((r) => r && !ARMENIA_REGIONS.includes(r))
+    .sort();
+  const regions = [...ARMENIA_REGIONS, ...extraRegions];
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
