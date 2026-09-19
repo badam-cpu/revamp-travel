@@ -49,6 +49,7 @@ import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
 import { SearchableMultiSelect, SearchableMultiSelectHandle } from "@/components/SearchableMultiSelect";
 import { OperatorBookings } from "@/components/OperatorBookings";
+import { OperatorBookingsTimeline } from "@/components/OperatorBookingsTimeline";
 import { OperatorPayouts } from "@/components/OperatorPayouts";
 import { OperatorAnalytics } from "@/components/OperatorAnalytics";
 import { ProfileTab, SecurityTab } from "@/pages/Account";
@@ -907,6 +908,35 @@ const OPERATOR_SECTIONS: { key: OperatorSection; label: string; icon: typeof Hom
   { key: "settings", label: "Settings", icon: Settings },
 ];
 
+function BookingsSection() {
+  const [view, setView] = useState<"timeline" | "list">("timeline");
+  return (
+    <div>
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="font-display text-4xl leading-[0.95] tracking-[-0.03em] sm:text-5xl">Bookings</h1>
+          <p className="mt-3 max-w-xl text-base leading-7 text-basalt/60">
+            {view === "timeline" ? "Your listings across the calendar — bookings and synced-blocked dates at a glance." : "Reservations on your listings, grouped by type."}
+          </p>
+        </div>
+        <div className="flex shrink-0 border border-basalt/15">
+          {(["timeline", "list"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setView(v)}
+              className={cn("px-4 py-2 text-xs font-bold uppercase tracking-[0.1em] transition-colors", view === v ? "bg-basalt text-paper" : "text-basalt/55 hover:text-basalt")}
+            >
+              {v === "timeline" ? "Timeline" : "List"}
+            </button>
+          ))}
+        </div>
+      </div>
+      {view === "timeline" ? <OperatorBookingsTimeline /> : <OperatorBookings />}
+    </div>
+  );
+}
+
 function SectionHead({ title, sub }: { title: string; sub: string }) {
   return (
     <div className="mb-8">
@@ -1027,12 +1057,7 @@ function DashboardContent() {
               </div>
             )}
 
-            {section === "bookings" && (
-              <div>
-                <SectionHead title="Bookings" sub="Reservations on your listings, grouped by type." />
-                <OperatorBookings />
-              </div>
-            )}
+            {section === "bookings" && <BookingsSection />}
 
             {section === "payouts" && (
               <div>
