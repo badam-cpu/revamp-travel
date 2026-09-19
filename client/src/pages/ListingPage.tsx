@@ -1,6 +1,6 @@
 /** Revamp brandbook: detail pages combine rounded imagery, bold sans hierarchy, concise facts, white space, and orange actions. */
 import { useEffect, useState } from "react";
-import { ArrowLeft, BedDouble, Bookmark, Check, Coffee, Home, KeyRound, MapPin, Navigation, Share2, ShieldCheck, Sparkles, SprayCan, Users, Wifi } from "lucide-react";
+import { ArrowLeft, BedDouble, Bookmark, Check, Coffee, Home, KeyRound, LayoutGrid, MapPin, Navigation, Share2, ShieldCheck, Sparkles, SprayCan, Users, Wifi } from "lucide-react";
 import { Link } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -45,6 +45,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   const { isSaved, toggleSaved } = useSavedPlaces();
   const { format } = useCurrency();
   const [amenitiesOpen, setAmenitiesOpen] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
   // On mobile the booking panel shows inline; the sticky bottom "Book" bar
   // should only appear once that panel has scrolled out of view (so there's
   // never a second "book" button on screen at the same time).
@@ -163,19 +164,39 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
           </div>
         </div>
 
-        <section className="container grid gap-2 md:grid-cols-[1.45fr_0.72fr] md:grid-rows-2">
-          <div className="brand-notch relative min-h-[360px] overflow-hidden md:row-span-2 md:min-h-[600px]">
-            <img src={listing.gallery[0]} alt={listing.title} className="h-full w-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-t from-basalt/60 via-transparent to-transparent" />
-            <div className="absolute bottom-7 left-7 max-w-xl text-white">
-              <DiscountBadge listing={listing} className="mb-3" />
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/70">{typeLabels[listing.type]} · {listing.city}</p>
-              <h1 className="mt-2 font-display text-5xl leading-[0.92] tracking-[-0.04em] sm:text-6xl lg:text-7xl">{listing.title}</h1>
-            </div>
-          </div>
-          <div className="hidden overflow-hidden md:block"><img src={listing.gallery[1]} alt="" className="h-full w-full object-cover" /></div>
-          <div className="hidden overflow-hidden md:block"><img src={listing.gallery[2]} alt="" className="h-full w-full object-cover" /></div>
-        </section>
+        {/* Title above the gallery (Airbnb-style showcase). */}
+        <div className="container">
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-tuff">{typeLabels[listing.type]} · {listing.city}</p>
+          <h1 className="mt-1.5 font-display text-4xl leading-[1.0] tracking-[-0.035em] sm:text-5xl">{listing.title}</h1>
+        </div>
+
+        {/* Photo mosaic: one large + a 2×2 grid, with "Show all photos". */}
+        {(() => {
+          const photos = Array.from(new Set([listing.image, ...(listing.gallery ?? [])].filter(Boolean))) as string[];
+          const grid = photos.slice(1, 5);
+          return (
+            <section className="container mt-4">
+              <div className="relative grid gap-2 overflow-hidden rounded-[14px] md:grid-cols-2 md:h-[460px]">
+                <button type="button" onClick={() => setGalleryOpen(true)} className="relative block h-64 w-full overflow-hidden sm:h-96 md:h-full">
+                  <img src={photos[0]} alt={listing.title} className="h-full w-full object-cover transition-transform duration-500 hover:scale-[1.02]" />
+                  <DiscountBadge listing={listing} className="absolute left-4 top-4" />
+                </button>
+                <div className="hidden grid-cols-2 grid-rows-2 gap-2 md:grid">
+                  {grid.map((src, i) => (
+                    <button key={src + i} type="button" onClick={() => setGalleryOpen(true)} className="relative block h-full w-full overflow-hidden bg-basalt/5">
+                      <img src={src} alt="" className="h-full w-full object-cover transition-transform duration-500 hover:scale-[1.02]" />
+                    </button>
+                  ))}
+                </div>
+                {photos.length > 1 && (
+                  <button type="button" onClick={() => setGalleryOpen(true)} className="absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-full border border-basalt/20 bg-paper px-4 py-2 text-xs font-semibold text-basalt shadow-md transition-colors hover:border-apricot hover:text-apricot">
+                    <LayoutGrid className="h-4 w-4" /> Show all {photos.length} photos
+                  </button>
+                )}
+              </div>
+            </section>
+          );
+        })()}
 
         <section className="container grid gap-12 py-14 lg:grid-cols-[minmax(0,1fr)_340px] lg:py-20">
           <div>
@@ -286,9 +307,6 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
               </p>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-2">
-              {listing.gallery.slice(2, 4).map((image, index) => <img key={image} src={image} alt={`${listing.title} detail ${index + 1}`} className="aspect-[4/3] w-full object-cover" />)}
-            </div>
           </div>
 
           <aside>
@@ -354,6 +372,18 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
           Book
         </Button>
       </div>
+      <Dialog open={galleryOpen} onOpenChange={setGalleryOpen}>
+        <DialogContent className="max-h-[92vh] gap-0 overflow-y-auto rounded-none sm:max-w-4xl">
+          <DialogHeader className="border-b border-basalt/10 pb-4">
+            <DialogTitle className="font-display text-2xl font-normal tracking-[-0.02em]">{listing.title}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3 py-5 sm:grid-cols-2">
+            {Array.from(new Set([listing.image, ...(listing.gallery ?? [])].filter(Boolean))).map((src, i) => (
+              <img key={(src as string) + i} src={src as string} alt={`${listing.title} photo ${i + 1}`} className="w-full rounded-[10px] object-cover" />
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog open={amenitiesOpen} onOpenChange={setAmenitiesOpen}>
         <DialogContent className="max-h-[85vh] gap-0 overflow-y-auto rounded-none sm:max-w-2xl">
           <DialogHeader className="border-b border-basalt/10 pb-4">
