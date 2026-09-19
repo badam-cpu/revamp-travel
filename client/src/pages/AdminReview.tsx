@@ -16,7 +16,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, Check, Home, LayoutDashboard, ListChecks, MapPin, MessageSquare, Newspaper, Palette, Wallet, X } from "lucide-react";
+import { AlertTriangle, Check, ExternalLink, Home, LayoutDashboard, ListChecks, MapPin, MessageSquare, Newspaper, Palette, Wallet, X } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { AdminSiteContent } from "@/components/AdminSiteContent";
@@ -34,6 +34,7 @@ import { toast } from "sonner";
 
 interface PendingListing {
   id: string;
+  slug: string;
   type: ListingType;
   title: string;
   eyebrow: string;
@@ -52,7 +53,7 @@ interface PendingListing {
 // is ambiguous ("more than one relationship was found"). Pin it to the
 // operator_id foreign key so we get the listing's operator, not its reviewer.
 const PENDING_COLUMNS =
-  "id, type, title, eyebrow, city, region, image, short_description, price_cents, price_unit, tags, profiles!operator_id(display_name, business_name)";
+  "id, slug, type, title, eyebrow, city, region, image, short_description, price_cents, price_unit, tags, profiles!operator_id(display_name, business_name)";
 
 function ReviewCard({ listing, onDecided }: { listing: PendingListing; onDecided: () => void }) {
   const [rejecting, setRejecting] = useState(false);
@@ -134,7 +135,15 @@ function ReviewCard({ listing, onDecided }: { listing: PendingListing; onDecided
             </div>
           </div>
         ) : (
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 flex flex-wrap gap-2">
+            <a
+              href={`/listing/${listing.slug}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-none border border-basalt/20 bg-paper px-4 py-2 text-sm font-semibold text-basalt transition-colors hover:border-apricot hover:text-apricot"
+            >
+              <ExternalLink className="h-3.5 w-3.5" /> Preview full listing
+            </a>
             <Button size="sm" className="rounded-none bg-sevan text-white hover:bg-sevan/90" disabled={busy} onClick={approve}>
               <Check className="mr-1.5 h-3.5 w-3.5" /> Approve
             </Button>
