@@ -6,7 +6,7 @@
  * Reads/refreshes through SiteSettingsContext so the change shows up live.
  */
 import { useEffect, useRef, useState } from "react";
-import { Minus, Plus, Save } from "lucide-react";
+import { ArrowDown, ArrowUp, Minus, Plus, Save } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { useListings } from "@/contexts/ListingsContext";
@@ -124,6 +124,15 @@ export function AdminSiteContent() {
     setRegionCards((prev) => prev.filter((c) => c.id !== id));
   };
   const addRegion = () => setRegionCards((prev) => [...prev, { id: crypto.randomUUID(), name: "", label: "", image: "" }]);
+  // Reorder region cards — their array order is exactly the home-page order.
+  const moveRegion = (index: number, dir: -1 | 1) =>
+    setRegionCards((prev) => {
+      const next = [...prev];
+      const target = index + dir;
+      if (target < 0 || target >= next.length) return prev;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
 
   const updateAddon = (id: string, patch: Partial<Addon>) => setAddons((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
   const removeAddon = (id: string) => setAddons((prev) => prev.filter((a) => a.id !== id));
@@ -205,6 +214,17 @@ export function AdminSiteContent() {
     }
   };
 
+  // Per-section save bar. Every section writes the whole settings row from
+  // current state, so any Save button commits all pending edits — the point is
+  // that you can save without scrolling to the bottom.
+  const sectionSave = () => (
+    <div className="mt-1 flex items-center justify-end gap-3 border-t border-basalt/10 pt-3">
+      <Button size="sm" onClick={save} disabled={saving || loading || !loaded || !hydrated} className="rounded-none bg-apricot text-white hover:bg-apricot/90">
+        {saving ? "Saving…" : "Save"}
+      </Button>
+    </div>
+  );
+
   return (
     <section className="mt-14 border-t border-basalt/10 pt-10">
       <p className="eyebrow">Site content</p>
@@ -244,6 +264,7 @@ export function AdminSiteContent() {
             <Label htmlFor="heroSubcopy" className="text-sm font-semibold">Sub-copy</Label>
             <Textarea id="heroSubcopy" rows={2} value={subcopy} onChange={(e) => setSubcopy(e.target.value)} placeholder="Exceptional stays, Armenian tables, and local routes…" className="rounded-none text-base" />
           </div>
+          {sectionSave()}
         </div>
 
         {/* Featured */}
@@ -267,6 +288,7 @@ export function AdminSiteContent() {
               ))}
             </div>
           )}
+          {sectionSave()}
         </div>
 
         {/* Announcement */}
@@ -288,6 +310,7 @@ export function AdminSiteContent() {
             <Label htmlFor="annHref" className="text-sm font-semibold">Link <span className="font-normal text-basalt/45">(optional — e.g. /explore/experience)</span></Label>
             <Input id="annHref" value={annHref} onChange={(e) => setAnnHref(e.target.value)} placeholder="/explore/experience" className="h-11 rounded-none" />
           </div>
+          {sectionSave()}
         </div>
 
         {/* Display currency */}
@@ -296,6 +319,7 @@ export function AdminSiteContent() {
           <p className="text-xs text-basalt/50">Prices settle in USD; this rate powers the AMD/USD switcher (display only). Set 0 to hide AMD.</p>
           <Label htmlFor="usdToAmd" className="text-sm font-semibold">AMD per 1 USD</Label>
           <Input id="usdToAmd" type="number" min={0} step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="e.g. 387" className="h-11 w-48 rounded-none" />
+          {sectionSave()}
         </div>
 
         {/* Home "choose the route" section */}
@@ -339,6 +363,7 @@ export function AdminSiteContent() {
               />
             </div>
           ))}
+          {sectionSave()}
         </div>
 
         {/* Concierge add-ons */}
@@ -397,6 +422,7 @@ export function AdminSiteContent() {
             </div>
           ))}
           <button type="button" onClick={addAddon} className="inline-flex items-center gap-1.5 self-start rounded-none border border-basalt/20 bg-paper px-4 py-2 text-sm font-semibold text-basalt hover:border-apricot"><Plus className="h-4 w-4" /> Add a service</button>
+          {sectionSave()}
         </div>
 
         {/* Home "the revamp. edit" (featured) section */}
@@ -410,6 +436,7 @@ export function AdminSiteContent() {
             <Label className="text-sm font-semibold">Heading <span className="font-normal text-basalt/45">(line breaks allowed)</span></Label>
             <Textarea rows={2} value={home.editTitle} onChange={(e) => setHome((p) => ({ ...p, editTitle: e.target.value }))} placeholder="Worth taking the long way." className="rounded-none text-base" />
           </div>
+          {sectionSave()}
         </div>
 
         {/* Home regions section */}
@@ -431,9 +458,17 @@ export function AdminSiteContent() {
             <div key={c.id} className="grid gap-2 border-t border-basalt/10 pt-4">
               <div className="flex items-center justify-between">
                 <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-apricot">Region {i + 1}</p>
-                <button type="button" onClick={() => removeRegion(c.id)} className="inline-flex items-center gap-1 text-xs font-semibold text-basalt/45 transition-colors hover:text-destructive">
-                  <Minus className="h-3.5 w-3.5" /> Remove
-                </button>
+                <div className="flex items-center gap-1">
+                  <button type="button" onClick={() => moveRegion(i, -1)} disabled={i === 0} aria-label="Move up" title="Move up" className="grid h-7 w-7 place-items-center border border-basalt/15 text-basalt/60 transition-colors hover:border-apricot hover:text-apricot disabled:opacity-30 disabled:hover:border-basalt/15 disabled:hover:text-basalt/60">
+                    <ArrowUp className="h-3.5 w-3.5" />
+                  </button>
+                  <button type="button" onClick={() => moveRegion(i, 1)} disabled={i === regionCards.length - 1} aria-label="Move down" title="Move down" className="grid h-7 w-7 place-items-center border border-basalt/15 text-basalt/60 transition-colors hover:border-apricot hover:text-apricot disabled:opacity-30 disabled:hover:border-basalt/15 disabled:hover:text-basalt/60">
+                    <ArrowDown className="h-3.5 w-3.5" />
+                  </button>
+                  <button type="button" onClick={() => removeRegion(c.id)} className="ml-1 inline-flex items-center gap-1 text-xs font-semibold text-basalt/45 transition-colors hover:text-destructive">
+                    <Minus className="h-3.5 w-3.5" /> Remove
+                  </button>
+                </div>
               </div>
               <Input value={c.name} onChange={(e) => updateRegion(c.id, "name", e.target.value)} placeholder="Region name (e.g. Tavush)" className="h-11 rounded-none" />
               <Input value={c.label} onChange={(e) => updateRegion(c.id, "label", e.target.value)} placeholder="Short label (e.g. Forest & craft)" className="h-11 rounded-none" />
@@ -449,6 +484,7 @@ export function AdminSiteContent() {
           <button type="button" onClick={addRegion} className="mt-2 inline-flex items-center gap-1.5 self-start rounded-none border border-basalt/20 bg-paper px-4 py-2 text-sm font-semibold text-basalt transition-colors hover:border-apricot">
             <Plus className="h-4 w-4" /> Add region
           </button>
+          {sectionSave()}
         </div>
 
         {/* Home map section */}
@@ -466,6 +502,7 @@ export function AdminSiteContent() {
             <Label className="text-sm font-semibold">Intro paragraph</Label>
             <Textarea rows={2} value={home.mapIntro} onChange={(e) => setHome((p) => ({ ...p, mapIntro: e.target.value }))} placeholder="Hover a place to follow it across Armenia…" className="rounded-none text-base" />
           </div>
+          {sectionSave()}
         </div>
 
         {/* Footer brand statement (site-wide) */}
@@ -479,6 +516,7 @@ export function AdminSiteContent() {
             <Label className="text-sm font-semibold">Sub-copy</Label>
             <Textarea rows={2} value={home.footerSubcopy} onChange={(e) => setHome((p) => ({ ...p, footerSubcopy: e.target.value }))} placeholder="Curated stays, tables, and local routes…" className="rounded-none text-base" />
           </div>
+          {sectionSave()}
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
