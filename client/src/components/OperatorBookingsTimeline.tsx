@@ -14,6 +14,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useListings } from "@/contexts/ListingsContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import type { BookingStatus } from "@shared/bookings";
 import { BookingDetailDialog } from "@/components/BookingDetailDialog";
 import { cn } from "@/lib/utils";
@@ -51,9 +52,23 @@ const BAR_STYLE: Partial<Record<BookingStatus, string>> = {
   completed: "bg-basalt/55 text-white",
 };
 
+/** Compact per-day price for the tight timeline cells (e.g. ֏45k, $116). */
+function useCompactPrice() {
+  const { currency, rate } = useCurrency();
+  return (amdCents: number): string => {
+    if (currency === "USD" && rate > 0) {
+      const usd = Math.round(amdCents / 100 / rate);
+      return usd >= 10000 ? `$${Math.round(usd / 1000)}k` : `$${usd.toLocaleString()}`;
+    }
+    const drams = Math.round(amdCents / 100);
+    return drams >= 1000 ? `֏${Math.round(drams / 1000)}k` : `֏${drams}`;
+  };
+}
+
 export function OperatorBookingsTimeline() {
   const { user } = useAuth();
   const { listings } = useListings();
+  const compact = useCompactPrice();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [startDate, setStartDate] = useState(() => todayIso());
   const [openId, setOpenId] = useState<string | null>(null);
@@ -145,6 +160,12 @@ export function OperatorBookingsTimeline() {
           {mine.map((listing) => {
             const bookings = byListing.get(listing.id) ?? [];
             const blocked = (listing.blockedRanges ?? []).map((b) => spanBox(b.start, addDaysIso(b.end, 1))).filter(Boolean) as { left: number; width: number }[];
+            const rBase = Math.round(listing.price * 100);
+            const rRates = listing.seasonalRates ?? [];
+            const priceOn = (d: string) => {
+              const m = rRates.filter((r) => r.start <= d && d <= r.end).pop();
+              return { cents: m ? m.priceCents : rBase, overridden: Boolean(m) };
+            };
             return (
               <div key={listing.id} className="flex border-b border-basalt/8 last:border-b-0">
                 {/* Sticky listing label */}
@@ -156,17 +177,23 @@ export function OperatorBookingsTimeline() {
                   </span>
                 </Link>
                 {/* Track */}
-                <div className="relative shrink-0" style={{ width: trackW, height: 56 }}>
-                  {/* day gridlines */}
+                <div className="relative shrink-0" style={{ width: trackW, height: 62 }}>
+                  {/* day gridlines + per-day price */}
                   {days.map((d, i) => {
                     const weekend = [0, 6].includes(new Date(d + "T00:00:00Z").getUTCDay());
-                    return <div key={d} className={cn("absolute top-0 h-full border-r border-basalt/8", weekend && "bg-basalt/[0.02]", d === today && "bg-apricot/[0.06]")} style={{ left: i * CELL_W, width: CELL_W }} />;
+                    const past = d < today;
+                    const p = rBase > 0 && !past ? priceOn(d) : null;
+                    return (
+                      <div key={d} className={cn("absolute top-0 h-full border-r border-basalt/8", weekend && "bg-basalt/[0.02]", d === today && "bg-apricot/[0.06]")} style={{ left: i * CELL_W, width: CELL_W }}>
+                        {p && <span className={cn("pointer-events-none absolute inset-x-0 bottom-1 text-center text-[9px] font-semibold tabular-nums", p.overridden ? "text-apricot" : "text-basalt/40")}>{compact(p.cents)}</span>}
+                      </div>
+                    );
                   })}
-                  {/* blocked overlays */}
+                  {/* blocked overlays (top band, above the price row) */}
                   {blocked.map((b, i) => (
-                    <div key={`blk-${i}`} title="External booking (synced from a connected calendar)" className="absolute top-1.5 bottom-1.5 rounded-sm border border-blue-500/40 bg-blue-500/[0.08] bg-[repeating-linear-gradient(45deg,#3b82f640,#3b82f640_4px,transparent_4px,transparent_8px)]" style={{ left: b.left + 1, width: Math.max(0, b.width - 2) }} />
+                    <div key={`blk-${i}`} title="External booking (synced from a connected calendar)" className="absolute top-1.5 h-[30px] rounded-sm border border-blue-500/40 bg-blue-500/[0.08] bg-[repeating-linear-gradient(45deg,#3b82f640,#3b82f640_4px,transparent_4px,transparent_8px)]" style={{ left: b.left + 1, width: Math.max(0, b.width - 2) }} />
                   ))}
-                  {/* booking bars */}
+                  {/* booking bars (top band, above the price row) */}
                   {bookings.map((b) => {
                     const box = spanBox(b.start_date, b.end_date);
                     if (!box) return null;
@@ -177,7 +204,7 @@ export function OperatorBookingsTimeline() {
                         key={b.id}
                         onClick={() => setOpenId(b.id)}
                         title={`${name} · ${b.start_date} → ${b.end_date} · ${b.guests} guest${b.guests === 1 ? "" : "s"}`}
-                        className={cn("absolute top-2 bottom-2 flex items-center overflow-hidden rounded px-2 text-[11px] font-semibold shadow-sm transition-[filter] hover:brightness-95", BAR_STYLE[b.status] ?? "bg-basalt text-white")}
+                        className={cn("absolute top-1.5 flex h-[30px] items-center overflow-hidden rounded px-2 text-[11px] font-semibold shadow-sm transition-[filter] hover:brightness-95", BAR_STYLE[b.status] ?? "bg-basalt text-white")}
                         style={{ left: box.left + 1, width: Math.max(0, box.width - 2) }}
                       >
                         <span className="truncate">{name}</span>

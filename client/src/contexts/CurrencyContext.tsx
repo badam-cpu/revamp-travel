@@ -29,7 +29,11 @@ interface CurrencyContextValue {
 }
 
 function amd(cents: number): string {
-  return `֏${Math.round(cents / 100).toLocaleString()}`;
+  // Round the DISPLAYED figure to the nearest 100 drams for a clean look — the
+  // stored/charged amount is untouched (many prices are non-round because
+  // migration 0020 converted them from USD at the exchange rate).
+  const drams = Math.round(cents / 100 / 100) * 100;
+  return `֏${drams.toLocaleString()}`;
 }
 
 const CurrencyContext = createContext<CurrencyContextValue>({

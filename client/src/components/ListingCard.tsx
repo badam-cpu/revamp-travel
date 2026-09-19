@@ -58,9 +58,9 @@ export function ListingCard({ listing, large = false, active = false, onHover }:
           </div>
           <MoveUpRight className="mt-1 h-5 w-5 shrink-0 text-basalt/35 transition-all group-hover:-translate-y-1 group-hover:translate-x-1 group-hover:text-apricot" />
         </div>
-        <div className="mt-4 flex items-center justify-between border-t border-basalt/10 pt-3 text-xs text-basalt/50">
-          <span>{listing.tags.slice(0, 2).join(" · ")}</span>
-          <span><strong className="text-sm text-basalt">{priceLabel}</strong>{listing.price > 0 ? ` / ${listing.priceUnit}` : ""}</span>
+        <div className="mt-4 flex items-center justify-between gap-3 border-t border-basalt/10 pt-3 text-xs text-basalt/50">
+          <span className="min-w-0 truncate">{listing.tags.slice(0, 2).join(" · ")}</span>
+          <span className="shrink-0 whitespace-nowrap"><strong className="text-sm text-basalt">{priceLabel}</strong>{listing.price > 0 ? ` / ${listing.priceUnit}` : ""}</span>
         </div>
       </Link>
     </article>

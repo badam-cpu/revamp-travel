@@ -125,9 +125,9 @@ export function TourCard({ listing }: { listing: Listing }) {
             )}
           </div>
 
-          <div className="flex items-center justify-between pt-1">
-            <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-basalt/40">From</span>
-            <span className="font-display text-xl text-basalt">
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.14em] text-basalt/40">From</span>
+            <span className="whitespace-nowrap text-right font-display text-xl text-basalt">
               {priceLabel} {listing.price > 0 && <span className="font-sans text-xs font-normal text-basalt/50">/ {listing.priceUnit}</span>}
             </span>
           </div>

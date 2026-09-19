@@ -42,6 +42,7 @@ export function PricingCalendar({ listing }: { listing: LiveListing }) {
       .then(({ data }) => setBooked((data ?? []).map((r) => ({ start: r.start_date as string, end: r.end_date as string }))));
   }, [listing.id]);
 
+  const isStay = listing.type === "stay";
   const base = Math.round(listing.price * 100);
   const rates = listing.seasonalRates ?? [];
   const priceForDate = (d: string) => {
@@ -71,7 +72,7 @@ export function PricingCalendar({ listing }: { listing: LiveListing }) {
   const selNights = sel && selStart && selEnd ? Math.round((Date.parse(selEnd) - Date.parse(selStart)) / DAY_MS) + 1 : 0;
 
   const startDrag = (d: string) => {
-    if (d < today) return; // don't price the past
+    if (!isStay || d < today) return; // pricing is per-night, stays only
     dragging.current = true;
     setSel({ a: d, b: d });
   };
@@ -133,14 +134,14 @@ export function PricingCalendar({ listing }: { listing: LiveListing }) {
           <button type="button" onClick={() => setMonth((m) => (m.m === 11 ? { y: m.y + 1, m: 0 } : { y: m.y, m: m.m + 1 }))} aria-label="Next month" className="grid h-8 w-8 place-items-center border border-basalt/15 hover:border-apricot hover:text-apricot"><ChevronRight className="h-4 w-4" /></button>
         </div>
         <p className="font-display text-xl">{monthLabel}</p>
-        <span className="ml-auto text-xs text-basalt/45">Base rate {format(base)} / night</span>
+        <span className="ml-auto text-xs text-basalt/45">{base > 0 ? (isStay ? `Base rate ${format(base)} / night` : `Price ${format(base)}`) : "Rate on request"}</span>
       </div>
 
       {/* Legend */}
       <div className="mb-3 flex flex-wrap items-center gap-4 text-xs text-basalt/55">
         <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-sevan" /> Booked</span>
         <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border border-blue-500/40 bg-[repeating-linear-gradient(45deg,#3b82f640,#3b82f640_3px,transparent_3px,transparent_6px)]" /> External (synced)</span>
-        <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border border-apricot bg-apricot/15" /> Selected</span>
+        {isStay && <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border border-apricot bg-apricot/15" /> Selected</span>}
       </div>
 
       {/* Weekday header */}
@@ -165,14 +166,14 @@ export function PricingCalendar({ listing }: { listing: LiveListing }) {
               onPointerEnter={() => extendDrag(d)}
               className={cn(
                 "relative min-h-[74px] border-b border-r border-basalt/10 p-1.5 text-left transition-colors",
-                past ? "bg-basalt/[0.02] text-basalt/30" : booked || blocked ? "cursor-not-allowed" : "cursor-pointer hover:bg-apricot/[0.04]",
+                past ? "bg-basalt/[0.02] text-basalt/30" : booked || blocked ? "cursor-not-allowed" : isStay ? "cursor-pointer hover:bg-apricot/[0.04]" : "",
                 selected && "bg-apricot/15 ring-1 ring-inset ring-apricot",
                 booked && "bg-sevan/10",
                 blocked && "bg-[repeating-linear-gradient(45deg,#3b82f626,#3b82f626_4px,transparent_4px,transparent_8px)]",
               )}
             >
               <span className={cn("text-xs font-semibold tabular-nums", d === today && "text-apricot")}>{Number(d.slice(8, 10))}</span>
-              {!past && !booked && !blocked && (
+              {isStay && !past && !booked && !blocked && base > 0 && (
                 <span className={cn("mt-3 block text-[11px] font-semibold", overridden ? "text-apricot" : "text-basalt/70")}>{format(price)}</span>
               )}
               {booked && <span className="mt-3 block text-[10px] font-semibold text-sevan">Booked</span>}
@@ -198,7 +199,11 @@ export function PricingCalendar({ listing }: { listing: LiveListing }) {
           </div>
         </div>
       )}
-      <p className="mt-3 text-xs text-basalt/45">Click a day or drag across several to set a nightly price. Prices in AMD; days show the price guests pay per night. Booked and externally-synced days can't be repriced here.</p>
+      <p className="mt-3 text-xs text-basalt/45">
+        {isStay
+          ? "Click a day or drag across several to set a nightly price. Prices in AMD; days show the price guests pay per night. Booked and externally-synced days can't be repriced here."
+          : "Booked and externally-synced (hatched) days are shown. Tours and experiences use a single price, edited on the listing itself — this calendar is for availability."}
+      </p>
     </div>
   );
 }
