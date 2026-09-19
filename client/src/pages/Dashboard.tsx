@@ -165,9 +165,10 @@ function realPhotos(draft: DraftListing): string[] {
 
 /** What saving this draft will actually do — differs by whether it's new, awaiting review, or already live. */
 function saveOutcome(draft: DraftListing, isEdit: boolean): string {
-  if (!isEdit) return "Submitted for review — it'll go live once an admin approves it.";
-  if (draft.status === "draft") return "An admin sent this back with feedback — saving resubmits it for review.";
-  if (draft.status === "pending") return "Still awaiting review — your changes are saved as part of that same submission.";
+  if (!isEdit) return "Submit sends it for review; Save as draft keeps it private until you're ready.";
+  if (draft.status === "draft" && draft.reviewNote) return "An admin sent this back with feedback — Submit for review resubmits it, or keep editing as a draft.";
+  if (draft.status === "draft") return "This is a draft — Submit for review to send it to an admin, or Save as draft to keep working.";
+  if (draft.status === "pending") return "Still awaiting review — your changes save as part of that submission (or move it back to a draft).";
   return "This listing is already live — changes save immediately, no re-review needed.";
 }
 
@@ -247,6 +248,8 @@ function ListingFormDialog({
   if (!draft) return null;
   const isEdit = Boolean(draft.id);
   const isLast = step === LAST_STEP;
+  // A published listing stays published on edit (no draft/submit toggle).
+  const isPublished = draft.status === "published";
 
   // Google Places autocomplete fills the uncontrolled fields imperatively.
   const setField = (name: string, value: string) => {
@@ -291,10 +294,19 @@ function ListingFormDialog({
       setStep((s) => s + 1);
       return;
     }
+    persist(true);
+  };
+
+  // Persist the listing. submitForReview=true → "pending" (into the review
+  // queue); false → "draft" (saved privately, not submitted). Both need a
+  // complete, valid form because the listing columns are NOT NULL / checked —
+  // a draft is "finished but not submitted", not a half-filled row.
+  const persist = async (submitForReview: boolean) => {
+    const form = formRef.current;
+    if (!form || !validateStep(step)) return;
     setSaving(true);
     setError(null);
     try {
-      const form = event.currentTarget;
       const payload = toInputPayload(draft, form, {
         amenities: amenitiesRef.current?.getValue() ?? [],
         photos: photosRef.current?.getValue() ?? [],
@@ -318,11 +330,11 @@ function ListingFormDialog({
         if (geo) payload.coordinates = geo;
       }
       if (isEdit && draft.id) {
-        await updateListing(draft.id, payload);
-        toast(`${payload.title} updated.`);
+        await updateListing(draft.id, payload, submitForReview);
+        toast(submitForReview ? `${payload.title} submitted for review.` : `${payload.title} saved as a draft.`);
       } else {
-        await createListing(payload);
-        toast(`${payload.title} added to the catalog.`);
+        await createListing(payload, submitForReview);
+        toast(submitForReview ? `${payload.title} submitted for review.` : `${payload.title} saved as a draft.`);
       }
       onSaved();
     } catch (err) {
@@ -625,9 +637,16 @@ function ListingFormDialog({
               <Button type="button" variant="ghost" className="rounded-none px-2 text-sm disabled:opacity-0" onClick={goBack} disabled={step === 0}>
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back
               </Button>
-              <Button type="submit" form="listing-onboarding" className="rounded-none bg-apricot px-6 text-white hover:bg-apricot/90" disabled={saving}>
-                {isLast ? (saving ? "Saving…" : isEdit ? "Save changes" : "Submit for review") : "Continue"}
-              </Button>
+              <div className="flex items-center gap-2">
+                {isLast && !isPublished && (
+                  <Button type="button" variant="outline" className="rounded-none px-5" disabled={saving} onClick={() => persist(false)}>
+                    Save as draft
+                  </Button>
+                )}
+                <Button type="submit" form="listing-onboarding" className="rounded-none bg-apricot px-6 text-white hover:bg-apricot/90" disabled={saving}>
+                  {isLast ? (saving ? "Saving…" : isPublished ? "Save changes" : "Submit for review") : "Continue"}
+                </Button>
+              </div>
             </div>
           </footer>
         </DialogPrimitive.Content>
@@ -636,14 +655,18 @@ function ListingFormDialog({
   );
 }
 
-function StatusBadge({ status }: { status: LiveListing["status"] }) {
+function StatusBadge({ status, reviewNote }: { status: LiveListing["status"]; reviewNote?: string | null }) {
   if (status === "published") {
     return <span className="border border-sevan/30 bg-sevan/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-sevan">Published</span>;
   }
   if (status === "pending") {
     return <span className="border border-tuff/30 bg-tuff/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-tuff">Pending review</span>;
   }
-  return <span className="border border-destructive/30 bg-destructive/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-destructive">Needs changes</span>;
+  // draft: an admin rejection (has a note) vs. an operator's own unsubmitted draft.
+  if (reviewNote) {
+    return <span className="border border-destructive/30 bg-destructive/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-destructive">Needs changes</span>;
+  }
+  return <span className="border border-basalt/25 bg-basalt/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-basalt/55">Draft</span>;
 }
 
 /** Per-listing Airbnb calendar (iCal) connect + sync control. One-way import: shows unavailable dates on Revamp, no prices. */
@@ -848,7 +871,7 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="truncate font-display text-xl leading-tight">{listing.title}</p>
-                    <StatusBadge status={listing.status} />
+                    <StatusBadge status={listing.status} reviewNote={listing.reviewNote} />
                   </div>
                   <p className="mt-1 text-xs text-basalt/50">{listing.city}, {listing.region} · {listing.priceLabel}{listing.price > 0 ? ` / ${listing.priceUnit}` : ""}</p>
                   {listing.status === "draft" && listing.reviewNote && (

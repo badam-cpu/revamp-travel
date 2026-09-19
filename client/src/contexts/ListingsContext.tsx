@@ -50,8 +50,10 @@ interface ListingsContextType {
   /** Set when Supabase couldn't be reached — the app is showing the static seed instead. */
   offline: boolean;
   refresh: () => Promise<void>;
-  createListing: (input: ListingInput) => Promise<LiveListing>;
-  updateListing: (id: string, input: ListingInput) => Promise<LiveListing>;
+  // submit=true submits for review (status "pending"); submit=false saves a
+  // draft (status "draft"). Defaults to true to preserve existing callers.
+  createListing: (input: ListingInput, submit?: boolean) => Promise<LiveListing>;
+  updateListing: (id: string, input: ListingInput, submit?: boolean) => Promise<LiveListing>;
   deleteListing: (id: string) => Promise<void>;
   /** Save the calendar export URL on a listing (the actual sync is POST /api/sync-ical). */
   setIcalUrl: (id: string, icalUrl: string | null) => Promise<LiveListing>;
@@ -257,20 +259,21 @@ export function ListingsProvider({ children }: { children: React.ReactNode }) {
   }, [refresh, user?.id]);
 
   const createListing = useCallback(
-    async (input: ListingInput): Promise<LiveListing> => {
+    async (input: ListingInput, submit = true): Promise<LiveListing> => {
       if (!user) throw new Error("You need to be signed in as an operator to add a listing.");
       const base = slugify(input.title);
       let slug = base;
+      // submit=true → "pending" (into the review queue); submit=false → "draft"
+      // (work in progress, not yet reviewed). RLS allows both on insert since
+      // migration 0031.
+      const status = submit ? "pending" : "draft";
       // Retry on a slug collision (unique constraint) instead of pre-checking
       // for existing slugs — correct under concurrent writers, unlike an
       // in-memory check would be.
       for (let attempt = 1; attempt <= 6; attempt++) {
         const { data, error } = await supabase
           .from("listings")
-          // Every new listing starts in review — RLS requires status:
-          // "pending" on insert (supabase/migrations/0002_review_gate_and_admin.sql),
-          // this just makes that requirement visible here too.
-          .insert({ ...toRow(input), slug, operator_id: user.id, status: "pending" })
+          .insert({ ...toRow(input), slug, operator_id: user.id, status })
           .select(ROW_COLUMNS)
           .single();
         if (!error) {
@@ -290,16 +293,18 @@ export function ListingsProvider({ children }: { children: React.ReactNode }) {
   );
 
   const updateListing = useCallback(
-    async (id: string, input: ListingInput): Promise<LiveListing> => {
-      // A listing sitting at "draft" is one an admin sent back with
-      // feedback (see review_note) — saving it is what resubmits it, so
-      // this is the one case that also touches status. Editing a
-      // "pending" or already-"published" listing's content leaves its
-      // status untouched (a live listing doesn't get pulled for a typo
-      // fix); the review-gate trigger enforces this server-side too, this
-      // is just what makes the intent visible client-side.
+    async (id: string, input: ListingInput, submit = true): Promise<LiveListing> => {
+      // Status intent (the review-gate trigger enforces the same rules server-
+      // side; this just makes them visible client-side):
+      //  • published listing → never change status here (a live listing isn't
+      //    pulled for an edit); save content only.
+      //  • otherwise (draft or pending) → submit=true sets "pending" (into/keep
+      //    in review), submit=false sets "draft" (save without submitting).
       const current = listings.find((item) => item.id === id);
-      const patch = current?.status === "draft" ? { ...toRow(input), status: "pending" as const } : toRow(input);
+      const patch =
+        current?.status === "published"
+          ? toRow(input)
+          : { ...toRow(input), status: (submit ? "pending" : "draft") as "pending" | "draft" };
       const { data, error } = await supabase.from("listings").update(patch).eq("id", id).select(ROW_COLUMNS).single();
       if (error) throw new Error(error.message);
       const listing = mapListingRow(data);

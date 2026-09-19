@@ -397,7 +397,7 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
   const goBack = () => setCurrentStep((s) => Math.max(0, s - 1));
   const jumpTo = (i: number) => { if (i <= maxUnlocked) setCurrentStep(i); };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (submitForReview = true) => {
     const firstInvalid = STEP_VALIDATORS.findIndex((isValid) => !isValid(data));
     if (firstInvalid !== -1) {
       setCurrentStep(firstInvalid);
@@ -410,11 +410,11 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
     try {
       const payload = toListingInput(data);
       if (isEdit && existing) {
-        await updateListing(existing.id, payload);
-        toast(`${payload.title} updated.`);
+        await updateListing(existing.id, payload, submitForReview);
+        toast(submitForReview ? `${payload.title} submitted for review.` : `${payload.title} saved as a draft.`);
       } else {
-        await createListing(payload);
-        toast(`${payload.title} submitted for review.`);
+        await createListing(payload, submitForReview);
+        toast(submitForReview ? `${payload.title} submitted for review.` : `${payload.title} saved as a draft.`);
       }
       navigate("/dashboard");
     } catch (err) {
@@ -774,9 +774,16 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                 Back
               </Button>
               {isLastStep ? (
-                <Button type="button" className="rounded-none bg-apricot text-white hover:bg-apricot/90" onClick={handleSubmit} disabled={submitting}>
-                  {submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…</> : <><Check className="mr-2 h-4 w-4" /> {isEdit ? "Save changes" : "Submit for review"}</>}
-                </Button>
+                <div className="flex items-center gap-2">
+                  {data.status !== "published" && (
+                    <Button type="button" variant="outline" className="rounded-none border-basalt/15" onClick={() => handleSubmit(false)} disabled={submitting}>
+                      Save as draft
+                    </Button>
+                  )}
+                  <Button type="button" className="rounded-none bg-apricot text-white hover:bg-apricot/90" onClick={() => handleSubmit(true)} disabled={submitting}>
+                    {submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…</> : <><Check className="mr-2 h-4 w-4" /> {data.status === "published" ? "Save changes" : "Submit for review"}</>}
+                  </Button>
+                </div>
               ) : (
                 <div className="text-right">
                   <Button type="button" className="rounded-none bg-apricot text-white hover:bg-apricot/90" onClick={goNext} disabled={!canAdvance}>
