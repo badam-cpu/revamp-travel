@@ -1,6 +1,6 @@
 /** Revamp brandbook: detail pages combine rounded imagery, bold sans hierarchy, concise facts, white space, and orange actions. */
 import { useEffect, useState } from "react";
-import { ArrowLeft, BedDouble, Bookmark, Check, Coffee, Home, KeyRound, LayoutGrid, MapPin, Navigation, Share2, ShieldCheck, Sparkles, SprayCan, Users, Wifi } from "lucide-react";
+import { ArrowLeft, BedDouble, Bookmark, Check, ChevronLeft, ChevronRight, Coffee, Home, KeyRound, LayoutGrid, MapPin, Navigation, Share2, ShieldCheck, Sparkles, SprayCan, Users, Wifi, X } from "lucide-react";
 import { Link } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -45,7 +45,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   const { isSaved, toggleSaved } = useSavedPlaces();
   const { format } = useCurrency();
   const [amenitiesOpen, setAmenitiesOpen] = useState(false);
-  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [lightbox, setLightbox] = useState<number | null>(null); // open photo index, null = closed
   // On mobile the booking panel shows inline; the sticky bottom "Book" bar
   // should only appear once that panel has scrolled out of view (so there's
   // never a second "book" button on screen at the same time).
@@ -177,19 +177,19 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
           return (
             <section className="container mt-4">
               <div className="relative grid gap-2 overflow-hidden rounded-[14px] md:aspect-[5/2] md:grid-cols-2">
-                <button type="button" onClick={() => setGalleryOpen(true)} className="relative block aspect-[4/3] w-full overflow-hidden md:aspect-auto md:h-full">
+                <button type="button" onClick={() => setLightbox(0)} className="relative block aspect-[4/3] w-full overflow-hidden md:aspect-auto md:h-full">
                   <img src={photos[0]} alt={listing.title} className="h-full w-full object-cover transition-transform duration-500 hover:scale-[1.02]" />
                   <DiscountBadge listing={listing} className="absolute left-4 top-4" />
                 </button>
                 <div className="hidden grid-cols-2 grid-rows-2 gap-2 md:grid">
                   {grid.map((src, i) => (
-                    <button key={src + i} type="button" onClick={() => setGalleryOpen(true)} className="relative block h-full w-full overflow-hidden bg-basalt/5">
+                    <button key={src + i} type="button" onClick={() => setLightbox(i + 1)} className="relative block h-full w-full overflow-hidden bg-basalt/5">
                       <img src={src} alt="" className="h-full w-full object-cover transition-transform duration-500 hover:scale-[1.02]" />
                     </button>
                   ))}
                 </div>
                 {photos.length > 1 && (
-                  <button type="button" onClick={() => setGalleryOpen(true)} className="absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-full border border-basalt/20 bg-paper px-4 py-2 text-xs font-semibold text-basalt shadow-md transition-colors hover:border-apricot hover:text-apricot">
+                  <button type="button" onClick={() => setLightbox(0)} className="absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-full border border-basalt/20 bg-paper px-4 py-2 text-xs font-semibold text-basalt shadow-md transition-colors hover:border-apricot hover:text-apricot">
                     <LayoutGrid className="h-4 w-4" /> Show all {photos.length} photos
                   </button>
                 )}
@@ -380,18 +380,42 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
           Book
         </Button>
       </div>
-      <Dialog open={galleryOpen} onOpenChange={setGalleryOpen}>
-        <DialogContent className="max-h-[92vh] gap-0 overflow-y-auto rounded-none sm:max-w-4xl">
-          <DialogHeader className="border-b border-basalt/10 pb-4">
-            <DialogTitle className="font-display text-2xl font-normal tracking-[-0.02em]">{listing.title}</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-3 py-5 sm:grid-cols-2">
-            {Array.from(new Set([listing.image, ...(listing.gallery ?? [])].filter(Boolean))).map((src, i) => (
-              <img key={(src as string) + i} src={src as string} alt={`${listing.title} photo ${i + 1}`} className="w-full rounded-[10px] object-cover" />
-            ))}
+      {/* Full-screen single-photo viewer (one at a time, ‹ › + counter). */}
+      {lightbox !== null && (() => {
+        const photos = Array.from(new Set([listing.image, ...(listing.gallery ?? [])].filter(Boolean))) as string[];
+        const total = photos.length;
+        const go = (d: number) => setLightbox((cur) => (cur === null ? cur : (cur + d + total) % total));
+        return (
+          <div
+            role="dialog"
+            aria-modal="true"
+            tabIndex={-1}
+            ref={(el) => el?.focus()}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setLightbox(null);
+              else if (e.key === "ArrowRight") go(1);
+              else if (e.key === "ArrowLeft") go(-1);
+            }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-paper outline-none"
+          >
+            <span className="absolute left-6 top-5 text-sm font-bold tabular-nums text-basalt">{lightbox + 1}/{total}</span>
+            <button type="button" onClick={() => setLightbox(null)} aria-label="Close" className="absolute right-5 top-5 grid h-10 w-10 place-items-center rounded-full bg-chalk text-basalt transition-colors hover:bg-basalt/10">
+              <X className="h-5 w-5" />
+            </button>
+            {total > 1 && (
+              <button type="button" onClick={() => go(-1)} aria-label="Previous photo" className="absolute left-3 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-chalk text-basalt shadow-sm transition-colors hover:bg-basalt/10 sm:left-8">
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+            )}
+            {total > 1 && (
+              <button type="button" onClick={() => go(1)} aria-label="Next photo" className="absolute right-3 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-chalk text-basalt shadow-sm transition-colors hover:bg-basalt/10 sm:right-8">
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            )}
+            <img src={photos[lightbox]} alt={`${listing.title} photo ${lightbox + 1}`} className="max-h-[86vh] max-w-[88vw] object-contain" />
           </div>
-        </DialogContent>
-      </Dialog>
+        );
+      })()}
       <Dialog open={amenitiesOpen} onOpenChange={setAmenitiesOpen}>
         <DialogContent className="max-h-[85vh] gap-0 overflow-y-auto rounded-none sm:max-w-2xl">
           <DialogHeader className="border-b border-basalt/10 pb-4">
