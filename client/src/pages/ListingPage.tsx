@@ -200,33 +200,41 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
 
         <section className="container grid gap-12 py-14 lg:grid-cols-[minmax(0,1fr)_340px] lg:py-20">
           <div>
-            <div className="grid gap-7 border-b border-basalt/10 pb-10 sm:grid-cols-[0.72fr_1.28fr]">
-              <div>
-                <p className="eyebrow">{listing.eyebrow}</p>
-                <p className="mt-4 flex items-center gap-2 text-sm font-semibold"><MapPin className="h-4 w-4 text-apricot" /> {listing.city}, {listing.region}</p>
-                {listing.facts.length > 0 && (
-                  <div className="mt-6 space-y-4">
-                    {listing.facts.map((fact) => <div key={fact.label}><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/40">{fact.label}</p><p className="mt-1 font-semibold">{fact.value}</p></div>)}
-                  </div>
-                )}
-                {glance.length > 0 && (
-                  <dl className="mt-6 grid grid-cols-2 gap-x-4 gap-y-5 border-t border-basalt/10 pt-6">
-                    {glance.map((g) => (
-                      <div key={g.label} className="flex items-start gap-2.5">
-                        <g.icon className="mt-0.5 h-4 w-4 shrink-0 text-apricot" strokeWidth={1.75} />
-                        <div>
-                          <dt className="text-[10px] font-bold uppercase tracking-[0.14em] text-basalt/40">{g.label}</dt>
-                          <dd className="mt-0.5 text-sm font-semibold">{g.value}</dd>
-                        </div>
+            <div className="border-b border-basalt/10 pb-10">
+              <p className="eyebrow">{listing.eyebrow}</p>
+              <p className="mt-3 flex items-center gap-2 text-sm font-semibold"><MapPin className="h-4 w-4 text-apricot" /> {listing.city}, {listing.region}</p>
+
+              {/* At a glance — a horizontal strip, not a narrow sidebar. */}
+              {glance.length > 0 && (
+                <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-y border-basalt/10 py-6 sm:grid-cols-4">
+                  {glance.map((g) => (
+                    <div key={g.label} className="flex items-start gap-2.5">
+                      <g.icon className="mt-0.5 h-4 w-4 shrink-0 text-apricot" strokeWidth={1.75} />
+                      <div>
+                        <dt className="text-[10px] font-bold uppercase tracking-[0.14em] text-basalt/40">{g.label}</dt>
+                        <dd className="mt-0.5 text-sm font-semibold">{g.value}</dd>
                       </div>
-                    ))}
-                  </dl>
-                )}
+                    </div>
+                  ))}
+                </dl>
+              )}
+
+              {/* Description — full width, readable body (not title-sized, not pale). */}
+              <div className="mt-8 max-w-3xl">
+                <p className="text-lg font-medium leading-relaxed text-basalt sm:text-xl">{listing.shortDescription}</p>
+                <p className="mt-4 whitespace-pre-line text-[15px] leading-8 text-basalt/80">{listing.longDescription}</p>
               </div>
-              <div>
-                <h2 className="font-display text-4xl leading-tight tracking-[-0.03em]">{listing.shortDescription}</h2>
-                <p className="mt-6 whitespace-pre-line text-base leading-8 text-basalt/62">{listing.longDescription}</p>
-              </div>
+
+              {listing.facts.length > 0 && (
+                <dl className="mt-8 grid max-w-3xl grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
+                  {listing.facts.map((fact) => (
+                    <div key={fact.label}>
+                      <dt className="text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/40">{fact.label}</dt>
+                      <dd className="mt-1 text-sm font-semibold">{fact.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
             </div>
 
             {rooms.length > 0 && (
