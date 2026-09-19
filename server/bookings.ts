@@ -48,10 +48,14 @@ const BOOKING_COLS = "id, listing_id, traveler_id, status, start_date, end_date,
 async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promise<void> {
   const { data: listing } = await admin
     .from("listings")
-    .select("title, type, city, region, slug, operator_id")
+    .select("title, type, city, region, slug, operator_id, lat, lng, facts")
     .eq("id", row.listing_id)
     .maybeSingle();
   if (!listing) return;
+
+  // Read a loosely-typed fact by label (meeting point / duration / languages).
+  const facts = (Array.isArray(listing.facts) ? listing.facts : []) as { label?: string; value?: string }[];
+  const fact = (...labels: string[]) => facts.find((f) => f.label && labels.includes(f.label.toLowerCase()))?.value || undefined;
 
   // Create the operator payout (idempotent — one per booking). Revamp is
   // merchant of record; the payout is on the pre-tax BASE (tax is a pass-through
@@ -87,6 +91,12 @@ async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promi
     region: listing.region,
     slug: listing.slug,
     addons: row.addons ?? [],
+    type: listing.type,
+    lat: typeof listing.lat === "number" ? listing.lat : undefined,
+    lng: typeof listing.lng === "number" ? listing.lng : undefined,
+    meetingPoint: fact("starting point", "meeting point", "start"),
+    duration: fact("duration"),
+    languages: fact("languages", "language"),
   };
   const [{ data: traveler }, { data: operator }, { data: travelerProfile }] = await Promise.all([
     admin.auth.admin.getUserById(row.traveler_id),

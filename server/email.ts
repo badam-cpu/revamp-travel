@@ -90,6 +90,13 @@ export interface BookingEmailInfo {
   region?: string;
   slug?: string;
   addons?: { name: string; amountCents: number; qty: number; onRequest?: boolean }[];
+  // Tour/experience extras.
+  type?: string;
+  lat?: number;
+  lng?: number;
+  meetingPoint?: string;
+  duration?: string;
+  languages?: string;
 }
 
 function detailRows(b: BookingEmailInfo): string {
@@ -97,13 +104,43 @@ function detailRows(b: BookingEmailInfo): string {
   // Yerevan"), then the country. Armenia's code is AM (AR is Argentina).
   const parts = [b.city, b.region && b.region !== b.city ? b.region : null].filter(Boolean);
   const where = [...parts, "Armenia"].join(", ");
+  const isActivity = b.type === "tour" || b.type === "experience";
+  const td = 'style="padding:8px 14px;color:#6B6357;"';
+  const tdR = 'style="padding:8px 14px;text-align:right;font-weight:600;"';
+  const row = (label: string, value: string) => `<tr><td ${td}>${label}</td><td ${tdR}>${value}</td></tr>`;
+
+  // Tours/experiences are a single day → show one date, and reveal the meeting
+  // point (hyperlinked to Google Maps from the listing's coordinates).
+  const dateRow = isActivity
+    ? row("Date", esc(prettyDate(b.startDate)))
+    : row("Dates", `${esc(prettyDate(b.startDate))} → ${esc(prettyDate(b.endDate))}`);
+
+  const mapUrl = typeof b.lat === "number" && typeof b.lng === "number" ? `https://www.google.com/maps?q=${b.lat},${b.lng}` : undefined;
+  let meetingRow = "";
+  if (isActivity) {
+    if (b.meetingPoint) {
+      const text = esc(b.meetingPoint);
+      meetingRow = row("Meeting point", mapUrl ? `<a href="${esc(mapUrl)}" style="color:#F15822;text-decoration:underline;">${text}</a>` : text);
+    } else if (mapUrl) {
+      meetingRow = row("Meeting point", `<a href="${esc(mapUrl)}" style="color:#F15822;text-decoration:underline;">View on map</a>`);
+    }
+  }
+  const durationRow = isActivity && b.duration ? row("Duration", esc(b.duration)) : "";
+  const languagesRow = isActivity && b.languages ? row("Languages", esc(b.languages)) : "";
+  const addonsRow = (b.addons ?? []).length
+    ? row("Add-ons", (b.addons ?? []).map((a) => esc(`${a.name}${a.qty > 1 ? ` ×${a.qty}` : ""}${a.onRequest ? " (on request)" : ""}`)).join("<br />"))
+    : "";
+
   return `
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;font-size:14px;line-height:1.5;border:1px solid #eee;border-radius:8px;padding:4px 0;margin:8px 0 18px;">
-      <tr><td style="padding:8px 14px;color:#6B6357;">Dates</td><td style="padding:8px 14px;text-align:right;font-weight:600;">${esc(prettyDate(b.startDate))} → ${esc(prettyDate(b.endDate))}</td></tr>
-      <tr><td style="padding:8px 14px;color:#6B6357;">Guests</td><td style="padding:8px 14px;text-align:right;font-weight:600;">${b.guests}</td></tr>
-      ${where ? `<tr><td style="padding:8px 14px;color:#6B6357;">Where</td><td style="padding:8px 14px;text-align:right;font-weight:600;">${esc(where)}</td></tr>` : ""}
-      ${(b.addons ?? []).length ? `<tr><td style="padding:8px 14px;color:#6B6357;">Add-ons</td><td style="padding:8px 14px;text-align:right;font-weight:600;">${(b.addons ?? []).map((a) => esc(`${a.name}${a.qty > 1 ? ` ×${a.qty}` : ""}${a.onRequest ? " (on request)" : ""}`)).join("<br />")}</td></tr>` : ""}
-      <tr><td style="padding:8px 14px;color:#6B6357;">Total</td><td style="padding:8px 14px;text-align:right;font-weight:700;">${esc(money(b.amountCents, b.currency))}</td></tr>
+      ${dateRow}
+      ${meetingRow}
+      ${durationRow}
+      ${languagesRow}
+      ${row("Guests", String(b.guests))}
+      ${where ? row("Where", esc(where)) : ""}
+      ${addonsRow}
+      ${row("Total", esc(money(b.amountCents, b.currency)))}
     </table>`;
 }
 
@@ -112,11 +149,15 @@ const SITE = () => (process.env.URL || "https://revampvacations.com").replace(/\
 /** To the traveler: their booking is confirmed. */
 export function sendTravelerConfirmation(to: string, b: BookingEmailInfo) {
   const site = SITE();
+  // Link the title to its listing page when we have a slug.
+  const titleHtml = b.slug ? `<a href="${esc(`${site}/listing/${b.slug}`)}" style="color:#212121;text-decoration:underline;">${esc(b.listingTitle)}</a>` : `<strong>${esc(b.listingTitle)}</strong>`;
+  const isActivity = b.type === "tour" || b.type === "experience";
   const html = shell(
-    `Your trip is confirmed 🎉`,
-    `<p style="font-size:15px;line-height:1.6;margin:0 0 6px;">You're booked for <strong>${esc(b.listingTitle)}</strong>. Here are the details:</p>
+    `Your ${isActivity ? "booking" : "trip"} is confirmed 🎉`,
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 6px;">You're booked for ${titleHtml}. Here are the details:</p>
      ${detailRows(b)}
-     <p style="margin:0 0 8px;"><a href="${esc(site)}/account?tab=trips" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">View your trips</a></p>`,
+     ${isActivity && b.meetingPoint ? `<p style="font-size:13px;line-height:1.6;margin:0 0 12px;color:#6B6357;">Please arrive at the meeting point a few minutes early. Tap the meeting point above to open it in maps.</p>` : ""}
+     <p style="margin:0 0 8px;"><a href="${esc(site)}/account?tab=trips" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">View your ${isActivity ? "booking" : "trips"}</a></p>`,
     site,
   );
   return send(to, `Confirmed: ${b.listingTitle}`, html);
