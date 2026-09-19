@@ -152,6 +152,27 @@ export function computeBookingAmountCents(
   return total;
 }
 
+/** A Revamp concierge add-on (admin-managed catalog, see migration 0029). */
+export interface Addon {
+  id: string;
+  name: string;
+  description?: string;
+  priceCents: number; // AMD cents
+  unit: "flat" | "per_night" | "per_guest" | "per_item";
+  onRequest?: boolean; // true = shown/recorded but not charged (variable price)
+  enabled?: boolean;
+}
+
+/** Cost of ONE unit of an add-on for a booking (qty multiplies at the call
+ * site for per_item). onRequest add-ons cost 0 (billed/handled separately). */
+export function addonUnitCost(a: Addon, ctx: { nights: number; guests: number }): number {
+  if (a.onRequest) return 0;
+  const p = Math.max(0, Math.round(a.priceCents));
+  if (a.unit === "per_night") return p * Math.max(1, ctx.nights);
+  if (a.unit === "per_guest") return p * Math.max(1, ctx.guests);
+  return p; // flat or per_item
+}
+
 /** The promotional-discount shape carried on a listing (see shared/listings.ts). */
 export interface ListingDiscount {
   discountType?: "percent" | "amount" | null;

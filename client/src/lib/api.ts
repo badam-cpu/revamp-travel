@@ -118,7 +118,7 @@ export interface StartCheckoutParams {
  * happens server-side after the traveler returns — see confirmCheckout.
  */
 export async function startCheckout(
-  params: StartCheckoutParams & { guestName?: string; guestEmail?: string; guestPhone?: string },
+  params: StartCheckoutParams & { guestName?: string; guestEmail?: string; guestPhone?: string; addons?: { id: string; qty: number }[] },
 ): Promise<{ redirectUrl: string }> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;

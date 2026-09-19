@@ -19,7 +19,7 @@ import { generateSupportReply, type SupportTurn } from "./support.js";
 import { generateOperatorReply, type OperatorTurn } from "./operatorAssistant.js";
 import { payoutState } from "../shared/payouts.js";
 import { sendCancellation, sendSupportAlert, type BookingEmailInfo } from "./email.js";
-import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, promoDiscount, DEFAULT_CURRENCY } from "../shared/bookings.js";
+import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, promoDiscount, addonUnitCost, nightsBetween, type Addon, DEFAULT_CURRENCY } from "../shared/bookings.js";
 import { planTrip, PlannerError } from "./planner.js";
 import { fetchPrefill, PrefillError } from "./urlPrefill.js";
 import { fetchIcalBlockedRanges } from "./ical.js";
@@ -56,6 +56,8 @@ const startCheckoutSchema = z.object({
   guestName: z.string().trim().max(120).optional(),
   guestEmail: z.string().trim().email().max(200).optional(),
   guestPhone: z.string().trim().max(40).optional(),
+  // Selected concierge add-ons (priced server-side from the admin catalog).
+  addons: z.array(z.object({ id: z.string().max(80), qty: z.number().int().min(1).max(20) })).max(20).optional(),
 });
 
 const cancelBookingSchema = z.object({
@@ -288,7 +290,7 @@ export function registerApiRoutes(app: Express) {
 
     const parsed = startCheckoutSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
-    const { listingId, startDate, endDate, guests, guestName, guestEmail, guestPhone } = parsed.data;
+    const { listingId, startDate, endDate, guests, guestName, guestEmail, guestPhone, addons } = parsed.data;
 
     if (endDate <= startDate) return res.status(400).json({ error: "Check-out must be after check-in." });
     const today = new Date().toISOString().slice(0, 10);
@@ -326,7 +328,25 @@ export function registerApiRoutes(app: Express) {
       { discountType: listing.discount_type, discountValue: listing.discount_value, discountStart: listing.discount_start, discountEnd: listing.discount_end },
       startDate,
     );
-    const charge = computeBookingCharge(netAccommodationCents + (listing.cleaning_fee_cents ?? 0)); // base + tax = total the guest pays
+    const charge = computeBookingCharge(netAccommodationCents + (listing.cleaning_fee_cents ?? 0)); // base + tax = accommodation portion the guest pays
+
+    // Concierge add-ons — priced server-side from the admin catalog (never trust
+    // client prices). Added on top of the booking; not part of the operator base.
+    let addonsCents = 0;
+    const addonSnapshot: { id: string; name: string; unit: string; qty: number; amountCents: number; onRequest: boolean }[] = [];
+    if (addons && addons.length) {
+      const { data: ss } = await supa.from("site_settings").select("addons").eq("id", 1).maybeSingle();
+      const catalog: Addon[] = Array.isArray(ss?.addons) ? (ss!.addons as Addon[]) : [];
+      const nights = nightsBetween(startDate, endDate);
+      for (const sel of addons) {
+        const a = catalog.find((c) => c.id === sel.id && c.enabled);
+        if (!a) continue;
+        const amt = addonUnitCost(a, { nights, guests }) * sel.qty;
+        addonsCents += amt;
+        addonSnapshot.push({ id: a.id, name: a.name, unit: a.unit, qty: sel.qty, amountCents: amt, onRequest: !!a.onRequest });
+      }
+    }
+    const finalTotalCents = charge.totalCents + addonsCents;
 
     // Availability: reject if the dates clash with the listing's iCal blocked
     // ranges, an existing confirmed booking, or a live (recent) pending hold.
@@ -358,7 +378,7 @@ export function registerApiRoutes(app: Express) {
         // PayLink's `amount` is in major currency units; charge the tax-inclusive
         // total. AMD (our settlement currency) has no minor unit, so round to a
         // whole dram — every stored *_cents value is AMD hundredths.
-        amount: currency === "AMD" ? Math.round(charge.totalCents / 100) : charge.totalCents / 100,
+        amount: currency === "AMD" ? Math.round(finalTotalCents / 100) : finalTotalCents / 100,
         currency,
         returnUrl: `${site}/account?checkout=return`,
         info: `Revamp booking · ${listing.title}`,
@@ -373,9 +393,11 @@ export function registerApiRoutes(app: Express) {
         start_date: startDate,
         end_date: endDate,
         guests,
-        amount_cents: charge.totalCents,
+        amount_cents: finalTotalCents,
         base_cents: charge.baseCents,
         tax_cents: charge.taxCents,
+        addons: addonSnapshot,
+        addons_cents: addonsCents,
         currency,
         status: "pending_payment",
         provider: "paylink",

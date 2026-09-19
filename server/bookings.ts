@@ -34,10 +34,11 @@ export interface BookingRow {
   created_at: string;
   guest_name: string | null;
   guest_email: string | null;
+  addons: { name: string; amountCents: number; qty: number; onRequest?: boolean }[] | null;
 }
 
 // Columns every confirm/reconcile query needs (row detail for the emails too).
-const BOOKING_COLS = "id, listing_id, traveler_id, status, start_date, end_date, guests, amount_cents, base_cents, currency, paylink_request_id, paylink_order_id, created_at, guest_name, guest_email";
+const BOOKING_COLS = "id, listing_id, traveler_id, status, start_date, end_date, guests, amount_cents, base_cents, currency, paylink_request_id, paylink_order_id, created_at, guest_name, guest_email, addons";
 
 /**
  * Fire booking-confirmed emails (traveler + operator). Best-effort: any failure
@@ -85,6 +86,7 @@ async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promi
     city: listing.city,
     region: listing.region,
     slug: listing.slug,
+    addons: row.addons ?? [],
   };
   const [{ data: traveler }, { data: operator }, { data: travelerProfile }] = await Promise.all([
     admin.auth.admin.getUserById(row.traveler_id),

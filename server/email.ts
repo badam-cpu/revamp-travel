@@ -89,6 +89,7 @@ export interface BookingEmailInfo {
   city?: string;
   region?: string;
   slug?: string;
+  addons?: { name: string; amountCents: number; qty: number; onRequest?: boolean }[];
 }
 
 function detailRows(b: BookingEmailInfo): string {
@@ -101,6 +102,7 @@ function detailRows(b: BookingEmailInfo): string {
       <tr><td style="padding:8px 14px;color:#6B6357;">Dates</td><td style="padding:8px 14px;text-align:right;font-weight:600;">${esc(prettyDate(b.startDate))} → ${esc(prettyDate(b.endDate))}</td></tr>
       <tr><td style="padding:8px 14px;color:#6B6357;">Guests</td><td style="padding:8px 14px;text-align:right;font-weight:600;">${b.guests}</td></tr>
       ${where ? `<tr><td style="padding:8px 14px;color:#6B6357;">Where</td><td style="padding:8px 14px;text-align:right;font-weight:600;">${esc(where)}</td></tr>` : ""}
+      ${(b.addons ?? []).length ? `<tr><td style="padding:8px 14px;color:#6B6357;">Add-ons</td><td style="padding:8px 14px;text-align:right;font-weight:600;">${(b.addons ?? []).map((a) => esc(`${a.name}${a.qty > 1 ? ` ×${a.qty}` : ""}${a.onRequest ? " (on request)" : ""}`)).join("<br />")}</td></tr>` : ""}
       <tr><td style="padding:8px 14px;color:#6B6357;">Total</td><td style="padding:8px 14px;text-align:right;font-weight:700;">${esc(money(b.amountCents, b.currency))}</td></tr>
     </table>`;
 }

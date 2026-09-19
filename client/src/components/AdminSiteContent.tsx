@@ -16,6 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { Addon } from "@shared/bookings";
 import { toast } from "sonner";
 
 // The four home "choose the route" cards, with their built-in defaults (used as
@@ -69,6 +71,7 @@ export function AdminSiteContent() {
   const [regionCards, setRegionCards] = useState<RegionCard[]>([]);
   const regionPhotoRefs = useRef<Map<string, PhotoUploaderHandle | null>>(new Map());
   const catPhotoRefs = useRef<Map<string, PhotoUploaderHandle | null>>(new Map());
+  const [addons, setAddons] = useState<Addon[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -102,6 +105,7 @@ export function AdminSiteContent() {
     });
     const seedRegions = h.regionCards && h.regionCards.length ? h.regionCards : HOME_REGIONS;
     setRegionCards(seedRegions.map((r) => ({ id: crypto.randomUUID(), name: r.name ?? "", label: r.label ?? "", image: (r as { image?: string }).image ?? "" })));
+    setAddons(settings.addons ?? []);
     setHydrated(true);
   }, [loading, hydrated, settings]);
 
@@ -117,6 +121,10 @@ export function AdminSiteContent() {
     setRegionCards((prev) => prev.filter((c) => c.id !== id));
   };
   const addRegion = () => setRegionCards((prev) => [...prev, { id: crypto.randomUUID(), name: "", label: "", image: "" }]);
+
+  const updateAddon = (id: string, patch: Partial<Addon>) => setAddons((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
+  const removeAddon = (id: string) => setAddons((prev) => prev.filter((a) => a.id !== id));
+  const addAddon = () => setAddons((prev) => [...prev, { id: crypto.randomUUID(), name: "", description: "", priceCents: 0, unit: "flat", onRequest: false, enabled: false }]);
 
   const save = async () => {
     setSaving(true);
@@ -136,6 +144,9 @@ export function AdminSiteContent() {
           announcement_message: annMessage.trim(),
           announcement_href: annHref.trim(),
           usd_to_amd_rate: Number(rate) || 0,
+          addons: addons
+            .map((a) => ({ ...a, name: a.name.trim(), description: (a.description ?? "").trim(), priceCents: Math.max(0, Math.round(a.priceCents)) }))
+            .filter((a) => a.name),
           home_content: {
             categoriesEyebrow: catEyebrow.trim(),
             categoriesTitle: catTitle.trim(),
@@ -302,6 +313,53 @@ export function AdminSiteContent() {
               />
             </div>
           ))}
+        </div>
+
+        {/* Concierge add-ons */}
+        <div className="grid gap-4 border border-basalt/10 bg-paper p-5">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Concierge add-ons</p>
+            <p className="mt-1 text-xs text-basalt/50">Extra services guests can add at checkout. Prices are in AMD; enable one to make it selectable. "On request" items show but aren't charged online.</p>
+          </div>
+          {addons.map((a) => (
+            <div key={a.id} className="grid gap-2 border-t border-basalt/10 pt-4">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.1em] text-basalt/60">
+                  <Checkbox checked={!!a.enabled} onCheckedChange={(c) => updateAddon(a.id, { enabled: c === true })} className="rounded-[3px] border-basalt/30 data-[state=checked]:border-apricot data-[state=checked]:bg-apricot" />
+                  {a.enabled ? "Enabled" : "Hidden"}
+                </label>
+                <button type="button" onClick={() => removeAddon(a.id)} className="inline-flex items-center gap-1 text-xs font-semibold text-basalt/45 hover:text-destructive"><Minus className="h-3.5 w-3.5" /> Remove</button>
+              </div>
+              <Input value={a.name} onChange={(e) => updateAddon(a.id, { name: e.target.value })} placeholder="Name (e.g. Airport pickup - Sedan)" className="h-11 rounded-none" />
+              <Textarea rows={2} value={a.description ?? ""} onChange={(e) => updateAddon(a.id, { description: e.target.value })} placeholder="Short description / key terms" className="rounded-none text-base" />
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-1">
+                  <Label className="text-xs font-semibold text-basalt/60">Price (AMD)</Label>
+                  <Input type="number" min={0} value={a.priceCents ? a.priceCents / 100 : ""} onChange={(e) => updateAddon(a.id, { priceCents: Math.round((Number(e.target.value) || 0) * 100) })} placeholder="e.g. 12000" className="h-11 rounded-none" />
+                </div>
+                <div className="grid gap-1">
+                  <Label className="text-xs font-semibold text-basalt/60">Charged</Label>
+                  <Select value={a.unit} onValueChange={(v) => updateAddon(a.id, { unit: v as Addon["unit"] })}>
+                    <SelectTrigger className="h-11 rounded-none text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="flat">Flat (once)</SelectItem>
+                      <SelectItem value="per_night">Per night</SelectItem>
+                      <SelectItem value="per_guest">Per guest</SelectItem>
+                      <SelectItem value="per_item">Per item (qty)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-1">
+                  <Label className="text-xs font-semibold text-basalt/60">On request</Label>
+                  <label className="flex h-11 items-center gap-2 text-sm text-basalt">
+                    <Checkbox checked={!!a.onRequest} onCheckedChange={(c) => updateAddon(a.id, { onRequest: c === true })} className="rounded-[3px] border-basalt/30 data-[state=checked]:border-apricot data-[state=checked]:bg-apricot" />
+                    Not charged online
+                  </label>
+                </div>
+              </div>
+            </div>
+          ))}
+          <button type="button" onClick={addAddon} className="inline-flex items-center gap-1.5 self-start rounded-none border border-basalt/20 bg-paper px-4 py-2 text-sm font-semibold text-basalt hover:border-apricot"><Plus className="h-4 w-4" /> Add a service</button>
         </div>
 
         {/* Home "the revamp. edit" (featured) section */}

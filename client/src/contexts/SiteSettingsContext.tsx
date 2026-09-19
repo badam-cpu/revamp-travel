@@ -12,6 +12,7 @@
  */
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import type { Addon } from "@shared/bookings";
 
 /** Per-card editorial override for the home "choose the route" section. */
 export interface HomeCategoryContent {
@@ -65,6 +66,8 @@ export interface SiteSettings {
   usdToAmdRate: number;
   /** Admin-editable home editorial copy (empty {} = all defaults). */
   homeContent: HomeContent;
+  /** Revamp concierge add-on catalog (migration 0029). */
+  addons: Addon[];
 }
 
 export const EMPTY_SITE_SETTINGS: SiteSettings = {
@@ -78,10 +81,11 @@ export const EMPTY_SITE_SETTINGS: SiteSettings = {
   announcementHref: "",
   usdToAmdRate: 0,
   homeContent: {},
+  addons: [],
 };
 
 export const SITE_SETTINGS_COLUMNS =
-  "hero_image, hero_images, hero_headline, hero_subcopy, featured_slugs, announcement_enabled, announcement_message, announcement_href, usd_to_amd_rate, home_content";
+  "hero_image, hero_images, hero_headline, hero_subcopy, featured_slugs, announcement_enabled, announcement_message, announcement_href, usd_to_amd_rate, home_content, addons";
 
 interface SiteSettingsRow {
   hero_image: string | null;
@@ -94,6 +98,7 @@ interface SiteSettingsRow {
   announcement_href: string | null;
   usd_to_amd_rate: number | null;
   home_content: HomeContent | null;
+  addons: Addon[] | null;
 }
 
 export function mapSiteSettingsRow(row: SiteSettingsRow): SiteSettings {
@@ -108,6 +113,7 @@ export function mapSiteSettingsRow(row: SiteSettingsRow): SiteSettings {
     announcementHref: row.announcement_href ?? "",
     usdToAmdRate: Number(row.usd_to_amd_rate) || 0,
     homeContent: row.home_content && typeof row.home_content === "object" ? row.home_content : {},
+    addons: Array.isArray(row.addons) ? row.addons : [],
   };
 }
 

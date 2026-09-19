@@ -22,9 +22,11 @@ import type { LiveListing, BlockedRange } from "@/contexts/ListingsContext";
 import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { startCheckout, ApiError } from "@/lib/api";
-import { computeBookingAmountCents, computeBookingCharge, describeBookingBasis, describeCancellationPolicy, isBookableType, promoDiscount, TAX_PERCENT } from "@shared/bookings";
+import { computeBookingAmountCents, computeBookingCharge, describeBookingBasis, describeCancellationPolicy, isBookableType, promoDiscount, nightsBetween, addonUnitCost, TAX_PERCENT } from "@shared/bookings";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -37,6 +39,7 @@ function addDays(iso: string, days: number): string {
 export function BookingPanel({ listing }: { listing: LiveListing }) {
   const { user, loading, signInAnonymously } = useAuth();
   const { format, currency: displayCurrency } = useCurrency();
+  const { settings } = useSiteSettings();
   const bookable = isBookableType(listing.type);
   const isStay = listing.type === "stay";
   const maxGuests = listing.maxGuests ?? 8;
@@ -50,6 +53,8 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
+  // Selected concierge add-ons: id → quantity (0/absent = not selected).
+  const [addonQty, setAddonQty] = useState<Record<string, number>>({});
 
   // Confirmed bookings for this listing (identity-free public view).
   useEffect(() => {
@@ -93,7 +98,11 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
   // top (same helper the server charges with).
   const cleaningCents = accommodationCents > 0 ? listing.cleaningFeeCents ?? 0 : 0;
   const charge = computeBookingCharge(netAccommodationCents + cleaningCents);
-  const amountCents = charge.totalCents; // what the guest is actually charged (AMD, settlement)
+  // Concierge add-ons (Revamp-managed) — added on top of the booking total.
+  const nights = selected ? nightsBetween(selected.startDate, selected.endDate) : 1;
+  const addons = (settings.addons ?? []).filter((a) => a.enabled);
+  const addonsTotalCents = addons.reduce((sum, a) => sum + (addonQty[a.id] ?? 0) * addonUnitCost(a, { nights, guests }), 0);
+  const amountCents = charge.totalCents + addonsTotalCents; // total charged to the guest (AMD, settlement)
   const policyText = describeCancellationPolicy(listing.cancellationPolicy, {
     freeCancelDays: listing.freeCancelDays,
     startDate: selected?.startDate,
@@ -135,11 +144,15 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
     setSubmitting(true);
     try {
       if (isGuest) await signInAnonymously();
+      const addonSel = Object.entries(addonQty)
+        .filter(([, q]) => q > 0)
+        .map(([id, qty]) => ({ id, qty }));
       const { redirectUrl } = await startCheckout({
         listingId: listing.id,
         startDate: selected.startDate,
         endDate: selected.endDate,
         guests,
+        ...(addonSel.length ? { addons: addonSel } : {}),
         ...(isGuest ? { guestName: guestName.trim(), guestEmail: guestEmail.trim(), guestPhone: guestPhone.trim() } : {}),
       });
       // Hand off to PayLink's hosted payment page.
@@ -201,6 +214,43 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
         <p className="mt-1.5 text-xs text-basalt/45">Up to {maxGuests} {maxGuests === 1 ? "guest" : "guests"}.</p>
       </div>
 
+      {/* Concierge add-ons (Revamp-managed extras) */}
+      {addons.length > 0 && (
+        <div className="mt-4 border-t border-basalt/10 pt-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.1em] text-basalt/45">Enhance your stay</p>
+          <div className="mt-3 grid gap-3">
+            {addons.map((a) => {
+              const qty = addonQty[a.id] ?? 0;
+              const on = qty > 0;
+              const unitCost = addonUnitCost(a, { nights, guests });
+              return (
+                <div key={a.id} className="flex items-start gap-2.5">
+                  <Checkbox
+                    checked={on}
+                    onCheckedChange={(c) => setAddonQty((p) => ({ ...p, [a.id]: c === true ? 1 : 0 }))}
+                    className="mt-0.5 rounded-[3px] border-basalt/30 data-[state=checked]:border-apricot data-[state=checked]:bg-apricot"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <span className="font-medium text-basalt">{a.name}</span>
+                      <span className="shrink-0 text-basalt/55">{a.onRequest ? "On request" : `${format(unitCost)}${a.unit === "per_item" ? " each" : ""}`}</span>
+                    </div>
+                    {a.description && <p className="mt-0.5 text-xs leading-5 text-basalt/45">{a.description}</p>}
+                    {on && a.unit === "per_item" && !a.onRequest && (
+                      <div className="mt-1.5 inline-flex items-center gap-2">
+                        <button type="button" aria-label="Fewer" onClick={() => setAddonQty((p) => ({ ...p, [a.id]: Math.max(1, (p[a.id] ?? 1) - 1) }))} className="grid h-6 w-6 place-items-center border border-basalt/15 text-basalt hover:border-apricot"><Minus className="h-3 w-3" /></button>
+                        <span className="text-sm font-semibold tabular-nums">{qty}</span>
+                        <button type="button" aria-label="More" onClick={() => setAddonQty((p) => ({ ...p, [a.id]: Math.min(20, (p[a.id] ?? 1) + 1) }))} className="grid h-6 w-6 place-items-center border border-basalt/15 text-basalt hover:border-apricot"><Plus className="h-3 w-3" /></button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Price breakdown — base + turnover tax added on top */}
       {selected && charge.baseCents > 0 && (
         <div className="mt-4 grid gap-1.5 border-t border-basalt/10 pt-4 text-sm">
@@ -224,9 +274,15 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
             <span>Tax ({TAX_PERCENT}%)</span>
             <span>{format(charge.taxCents)}</span>
           </div>
+          {addonsTotalCents > 0 && (
+            <div className="flex items-center justify-between text-basalt/55">
+              <span>Add-ons</span>
+              <span>{format(addonsTotalCents)}</span>
+            </div>
+          )}
           <div className="flex items-center justify-between border-t border-basalt/10 pt-1.5">
             <span className="font-semibold">Total</span>
-            <strong className="font-display text-xl font-normal">{format(charge.totalCents)}</strong>
+            <strong className="font-display text-xl font-normal">{format(amountCents)}</strong>
           </div>
         </div>
       )}
