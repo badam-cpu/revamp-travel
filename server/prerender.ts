@@ -226,7 +226,7 @@ function renderHome(catalog: PublicListing[], origin: string): string {
   const shown = featured.length > 0 ? featured : catalog.slice(0, 6);
 
   const bodyHtml = `
-<h1>Revamp Vacations — Discover Armenia</h1>
+<h1>Revamp Vacations — Stays, Tours &amp; Experiences in Armenia</h1>
 <p>Curated places to stay, Armenian restaurants, local tours, and memorable routes across Armenia.</p>
 <section>
 <h2>Browse by category</h2>
@@ -249,7 +249,7 @@ ${regions.map((region) => `<li><a href="${origin}/explore?query=${encodeURICompo
 </section>`;
 
   return renderPageShell({
-    title: "Revamp Vacations — Discover Armenia",
+    title: "Revamp Vacations — Stays, Tours & Experiences in Armenia",
     description: "Curated places to stay, Armenian restaurants, local tours, and memorable routes across Armenia.",
     canonical: `${origin}/`,
     ogImage: `${origin}${brandAssets.hero}`,

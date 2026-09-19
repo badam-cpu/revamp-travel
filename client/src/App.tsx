@@ -2,7 +2,9 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Route, Switch, useLocation } from "wouter";
+import { useEffect } from "react";
+import { initAnalytics, trackPageView } from "./lib/analytics";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -31,6 +33,20 @@ import BlogPost from "./pages/BlogPost";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import Plan from "./pages/Plan";
+
+/** Loads GA4 (if configured) and reports a page view on every route change. */
+function AnalyticsTracker() {
+  const [location] = useLocation();
+  useEffect(() => {
+    initAnalytics();
+  }, []);
+  useEffect(() => {
+    // Defer so the per-page <title> (set by useDocumentMeta) is current.
+    const t = setTimeout(() => trackPageView(location), 0);
+    return () => clearTimeout(t);
+  }, [location]);
+  return null;
+}
 
 function Router() {
   return (
@@ -72,6 +88,7 @@ function App() {
                 <CurrencyProvider>
                   <TooltipProvider>
                     <Toaster />
+                    <AnalyticsTracker />
                     <AnnouncementBanner />
                     <Router />
                     <SupportWidget />
