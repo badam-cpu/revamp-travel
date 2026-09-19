@@ -103,9 +103,17 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
   const { amenities, photos, notIncluded, whatToBring, notSuitableFor, houseRules, rooms, seasonalRates } = lists;
   const highlights = get("highlights").split(",").map((t) => t.trim()).filter(Boolean);
   const importantInfo = get("importantInfo").trim();
-  const facts = [1, 2, 3, 4, 5, 6]
+  // Dedicated tour fields (Duration / Languages) map into the loosely-typed
+  // facts array the detail view already reads by label; they take precedence
+  // over any same-label quick fact.
+  const dedicatedFacts = [
+    { label: "Duration", value: get("tourDuration").trim() },
+    { label: "Languages", value: get("tourLanguages").trim() },
+  ].filter((f) => f.value);
+  const quickFacts = [1, 2, 3, 4, 5, 6]
     .map((n) => ({ label: get(`fact${n}Label`).trim(), value: get(`fact${n}Value`).trim() }))
     .filter((f) => f.label && f.value);
+  const facts = [...dedicatedFacts, ...quickFacts.filter((q) => !dedicatedFacts.some((d) => d.label.toLowerCase() === q.label.toLowerCase()))];
 
   return {
     type: draft.type,
@@ -594,6 +602,20 @@ function ListingFormDialog({
                     </div>
                   </div>
                 </div>
+
+                {/* Tour essentials — duration + languages, shown on the detail page. */}
+                {draft.type === "tour" && (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="tourDuration" className="text-sm font-semibold">Duration</Label>
+                      <Input id="tourDuration" name="tourDuration" placeholder="e.g. 3 hours" defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "duration")?.value ?? ""} className={FIELD} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="tourLanguages" className="text-sm font-semibold">Language(s)</Label>
+                      <Input id="tourLanguages" name="tourLanguages" placeholder="e.g. Armenian, English" defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "languages")?.value ?? ""} className={FIELD} />
+                    </div>
+                  </div>
+                )}
 
                 {/* Quick facts — collapsed by default to keep the form tidy; the
                     inputs stay in the DOM so any values still save even closed. */}
