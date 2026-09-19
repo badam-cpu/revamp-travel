@@ -63,7 +63,7 @@ function HeroCarousel({ photos, title, onOpen, badge }: { photos: string[]; titl
 
   return (
     <div
-      className="group relative aspect-[4/3] overflow-hidden rounded-[14px] bg-basalt/5 sm:aspect-[16/10] lg:aspect-[16/9]"
+      className="group relative aspect-[4/3] overflow-hidden rounded-[14px] bg-basalt/5 sm:aspect-[2/1] lg:aspect-[5/2] lg:max-h-[480px]"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
