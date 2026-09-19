@@ -34,6 +34,18 @@
   function = "prerender"
   excludedPath = ["/api/*", "/assets/*", "/images/*", "/brand/*"]
 
+# SEO: the auto-generated Netlify subdomain serves the whole site and would
+# otherwise be indexed as duplicate content competing with the custom domain
+# (it self-canonicalizes to itself). 301 every request on that host to the
+# canonical domain so ranking signals consolidate there. Matches ONLY this
+# exact host, so deploy previews (deploy-preview-*--…​.netlify.app) and the
+# custom domain are unaffected. Listed first so it wins.
+[[redirects]]
+  from = "https://revamptravel.netlify.app/*"
+  to = "https://revampvacations.com/:splat"
+  status = 301
+  force = true
+
 # All /api/* traffic is handled by the Express app inside the api Function.
 # force = true so it wins over any static asset resolution.
 [[redirects]]
