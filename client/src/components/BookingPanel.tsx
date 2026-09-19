@@ -130,7 +130,7 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
           <strong className="font-display text-[1.75rem] font-normal">{priceLabel}</strong>{" "}
           {listing.price > 0 && <span className="text-sm text-basalt/50">/ {listing.priceUnit}</span>}
         </p>
-        {listing.price > 0 && !selected && (
+        {isStay && listing.price > 0 && !selected && (
           <p className="mt-1 text-xs text-basalt/50">Average nightly rate — select dates for exact pricing.</p>
         )}
       </div>

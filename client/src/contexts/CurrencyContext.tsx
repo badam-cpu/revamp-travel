@@ -75,9 +75,9 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   const format = useCallback(
     (amdCents: number): string => {
       if (active === "USD" && rate > 0) {
-        const usd = amdCents / 100 / rate;
-        const n = usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        return `$${n}`;
+        // Whole numbers only — no cents (matches the AMD display).
+        const usd = Math.round(amdCents / 100 / rate);
+        return `$${usd.toLocaleString()}`;
       }
       return amd(amdCents);
     },
