@@ -49,6 +49,7 @@ import { RatesEditor, RatesEditorHandle } from "@/components/RatesEditor";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
 import { SearchableMultiSelect, SearchableMultiSelectHandle } from "@/components/SearchableMultiSelect";
+import { ListEditor } from "@/components/ListEditor";
 import { OperatorBookings } from "@/components/OperatorBookings";
 import { OperatorBookingsTimeline } from "@/components/OperatorBookingsTimeline";
 import { OperatorPayouts } from "@/components/OperatorPayouts";
@@ -85,6 +86,7 @@ function emptyDraft(type: ListingType): DraftListing {
 interface RefLists {
   amenities: string[];
   photos: string[];
+  itinerary: string[];
   notIncluded: string[];
   whatToBring: string[];
   notSuitableFor: string[];
@@ -101,7 +103,9 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
   // notSuitableFor) come from their ref-based pickers, passed in via `lists`.
   // Highlights stays a free-text field; importantInfo a free-text note.
   const { amenities, photos, notIncluded, whatToBring, notSuitableFor, houseRules, rooms, seasonalRates } = lists;
-  const highlights = get("highlights").split(",").map((t) => t.trim()).filter(Boolean);
+  // Itinerary/highlights come from the ListEditor (ordered) via lists; fall back
+  // to the legacy comma-separated field if present.
+  const highlights = lists.itinerary.length ? lists.itinerary : get("highlights").split(",").map((t) => t.trim()).filter(Boolean);
   const importantInfo = get("importantInfo").trim();
   // Dedicated tour fields (Duration / Languages) map into the loosely-typed
   // facts array the detail view already reads by label; they take precedence
@@ -109,6 +113,7 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
   const dedicatedFacts = [
     { label: "Duration", value: get("tourDuration").trim() },
     { label: "Languages", value: get("tourLanguages").trim() },
+    { label: "Starting point", value: get("fact_startpoint").trim() },
   ].filter((f) => f.value);
   const quickFacts = [1, 2, 3, 4, 5, 6]
     .map((n) => ({ label: get(`fact${n}Label`).trim(), value: get(`fact${n}Value`).trim() }))
@@ -248,12 +253,15 @@ function ListingFormDialog({
   const notIncludedRef = useRef<SearchableMultiSelectHandle>(null);
   const whatToBringRef = useRef<SearchableMultiSelectHandle>(null);
   const notSuitableForRef = useRef<SearchableMultiSelectHandle>(null);
+  // Ordered tour/experience itinerary (stored in `highlights`).
+  const [itinerary, setItinerary] = useState<string[]>(draft?.highlights ?? []);
   const draftId = draft?.id;
   // Reset to the first step whenever the dialog (re)opens or a different draft loads.
   useEffect(() => {
     setStep(0);
     setStepError(null);
     setError(null);
+    setItinerary(draft?.highlights ?? []);
   }, [open, draftId]);
   if (!draft) return null;
   const isEdit = Boolean(draft.id);
@@ -320,6 +328,7 @@ function ListingFormDialog({
       const payload = toInputPayload(draft, form, {
         amenities: amenitiesRef.current?.getValue() ?? [],
         photos: photosRef.current?.getValue() ?? [],
+        itinerary,
         notIncluded: notIncludedRef.current?.getValue() ?? [],
         whatToBring: whatToBringRef.current?.getValue() ?? [],
         notSuitableFor: notSuitableForRef.current?.getValue() ?? [],
@@ -504,9 +513,18 @@ function ListingFormDialog({
                 {/* Tour & experience-only detail fields. */}
                 {(draft.type === "tour" || draft.type === "experience") && (
                   <div className="grid gap-6">
+                    <ListEditor
+                      label={draft.type === "tour" ? "Itinerary" : "Highlights"}
+                      numbered
+                      values={itinerary}
+                      onChange={setItinerary}
+                      placeholder={draft.type === "tour" ? "e.g. Coffee tasting at a local roastery" : "e.g. Bake lavash in a tonir"}
+                      helpText={draft.type === "tour" ? "Add each stop in order — shown as a timeline on your listing." : "Add each highlight; shown in order."}
+                    />
+                    <input type="hidden" name="highlights" value={itinerary.join(",")} readOnly />
                     <div className="grid gap-2">
-                      <Label htmlFor="highlights" className="text-sm font-semibold">Highlights <span className="font-normal text-basalt/45">(comma separated)</span></Label>
-                      <Input id="highlights" name="highlights" placeholder="Bake lavash in a tonir, Blend your own spice mix" defaultValue={draft.highlights?.join(", ")} className={FIELD} />
+                      <Label className="text-sm font-semibold">Starting point <span className="font-normal text-basalt/45">(where the tour begins/ends)</span></Label>
+                      <Input name="fact_startpoint" placeholder="e.g. Armenian National Opera and Ballet Theatre" defaultValue={draft.facts?.find((f) => ["starting point", "meeting point", "start"].includes(f.label.toLowerCase()))?.value ?? ""} className={FIELD} />
                     </div>
                     <div className="grid gap-2">
                       <Label className="text-sm font-semibold">Not included <span className="font-normal text-basalt/45">(search or add your own)</span></Label>

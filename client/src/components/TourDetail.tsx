@@ -161,21 +161,37 @@ export function TourDetail({ listing }: { listing: Listing }) {
             <p className="mt-4 whitespace-pre-line text-[15px] leading-8 text-basalt/90">{listing.longDescription}</p>
           </div>
 
-          {!!listing.highlights?.length && (
-            <div className="mt-8 border-t border-basalt/10 pt-8">
-              <p className="eyebrow">{isExperience ? "Itinerary" : "Highlights"}</p>
-              <div className="mt-5 grid gap-3">
-                {listing.highlights.map((item) => (
-                  <div key={item} className="flex items-start gap-3 text-sm leading-6 text-basalt/75">
-                    <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-apricot/10 text-apricot">
-                      <Sparkles className="h-3.5 w-3.5" />
-                    </span>
-                    {item}
-                  </div>
-                ))}
+          {!!listing.highlights?.length && (() => {
+            const startPoint = factValue(listing, "Starting point", "Meeting point");
+            // A stop can carry an optional subtitle after " — " or " - ".
+            const stops = listing.highlights.map((raw) => {
+              const m = raw.split(/\s+[—-]\s+/);
+              return { title: m[0].trim(), sub: m.slice(1).join(" — ").trim() };
+            });
+            type Node = { title: string; sub?: string; endpoint?: boolean };
+            const nodes: Node[] = [
+              ...(startPoint ? [{ title: "Starting location", sub: startPoint, endpoint: true }] : []),
+              ...stops,
+              ...(startPoint ? [{ title: "Arrive back at", sub: startPoint, endpoint: true }] : []),
+            ];
+            return (
+              <div className="mt-8 border-t border-basalt/10 pt-8">
+                <p className="eyebrow">Itinerary</p>
+                <div className="relative mt-6 pl-9">
+                  <span className="absolute left-[13px] top-2 bottom-2 w-px bg-basalt/15" aria-hidden />
+                  {nodes.map((n, i) => (
+                    <div key={i} className="relative mb-6 last:mb-0">
+                      <span className={cn("absolute -left-9 top-0 grid h-7 w-7 place-items-center rounded-full text-white shadow-sm", n.endpoint ? "bg-apricot" : "bg-basalt")}>
+                        {n.endpoint ? <MapPin className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+                      </span>
+                      <p className="font-semibold leading-6 text-basalt">{n.title}{n.endpoint && ":"}</p>
+                      {n.sub && <p className="mt-0.5 text-sm leading-6 text-basalt/60">{n.sub}</p>}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {listing.amenities.length > 0 && (
             <div className="mt-10 border-t border-basalt/10 pt-8">
