@@ -152,7 +152,6 @@ export function AdminSiteContent() {
               description: (a.description ?? "").trim(),
               image: addonPhotoRefs.current.get(a.id)?.getValue()[0] ?? a.image ?? "",
               priceCents: Math.max(0, Math.round(a.priceCents)),
-              enabled: true, // presence in the catalog = live; no per-item enable step
             }))
             .filter((a) => a.name),
           home_content: {
@@ -327,11 +326,15 @@ export function AdminSiteContent() {
         <div className="grid gap-4 border border-basalt/10 bg-paper p-5">
           <div>
             <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Concierge add-ons</p>
-            <p className="mt-1 text-xs text-basalt/50">Extra services guests can add at checkout on stay listings. Every add-on here is shown to guests (needs a name and a price, or mark it "On request"). Prices are in AMD. "On request" items show but aren't charged online. To hide one, remove it.</p>
+            <p className="mt-1 text-xs text-basalt/50">Extra services guests can add at checkout on stay listings. Toggle Enabled to show one to guests (Hidden keeps it here but off the checkout page). Needs a name and a price, or mark it "On request". Prices are in AMD. "On request" items show but aren't charged online.</p>
           </div>
           {addons.map((a) => (
             <div key={a.id} className="grid gap-2 border-t border-basalt/10 pt-4">
-              <div className="flex items-center justify-end">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.1em] text-basalt/60">
+                  <Checkbox checked={!!a.enabled} onCheckedChange={(c) => updateAddon(a.id, { enabled: c === true })} className="rounded-[3px] border-basalt/30 data-[state=checked]:border-apricot data-[state=checked]:bg-apricot" />
+                  {a.enabled ? "Enabled" : "Hidden"}
+                </label>
                 <button type="button" onClick={() => removeAddon(a.id)} className="inline-flex items-center gap-1 text-xs font-semibold text-basalt/45 hover:text-destructive"><Minus className="h-3.5 w-3.5" /> Remove</button>
               </div>
               <Input value={a.name} onChange={(e) => updateAddon(a.id, { name: e.target.value })} placeholder="Name (e.g. Airport pickup - Sedan)" className="h-11 rounded-none" />

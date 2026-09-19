@@ -10,23 +10,20 @@
  * (read from the identity-free `listing_booked_ranges` view). The price shown
  * is computed by the SAME shared helper the server charges with
  * (computeBookingAmountCents), so the preview always matches the real charge.
- * "Book" hands off to POST /api/start-checkout and redirects to PayLink; a
- * signed-out visitor is sent to sign in and back (Login.tsx honors ?redirect).
+ * "Book" doesn't check out here — it hands off to the dedicated /checkout page
+ * (contact details + concierge add-ons + PayLink), carrying the chosen dates
+ * and guest count in the URL.
  */
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "wouter";
-import { ChevronDown, Minus, Plus, Users } from "lucide-react";
+import { useLocation } from "wouter";
+import { Minus, Plus, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { useAuth } from "@/contexts/AuthContext";
 import type { LiveListing, BlockedRange } from "@/contexts/ListingsContext";
 import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { startCheckout, ApiError } from "@/lib/api";
-import { computeBookingAmountCents, computeBookingCharge, describeBookingBasis, describeCancellationPolicy, isBookableType, promoDiscount, nightsBetween, addonUnitCost, TAX_PERCENT } from "@shared/bookings";
+import { computeBookingAmountCents, computeBookingCharge, describeBookingBasis, describeCancellationPolicy, isBookableType, promoDiscount } from "@shared/bookings";
+import { TAX_PERCENT } from "@shared/bookings";
 import { useCurrency } from "@/contexts/CurrencyContext";
-import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -37,9 +34,8 @@ function addDays(iso: string, days: number): string {
 }
 
 export function BookingPanel({ listing }: { listing: LiveListing }) {
-  const { user, loading, signInAnonymously } = useAuth();
   const { format, currency: displayCurrency } = useCurrency();
-  const { settings } = useSiteSettings();
+  const [, navigate] = useLocation();
   const bookable = isBookableType(listing.type);
   const isStay = listing.type === "stay";
   const maxGuests = listing.maxGuests ?? 8;
@@ -48,16 +44,6 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
   const [guests, setGuests] = useState(1);
   const [range, setRange] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
   const [booked, setBooked] = useState<BlockedRange[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-  // Guest checkout contact details (signed-out travelers).
-  const [guestName, setGuestName] = useState("");
-  const [guestEmail, setGuestEmail] = useState("");
-  const [guestPhone, setGuestPhone] = useState("");
-  // Selected concierge add-ons: id → quantity (0/absent = not selected).
-  const [addonQty, setAddonQty] = useState<Record<string, number>>({});
-  // When there are more than 3 add-ons, keep them behind an expandable dropdown
-  // so the booking box stays compact.
-  const [addonsOpen, setAddonsOpen] = useState(false);
 
   // Confirmed bookings for this listing (identity-free public view).
   useEffect(() => {
@@ -99,20 +85,10 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
   const promo = promoDiscount(accommodationCents, listing, selected?.startDate ?? "");
   const netAccommodationCents = promo.netCents;
   // Base = discounted accommodation + flat cleaning fee; guest pays base + tax on
-  // top (same helper the server charges with).
+  // top (same helper the server charges with). Add-ons are chosen on /checkout.
   const cleaningCents = accommodationCents > 0 ? listing.cleaningFeeCents ?? 0 : 0;
   const charge = computeBookingCharge(netAccommodationCents + cleaningCents);
-  // Concierge add-ons (Revamp-managed) — added on top of the booking total.
-  // Stays only: these extras (grocery, luggage, airport pickup, toiletries) are
-  // stay-specific, so tours/experiences never show the section.
-  const nights = selected ? nightsBetween(selected.startDate, selected.endDate) : 1;
-  // Every add-on in the catalog is offered (no per-item enable step) as long as
-  // it's a real, priced entry: a name plus either a price or an "on request" flag.
-  const addons = isStay
-    ? (settings.addons ?? []).filter((a) => a.name && (a.priceCents > 0 || a.onRequest))
-    : [];
-  const addonsTotalCents = addons.reduce((sum, a) => sum + (addonQty[a.id] ?? 0) * addonUnitCost(a, { nights, guests }), 0);
-  const amountCents = charge.totalCents + addonsTotalCents; // total charged to the guest (AMD, settlement)
+  const amountCents = charge.totalCents; // accommodation total; add-ons added at checkout
   const policyText = describeCancellationPolicy(listing.cancellationPolicy, {
     freeCancelDays: listing.freeCancelDays,
     startDate: selected?.startDate,
@@ -133,44 +109,16 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
     );
   }
 
-  const book = async () => {
+  // "Book" → the dedicated checkout page (details + add-ons + payment). We only
+  // carry the non-sensitive selection in the URL; contact details are collected
+  // on the checkout page, never in a query string.
+  const goToCheckout = () => {
     if (!selected) {
       toast(isStay ? "Choose your check-in and check-out dates." : "Pick a date first.");
       return;
     }
-    // Signed-out travelers check out as a guest: validate their contact details,
-    // then sign in anonymously so the booking has an owner (no account needed).
-    const isGuest = !user;
-    if (isGuest) {
-      if (!guestName.trim() || !guestEmail.trim() || !guestPhone.trim()) {
-        toast("Add your name, email, and phone to continue.");
-        return;
-      }
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(guestEmail.trim())) {
-        toast("Enter a valid email address.");
-        return;
-      }
-    }
-    setSubmitting(true);
-    try {
-      if (isGuest) await signInAnonymously();
-      const addonSel = Object.entries(addonQty)
-        .filter(([, q]) => q > 0)
-        .map(([id, qty]) => ({ id, qty }));
-      const { redirectUrl } = await startCheckout({
-        listingId: listing.id,
-        startDate: selected.startDate,
-        endDate: selected.endDate,
-        guests,
-        ...(addonSel.length ? { addons: addonSel } : {}),
-        ...(isGuest ? { guestName: guestName.trim(), guestEmail: guestEmail.trim(), guestPhone: guestPhone.trim() } : {}),
-      });
-      // Hand off to PayLink's hosted payment page.
-      window.location.href = redirectUrl;
-    } catch (err) {
-      toast(err instanceof ApiError ? err.message : "Couldn't start checkout. Please try again.");
-      setSubmitting(false);
-    }
+    const q = new URLSearchParams({ start: selected.startDate, end: selected.endDate, guests: String(guests) });
+    navigate(`/checkout/${listing.slug}?${q.toString()}`);
   };
 
   return (
@@ -224,62 +172,7 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
         <p className="mt-1.5 text-xs text-basalt/45">Up to {maxGuests} {maxGuests === 1 ? "guest" : "guests"}.</p>
       </div>
 
-      {/* Concierge add-ons (Revamp-managed extras). More than 3 collapse into a
-          dropdown so the booking box stays compact. */}
-      {addons.length > 0 && (() => {
-        const collapsible = addons.length > 3;
-        const expanded = !collapsible || addonsOpen;
-        const selectedCount = addons.reduce((n, a) => n + ((addonQty[a.id] ?? 0) > 0 ? 1 : 0), 0);
-        return (
-        <div className="mt-4 border-t border-basalt/10 pt-4">
-          {collapsible ? (
-            <button type="button" onClick={() => setAddonsOpen((o) => !o)} className="flex w-full items-center justify-between gap-2 text-left">
-              <span className="text-xs font-semibold uppercase tracking-[0.1em] text-basalt/45">
-                Enhance your stay{selectedCount > 0 ? ` · ${selectedCount} added` : ` · ${addons.length} available`}
-              </span>
-              <ChevronDown className={cn("h-4 w-4 shrink-0 text-basalt/45 transition-transform", expanded && "rotate-180")} />
-            </button>
-          ) : (
-            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-basalt/45">Enhance your stay</p>
-          )}
-          {expanded && (
-          <div className="mt-3 grid gap-3">
-            {addons.map((a) => {
-              const qty = addonQty[a.id] ?? 0;
-              const on = qty > 0;
-              const unitCost = addonUnitCost(a, { nights, guests });
-              return (
-                <div key={a.id} className="flex items-start gap-2.5">
-                  <Checkbox
-                    checked={on}
-                    onCheckedChange={(c) => setAddonQty((p) => ({ ...p, [a.id]: c === true ? 1 : 0 }))}
-                    className="mt-0.5 rounded-[3px] border-basalt/30 data-[state=checked]:border-apricot data-[state=checked]:bg-apricot"
-                  />
-                  {a.image && <img src={a.image} alt="" className="h-11 w-11 shrink-0 rounded-md object-cover" />}
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between gap-2 text-sm">
-                      <span className="font-medium text-basalt">{a.name}</span>
-                      <span className="shrink-0 text-basalt/55">{a.onRequest ? "On request" : `${format(unitCost)}${a.unit === "per_item" ? " each" : ""}`}</span>
-                    </div>
-                    {a.description && <p className="mt-0.5 text-xs leading-5 text-basalt/45">{a.description}</p>}
-                    {on && a.unit === "per_item" && !a.onRequest && (
-                      <div className="mt-1.5 inline-flex items-center gap-2">
-                        <button type="button" aria-label="Fewer" onClick={() => setAddonQty((p) => ({ ...p, [a.id]: Math.max(1, (p[a.id] ?? 1) - 1) }))} className="grid h-6 w-6 place-items-center border border-basalt/15 text-basalt hover:border-apricot"><Minus className="h-3 w-3" /></button>
-                        <span className="text-sm font-semibold tabular-nums">{qty}</span>
-                        <button type="button" aria-label="More" onClick={() => setAddonQty((p) => ({ ...p, [a.id]: Math.min(20, (p[a.id] ?? 1) + 1) }))} className="grid h-6 w-6 place-items-center border border-basalt/15 text-basalt hover:border-apricot"><Plus className="h-3 w-3" /></button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          )}
-        </div>
-        );
-      })()}
-
-      {/* Price breakdown — base + turnover tax added on top */}
+      {/* Price breakdown — base + turnover tax added on top (add-ons at checkout) */}
       {selected && charge.baseCents > 0 && (
         <div className="mt-4 grid gap-1.5 border-t border-basalt/10 pt-4 text-sm">
           <div className="flex items-center justify-between text-basalt/55">
@@ -302,12 +195,6 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
             <span>Tax ({TAX_PERCENT}%)</span>
             <span>{format(charge.taxCents)}</span>
           </div>
-          {addonsTotalCents > 0 && (
-            <div className="flex items-center justify-between text-basalt/55">
-              <span>Add-ons</span>
-              <span>{format(addonsTotalCents)}</span>
-            </div>
-          )}
           <div className="flex items-center justify-between border-t border-basalt/10 pt-1.5">
             <span className="font-semibold">Total</span>
             <strong className="font-display text-xl font-normal">{format(amountCents)}</strong>
@@ -321,43 +208,24 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
         {policyText}.
       </p>
 
-      {/* Action */}
-      {loading ? (
-        <Button disabled className="mt-5 h-12 w-full rounded-none bg-basalt/10 text-basalt/40">…</Button>
-      ) : listing.price <= 0 ? (
+      {/* Action — hands off to the checkout page */}
+      {listing.price <= 0 ? (
         <Button disabled title="Rate on request" className="mt-5 h-12 w-full cursor-not-allowed rounded-none bg-basalt/10 text-basalt/45 hover:bg-basalt/10">
           Rate on request
         </Button>
       ) : (
-        <>
-          {/* Guest checkout — no account required. */}
-          {!user && (
-            <div className="mt-5 grid gap-2.5 border-t border-basalt/10 pt-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.1em] text-basalt/45">Your details</p>
-              <Input value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="Full name" autoComplete="name" className="h-11 rounded-none" />
-              <Input type="email" value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} placeholder="Email address" autoComplete="email" className="h-11 rounded-none" />
-              <Input type="tel" value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} placeholder="Phone (e.g. +374 …)" autoComplete="tel" className="h-11 rounded-none" />
-            </div>
-          )}
-          <Button
-            onClick={book}
-            disabled={!selected || submitting}
-            className={cn("mt-4 h-12 w-full rounded-none bg-apricot text-white hover:bg-apricot/90", (!selected || submitting) && "opacity-60")}
-          >
-            {submitting ? (isStay ? "Reserving your dates…" : "Reserving your spot…") : selected ? `Book · ${format(amountCents)}` : "Select dates to book"}
-          </Button>
-          {!user && (
-            <p className="mt-2 text-center text-[11px] text-basalt/45">
-              Have an account?{" "}
-              <Link href={`/login?redirect=${encodeURIComponent(`/listing/${listing.slug}`)}`} className="font-semibold text-apricot hover:underline">Sign in</Link>
-            </p>
-          )}
-        </>
+        <Button
+          onClick={goToCheckout}
+          disabled={!selected}
+          className={cn("mt-5 h-12 w-full rounded-none bg-apricot text-white hover:bg-apricot/90", !selected && "opacity-60")}
+        >
+          {selected ? `Book · ${format(amountCents)}` : "Select dates to book"}
+        </Button>
       )}
       <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">
-        You'll pay securely via{" "}
+        You'll add your details{isStay ? " and any extras" : ""} on the next step, then pay securely via{" "}
         <a href="https://paylink.am" target="_blank" rel="noreferrer" className="font-semibold text-basalt/55 underline underline-offset-2 hover:text-apricot">PayLink</a>
-        . Your dates are confirmed once payment clears.{!user ? " No account needed — we'll email your confirmation." : ""}{displayCurrency === "USD" ? " Charged in AMD; USD shown for reference." : ""}
+        . No account needed.{displayCurrency === "USD" ? " Charged in AMD; USD shown for reference." : ""}
       </p>
     </div>
   );

@@ -340,9 +340,9 @@ export function registerApiRoutes(app: Express) {
       const catalog: Addon[] = Array.isArray(ss?.addons) ? (ss!.addons as Addon[]) : [];
       const nights = nightsBetween(startDate, endDate);
       for (const sel of addons) {
-        // Any catalog add-on that's a real, priced entry is chargeable (no
-        // per-item enable step — mirrors the booking box).
-        const a = catalog.find((c) => c.id === sel.id && c.name && (c.priceCents > 0 || c.onRequest));
+        // Only enabled, real, priced entries are chargeable (mirrors the
+        // checkout page's own filter).
+        const a = catalog.find((c) => c.id === sel.id && c.enabled && c.name && (c.priceCents > 0 || c.onRequest));
         if (!a) continue;
         const amt = addonUnitCost(a, { nights, guests }) * sel.qty;
         addonsCents += amt;

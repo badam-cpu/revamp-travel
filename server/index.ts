@@ -28,7 +28,7 @@ async function startServer() {
   // under these paths also carries the header, regardless of user agent. (On
   // Netlify this is done with a [[headers]] block in netlify.toml instead,
   // since these routes are served by the CDN, not this process.)
-  app.use(["/dashboard", "/admin"], (_req, res, next) => {
+  app.use(["/dashboard", "/admin", "/checkout"], (_req, res, next) => {
     res.setHeader("X-Robots-Tag", "noindex, nofollow");
     next();
   });
