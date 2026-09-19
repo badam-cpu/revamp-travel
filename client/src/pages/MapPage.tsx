@@ -26,7 +26,7 @@ export default function MapPage() {
   return (
     <div className="min-h-screen bg-basalt text-paper">
       <SiteHeader flush />
-      <main className="grid min-h-[calc(100vh-76px)] lg:grid-cols-[390px_1fr]">
+      <main className="grid min-h-[calc(100vh-76px)] lg:grid-cols-[460px_1fr] xl:grid-cols-[520px_1fr]">
         <aside className="relative order-2 max-h-none overflow-hidden overflow-y-auto bg-basalt p-5 lg:order-1 lg:max-h-[calc(100vh-76px)] lg:p-7">
           <div className="pointer-events-none absolute -right-10 -top-14 text-[10rem] font-bold leading-none tracking-[-0.12em] text-white/[0.035]">re.</div>
           <div className="mb-7 flex items-center justify-between border-b border-white/10 pb-4 text-[8px] font-bold uppercase tracking-[0.2em] text-paper/35"><span>Atlas sheet 01</span><span>38.8°—41.3° N</span></div>
