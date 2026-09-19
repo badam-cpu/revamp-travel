@@ -11,13 +11,22 @@ export function SearchBar({ compact = false, initialQuery = "", initialType = "a
   const [, navigate] = useLocation();
   const [query, setQuery] = useState(initialQuery);
   const [type, setType] = useState(initialType || "all");
-  const [date, setDate] = useState("");
+  // Stays take a check-in → check-out range; everything else a single date.
+  const [checkin, setCheckin] = useState("");
+  const [checkout, setCheckout] = useState("");
+  const wantsRange = type === "stay" || type === "all";
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const params = new URLSearchParams();
     if (query.trim()) params.set("query", query.trim());
-    if (date) params.set("date", date);
+    // `date` = check-in (kept for any single-date consumer); checkin/checkout
+    // carry the stay range.
+    if (checkin) {
+      params.set("date", checkin);
+      params.set("checkin", checkin);
+    }
+    if (wantsRange && checkout) params.set("checkout", checkout);
     if (type === "tour") {
       navigate(`/explore/tour${params.toString() ? `?${params}` : ""}`);
       return;
@@ -26,12 +35,14 @@ export function SearchBar({ compact = false, initialQuery = "", initialType = "a
     navigate(`/explore${params.toString() ? `?${params}` : ""}`);
   };
 
+  const dateInputClass = "h-auto w-full border-0 bg-transparent px-0 py-1 text-[15px] font-semibold shadow-none focus-visible:ring-0";
+
   return (
     <form
       onSubmit={submit}
       className={cn(
         "search-desk grid bg-chalk text-basalt shadow-[0_22px_60px_rgba(35,35,33,0.14)]",
-        compact ? "gap-px border border-basalt/10 md:grid-cols-[1.6fr_1fr_auto]" : "gap-px border border-basalt/10 lg:grid-cols-[1.5fr_0.85fr_0.9fr_auto]",
+        compact ? "gap-px border border-basalt/10 md:grid-cols-[1.6fr_1fr_auto]" : "gap-px border border-basalt/10 lg:grid-cols-[1.35fr_0.8fr_1.15fr_auto]",
       )}
     >
       <label className="flex min-h-[78px] items-center gap-3 bg-chalk px-5 py-3">
@@ -64,18 +75,40 @@ export function SearchBar({ compact = false, initialQuery = "", initialType = "a
         </span>
       </div>
       {!compact && (
-        <label className="flex min-h-[78px] items-center gap-3 bg-chalk px-5 py-3">
+        <div className="flex min-h-[78px] items-center gap-3 bg-chalk px-5 py-3">
           <CalendarDays className="h-5 w-5 shrink-0 text-sevan" />
-          <span className="min-w-0 flex-1">
-            <span className="block text-[10px] font-bold uppercase tracking-[0.18em] text-basalt/45">When</span>
-            <Input
-              type="date"
-              value={date}
-              onChange={(event) => setDate(event.target.value)}
-              className="h-auto border-0 bg-transparent px-0 py-1 text-[15px] font-semibold shadow-none focus-visible:ring-0"
-            />
-          </span>
-        </label>
+          {wantsRange ? (
+            <div className="grid min-w-0 flex-1 grid-cols-2 gap-3">
+              <label className="min-w-0">
+                <span className="block text-[10px] font-bold uppercase tracking-[0.18em] text-basalt/45">Check-in</span>
+                <Input
+                  type="date"
+                  value={checkin}
+                  onChange={(event) => {
+                    setCheckin(event.target.value);
+                    if (checkout && event.target.value && checkout <= event.target.value) setCheckout("");
+                  }}
+                  className={dateInputClass}
+                />
+              </label>
+              <label className="min-w-0">
+                <span className="block text-[10px] font-bold uppercase tracking-[0.18em] text-basalt/45">Check-out</span>
+                <Input
+                  type="date"
+                  value={checkout}
+                  min={checkin || undefined}
+                  onChange={(event) => setCheckout(event.target.value)}
+                  className={dateInputClass}
+                />
+              </label>
+            </div>
+          ) : (
+            <label className="min-w-0 flex-1">
+              <span className="block text-[10px] font-bold uppercase tracking-[0.18em] text-basalt/45">When</span>
+              <Input type="date" value={checkin} onChange={(event) => setCheckin(event.target.value)} className={dateInputClass} />
+            </label>
+          )}
+        </div>
       )}
       <Button type="submit" className="min-h-[78px] rounded-[0px] bg-apricot px-7 text-white hover:bg-apricot/90">
         <Search className="mr-2 h-4 w-4" /> Search
