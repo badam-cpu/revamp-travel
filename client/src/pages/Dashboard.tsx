@@ -51,6 +51,7 @@ import { PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
 import { SearchableMultiSelect, SearchableMultiSelectHandle } from "@/components/SearchableMultiSelect";
 import { ListEditor } from "@/components/ListEditor";
 import { OperatorBookings } from "@/components/OperatorBookings";
+import { PricingCalendar } from "@/components/PricingCalendar";
 import { OperatorBookingsTimeline } from "@/components/OperatorBookingsTimeline";
 import { OperatorPayouts } from "@/components/OperatorPayouts";
 import { OperatorAnalytics } from "@/components/OperatorAnalytics";
@@ -971,31 +972,78 @@ const OPERATOR_SECTIONS: { key: OperatorSection; label: string; icon: typeof Hom
   { key: "settings", label: "Settings", icon: Settings },
 ];
 
+const BOOKINGS_VIEWS = [
+  { key: "timeline", label: "Timeline", blurb: "Your listings across the calendar — bookings and synced-blocked dates at a glance." },
+  { key: "calendar", label: "Calendar", blurb: "Open a single stay's calendar to see its bookings and set nightly prices." },
+  { key: "list", label: "List", blurb: "Reservations on your listings, grouped by type." },
+] as const;
+type BookingsView = (typeof BOOKINGS_VIEWS)[number]["key"];
+
 function BookingsSection() {
-  const [view, setView] = useState<"timeline" | "list">("timeline");
+  const [view, setView] = useState<BookingsView>("timeline");
+  const blurb = BOOKINGS_VIEWS.find((v) => v.key === view)?.blurb ?? "";
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-4xl leading-[0.95] tracking-[-0.03em] sm:text-5xl">Bookings</h1>
-          <p className="mt-3 max-w-xl text-base leading-7 text-basalt/60">
-            {view === "timeline" ? "Your listings across the calendar — bookings and synced-blocked dates at a glance." : "Reservations on your listings, grouped by type."}
-          </p>
+          <p className="mt-3 max-w-xl text-base leading-7 text-basalt/60">{blurb}</p>
         </div>
         <div className="flex shrink-0 border border-basalt/15">
-          {(["timeline", "list"] as const).map((v) => (
+          {BOOKINGS_VIEWS.map((v) => (
             <button
-              key={v}
+              key={v.key}
               type="button"
-              onClick={() => setView(v)}
-              className={cn("px-4 py-2 text-xs font-bold uppercase tracking-[0.1em] transition-colors", view === v ? "bg-basalt text-paper" : "text-basalt/55 hover:text-basalt")}
+              onClick={() => setView(v.key)}
+              className={cn("px-4 py-2 text-xs font-bold uppercase tracking-[0.1em] transition-colors", view === v.key ? "bg-basalt text-paper" : "text-basalt/55 hover:text-basalt")}
             >
-              {v === "timeline" ? "Timeline" : "List"}
+              {v.label}
             </button>
           ))}
         </div>
       </div>
-      {view === "timeline" ? <OperatorBookingsTimeline /> : <OperatorBookings />}
+      {view === "timeline" && <OperatorBookingsTimeline />}
+      {view === "calendar" && <CalendarSection />}
+      {view === "list" && <OperatorBookings />}
+    </div>
+  );
+}
+
+/** Per-listing calendar: pick one stay, then see/manage its month calendar. */
+function CalendarSection() {
+  const { user } = useAuth();
+  const { listings } = useListings();
+  const stays = useMemo(
+    () => listings.filter((l) => l.operatorId === user?.id && l.type === "stay").sort((a, b) => a.title.localeCompare(b.title)),
+    [listings, user?.id],
+  );
+  const [selectedId, setSelectedId] = useState<string>("");
+  const selected = stays.find((l) => l.id === selectedId) ?? null;
+
+  if (stays.length === 0) {
+    return <p className="border border-dashed border-basalt/20 bg-chalk px-6 py-10 text-center text-sm text-basalt/55">Add a stay to manage its nightly prices and availability here. Tours and experiences use a single fixed price rather than a per-night calendar.</p>;
+  }
+
+  return (
+    <div>
+      <label className="mb-5 block max-w-md">
+        <span className="mb-1.5 block text-xs font-bold uppercase tracking-[0.1em] text-basalt/45">Stay</span>
+        <select
+          value={selectedId}
+          onChange={(e) => setSelectedId(e.target.value)}
+          className="w-full rounded-none border border-basalt/15 bg-paper px-3 py-2.5 text-sm focus:border-apricot focus:outline-none"
+        >
+          <option value="">Select a stay to open its calendar…</option>
+          {stays.map((l) => (
+            <option key={l.id} value={l.id}>{l.title}</option>
+          ))}
+        </select>
+      </label>
+      {selected ? (
+        <PricingCalendar key={selected.id} listing={selected} />
+      ) : (
+        <p className="border border-dashed border-basalt/20 bg-chalk px-6 py-10 text-center text-sm text-basalt/55">Choose a stay above to view and manage its calendar.</p>
+      )}
     </div>
   );
 }

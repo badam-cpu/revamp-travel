@@ -57,6 +57,7 @@ interface ListingsContextType {
   deleteListing: (id: string) => Promise<void>;
   /** Save the calendar export URL on a listing (the actual sync is POST /api/sync-ical). */
   setIcalUrl: (id: string, icalUrl: string | null) => Promise<LiveListing>;
+  setSeasonalRates: (id: string, rates: SeasonalRate[]) => Promise<LiveListing>;
 }
 
 const ListingsContext = createContext<ListingsContextType | undefined>(undefined);
@@ -333,8 +334,23 @@ export function ListingsProvider({ children }: { children: React.ReactNode }) {
     return listing;
   }, []);
 
+  // Update only a listing's seasonal/daily rates (from the pricing timeline).
+  // A content-only edit — doesn't touch status (review gate untouched).
+  const setSeasonalRates = useCallback(async (id: string, rates: SeasonalRate[]): Promise<LiveListing> => {
+    const { data, error } = await supabase
+      .from("listings")
+      .update({ seasonal_rates: rates })
+      .eq("id", id)
+      .select(ROW_COLUMNS)
+      .single();
+    if (error) throw new Error(error.message);
+    const listing = mapListingRow(data);
+    setListings((prev) => prev.map((item) => (item.id === id ? listing : item)));
+    return listing;
+  }, []);
+
   return (
-    <ListingsContext.Provider value={{ listings, loading, offline, refresh, createListing, updateListing, deleteListing, setIcalUrl }}>
+    <ListingsContext.Provider value={{ listings, loading, offline, refresh, createListing, updateListing, deleteListing, setIcalUrl, setSeasonalRates }}>
       {children}
     </ListingsContext.Provider>
   );
