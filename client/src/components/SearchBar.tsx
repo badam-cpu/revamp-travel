@@ -11,10 +11,11 @@ export function SearchBar({ compact = false, initialQuery = "", initialType = "a
   const [, navigate] = useLocation();
   const [query, setQuery] = useState(initialQuery);
   const [type, setType] = useState(initialType || "all");
-  // Stays take a check-in → check-out range; everything else a single date.
+  // Check-in → check-out is stay-specific; every other search (Everything,
+  // tours, experiences, restaurants) uses a single date.
   const [checkin, setCheckin] = useState("");
   const [checkout, setCheckout] = useState("");
-  const wantsRange = type === "stay" || type === "all";
+  const wantsRange = type === "stay";
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
