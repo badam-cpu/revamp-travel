@@ -9,8 +9,9 @@ import { ListingCard } from "@/components/ListingCard";
 import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { ListingType, typeLabels, ARMENIA_REGIONS } from "@/data/listings";
+import { ListingType, typeLabels } from "@/data/listings";
 import { useListings } from "@/contexts/ListingsContext";
+import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { buildCollectionPageJsonLd } from "@shared/seo";
 import { cn } from "@/lib/utils";
@@ -20,18 +21,19 @@ const validTypes = new Set(["all", "stay", "eat", "tour", "experience"]);
 export default function Explore({ initialType = "" }: { initialType?: string }) {
   const [, navigate] = useLocation();
   const { listings } = useListings();
+  const { settings } = useSiteSettings();
   const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
   const urlType = params.get("type") || initialType;
   const [query, setQuery] = useState(params.get("query") || "");
   const [type, setType] = useState(validTypes.has(urlType) ? urlType : "all");
   const [region, setRegion] = useState("all");
   const [selectedId, setSelectedId] = useState<string | undefined>();
-  // Show every Armenian region, not only those that currently have listings,
-  // plus any extra region a listing might use that isn't in the canonical set.
-  const extraRegions = Array.from(new Set(listings.map((listing) => listing.region)))
-    .filter((r) => r && !ARMENIA_REGIONS.includes(r))
-    .sort();
-  const regions = [...ARMENIA_REGIONS, ...extraRegions];
+  // Region options = the regions the site actually showcases: the admin's home
+  // region cards, plus any region that has a live listing. (Not every Armenian
+  // marze — an empty region would only create a dead-end "0 places" filter.)
+  const showcasedRegions = (settings.homeContent.regionCards ?? []).map((r) => r.name).filter(Boolean);
+  const listingRegions = listings.map((listing) => listing.region).filter(Boolean);
+  const regions = Array.from(new Set([...showcasedRegions, ...listingRegions])).sort();
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
