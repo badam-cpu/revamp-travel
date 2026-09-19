@@ -5,13 +5,17 @@ import { Listing, typeLabels } from "@/data/listings";
 import { cn } from "@/lib/utils";
 import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { averageNightlyCents } from "@shared/bookings";
 import { DiscountBadge } from "@/components/DiscountBadge";
 
 export function ListingCard({ listing, large = false, active = false, onHover }: { listing: Listing; large?: boolean; active?: boolean; onHover?: (id?: string) => void }) {
   const { isSaved, toggleSaved } = useSavedPlaces();
   const { format } = useCurrency();
   const saved = isSaved(listing.id);
-  const priceLabel = listing.price > 0 ? format(Math.round(listing.price * 100)) : "Rate on request";
+  // Headline shows the day-weighted average nightly rate when the stay uses
+  // seasonal/daily rates; otherwise it's just the base price.
+  const nightlyCents = averageNightlyCents({ priceCents: Math.round(listing.price * 100), priceUnit: listing.priceUnit, seasonalRates: listing.seasonalRates });
+  const priceLabel = listing.price > 0 ? format(nightlyCents) : "Rate on request";
   return (
     <article
       className={cn("group relative", active && "is-active")}

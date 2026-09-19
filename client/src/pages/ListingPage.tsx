@@ -20,7 +20,7 @@ import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { cn } from "@/lib/utils";
-import { describeCancellationPolicy } from "@shared/bookings";
+import { describeCancellationPolicy, averageNightlyCents } from "@shared/bookings";
 import { buildBreadcrumbJsonLd, buildListingJsonLd } from "@shared/seo";
 import { toast } from "sonner";
 
@@ -51,7 +51,10 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   const [showMobileBar, setShowMobileBar] = useState(false);
   const listing = findListing(params.slug, listings);
   const saved = listing ? isSaved(listing.id) : false;
-  const priceLabel = listing && listing.price > 0 ? format(Math.round(listing.price * 100)) : "Rate on request";
+  // Headline shows the day-weighted average nightly rate when the stay uses
+  // seasonal/daily rates; otherwise it's the base price.
+  const nightlyCents = listing ? averageNightlyCents({ priceCents: Math.round(listing.price * 100), priceUnit: listing.priceUnit, seasonalRates: listing.seasonalRates }) : 0;
+  const priceLabel = listing && listing.price > 0 ? format(nightlyCents) : "Rate on request";
 
   // Hook call must come before any early return (rules of hooks) — this
   // covers both the not-found and found cases with one call.

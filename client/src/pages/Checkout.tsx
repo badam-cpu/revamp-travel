@@ -281,7 +281,7 @@ export default function Checkout({ slug }: { slug: string }) {
 
               <div className="mt-4 grid gap-1.5 border-t border-basalt/10 pt-4 text-sm">
                 <div className="flex items-center justify-between text-basalt/55">
-                  <span>{describeBookingBasis(listing!, { startDate, endDate, guests }, format(Math.round(listing!.price * 100)))}</span>
+                  <span>{describeBookingBasis(listing!, { startDate, endDate, guests }, (listing!.seasonalRates?.length ?? 0) > 0 ? `avg ${format(nights > 0 ? Math.round(accommodationCents / nights) : Math.round(listing!.price * 100))}` : format(Math.round(listing!.price * 100)))}</span>
                   <span>{format(accommodationCents)}</span>
                 </div>
                 {promo.active && (

@@ -21,7 +21,7 @@ import { supabase } from "@/lib/supabase";
 import type { LiveListing, BlockedRange } from "@/contexts/ListingsContext";
 import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
 import { Button } from "@/components/ui/button";
-import { computeBookingAmountCents, computeBookingCharge, describeBookingBasis, describeCancellationPolicy, isBookableType, promoDiscount } from "@shared/bookings";
+import { computeBookingAmountCents, computeBookingCharge, describeBookingBasis, describeCancellationPolicy, isBookableType, promoDiscount, averageNightlyCents, nightsBetween } from "@shared/bookings";
 import { TAX_PERCENT } from "@shared/bookings";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
@@ -39,7 +39,9 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
   const bookable = isBookableType(listing.type);
   const isStay = listing.type === "stay";
   const maxGuests = listing.maxGuests ?? 8;
-  const priceLabel = listing.price > 0 ? format(Math.round(listing.price * 100)) : "Rate on request";
+  // Headline shows the day-weighted average nightly rate when the stay uses
+  // seasonal/daily rates; otherwise the base price.
+  const priceLabel = listing.price > 0 ? format(averageNightlyCents({ priceCents: Math.round(listing.price * 100), priceUnit: listing.priceUnit, seasonalRates: listing.seasonalRates })) : "Rate on request";
 
   const [guests, setGuests] = useState(1);
   const [range, setRange] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
@@ -175,10 +177,20 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
       {/* Price breakdown — base + turnover tax added on top (add-ons at checkout) */}
       {selected && charge.baseCents > 0 && (
         <div className="mt-4 grid gap-1.5 border-t border-basalt/10 pt-4 text-sm">
-          <div className="flex items-center justify-between text-basalt/55">
-            <span>{describeBookingBasis(listing, { ...selected, guests }, format(Math.round(listing.price * 100)))}</span>
-            <span>{format(accommodationCents)}</span>
-          </div>
+          {(() => {
+            // Compact basis: when seasonal/daily rates apply, show the average
+            // nightly rate of the chosen dates ("avg ֏X × N nights"); otherwise
+            // the plain per-night rate. Either way it reconciles to the total.
+            const n = nightsBetween(selected.startDate, selected.endDate);
+            const perNight = n > 0 ? Math.round(accommodationCents / n) : Math.round(listing.price * 100);
+            const label = (listing.seasonalRates?.length ?? 0) > 0 ? `avg ${format(perNight)}` : format(perNight);
+            return (
+              <div className="flex items-center justify-between text-basalt/55">
+                <span>{describeBookingBasis(listing, { ...selected, guests }, label)}</span>
+                <span>{format(accommodationCents)}</span>
+              </div>
+            );
+          })()}
           {promo.active && (
             <div className="flex items-center justify-between font-semibold text-apricot">
               <span>Discount{listing.discountType === "percent" ? ` (${listing.discountValue}% off)` : " (sale)"}</span>

@@ -167,6 +167,33 @@ export function computeBookingAmountCents(
   return total;
 }
 
+/**
+ * A representative "per night" price for headline display (cards + detail
+ * header) when a stay uses seasonal/daily rates. Day-weighted average across a
+ * window (default: the next 365 days) — each day counts at its matching
+ * seasonal rate, or the base price for days outside every range. Falls back to
+ * the base price for non-per-night units or when no seasonal rates are set, so
+ * it's always safe to call. Returns AMD cents.
+ */
+export function averageNightlyCents(
+  listing: { priceCents: number; priceUnit: string; seasonalRates?: { start: string; end: string; priceCents: number }[] },
+  opts?: { from?: string; days?: number },
+): number {
+  const unit = (listing.priceUnit || "").toLowerCase().trim();
+  const base = Math.max(0, Math.round(listing.priceCents));
+  const rates = listing.seasonalRates ?? [];
+  if (!PER_NIGHT_UNITS.has(unit) || rates.length === 0) return base;
+  const days = Math.max(1, opts?.days ?? 365);
+  let d = opts?.from ?? new Date().toISOString().slice(0, 10);
+  let sum = 0;
+  for (let i = 0; i < days; i++) {
+    const match = rates.filter((r) => r.start <= d && d <= r.end).pop();
+    sum += Math.max(0, Math.round(match ? match.priceCents : base));
+    d = addDaysIso(d, 1);
+  }
+  return Math.round(sum / days);
+}
+
 /** A Revamp concierge add-on (admin-managed catalog, see migration 0029). */
 export interface Addon {
   id: string;
