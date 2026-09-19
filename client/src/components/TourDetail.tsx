@@ -12,7 +12,7 @@
  * brand's non-negotiable rules forbid fabricating any of that, so the
  * quick-facts row and "what's included" list carry the weight instead.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, ArrowLeft, Backpack, Ban, Check, Clock, Gauge, Info, MapPin, Share2, Bookmark, Sparkles, Users, X } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
@@ -35,6 +35,17 @@ export function TourDetail({ listing }: { listing: Listing }) {
   const saved = isSaved(listing.id);
   const [activeImage, setActiveImage] = useState(0);
   const live = listings.find((l) => l.id === listing.id) ?? null;
+
+  // Show the sticky mobile "Book" bar only once the inline booking panel (#book)
+  // has scrolled out of view — so there's never two Book buttons at once.
+  const [showMobileBar, setShowMobileBar] = useState(false);
+  useEffect(() => {
+    const el = document.getElementById("book");
+    if (!el) return;
+    const io = new IntersectionObserver(([entry]) => setShowMobileBar(!entry.isIntersecting), { threshold: 0 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [listing.id, live]);
 
   const images = listing.gallery.length ? listing.gallery : [listing.image];
   const duration = factValue(listing, "Duration");
@@ -285,7 +296,7 @@ export function TourDetail({ listing }: { listing: Listing }) {
         </section>
       )}
 
-      <div className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between border-t border-basalt/10 bg-paper/95 px-4 py-3 shadow-[0_-10px_30px_rgba(35,35,33,0.08)] backdrop-blur lg:hidden">
+      <div className={cn("fixed inset-x-0 bottom-0 z-40 items-center justify-between border-t border-basalt/10 bg-paper/95 px-4 py-3 shadow-[0_-10px_30px_rgba(35,35,33,0.08)] backdrop-blur lg:hidden", showMobileBar ? "flex" : "hidden")}>
         <p>
           <span className="block text-[9px] font-bold uppercase tracking-[0.14em] text-basalt/40">From</span>
           <strong className="font-display text-2xl font-normal">{priceLabel}</strong> {listing.price > 0 && <span className="text-xs text-basalt/45">/ {listing.priceUnit}</span>}
