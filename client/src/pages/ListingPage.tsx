@@ -1,5 +1,5 @@
 /** Revamp brandbook: detail pages combine rounded imagery, bold sans hierarchy, concise facts, white space, and orange actions. */
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ArrowLeft, BedDouble, Bookmark, Check, ChevronLeft, ChevronRight, Coffee, Home, KeyRound, LayoutGrid, MapPin, Navigation, Share2, ShieldCheck, Sparkles, SprayCan, Users, Wifi, X } from "lucide-react";
 import { Link } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -39,6 +39,80 @@ const REVAMP_STANDARD = [
 /** How many of a listing's own amenities to show inline before the "show all"
  * modal — keeps a 30-35-amenity listing from flooding the page. */
 const AMENITIES_INLINE_LIMIT = 10;
+
+/**
+ * Rolling hero carousel: one photo at a time (shown large, so rooms aren't
+ * cropped to a "minimal" slice), cross-fading. Auto-advances (pauses on hover,
+ * respects reduced motion), with arrows, windowed dots, and a "Show all photos"
+ * button. Clicking a photo opens the full-screen lightbox at that index.
+ */
+function HeroCarousel({ photos, title, onOpen, badge }: { photos: string[]; title: string; onOpen: (i: number) => void; badge?: ReactNode }) {
+  const [i, setI] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const total = photos.length;
+
+  useEffect(() => {
+    if (total <= 1 || paused) return;
+    const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) return;
+    const t = setInterval(() => setI((c) => (c + 1) % total), 5000);
+    return () => clearInterval(t);
+  }, [total, paused]);
+
+  const go = (d: number) => setI((c) => (c + d + total) % total);
+
+  return (
+    <div
+      className="group relative aspect-[4/3] overflow-hidden rounded-[14px] bg-basalt/5 sm:aspect-[16/10] lg:aspect-[16/9]"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+    >
+      {photos.map((src, idx) => (
+        <button
+          key={src + idx}
+          type="button"
+          tabIndex={idx === i ? 0 : -1}
+          aria-hidden={idx !== i}
+          onClick={() => onOpen(i)}
+          className={cn("absolute inset-0 h-full w-full transition-opacity duration-700 ease-out", idx === i ? "opacity-100" : "pointer-events-none opacity-0")}
+        >
+          <img src={src} alt={idx === 0 ? title : ""} className="h-full w-full object-cover" />
+        </button>
+      ))}
+      {badge}
+
+      {total > 1 && (
+        <>
+          <button type="button" onClick={() => go(-1)} aria-label="Previous photo" className="absolute left-3 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-paper/90 text-basalt opacity-0 shadow-md transition-opacity hover:bg-paper group-hover:opacity-100">
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <button type="button" onClick={() => go(1)} aria-label="Next photo" className="absolute right-3 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-paper/90 text-basalt opacity-0 shadow-md transition-opacity hover:bg-paper group-hover:opacity-100">
+            <ChevronRight className="h-5 w-5" />
+          </button>
+          {/* Windowed dots — up to 5 around the active one. */}
+          <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-basalt/25 px-2.5 py-1.5 backdrop-blur-sm">
+            {photos.map((_, idx) => {
+              const dist = Math.abs(idx - i);
+              if (total > 5 && dist > 2) return null;
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  aria-label={`Go to photo ${idx + 1}`}
+                  onClick={() => setI(idx)}
+                  className={cn("rounded-full bg-white transition-all", idx === i ? "h-2 w-2" : dist === 1 ? "h-1.5 w-1.5 opacity-80" : "h-1 w-1 opacity-60")}
+                />
+              );
+            })}
+          </div>
+          <button type="button" onClick={() => onOpen(i)} className="absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-full border border-basalt/15 bg-paper px-4 py-2 text-xs font-semibold text-basalt shadow-md transition-colors hover:border-apricot hover:text-apricot">
+            <LayoutGrid className="h-4 w-4" /> Show all {total} photos
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function ListingPage({ params }: { params: { slug: string } }) {
   const { listings, loading } = useListings();
@@ -170,42 +244,16 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
           <h1 className="mt-1.5 font-display text-4xl leading-[1.0] tracking-[-0.035em] sm:text-5xl">{listing.title}</h1>
         </div>
 
-        {/* Photo showcase: a big hero + 3 (one wide, two below) — fewer, larger
-            cells than a 5-up, all landscape so rooms show in full. */}
-        {(() => {
-          const photos = Array.from(new Set([listing.image, ...(listing.gallery ?? [])].filter(Boolean))) as string[];
-          const Cell = ({ i }: { i: number }) =>
-            photos[i] ? (
-              <button type="button" onClick={() => setLightbox(i)} className="relative block h-full w-full overflow-hidden bg-basalt/5">
-                <img src={photos[i]} alt="" className="h-full w-full object-cover transition-transform duration-500 hover:scale-[1.02]" />
-              </button>
-            ) : (
-              <div className="h-full w-full bg-basalt/5" />
-            );
-          return (
-            <section className="container mt-4">
-              <div className="relative grid gap-1.5 overflow-hidden rounded-[14px] md:aspect-[9/4] md:grid-cols-2">
-                <button type="button" onClick={() => setLightbox(0)} className="relative block aspect-[3/2] w-full overflow-hidden md:aspect-auto md:h-full">
-                  <img src={photos[0]} alt={listing.title} className="h-full w-full object-cover transition-transform duration-500 hover:scale-[1.02]" />
-                  <DiscountBadge listing={listing} className="absolute left-4 top-4" />
-                </button>
-                {/* Right: one wide photo on top, two below. */}
-                <div className="hidden grid-rows-2 gap-1.5 md:grid">
-                  <Cell i={1} />
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <Cell i={2} />
-                    <Cell i={3} />
-                  </div>
-                </div>
-                {photos.length > 1 && (
-                  <button type="button" onClick={() => setLightbox(0)} className="absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-full border border-basalt/20 bg-paper px-4 py-2 text-xs font-semibold text-basalt shadow-md transition-colors hover:border-apricot hover:text-apricot">
-                    <LayoutGrid className="h-4 w-4" /> Show all {photos.length} photos
-                  </button>
-                )}
-              </div>
-            </section>
-          );
-        })()}
+        {/* Photo showcase: a single rolling hero carousel — each photo shown
+            large (minimal crop), with dots + arrows and "Show all photos". */}
+        <section className="container mt-4">
+          <HeroCarousel
+            photos={Array.from(new Set([listing.image, ...(listing.gallery ?? [])].filter(Boolean))) as string[]}
+            title={listing.title}
+            onOpen={setLightbox}
+            badge={<DiscountBadge listing={listing} className="absolute left-4 top-4 z-10" />}
+          />
+        </section>
 
         <section className="container grid gap-12 py-14 lg:grid-cols-[minmax(0,1fr)_340px] lg:py-20">
           <div>
