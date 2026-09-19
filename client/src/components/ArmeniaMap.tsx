@@ -84,6 +84,7 @@ export function ArmeniaMap({ listings, selectedId, onSelect, className, single =
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const clustererRef = useRef<MarkerClusterer | null>(null);
+  const markersRef = useRef<Map<string, google.maps.Marker>>(new Map());
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
   const [ready, setReady] = useState(false);
@@ -141,21 +142,24 @@ export function ArmeniaMap({ listings, selectedId, onSelect, className, single =
   }, []);
 
   // Sync markers + framing whenever data/selection changes (once the map is up).
+  // Build markers + frame the camera. Runs only when the SET of listings
+  // changes — NOT on hover/selection — so hovering a card never moves the map.
   useEffect(() => {
     const map = mapRef.current;
     const clusterer = clustererRef.current;
     if (!ready || !map || !clusterer) return;
 
     clusterer.clearMarkers();
+    markersRef.current.clear();
     const markers = listings.map((listing) => {
-      const isSelected = selectedId === listing.id || (single && listing.id === active?.id);
       const marker = new google.maps.Marker({
         position: { lat: listing.coordinates.lat, lng: listing.coordinates.lng },
-        icon: pillIcon(listing.price > 0 ? format(Math.round(listing.price * 100)) : listing.priceLabel, isSelected),
+        icon: pillIcon(listing.price > 0 ? format(Math.round(listing.price * 100)) : listing.priceLabel, false),
         title: listing.title,
-        zIndex: isSelected ? 9_000 : 1,
+        zIndex: 1,
       });
       marker.addListener("click", () => onSelectRef.current?.(listing.id));
+      markersRef.current.set(listing.id, marker);
       return marker;
     });
     clusterer.addMarkers(markers);
@@ -166,7 +170,7 @@ export function ArmeniaMap({ listings, selectedId, onSelect, className, single =
       return;
     }
     if (single || listings.length === 1) {
-      const a = active ?? listings[0];
+      const a = listings[0];
       map.setCenter({ lat: a.coordinates.lat, lng: a.coordinates.lng });
       map.setZoom(a.city.trim().toLowerCase() === "yerevan" ? 14 : 9);
     } else {
@@ -178,7 +182,20 @@ export function ArmeniaMap({ listings, selectedId, onSelect, className, single =
         if (typeof z === "number" && z > 15) map.setZoom(15);
       });
     }
-  }, [ready, listings, selectedId, single, active, format]);
+  }, [ready, listings, single, format]);
+
+  // Highlight the selected marker only — recolors/raises its pin without moving
+  // the camera (this is what runs on hover).
+  useEffect(() => {
+    if (!ready) return;
+    listings.forEach((listing) => {
+      const marker = markersRef.current.get(listing.id);
+      if (!marker) return;
+      const isSelected = selectedId === listing.id || (single && listing.id === active?.id);
+      marker.setIcon(pillIcon(listing.price > 0 ? format(Math.round(listing.price * 100)) : listing.priceLabel, isSelected));
+      marker.setZIndex(isSelected ? 9_000 : 1);
+    });
+  }, [ready, selectedId, single, active, listings, format]);
 
   return (
     <div className={cn("atlas-map relative overflow-hidden bg-[#EDECE6]", className)}>
