@@ -172,6 +172,7 @@ export interface Addon {
   id: string;
   name: string;
   description?: string;
+  image?: string; // thumbnail shown in the booking box
   priceCents: number; // AMD cents
   unit: "flat" | "per_night" | "per_guest" | "per_item";
   onRequest?: boolean; // true = shown/recorded but not charged (variable price)

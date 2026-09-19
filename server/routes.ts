@@ -335,12 +335,14 @@ export function registerApiRoutes(app: Express) {
     // client prices). Added on top of the booking; not part of the operator base.
     let addonsCents = 0;
     const addonSnapshot: { id: string; name: string; unit: string; qty: number; amountCents: number; onRequest: boolean }[] = [];
-    if (addons && addons.length) {
+    if (addons && addons.length && listing.type === "stay") {
       const { data: ss } = await supa.from("site_settings").select("addons").eq("id", 1).maybeSingle();
       const catalog: Addon[] = Array.isArray(ss?.addons) ? (ss!.addons as Addon[]) : [];
       const nights = nightsBetween(startDate, endDate);
       for (const sel of addons) {
-        const a = catalog.find((c) => c.id === sel.id && c.enabled);
+        // Any catalog add-on that's a real, priced entry is chargeable (no
+        // per-item enable step — mirrors the booking box).
+        const a = catalog.find((c) => c.id === sel.id && c.name && (c.priceCents > 0 || c.onRequest));
         if (!a) continue;
         const amt = addonUnitCost(a, { nights, guests }) * sel.qty;
         addonsCents += amt;

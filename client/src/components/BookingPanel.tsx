@@ -15,7 +15,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { Minus, Plus, Users } from "lucide-react";
+import { ChevronDown, Minus, Plus, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import type { LiveListing, BlockedRange } from "@/contexts/ListingsContext";
@@ -55,6 +55,9 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
   const [guestPhone, setGuestPhone] = useState("");
   // Selected concierge add-ons: id → quantity (0/absent = not selected).
   const [addonQty, setAddonQty] = useState<Record<string, number>>({});
+  // When there are more than 3 add-ons, keep them behind an expandable dropdown
+  // so the booking box stays compact.
+  const [addonsOpen, setAddonsOpen] = useState(false);
 
   // Confirmed bookings for this listing (identity-free public view).
   useEffect(() => {
@@ -100,8 +103,14 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
   const cleaningCents = accommodationCents > 0 ? listing.cleaningFeeCents ?? 0 : 0;
   const charge = computeBookingCharge(netAccommodationCents + cleaningCents);
   // Concierge add-ons (Revamp-managed) — added on top of the booking total.
+  // Stays only: these extras (grocery, luggage, airport pickup, toiletries) are
+  // stay-specific, so tours/experiences never show the section.
   const nights = selected ? nightsBetween(selected.startDate, selected.endDate) : 1;
-  const addons = (settings.addons ?? []).filter((a) => a.enabled);
+  // Every add-on in the catalog is offered (no per-item enable step) as long as
+  // it's a real, priced entry: a name plus either a price or an "on request" flag.
+  const addons = isStay
+    ? (settings.addons ?? []).filter((a) => a.name && (a.priceCents > 0 || a.onRequest))
+    : [];
   const addonsTotalCents = addons.reduce((sum, a) => sum + (addonQty[a.id] ?? 0) * addonUnitCost(a, { nights, guests }), 0);
   const amountCents = charge.totalCents + addonsTotalCents; // total charged to the guest (AMD, settlement)
   const policyText = describeCancellationPolicy(listing.cancellationPolicy, {
@@ -215,10 +224,25 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
         <p className="mt-1.5 text-xs text-basalt/45">Up to {maxGuests} {maxGuests === 1 ? "guest" : "guests"}.</p>
       </div>
 
-      {/* Concierge add-ons (Revamp-managed extras) */}
-      {addons.length > 0 && (
+      {/* Concierge add-ons (Revamp-managed extras). More than 3 collapse into a
+          dropdown so the booking box stays compact. */}
+      {addons.length > 0 && (() => {
+        const collapsible = addons.length > 3;
+        const expanded = !collapsible || addonsOpen;
+        const selectedCount = addons.reduce((n, a) => n + ((addonQty[a.id] ?? 0) > 0 ? 1 : 0), 0);
+        return (
         <div className="mt-4 border-t border-basalt/10 pt-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.1em] text-basalt/45">Enhance your stay</p>
+          {collapsible ? (
+            <button type="button" onClick={() => setAddonsOpen((o) => !o)} className="flex w-full items-center justify-between gap-2 text-left">
+              <span className="text-xs font-semibold uppercase tracking-[0.1em] text-basalt/45">
+                Enhance your stay{selectedCount > 0 ? ` · ${selectedCount} added` : ` · ${addons.length} available`}
+              </span>
+              <ChevronDown className={cn("h-4 w-4 shrink-0 text-basalt/45 transition-transform", expanded && "rotate-180")} />
+            </button>
+          ) : (
+            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-basalt/45">Enhance your stay</p>
+          )}
+          {expanded && (
           <div className="mt-3 grid gap-3">
             {addons.map((a) => {
               const qty = addonQty[a.id] ?? 0;
@@ -231,6 +255,7 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
                     onCheckedChange={(c) => setAddonQty((p) => ({ ...p, [a.id]: c === true ? 1 : 0 }))}
                     className="mt-0.5 rounded-[3px] border-basalt/30 data-[state=checked]:border-apricot data-[state=checked]:bg-apricot"
                   />
+                  {a.image && <img src={a.image} alt="" className="h-11 w-11 shrink-0 rounded-md object-cover" />}
                   <div className="flex-1">
                     <div className="flex items-center justify-between gap-2 text-sm">
                       <span className="font-medium text-basalt">{a.name}</span>
@@ -249,8 +274,10 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
               );
             })}
           </div>
+          )}
         </div>
-      )}
+        );
+      })()}
 
       {/* Price breakdown — base + turnover tax added on top */}
       {selected && charge.baseCents > 0 && (

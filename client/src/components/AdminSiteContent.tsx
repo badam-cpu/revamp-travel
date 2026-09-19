@@ -71,6 +71,7 @@ export function AdminSiteContent() {
   const [regionCards, setRegionCards] = useState<RegionCard[]>([]);
   const regionPhotoRefs = useRef<Map<string, PhotoUploaderHandle | null>>(new Map());
   const catPhotoRefs = useRef<Map<string, PhotoUploaderHandle | null>>(new Map());
+  const addonPhotoRefs = useRef<Map<string, PhotoUploaderHandle | null>>(new Map());
   const [addons, setAddons] = useState<Addon[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -124,7 +125,7 @@ export function AdminSiteContent() {
 
   const updateAddon = (id: string, patch: Partial<Addon>) => setAddons((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
   const removeAddon = (id: string) => setAddons((prev) => prev.filter((a) => a.id !== id));
-  const addAddon = () => setAddons((prev) => [...prev, { id: crypto.randomUUID(), name: "", description: "", priceCents: 0, unit: "flat", onRequest: false, enabled: false }]);
+  const addAddon = () => setAddons((prev) => [...prev, { id: crypto.randomUUID(), name: "", description: "", image: "", priceCents: 0, unit: "flat", onRequest: false, enabled: true }]);
 
   const save = async () => {
     setSaving(true);
@@ -145,7 +146,14 @@ export function AdminSiteContent() {
           announcement_href: annHref.trim(),
           usd_to_amd_rate: Number(rate) || 0,
           addons: addons
-            .map((a) => ({ ...a, name: a.name.trim(), description: (a.description ?? "").trim(), priceCents: Math.max(0, Math.round(a.priceCents)) }))
+            .map((a) => ({
+              ...a,
+              name: a.name.trim(),
+              description: (a.description ?? "").trim(),
+              image: addonPhotoRefs.current.get(a.id)?.getValue()[0] ?? a.image ?? "",
+              priceCents: Math.max(0, Math.round(a.priceCents)),
+              enabled: true, // presence in the catalog = live; no per-item enable step
+            }))
             .filter((a) => a.name),
           home_content: {
             categoriesEyebrow: catEyebrow.trim(),
@@ -319,19 +327,26 @@ export function AdminSiteContent() {
         <div className="grid gap-4 border border-basalt/10 bg-paper p-5">
           <div>
             <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Concierge add-ons</p>
-            <p className="mt-1 text-xs text-basalt/50">Extra services guests can add at checkout. Prices are in AMD; enable one to make it selectable. "On request" items show but aren't charged online.</p>
+            <p className="mt-1 text-xs text-basalt/50">Extra services guests can add at checkout on stay listings. Every add-on here is shown to guests (needs a name and a price, or mark it "On request"). Prices are in AMD. "On request" items show but aren't charged online. To hide one, remove it.</p>
           </div>
           {addons.map((a) => (
             <div key={a.id} className="grid gap-2 border-t border-basalt/10 pt-4">
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.1em] text-basalt/60">
-                  <Checkbox checked={!!a.enabled} onCheckedChange={(c) => updateAddon(a.id, { enabled: c === true })} className="rounded-[3px] border-basalt/30 data-[state=checked]:border-apricot data-[state=checked]:bg-apricot" />
-                  {a.enabled ? "Enabled" : "Hidden"}
-                </label>
+              <div className="flex items-center justify-end">
                 <button type="button" onClick={() => removeAddon(a.id)} className="inline-flex items-center gap-1 text-xs font-semibold text-basalt/45 hover:text-destructive"><Minus className="h-3.5 w-3.5" /> Remove</button>
               </div>
               <Input value={a.name} onChange={(e) => updateAddon(a.id, { name: e.target.value })} placeholder="Name (e.g. Airport pickup - Sedan)" className="h-11 rounded-none" />
               <Textarea rows={2} value={a.description ?? ""} onChange={(e) => updateAddon(a.id, { description: e.target.value })} placeholder="Short description / key terms" className="rounded-none text-base" />
+              <div className="grid gap-1">
+                <Label className="text-xs font-semibold text-basalt/60">Thumbnail</Label>
+                <PhotoUploader
+                  key={hydrated ? `addon-${a.id}` : `addon-${a.id}-loading`}
+                  ref={(el) => {
+                    if (el) addonPhotoRefs.current.set(a.id, el);
+                    else addonPhotoRefs.current.delete(a.id);
+                  }}
+                  defaultValue={a.image ? [a.image] : []}
+                />
+              </div>
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="grid gap-1">
                   <Label className="text-xs font-semibold text-basalt/60">Price (AMD)</Label>
