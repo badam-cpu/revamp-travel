@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils";
 
 export type PhotoUploaderHandle = { getValue: () => string[] };
 
-const MAX_PHOTOS = 12;
+const MAX_PHOTOS = 24;
 
 type Photo = { id: string; url: string };
 type Pending = { id: string; name: string; error?: string };

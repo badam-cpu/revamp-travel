@@ -23,7 +23,7 @@
  */
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, ArrowLeft, ArrowRight, CalendarCheck, CalendarClock, Home, LayoutDashboard, Link2, List, Pencil, Plus, Settings, Sparkles, Trash2, Wallet, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, CalendarCheck, CalendarClock, ChevronDown, Home, LayoutDashboard, Link2, List, Pencil, Plus, Settings, Sparkles, Trash2, Wallet, X } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -593,9 +593,14 @@ function ListingFormDialog({
                   </div>
                 </div>
 
-                <div className="grid gap-3">
-                  <Label className="text-sm font-semibold">Quick facts <span className="font-normal text-basalt/45">(up to 6, optional)</span></Label>
-                  <div className="grid gap-2">
+                {/* Quick facts — collapsed by default to keep the form tidy; the
+                    inputs stay in the DOM so any values still save even closed. */}
+                <details className="group grid gap-3 border border-basalt/12 p-4" open={(draft.facts?.length ?? 0) > 0}>
+                  <summary className="flex cursor-pointer list-none items-center justify-between">
+                    <span className="text-sm font-semibold">Quick facts <span className="font-normal text-basalt/45">(optional — a few at-a-glance details)</span></span>
+                    <ChevronDown className="h-4 w-4 shrink-0 text-basalt/40 transition-transform group-open:rotate-180" />
+                  </summary>
+                  <div className="mt-3 grid gap-2">
                     {[0, 1, 2, 3, 4, 5].map((i) => {
                       const [exLabel, exValue] = FACT_EXAMPLES[draft.type][i];
                       return (
@@ -606,7 +611,7 @@ function ListingFormDialog({
                       );
                     })}
                   </div>
-                </div>
+                </details>
 
                 <PhotoUploader ref={photosRef} defaultValue={realPhotos(draft)} />
 
