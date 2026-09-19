@@ -6,7 +6,7 @@
  * the operator's own listings.
  */
 import { useEffect, useState } from "react";
-import { Mail, Phone, User, X } from "lucide-react";
+import { Mail, Phone, User } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 import type { BookingStatus } from "@shared/bookings";
@@ -99,6 +99,14 @@ export function BookingDetailDialog({ bookingId, onClose }: { bookingId: string 
   const b = booking;
   const guestName = b?.guest_name || b?.profiles?.display_name || "Guest";
   const baseCents = b ? (b.base_cents ?? b.amount_cents) : 0;
+  const totalLabel =
+    b?.status === "confirmed" || b?.status === "completed"
+      ? "Paid"
+      : b?.status === "pending_payment"
+        ? "Total due"
+        : b?.status === "cancelled" || b?.status === "refunded"
+          ? "Charged"
+          : "Total";
 
   return (
     <Dialog open={!!bookingId} onOpenChange={(o) => !o && onClose()}>
@@ -108,7 +116,7 @@ export function BookingDetailDialog({ bookingId, onClose }: { bookingId: string 
         ) : (
           <div className="max-h-[85vh] overflow-y-auto">
             {/* Header */}
-            <div className="flex items-start justify-between gap-4 border-b border-basalt/10 bg-chalk p-5">
+            <div className="flex items-start justify-between gap-4 border-b border-basalt/10 bg-chalk p-5 pr-14">
               <div className="min-w-0">
                 <DialogTitle className="truncate font-display text-2xl font-normal leading-tight">{b.listings?.title ?? "Booking"}</DialogTitle>
                 <p className="mt-1 text-xs uppercase tracking-[0.1em] text-basalt/45">{b.listings?.type} · {b.listings?.city}</p>
@@ -145,7 +153,7 @@ export function BookingDetailDialog({ bookingId, onClose }: { bookingId: string 
                   <div className="flex justify-between text-basalt/60"><span>Base</span><span>{money(baseCents - (b.addons_cents ?? 0), b.currency)}</span></div>
                   {b.addons_cents ? <div className="flex justify-between text-basalt/60"><span>Add-ons</span><span>{money(b.addons_cents, b.currency)}</span></div> : null}
                   {b.tax_cents ? <div className="flex justify-between text-basalt/60"><span>Tax</span><span>{money(b.tax_cents, b.currency)}</span></div> : null}
-                  <div className="flex justify-between border-t border-basalt/10 pt-1.5 font-semibold"><span>{b.status === "cancelled" || b.status === "refunded" ? "Charged" : "Paid"}</span><span>{money(b.amount_cents, b.currency)}</span></div>
+                  <div className="flex justify-between border-t border-basalt/10 pt-1.5 font-semibold"><span>{totalLabel}</span><span>{money(b.amount_cents, b.currency)}</span></div>
                   {b.refund_amount_cents ? <div className="flex justify-between text-destructive"><span>Refund due</span><span>{money(b.refund_amount_cents, b.currency)}</span></div> : null}
                 </div>
                 {b.addons && b.addons.length > 0 && (
@@ -180,7 +188,6 @@ export function BookingDetailDialog({ bookingId, onClose }: { bookingId: string 
             </div>
           </div>
         )}
-        <button type="button" onClick={onClose} aria-label="Close" className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-paper/80 text-basalt/60 hover:bg-paper hover:text-basalt"><X className="h-4 w-4" /></button>
       </DialogContent>
     </Dialog>
   );
