@@ -1112,7 +1112,7 @@ function DashboardContent() {
   return (
     <div className="min-h-screen bg-paper text-basalt">
       <SiteHeader minimal />
-      <main className="container py-10 lg:py-14">
+      <main className="mx-auto w-full max-w-[1680px] px-4 py-10 sm:px-6 lg:px-10 lg:py-14">
         <div className="grid gap-8 lg:grid-cols-[210px_minmax(0,1fr)]">
           <aside className="lg:sticky lg:top-[96px] lg:self-start">
             <p className="hidden px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-basalt/40 lg:block">Operator</p>
