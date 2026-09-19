@@ -18,6 +18,10 @@ import { cn } from "@/lib/utils";
 
 const validTypes = new Set(["all", "stay", "eat", "tour", "experience"]);
 
+// Canonicalize an Armenian region name so "Tavush" and "Tavush Province" (or
+// "…Marz") collapse to one filter option and still match listings either way.
+const normalizeRegion = (r: string) => r.trim().replace(/\s+(province|marz)$/i, "").trim();
+
 export default function Explore({ initialType = "" }: { initialType?: string }) {
   const [, navigate] = useLocation();
   const { listings } = useListings();
@@ -31,15 +35,27 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
   // Region options = the regions the site actually showcases: the admin's home
   // region cards, plus any region that has a live listing. (Not every Armenian
   // marze — an empty region would only create a dead-end "0 places" filter.)
-  const showcasedRegions = (settings.homeContent.regionCards ?? []).map((r) => r.name).filter(Boolean);
-  const listingRegions = listings.map((listing) => listing.region).filter(Boolean);
-  const regions = Array.from(new Set([...showcasedRegions, ...listingRegions])).sort();
+  const showcasedRegions = (settings.homeContent.regionCards ?? []).map((r) => normalizeRegion(r.name)).filter(Boolean);
+  const listingRegions = listings.map((listing) => normalizeRegion(listing.region)).filter(Boolean);
+  // Dedupe case-insensitively (keep first-seen casing) so no near-duplicates.
+  const regions = (() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const r of [...showcasedRegions, ...listingRegions]) {
+      const k = r.toLowerCase();
+      if (!seen.has(k)) {
+        seen.add(k);
+        out.push(r);
+      }
+    }
+    return out.sort();
+  })();
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return listings.filter((listing) => {
       const matchesType = type === "all" || listing.type === type;
-      const matchesRegion = region === "all" || listing.region === region;
+      const matchesRegion = region === "all" || normalizeRegion(listing.region).toLowerCase() === region.toLowerCase();
       const haystack = [listing.title, listing.city, listing.region, listing.type, listing.shortDescription, ...listing.tags].join(" ").toLowerCase();
       return matchesType && matchesRegion && (!needle || haystack.includes(needle));
     });
