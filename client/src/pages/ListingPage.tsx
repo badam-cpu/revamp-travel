@@ -170,23 +170,32 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
           <h1 className="mt-1.5 font-display text-4xl leading-[1.0] tracking-[-0.035em] sm:text-5xl">{listing.title}</h1>
         </div>
 
-        {/* Photo mosaic: one large + a 2×2 grid, with "Show all photos". */}
+        {/* Photo showcase: a big hero + 3 (one wide, two below) — fewer, larger
+            cells than a 5-up, all landscape so rooms show in full. */}
         {(() => {
           const photos = Array.from(new Set([listing.image, ...(listing.gallery ?? [])].filter(Boolean))) as string[];
-          const grid = photos.slice(1, 5);
+          const Cell = ({ i }: { i: number }) =>
+            photos[i] ? (
+              <button type="button" onClick={() => setLightbox(i)} className="relative block h-full w-full overflow-hidden bg-basalt/5">
+                <img src={photos[i]} alt="" className="h-full w-full object-cover transition-transform duration-500 hover:scale-[1.02]" />
+              </button>
+            ) : (
+              <div className="h-full w-full bg-basalt/5" />
+            );
           return (
             <section className="container mt-4">
-              <div className="relative grid gap-1.5 overflow-hidden rounded-[14px] md:aspect-[11/4] md:grid-cols-2">
+              <div className="relative grid gap-1.5 overflow-hidden rounded-[14px] md:aspect-[9/4] md:grid-cols-2">
                 <button type="button" onClick={() => setLightbox(0)} className="relative block aspect-[3/2] w-full overflow-hidden md:aspect-auto md:h-full">
                   <img src={photos[0]} alt={listing.title} className="h-full w-full object-cover transition-transform duration-500 hover:scale-[1.02]" />
                   <DiscountBadge listing={listing} className="absolute left-4 top-4" />
                 </button>
-                <div className="hidden grid-cols-2 grid-rows-2 gap-1.5 md:grid">
-                  {grid.map((src, i) => (
-                    <button key={src + i} type="button" onClick={() => setLightbox(i + 1)} className="relative block h-full w-full overflow-hidden bg-basalt/5">
-                      <img src={src} alt="" className="h-full w-full object-cover transition-transform duration-500 hover:scale-[1.02]" />
-                    </button>
-                  ))}
+                {/* Right: one wide photo on top, two below. */}
+                <div className="hidden grid-rows-2 gap-1.5 md:grid">
+                  <Cell i={1} />
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <Cell i={2} />
+                    <Cell i={3} />
+                  </div>
                 </div>
                 {photos.length > 1 && (
                   <button type="button" onClick={() => setLightbox(0)} className="absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-full border border-basalt/20 bg-paper px-4 py-2 text-xs font-semibold text-basalt shadow-md transition-colors hover:border-apricot hover:text-apricot">
