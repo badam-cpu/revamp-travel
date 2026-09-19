@@ -176,12 +176,12 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
           const grid = photos.slice(1, 5);
           return (
             <section className="container mt-4">
-              <div className="relative grid gap-2 overflow-hidden rounded-[14px] md:aspect-[5/2] md:grid-cols-2">
-                <button type="button" onClick={() => setLightbox(0)} className="relative block aspect-[4/3] w-full overflow-hidden md:aspect-auto md:h-full">
+              <div className="relative grid gap-1.5 overflow-hidden rounded-[14px] md:aspect-[11/4] md:grid-cols-2">
+                <button type="button" onClick={() => setLightbox(0)} className="relative block aspect-[3/2] w-full overflow-hidden md:aspect-auto md:h-full">
                   <img src={photos[0]} alt={listing.title} className="h-full w-full object-cover transition-transform duration-500 hover:scale-[1.02]" />
                   <DiscountBadge listing={listing} className="absolute left-4 top-4" />
                 </button>
-                <div className="hidden grid-cols-2 grid-rows-2 gap-2 md:grid">
+                <div className="hidden grid-cols-2 grid-rows-2 gap-1.5 md:grid">
                   {grid.map((src, i) => (
                     <button key={src + i} type="button" onClick={() => setLightbox(i + 1)} className="relative block h-full w-full overflow-hidden bg-basalt/5">
                       <img src={src} alt="" className="h-full w-full object-cover transition-transform duration-500 hover:scale-[1.02]" />
