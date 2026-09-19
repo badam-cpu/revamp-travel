@@ -122,7 +122,16 @@ function cnBadge(status: Post["status"]): string {
 
 function ToolbarBtn({ onClick, title, children }: { onClick: () => void; title: string; children: ReactNode }) {
   return (
-    <button type="button" onClick={onClick} title={title} aria-label={title} className="grid h-8 w-8 place-items-center rounded-[4px] text-basalt/70 transition-colors hover:bg-paper hover:text-apricot">
+    <button
+      type="button"
+      // Prevent the mousedown from moving focus out of the textarea, so the
+      // selection stays intact when the format is applied.
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className="grid h-8 w-8 place-items-center rounded-[4px] text-basalt/70 transition-colors hover:bg-paper hover:text-apricot"
+    >
       {children}
     </button>
   );
@@ -147,34 +156,42 @@ function PostEditor({ post, authorId, onDone, onCancel }: { post: Post | null; a
 
   const previewHtml = useMemo(() => renderMarkdown(body), [body]);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
+  // Remember the last real selection so a toolbar click applies to exactly
+  // that range even if focus briefly moved.
+  const selRef = useRef({ start: 0, end: 0 });
+  const saveSel = () => {
+    const el = bodyRef.current;
+    if (el) selRef.current = { start: el.selectionStart, end: el.selectionEnd };
+  };
 
-  // Toolbar: wrap the current selection (bold/italic/link/image) or prefix the
-  // current line (heading/list/quote). Keeps the stored format Markdown so the
-  // safe render pipeline (shared/markdown.ts) is unchanged — the admin just
-  // never has to type the syntax.
+  // Toolbar: wrap the tracked selection (bold/italic/link/image) or prefix its
+  // line (heading/list/quote). Keeps the stored format Markdown so the safe
+  // render pipeline (shared/markdown.ts) is unchanged — the admin never types
+  // the syntax.
   const surround = (before: string, after = before, placeholder = "") => {
     const el = bodyRef.current;
     if (!el) return;
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
+    const { start, end } = selRef.current;
     const sel = body.slice(start, end) || placeholder;
     setBody(body.slice(0, start) + before + sel + after + body.slice(end));
     requestAnimationFrame(() => {
       el.focus();
       const pos = start + before.length;
       el.setSelectionRange(pos, pos + sel.length);
+      selRef.current = { start: pos, end: pos + sel.length };
     });
   };
   const prefixLine = (prefix: string) => {
     const el = bodyRef.current;
     if (!el) return;
-    const start = el.selectionStart;
+    const { start } = selRef.current;
     const lineStart = body.lastIndexOf("\n", start - 1) + 1;
     setBody(body.slice(0, lineStart) + prefix + body.slice(lineStart));
     requestAnimationFrame(() => {
       el.focus();
       const pos = start + prefix.length;
       el.setSelectionRange(pos, pos);
+      selRef.current = { start: pos, end: pos };
     });
   };
   const insertLink = () => {
@@ -283,6 +300,10 @@ function PostEditor({ post, authorId, onDone, onCancel }: { post: Post | null; a
               rows={16}
               value={body}
               onChange={(e) => setBody(e.target.value)}
+              onSelect={saveSel}
+              onKeyUp={saveSel}
+              onMouseUp={saveSel}
+              onBlur={saveSel}
               placeholder={"Start writing…\n\nSelect a line and click Heading, or select words and click Bold. You can also just type."}
               className="min-h-[20rem] w-full rounded-none border border-basalt/15 bg-paper px-3 py-2 text-sm leading-7 outline-none focus:border-apricot"
             />

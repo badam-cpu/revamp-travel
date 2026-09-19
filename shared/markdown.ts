@@ -42,7 +42,10 @@ export function renderMarkdown(src: string): string {
   let para: string[] = [];
   const flushPara = () => {
     if (para.length) {
-      out.push(`<p>${inline(para.join(" "))}</p>`);
+      // Preserve single line breaks as <br> (Enter = a line break), which is
+      // what a non-technical author expects — plain-pasted text keeps its
+      // shape instead of collapsing into one run-on paragraph.
+      out.push(`<p>${inline(para.join("<br>"))}</p>`);
       para = [];
     }
   };
