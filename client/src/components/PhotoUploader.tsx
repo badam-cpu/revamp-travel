@@ -8,7 +8,7 @@
  * bucket `listing-photos` (see supabase/migrations/0005_listing_photos_storage.sql),
  * scoped by RLS to the signed-in user's own `<uid>/…` folder — the same
  * anon-key-plus-RLS trust model as everything else the client writes. Uploads
- * are downscaled/re-encoded in-browser first (max 2560px long edge, WebP q≈0.9)
+ * are downscaled/re-encoded in-browser first (max 3000px long edge, WebP q≈0.9)
  * so photos stay crisp on full-width galleries and the lightbox without shipping
  * raw multi-MB originals. HEIC or anything the canvas can't decode is uploaded
  * as-is. See client/src/lib/imageUpload.ts.

@@ -1,19 +1,19 @@
 /**
  * Browser → Supabase Storage image upload, shared by PhotoUploader (listing
  * photos) and AdminBlog (blog body/cover images). Images are downscaled/
- * re-encoded in-browser first (max 2560px long edge, WebP q≈0.9 — JPEG q≈0.92
+ * re-encoded in-browser first (max 3000px long edge, WebP q≈0.9 — JPEG q≈0.92
  * where WebP encoding isn't available) so they stay crisp on full-width galleries
- * and the full-screen lightbox, including retina/2× displays, without shipping
- * raw multi-MB originals. Uploads go to the public `listing-photos` bucket,
+ * and the full-screen lightbox, including large retina/2× displays, without
+ * shipping raw multi-MB originals. Uploads go to the public `listing-photos` bucket,
  * scoped by RLS to the signed-in user's own `<uid>/…` folder (see
  * supabase/migrations/0005_listing_photos_storage.sql).
  */
 import { supabase } from "@/lib/supabase";
 
 const BUCKET = "listing-photos";
-// 2560px covers a full-width gallery/lightbox at 2× device pixel ratio; below
-// this photos get upscaled on screen and look soft/pixelated.
-const MAX_DIMENSION = 2560;
+// 3000px keeps photos crisp even in the full-screen lightbox on large 2× (retina)
+// monitors; below this photos get upscaled on screen and look soft/pixelated.
+const MAX_DIMENSION = 3000;
 const WEBP_QUALITY = 0.9;
 const JPEG_QUALITY = 0.92;
 
