@@ -53,7 +53,7 @@ export default function MapPage() {
             ))}
           </div>
         </aside>
-        <ArmeniaMap listings={filtered} selectedId={selectedId} onSelect={setSelectedId} className="order-1 h-[58vh] min-h-[430px] lg:order-2 lg:h-[calc(100vh-76px)]" />
+        <ArmeniaMap listings={filtered} selectedId={selectedId} onSelect={setSelectedId} className="atlas-map--flush order-1 h-[58vh] min-h-[430px] lg:order-2 lg:h-[calc(100vh-76px)]" />
       </main>
     </div>
   );
