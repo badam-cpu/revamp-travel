@@ -4,9 +4,9 @@
  * rendered by shared/markdown.ts (safe — HTML-escaped first). Admin-only writes
  * are enforced by RLS, not this component.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "wouter";
-import { ExternalLink, Eye, Pencil, Plus, Trash2 } from "lucide-react";
+import { Bold, ExternalLink, Eye, Heading2, Image as ImageIcon, Italic, Link2, List, Pencil, Plus, Quote, Trash2 } from "lucide-react";
 import { PhotoUploader, type PhotoUploaderHandle } from "@/components/PhotoUploader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -120,6 +120,14 @@ function cnBadge(status: Post["status"]): string {
     : "shrink-0 border border-basalt/20 bg-basalt/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-basalt/50";
 }
 
+function ToolbarBtn({ onClick, title, children }: { onClick: () => void; title: string; children: ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} title={title} aria-label={title} className="grid h-8 w-8 place-items-center rounded-[4px] text-basalt/70 transition-colors hover:bg-paper hover:text-apricot">
+      {children}
+    </button>
+  );
+}
+
 function PostEditor({ post, authorId, onDone, onCancel }: { post: Post | null; authorId: string | null; onDone: () => void; onCancel: () => void }) {
   const [title, setTitle] = useState(post?.title ?? "");
   const [slug, setSlug] = useState(post?.slug ?? "");
@@ -138,6 +146,45 @@ function PostEditor({ post, authorId, onDone, onCancel }: { post: Post | null; a
   }, [title, slugTouched]);
 
   const previewHtml = useMemo(() => renderMarkdown(body), [body]);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+
+  // Toolbar: wrap the current selection (bold/italic/link/image) or prefix the
+  // current line (heading/list/quote). Keeps the stored format Markdown so the
+  // safe render pipeline (shared/markdown.ts) is unchanged — the admin just
+  // never has to type the syntax.
+  const surround = (before: string, after = before, placeholder = "") => {
+    const el = bodyRef.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const sel = body.slice(start, end) || placeholder;
+    setBody(body.slice(0, start) + before + sel + after + body.slice(end));
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + before.length;
+      el.setSelectionRange(pos, pos + sel.length);
+    });
+  };
+  const prefixLine = (prefix: string) => {
+    const el = bodyRef.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const lineStart = body.lastIndexOf("\n", start - 1) + 1;
+    setBody(body.slice(0, lineStart) + prefix + body.slice(lineStart));
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + prefix.length;
+      el.setSelectionRange(pos, pos);
+    });
+  };
+  const insertLink = () => {
+    const url = window.prompt("Link URL (https://…)");
+    if (url) surround("[", `](${url.trim()})`, "link text");
+  };
+  const insertImage = () => {
+    const url = window.prompt("Image URL (https://…)");
+    if (url) surround("![", `](${url.trim()})`, "alt text");
+  };
 
   const save = async (publish?: boolean) => {
     const nextStatus: Post["status"] = publish === undefined ? status : publish ? "published" : "draft";
@@ -213,18 +260,37 @@ function PostEditor({ post, authorId, onDone, onCancel }: { post: Post | null; a
 
         <div className="grid gap-1.5">
           <div className="flex items-center justify-between">
-            <Label className="text-xs font-semibold text-basalt/60">Body (Markdown)</Label>
+            <Label className="text-xs font-semibold text-basalt/60">Body</Label>
             <button type="button" onClick={() => setShowPreview((s) => !s)} className="inline-flex items-center gap-1.5 text-xs font-semibold text-apricot hover:underline">
               <Eye className="h-3.5 w-3.5" /> {showPreview ? "Hide preview" : "Preview"}
             </button>
           </div>
+          {/* Formatting toolbar — select text, then click; no Markdown to type. */}
+          <div className="flex flex-wrap items-center gap-0.5 border border-basalt/12 bg-chalk p-1.5">
+            <ToolbarBtn onClick={() => surround("**", "**", "bold text")} title="Bold"><Bold className="h-4 w-4" /></ToolbarBtn>
+            <ToolbarBtn onClick={() => surround("*", "*", "italic text")} title="Italic"><Italic className="h-4 w-4" /></ToolbarBtn>
+            <span className="mx-1 h-5 w-px bg-basalt/15" />
+            <ToolbarBtn onClick={() => prefixLine("## ")} title="Heading"><Heading2 className="h-4 w-4" /></ToolbarBtn>
+            <ToolbarBtn onClick={() => prefixLine("- ")} title="Bulleted list"><List className="h-4 w-4" /></ToolbarBtn>
+            <ToolbarBtn onClick={() => prefixLine("> ")} title="Quote"><Quote className="h-4 w-4" /></ToolbarBtn>
+            <span className="mx-1 h-5 w-px bg-basalt/15" />
+            <ToolbarBtn onClick={insertLink} title="Link"><Link2 className="h-4 w-4" /></ToolbarBtn>
+            <ToolbarBtn onClick={insertImage} title="Image"><ImageIcon className="h-4 w-4" /></ToolbarBtn>
+          </div>
           <div className={showPreview ? "grid gap-4 lg:grid-cols-2" : "grid gap-4"}>
-            <Textarea rows={18} value={body} onChange={(e) => setBody(e.target.value)} placeholder={"Write in Markdown.\n\n## A heading\n\n**Bold**, *italic*, [links](https://example.com), lists:\n\n- one\n- two\n\n> A quote"} className="rounded-none font-mono text-sm leading-6" />
+            <textarea
+              ref={bodyRef}
+              rows={16}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder={"Start writing…\n\nSelect a line and click Heading, or select words and click Bold. You can also just type."}
+              className="min-h-[20rem] w-full rounded-none border border-basalt/15 bg-paper px-3 py-2 text-sm leading-7 outline-none focus:border-apricot"
+            />
             {showPreview && (
               <div className="prose-blog max-h-[28rem] overflow-y-auto border border-basalt/12 bg-paper p-5 text-sm leading-7" dangerouslySetInnerHTML={{ __html: previewHtml }} />
             )}
           </div>
-          <p className="text-xs text-basalt/45">Markdown supported: # headings, **bold**, *italic*, `code`, lists, &gt; quotes, [links](url), ![images](url).</p>
+          <p className="text-xs text-basalt/45">Select text, then click a button. Turn on Preview to see exactly how it'll look.</p>
         </div>
       </div>
     </div>
