@@ -125,11 +125,14 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
 
   return (
     <div id="book" className="brand-notch sticky top-[104px] border border-basalt/12 bg-chalk p-6 shadow-[0_20px_55px_rgba(35,35,33,0.1)] lg:max-h-[calc(100vh_-_124px)] lg:overflow-y-auto">
-      <div className="flex items-end justify-between gap-4 border-b border-basalt/10 pb-5">
+      <div className="border-b border-basalt/10 pb-5">
         <p>
-          <strong className="font-display text-4xl font-normal">{priceLabel}</strong>{" "}
+          <strong className="font-display text-[1.75rem] font-normal">{priceLabel}</strong>{" "}
           {listing.price > 0 && <span className="text-sm text-basalt/50">/ {listing.priceUnit}</span>}
         </p>
+        {listing.price > 0 && !selected && (
+          <p className="mt-1 text-xs text-basalt/50">Average nightly rate — select dates for exact pricing.</p>
+        )}
       </div>
 
       {/* Dates — stays pick a range, activities pick a single date; same calendar. */}
