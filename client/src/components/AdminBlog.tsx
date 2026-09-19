@@ -6,7 +6,8 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "wouter";
-import { Bold, ExternalLink, Eye, Heading2, Image as ImageIcon, Italic, Link2, List, Pencil, Plus, Quote, Trash2 } from "lucide-react";
+import { Bold, ExternalLink, Eye, Heading2, Image as ImageIcon, Italic, Link2, List, Loader2, Pencil, Plus, Quote, Trash2 } from "lucide-react";
+import { uploadImage } from "@/lib/imageUpload";
 import { PhotoUploader, type PhotoUploaderHandle } from "@/components/PhotoUploader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -198,9 +199,38 @@ function PostEditor({ post, authorId, onDone, onCancel }: { post: Post | null; a
     const url = window.prompt("Link URL (https://…)");
     if (url) surround("[", `](${url.trim()})`, "link text");
   };
-  const insertImage = () => {
-    const url = window.prompt("Image URL (https://…)");
-    if (url) surround("![", `](${url.trim()})`, "alt text");
+
+  // Image: upload a file to Supabase Storage and insert it at the cursor.
+  const imgInputRef = useRef<HTMLInputElement>(null);
+  const [imgUploading, setImgUploading] = useState(false);
+  const insertImageMarkdown = (alt: string, url: string) => {
+    const el = bodyRef.current;
+    const { start } = selRef.current;
+    const md = `![${alt}](${url})`;
+    setBody(body.slice(0, start) + md + body.slice(start));
+    requestAnimationFrame(() => {
+      if (!el) return;
+      el.focus();
+      const pos = start + md.length;
+      el.setSelectionRange(pos, pos);
+      selRef.current = { start: pos, end: pos };
+    });
+  };
+  const onImageFile = async (file: File) => {
+    if (!authorId) {
+      toast("Sign in to upload images.");
+      return;
+    }
+    setImgUploading(true);
+    try {
+      const url = await uploadImage(file, authorId);
+      insertImageMarkdown(file.name.replace(/\.[^.]+$/, ""), url);
+      toast("Image added.");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Image upload failed.");
+    } finally {
+      setImgUploading(false);
+    }
   };
 
   const save = async (publish?: boolean) => {
@@ -292,7 +322,20 @@ function PostEditor({ post, authorId, onDone, onCancel }: { post: Post | null; a
             <ToolbarBtn onClick={() => prefixLine("> ")} title="Quote"><Quote className="h-4 w-4" /></ToolbarBtn>
             <span className="mx-1 h-5 w-px bg-basalt/15" />
             <ToolbarBtn onClick={insertLink} title="Link"><Link2 className="h-4 w-4" /></ToolbarBtn>
-            <ToolbarBtn onClick={insertImage} title="Image"><ImageIcon className="h-4 w-4" /></ToolbarBtn>
+            <ToolbarBtn onClick={() => !imgUploading && imgInputRef.current?.click()} title="Upload image">
+              {imgUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
+            </ToolbarBtn>
+            <input
+              ref={imgInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) onImageFile(file);
+                e.target.value = "";
+              }}
+            />
           </div>
           <div className={showPreview ? "grid gap-4 lg:grid-cols-2" : "grid gap-4"}>
             <textarea

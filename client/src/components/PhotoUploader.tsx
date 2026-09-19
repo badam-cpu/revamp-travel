@@ -19,7 +19,8 @@
  */
 import { forwardRef, useImperativeHandle, useRef, useState, type DragEvent } from "react";
 import { ImagePlus, Star, X, ArrowLeft, ArrowRight, Loader2, Link2 } from "lucide-react";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { isSupabaseConfigured } from "@/lib/supabase";
+import { uploadImage } from "@/lib/imageUpload";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,38 +29,10 @@ import { cn } from "@/lib/utils";
 
 export type PhotoUploaderHandle = { getValue: () => string[] };
 
-const BUCKET = "listing-photos";
 const MAX_PHOTOS = 12;
-const MAX_DIMENSION = 1600;
-const JPEG_QUALITY = 0.82;
 
 type Photo = { id: string; url: string };
 type Pending = { id: string; name: string; error?: string };
-
-/** Downscale + re-encode an image in the browser. Falls back to the original file if the canvas can't handle it (e.g. HEIC). */
-async function compressImage(file: File): Promise<{ blob: Blob; ext: string; contentType: string }> {
-  const fallback = { blob: file, ext: (file.name.split(".").pop() || "bin").toLowerCase(), contentType: file.type || "application/octet-stream" };
-  if (!file.type.startsWith("image/")) return fallback;
-  try {
-    const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
-    const w = Math.round(bitmap.width * scale);
-    const h = Math.round(bitmap.height * scale);
-    const canvas = document.createElement("canvas");
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return fallback;
-    ctx.drawImage(bitmap, 0, 0, w, h);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", JPEG_QUALITY));
-    if (!blob) return fallback;
-    // Only keep the re-encode if it actually helped (small already-optimized files can grow).
-    if (blob.size >= file.size && scale === 1) return fallback;
-    return { blob, ext: "jpg", contentType: "image/jpeg" };
-  } catch {
-    return fallback;
-  }
-}
 
 export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: string[] }>(function PhotoUploader({ defaultValue = [] }, ref) {
   const { user } = useAuth();
@@ -79,12 +52,8 @@ export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: st
     const id = crypto.randomUUID();
     setPending((prev) => [...prev, { id, name: file.name }]);
     try {
-      const { blob, ext, contentType } = await compressImage(file);
-      const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from(BUCKET).upload(path, blob, { contentType, upsert: false });
-      if (error) throw error;
-      const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-      setPhotos((prev) => [...prev, { id, url: data.publicUrl }]);
+      const url = await uploadImage(file, user.id);
+      setPhotos((prev) => [...prev, { id, url }]);
       setPending((prev) => prev.filter((p) => p.id !== id));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Upload failed";
