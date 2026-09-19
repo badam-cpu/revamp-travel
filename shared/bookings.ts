@@ -135,14 +135,29 @@ export function addDaysIso(iso: string, days: number): string {
  *   • anything else    → flat unit price
  */
 export function computeBookingAmountCents(
-  listing: { priceCents: number; priceUnit: string; cancellationPolicy?: CancellationPolicy; nonrefundableDiscountPercent?: number },
+  listing: {
+    priceCents: number;
+    priceUnit: string;
+    cancellationPolicy?: CancellationPolicy;
+    nonrefundableDiscountPercent?: number;
+    seasonalRates?: { start: string; end: string; priceCents: number }[];
+  },
   params: { startDate: string; endDate: string; guests: number },
 ): number {
   const unit = (listing.priceUnit || "").toLowerCase().trim();
   const base = Math.max(0, Math.round(listing.priceCents));
   let total: number;
-  if (PER_NIGHT_UNITS.has(unit)) total = base * nightsBetween(params.startDate, params.endDate);
-  else if (PER_PERSON_UNITS.has(unit)) total = base * Math.max(1, params.guests);
+  if (PER_NIGHT_UNITS.has(unit)) {
+    // Sum each night at its per-date rate: a matching seasonal/date-range rate
+    // if the operator set one (last match wins), otherwise the base nightly price.
+    const rates = listing.seasonalRates ?? [];
+    let sum = 0;
+    for (let d = params.startDate; d < params.endDate; d = addDaysIso(d, 1)) {
+      const match = rates.filter((r) => r.start <= d && d <= r.end).pop();
+      sum += Math.max(0, Math.round(match ? match.priceCents : base));
+    }
+    total = sum;
+  } else if (PER_PERSON_UNITS.has(unit)) total = base * Math.max(1, params.guests);
   else total = base;
   // Non-refundable rate is offered at a discount as the incentive.
   if (listing.cancellationPolicy === "non_refundable") {

@@ -45,6 +45,15 @@ export interface ListingRoom {
   beds: RoomBed[];
 }
 
+/** A per-period nightly rate override (a season or a specific date range).
+ * `start`/`end` are inclusive night dates (YYYY-MM-DD); `priceCents` is AMD. */
+export interface SeasonalRate {
+  start: string;
+  end: string;
+  priceCents: number;
+  label?: string;
+}
+
 export interface Listing {
   id: string;
   slug: string;
@@ -101,6 +110,8 @@ export interface Listing {
   discountEnd?: string;
   /** Stay sleeping arrangement — rooms and the beds in each. */
   rooms?: ListingRoom[];
+  /** Per-period nightly rate overrides (seasonal / date-range pricing). */
+  seasonalRates?: SeasonalRate[];
 }
 
 // Deployment note: this fork replaces the Manus-managed `/manus-storage/...`
@@ -514,4 +525,6 @@ export interface ListingInput {
   discountEnd?: string;
   /** Stay sleeping arrangement — rooms and the beds in each. */
   rooms?: ListingRoom[];
+  /** Per-period nightly rate overrides (seasonal / date-range pricing). */
+  seasonalRates?: SeasonalRate[];
 }

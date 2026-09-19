@@ -44,6 +44,8 @@ import { geocodeQuery } from "@/lib/googleMaps";
 import { AmenityPicker, AmenityPickerHandle } from "@/components/AmenityPicker";
 import { HouseRulesPicker, HouseRulesPickerHandle } from "@/components/HouseRulesPicker";
 import { RoomsEditor, RoomsEditorHandle } from "@/components/RoomsEditor";
+import { RatesEditor, RatesEditorHandle } from "@/components/RatesEditor";
+import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
 import { SearchableMultiSelect, SearchableMultiSelectHandle } from "@/components/SearchableMultiSelect";
 import { OperatorBookings } from "@/components/OperatorBookings";
@@ -86,6 +88,7 @@ interface RefLists {
   notSuitableFor: string[];
   houseRules: string[];
   rooms: import("@shared/listings").ListingRoom[];
+  seasonalRates: import("@shared/listings").SeasonalRate[];
 }
 
 function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLists): ListingInput {
@@ -95,7 +98,7 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
   // amenities/photos and the searchable lists (notIncluded/whatToBring/
   // notSuitableFor) come from their ref-based pickers, passed in via `lists`.
   // Highlights stays a free-text field; importantInfo a free-text note.
-  const { amenities, photos, notIncluded, whatToBring, notSuitableFor, houseRules, rooms } = lists;
+  const { amenities, photos, notIncluded, whatToBring, notSuitableFor, houseRules, rooms, seasonalRates } = lists;
   const highlights = get("highlights").split(",").map((t) => t.trim()).filter(Boolean);
   const importantInfo = get("importantInfo").trim();
   const facts = [1, 2, 3, 4, 5, 6]
@@ -149,6 +152,7 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
     })(),
     houseRules,
     rooms,
+    seasonalRates,
     neighborhood: get("neighborhood").trim() || undefined,
   };
 }
@@ -227,6 +231,8 @@ function ListingFormDialog({
   const amenitiesRef = useRef<AmenityPickerHandle>(null);
   const houseRulesRef = useRef<HouseRulesPickerHandle>(null);
   const roomsRef = useRef<RoomsEditorHandle>(null);
+  const ratesRef = useRef<RatesEditorHandle>(null);
+  const { settings: siteSettings } = useSiteSettings();
   const photosRef = useRef<PhotoUploaderHandle>(null);
   const notIncludedRef = useRef<SearchableMultiSelectHandle>(null);
   const whatToBringRef = useRef<SearchableMultiSelectHandle>(null);
@@ -297,6 +303,7 @@ function ListingFormDialog({
         notSuitableFor: notSuitableForRef.current?.getValue() ?? [],
         houseRules: houseRulesRef.current?.getValue() ?? [],
         rooms: roomsRef.current?.getValue() ?? [],
+        seasonalRates: ratesRef.current?.getValue() ?? [],
       });
 
       // Keep the map pin (and the nearby-sights it drives) in sync with the
@@ -466,8 +473,9 @@ function ListingFormDialog({
               <div hidden={step !== 3} className="mt-10 grid gap-8">
                 <AmenityPicker ref={amenitiesRef} type={draft.type} defaultValue={draft.amenities ?? []} />
 
-                {/* Stay-only sleeping arrangement + house rules. */}
+                {/* Stay-only sleeping arrangement, seasonal rates + house rules. */}
                 {draft.type === "stay" && <RoomsEditor ref={roomsRef} defaultValue={draft.rooms ?? []} />}
+                {draft.type === "stay" && <RatesEditor ref={ratesRef} defaultValue={draft.seasonalRates ?? []} rate={siteSettings.usdToAmdRate} />}
                 {draft.type === "stay" && <HouseRulesPicker ref={houseRulesRef} defaultValue={draft.houseRules ?? []} />}
 
                 {/* Tour & experience-only detail fields. */}

@@ -141,7 +141,11 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const { data, error } = await supabase.from("site_settings").select(SITE_SETTINGS_COLUMNS).eq("id", 1).maybeSingle();
+      // Select "*" (not a fixed column list) so a not-yet-run migration — a new
+      // column the client knows about but the DB doesn't have yet — can't fail
+      // the whole query and wipe all admin content back to defaults. Missing
+      // columns simply come back undefined and fall back in mapSiteSettingsRow.
+      const { data, error } = await supabase.from("site_settings").select("*").eq("id", 1).maybeSingle();
       if (!error && data) setSettings(mapSiteSettingsRow(data as SiteSettingsRow));
     } catch {
       // Table missing / offline — keep defaults.

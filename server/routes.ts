@@ -302,7 +302,7 @@ export function registerApiRoutes(app: Express) {
     // Read the listing under RLS — published listings are publicly readable.
     const { data: listing, error: readErr } = await supa
       .from("listings")
-      .select("id, type, title, status, price_cents, price_unit, blocked_ranges, cancellation_policy, free_cancel_days, nonrefundable_discount_percent, cleaning_fee_cents, discount_type, discount_value, discount_start, discount_end")
+      .select("*")
       .eq("id", listingId)
       .maybeSingle();
     if (readErr || !listing) return res.status(404).json({ error: "Listing not found." });
@@ -318,6 +318,7 @@ export function registerApiRoutes(app: Express) {
         priceUnit: listing.price_unit,
         cancellationPolicy: listing.cancellation_policy ?? "flexible",
         nonrefundableDiscountPercent: listing.nonrefundable_discount_percent ?? 0,
+        seasonalRates: Array.isArray(listing.seasonal_rates) ? listing.seasonal_rates : [],
       },
       { startDate, endDate, guests },
     );

@@ -87,6 +87,7 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
           priceUnit: listing.priceUnit,
           cancellationPolicy: listing.cancellationPolicy,
           nonrefundableDiscountPercent: listing.nonrefundableDiscountPercent,
+          seasonalRates: listing.seasonalRates,
         },
         { ...selected, guests },
       )
