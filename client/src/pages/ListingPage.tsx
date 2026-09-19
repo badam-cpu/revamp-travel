@@ -176,7 +176,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
           const grid = photos.slice(1, 5);
           return (
             <section className="container mt-4">
-              <div className="relative grid gap-2 overflow-hidden rounded-[14px] md:aspect-[2/1] md:grid-cols-2">
+              <div className="relative grid gap-2 overflow-hidden rounded-[14px] md:aspect-[5/2] md:grid-cols-2">
                 <button type="button" onClick={() => setGalleryOpen(true)} className="relative block aspect-[4/3] w-full overflow-hidden md:aspect-auto md:h-full">
                   <img src={photos[0]} alt={listing.title} className="h-full w-full object-cover transition-transform duration-500 hover:scale-[1.02]" />
                   <DiscountBadge listing={listing} className="absolute left-4 top-4" />
@@ -222,7 +222,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
               {/* Description — full width, readable body (not title-sized, not pale). */}
               <div className="mt-8 max-w-3xl">
                 <p className="text-lg font-medium leading-relaxed text-basalt sm:text-xl">{listing.shortDescription}</p>
-                <p className="mt-4 whitespace-pre-line text-[15px] leading-8 text-basalt/80">{listing.longDescription}</p>
+                <p className="mt-4 whitespace-pre-line text-[15px] leading-8 text-basalt/90">{listing.longDescription}</p>
               </div>
 
               {listing.facts.length > 0 && (
