@@ -20,6 +20,7 @@ import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { cn } from "@/lib/utils";
+import { imgAttrs } from "@/lib/responsiveImg";
 import { describeCancellationPolicy, averageNightlyCents } from "@shared/bookings";
 import { buildBreadcrumbJsonLd, buildListingJsonLd } from "@shared/seo";
 import { toast } from "sonner";
@@ -79,7 +80,7 @@ function HeroCarousel({ photos, title, onOpen, badge }: { photos: string[]; titl
             onClick={() => onOpen(i)}
             className="h-full w-full shrink-0"
           >
-            <img src={src} alt={idx === 0 ? title : ""} className="h-full w-full object-cover" />
+            <img {...imgAttrs(src, "(min-width:1024px) 1100px, 100vw")} alt={idx === 0 ? title : ""} loading={idx === 0 ? undefined : "lazy"} className="h-full w-full object-cover" />
           </button>
         ))}
       </div>
@@ -473,7 +474,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
                 <ChevronRight className="h-5 w-5" />
               </button>
             )}
-            <img src={photos[lightbox]} alt={`${listing.title} photo ${lightbox + 1}`} className="max-h-[86vh] max-w-[88vw] object-contain" />
+            <img {...imgAttrs(photos[lightbox], "90vw")} alt={`${listing.title} photo ${lightbox + 1}`} className="max-h-[86vh] max-w-[88vw] object-contain" />
           </div>
         );
       })()}

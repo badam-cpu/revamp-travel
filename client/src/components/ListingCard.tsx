@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { averageNightlyCents } from "@shared/bookings";
+import { imgAttrs } from "@/lib/responsiveImg";
 import { DiscountBadge } from "@/components/DiscountBadge";
 
 export function ListingCard({ listing, large = false, active = false, onHover }: { listing: Listing; large?: boolean; active?: boolean; onHover?: (id?: string) => void }) {
@@ -24,7 +25,7 @@ export function ListingCard({ listing, large = false, active = false, onHover }:
     >
       <Link href={`/listing/${listing.slug}`} className="block focus-visible:outline-none">
         <div className={cn("listing-image brand-notch relative overflow-hidden bg-basalt/5", large ? "aspect-[16/10]" : "aspect-[4/3]")}> 
-          <img src={listing.image} alt={listing.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.025]" />
+          <img {...imgAttrs(listing.image, large ? "(min-width:1024px) 66vw, 100vw" : "(min-width:1024px) 33vw, (min-width:640px) 50vw, 100vw")} alt={listing.title} loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.025]" />
           <div className="absolute inset-0 bg-gradient-to-t from-basalt/55 via-transparent to-transparent" />
           <span className="absolute left-4 top-4 bg-paper px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.17em] text-basalt">
             {typeLabels[listing.type]}

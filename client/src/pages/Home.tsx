@@ -5,6 +5,7 @@ import { Link } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SearchBar } from "@/components/SearchBar";
+import { imgAttrs } from "@/lib/responsiveImg";
 import { ListingCard } from "@/components/ListingCard";
 import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { Button } from "@/components/ui/button";
@@ -115,7 +116,7 @@ export default function Home() {
           {heroSlides.map((src, i) => (
             <img
               key={`${src}-${i}`}
-              src={src}
+              {...imgAttrs(src, "100vw")}
               alt={i === 0 ? "Armenian highlands at morning light" : ""}
               aria-hidden={i === heroIdx ? undefined : true}
               className={`absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-[1200ms] ${i === heroIdx ? "opacity-100" : "opacity-0"}`}
