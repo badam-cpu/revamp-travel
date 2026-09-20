@@ -13,7 +13,20 @@
  * Loosely typed / outside tsconfig, like netlify/functions/api.ts.
  */
 import { supabaseAdmin, adminConfigured } from "../../server/supabaseAdmin.js";
-import { fetchIcalBlockedRanges } from "../../server/ical.js";
+import { fetchMergedBlockedRanges } from "../../server/ical.js";
+
+/** Legacy single `ical_url` → one Airbnb feed; otherwise use `ical_feeds`. */
+function feedsFor(row: { ical_url?: string | null; ical_feeds?: unknown }) {
+  const feeds: { url: string; label: string }[] = [];
+  if (Array.isArray(row.ical_feeds)) {
+    for (const f of row.ical_feeds as { url?: unknown; label?: unknown }[]) {
+      const url = typeof f?.url === "string" ? f.url.trim() : "";
+      if (url) feeds.push({ url, label: typeof f?.label === "string" && f.label.trim() ? f.label.trim() : "Calendar" });
+    }
+  }
+  if (feeds.length === 0 && row.ical_url) feeds.push({ url: row.ical_url, label: "Airbnb" });
+  return feeds;
+}
 
 export const handler = async () => {
   if (!adminConfigured()) {
@@ -23,10 +36,8 @@ export const handler = async () => {
   const admin = supabaseAdmin();
   if (!admin) return { statusCode: 200, body: JSON.stringify({ skipped: "no_client" }) };
 
-  const { data, error } = await admin
-    .from("listings")
-    .select("id, ical_url")
-    .not("ical_url", "is", null);
+  // select("*") so a not-yet-run 0034 (ical_feeds) migration doesn't break the cron.
+  const { data, error } = await admin.from("listings").select("*");
   if (error || !data) {
     console.error("[refresh-ical] failed to list listings", error);
     return { statusCode: 500, body: JSON.stringify({ error: "list_failed" }) };
@@ -34,15 +45,18 @@ export const handler = async () => {
 
   let refreshed = 0;
   let failed = 0;
-  for (const listing of data as { id: string; ical_url: string | null }[]) {
-    if (!listing.ical_url) continue;
+  for (const listing of data as { id: string; ical_url: string | null; ical_feeds: unknown }[]) {
+    const feeds = feedsFor(listing);
+    if (feeds.length === 0) continue;
     const syncedAt = new Date().toISOString();
     try {
-      const blockedRanges = await fetchIcalBlockedRanges(listing.ical_url);
-      await admin.from("listings").update({ blocked_ranges: blockedRanges, ical_synced_at: syncedAt, ical_error: null }).eq("id", listing.id);
-      refreshed++;
+      const { ranges, errors } = await fetchMergedBlockedRanges(feeds);
+      const patch: Record<string, unknown> = { ical_synced_at: syncedAt, ical_error: errors.length ? errors.join("; ") : null };
+      // Keep last-known-good ranges if every feed failed.
+      if (errors.length < feeds.length) patch.blocked_ranges = ranges;
+      await admin.from("listings").update(patch).eq("id", listing.id);
+      if (errors.length) failed++; else refreshed++;
     } catch (err) {
-      // Record the failure but never wipe the last-known-good busy ranges.
       const message = err instanceof Error ? err.message : "Couldn't refresh this calendar.";
       await admin.from("listings").update({ ical_error: message, ical_synced_at: syncedAt }).eq("id", listing.id);
       failed++;

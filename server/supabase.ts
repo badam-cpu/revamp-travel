@@ -231,3 +231,30 @@ export function userClient(accessToken: string) {
     auth: { persistSession: false },
   });
 }
+
+/**
+ * All unavailable date ranges for a PUBLISHED listing, for the public export
+ * .ics feed (GET /api/ical/:id) that operators paste into Airbnb/Booking.com.
+ * Merges confirmed bookings (identity-free `listing_booked_ranges` view) with
+ * the listing's imported iCal `blocked_ranges` and operator `manual_blocked_ranges`.
+ * Anon-key only — everything read here is already public. Returns null when the
+ * listing isn't found/published. Every `end` is EXCLUSIVE (iCal DTEND semantics).
+ */
+export async function getListingBusyRanges(id: string): Promise<{ title: string; ranges: { start: string; end: string }[] } | null> {
+  if (!client) return null;
+  const { data: listing } = await client
+    .from("listings")
+    .select("title, status, blocked_ranges, manual_blocked_ranges")
+    .eq("id", id)
+    .eq("status", "published")
+    .maybeSingle();
+  if (!listing) return null;
+  const { data: booked } = await client.from("listing_booked_ranges").select("start_date, end_date").eq("listing_id", id);
+  const arr = (v: unknown) => (Array.isArray(v) ? (v as { start: string; end: string }[]) : []);
+  const ranges = [
+    ...arr(listing.blocked_ranges),
+    ...arr(listing.manual_blocked_ranges),
+    ...((booked ?? []).map((b) => ({ start: b.start_date as string, end: b.end_date as string }))),
+  ].filter((r) => r && r.start && r.end);
+  return { title: listing.title as string, ranges };
+}

@@ -38,6 +38,8 @@ export type LiveListing = Listing & {
   reviewedAt: string | null;
   /** Airbnb (or other) calendar export URL, availability sync state, and the cached busy ranges. */
   icalUrl: string | null;
+  /** Multiple import feeds (Airbnb, Booking.com, …). Legacy icalUrl still read as a fallback. */
+  icalFeeds: { url: string; label: string }[];
   icalSyncedAt: string | null;
   icalError: string | null;
   blockedRanges: BlockedRange[];
@@ -59,6 +61,8 @@ interface ListingsContextType {
   deleteListing: (id: string) => Promise<void>;
   /** Save the calendar export URL on a listing (the actual sync is POST /api/sync-ical). */
   setIcalUrl: (id: string, icalUrl: string | null) => Promise<LiveListing>;
+  /** Save the listing's import feeds (Airbnb/Booking.com/…); the sync then merges them. */
+  setIcalFeeds: (id: string, feeds: { url: string; label: string }[]) => Promise<LiveListing>;
   setSeasonalRates: (id: string, rates: SeasonalRate[]) => Promise<LiveListing>;
   /** Save the operator's manual availability blocks (content-only; status untouched). */
   setManualBlocks: (id: string, ranges: BlockedRange[]) => Promise<LiveListing>;
@@ -100,6 +104,7 @@ interface ListingRow {
   review_note: string | null;
   reviewed_at: string | null;
   ical_url: string | null;
+  ical_feeds: { url: string; label: string }[] | null;
   ical_synced_at: string | null;
   ical_error: string | null;
   blocked_ranges: BlockedRange[] | null;
@@ -155,6 +160,7 @@ function mapListingRow(row: ListingRow): LiveListing {
     reviewNote: row.review_note,
     reviewedAt: row.reviewed_at,
     icalUrl: row.ical_url,
+    icalFeeds: Array.isArray(row.ical_feeds) ? row.ical_feeds : [],
     icalSyncedAt: row.ical_synced_at,
     icalError: row.ical_error,
     blockedRanges: Array.isArray(row.blocked_ranges) ? row.blocked_ranges : [],
@@ -232,6 +238,7 @@ function fallbackListings(): LiveListing[] {
     reviewNote: null,
     reviewedAt: null,
     icalUrl: null,
+    icalFeeds: [],
     icalSyncedAt: null,
     icalError: null,
     blockedRanges: [],
@@ -346,6 +353,20 @@ export function ListingsProvider({ children }: { children: React.ReactNode }) {
     return listing;
   }, []);
 
+  const setIcalFeeds = useCallback(async (id: string, feeds: { url: string; label: string }[]): Promise<LiveListing> => {
+    const clean = feeds.map((f) => ({ url: f.url.trim(), label: f.label.trim() || "Calendar" })).filter((f) => f.url);
+    const { data, error } = await supabase
+      .from("listings")
+      .update({ ical_feeds: clean })
+      .eq("id", id)
+      .select(ROW_COLUMNS)
+      .single();
+    if (error) throw new Error(error.message);
+    const listing = mapListingRow(data);
+    setListings((prev) => prev.map((item) => (item.id === id ? listing : item)));
+    return listing;
+  }, []);
+
   // Update only a listing's seasonal/daily rates (from the pricing timeline).
   // A content-only edit — doesn't touch status (review gate untouched).
   const setSeasonalRates = useCallback(async (id: string, rates: SeasonalRate[]): Promise<LiveListing> => {
@@ -392,7 +413,7 @@ export function ListingsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <ListingsContext.Provider value={{ listings, loading, offline, refresh, createListing, updateListing, deleteListing, setIcalUrl, setSeasonalRates, setManualBlocks, setListingFacts }}>
+    <ListingsContext.Provider value={{ listings, loading, offline, refresh, createListing, updateListing, deleteListing, setIcalUrl, setIcalFeeds, setSeasonalRates, setManualBlocks, setListingFacts }}>
       {children}
     </ListingsContext.Provider>
   );

@@ -193,6 +193,10 @@ export async function submitSupportContact(email: string, name?: string): Promis
 export interface IcalSyncResult {
   count: number;
   syncedAt: string;
+  /** Number of feeds synced (multi-feed stays); undefined for single-feed. */
+  feeds?: number;
+  /** Per-feed errors (a bad feed doesn't fail the whole sync). */
+  errors?: string[];
 }
 
 /**

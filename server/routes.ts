@@ -11,7 +11,7 @@
  */
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
-import { listPublishedForPlanner, verifyUser, userClient } from "./supabase.js";
+import { listPublishedForPlanner, verifyUser, userClient, getListingBusyRanges } from "./supabase.js";
 import { supabaseAdmin, adminConfigured } from "./supabaseAdmin.js";
 import { paylinkConfigured, registerPayment } from "./paylink.js";
 import { reconcileUserBookings, logBookingEvent } from "./bookings.js";
@@ -22,8 +22,24 @@ import { sendCancellation, sendSupportAlert, type BookingEmailInfo } from "./ema
 import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, promoDiscount, addonUnitCost, nightsBetween, type Addon, DEFAULT_CURRENCY } from "../shared/bookings.js";
 import { planTrip, PlannerError } from "./planner.js";
 import { fetchPrefill, PrefillError } from "./urlPrefill.js";
-import { fetchIcalBlockedRanges } from "./ical.js";
+import { fetchMergedBlockedRanges, buildIcalFeed, type IcalFeed } from "./ical.js";
 import { SafeFetchError } from "./safeFetch.js";
+
+/** Normalize a listing's stored feeds into a clean list, falling back to the
+ *  legacy single `ical_url` (as an "Airbnb" feed) when no feeds are set. */
+function normalizeFeeds(icalFeeds: unknown, legacyUrl: unknown): IcalFeed[] {
+  const feeds: IcalFeed[] = [];
+  if (Array.isArray(icalFeeds)) {
+    for (const f of icalFeeds as { url?: unknown; label?: unknown }[]) {
+      const url = typeof f?.url === "string" ? f.url.trim() : "";
+      if (url) feeds.push({ url, label: typeof f?.label === "string" && f.label.trim() ? f.label.trim() : "Calendar" });
+    }
+  }
+  if (feeds.length === 0 && typeof legacyUrl === "string" && legacyUrl.trim()) {
+    feeds.push({ url: legacyUrl.trim(), label: "Airbnb" });
+  }
+  return feeds;
+}
 import { robotsTxtHandler } from "./robots.js";
 import { sitemapHandler } from "./sitemap.js";
 import { renderForBot } from "./prerender.js";
@@ -248,30 +264,46 @@ export function registerApiRoutes(app: Express) {
     }
     const { listingId } = parsed.data;
 
-    const { data: listing, error: readErr } = await supa.from("listings").select("id, ical_url").eq("id", listingId).maybeSingle();
+    // select("*") so a not-yet-run 0034 (ical_feeds) migration doesn't break sync.
+    const { data: listing, error: readErr } = await supa.from("listings").select("*").eq("id", listingId).maybeSingle();
     if (readErr || !listing) {
       return res.status(404).json({ error: "Listing not found." });
     }
-    if (!listing.ical_url) {
-      return res.status(400).json({ error: "Add an Airbnb calendar export URL to this listing first." });
+    const feeds = normalizeFeeds(listing.ical_feeds, listing.ical_url);
+    if (feeds.length === 0) {
+      return res.status(400).json({ error: "Add a calendar export URL (Airbnb or Booking.com) to this listing first." });
     }
 
     try {
-      const blockedRanges = await fetchIcalBlockedRanges(listing.ical_url);
+      const { ranges, errors } = await fetchMergedBlockedRanges(feeds);
       const syncedAt = new Date().toISOString();
-      const { error: upErr } = await supa
-        .from("listings")
-        .update({ blocked_ranges: blockedRanges, ical_synced_at: syncedAt, ical_error: null })
-        .eq("id", listingId);
+      // Only overwrite availability when at least one feed was read; if every
+      // feed failed, keep the last-known-good ranges and just record the error.
+      const patch: Record<string, unknown> = { ical_synced_at: syncedAt, ical_error: errors.length ? errors.join("; ") : null };
+      if (errors.length < feeds.length) patch.blocked_ranges = ranges;
+      const { error: upErr } = await supa.from("listings").update(patch).eq("id", listingId);
       if (upErr) throw new Error(upErr.message);
-      res.json({ count: blockedRanges.length, blockedRanges, syncedAt });
+      res.json({ count: ranges.length, feeds: feeds.length, errors, syncedAt });
     } catch (err) {
-      const message = err instanceof SafeFetchError ? err.message : "Couldn't read that calendar. Check it's the Airbnb calendar *export* URL (ends in .ics).";
-      // Record the failure on the listing so the operator sees it, but don't wipe existing availability.
+      const message = err instanceof SafeFetchError ? err.message : "Couldn't read that calendar. Check it's the calendar *export* URL (ends in .ics).";
       await supa.from("listings").update({ ical_error: message, ical_synced_at: new Date().toISOString() }).eq("id", listingId);
       console.error("sync-ical failed", err);
       res.status(err instanceof SafeFetchError ? err.status : 502).json({ error: message });
     }
+  });
+
+  // GET /api/ical/:id(.ics) — PUBLIC availability export for a published listing,
+  // pasted into Airbnb/Booking.com so Revamp bookings + blocks propagate there.
+  // Merges confirmed bookings + imported blocks + manual blocks. No auth (OTAs
+  // fetch it unauthenticated); reads only already-public data via the anon key.
+  app.get("/api/ical/:id", async (req: Request, res: Response) => {
+    const id = String(req.params.id || "").replace(/\.ics$/i, "");
+    const data = await getListingBusyRanges(id);
+    if (!data) return res.status(404).type("text/plain").send("Listing not found or not published.");
+    res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+    res.setHeader("Content-Disposition", `inline; filename="revamp-${id}.ics"`);
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.send(buildIcalFeed(`${data.title} — Revamp`, data.ranges));
   });
 
   // --- PayLink booking loop --------------------------------------------

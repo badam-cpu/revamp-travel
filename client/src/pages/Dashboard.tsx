@@ -23,7 +23,7 @@
  */
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, ArrowLeft, ArrowRight, CalendarCheck, CalendarClock, Check, ChevronDown, Home, LayoutDashboard, Link2, List, Pencil, Plus, Settings, Sparkles, Trash2, Wallet, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, Home, LayoutDashboard, Link2, List, Pencil, Plus, Settings, Sparkles, Trash2, Wallet, X } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -780,6 +780,12 @@ const ICAL_SOURCE: Record<ListingType, { name: string; placeholder: string }> = 
 };
 
 function AvailabilityRow({ listing }: { listing: LiveListing }) {
+  // Stays typically list on both Airbnb and Booking.com and want a two-way feed;
+  // other types keep the simpler single-calendar import.
+  return listing.type === "stay" ? <StayCalendarSync listing={listing} /> : <SingleCalendarSync listing={listing} />;
+}
+
+function SingleCalendarSync({ listing }: { listing: LiveListing }) {
   const { setIcalUrl, refresh } = useListings();
   const source = ICAL_SOURCE[listing.type];
   const [url, setUrl] = useState(listing.icalUrl ?? "");
@@ -853,6 +859,102 @@ function AvailabilityRow({ listing }: { listing: LiveListing }) {
         {isSynced && <Check className="h-3.5 w-3.5 shrink-0" />}
         {statusText}
       </p>
+    </div>
+  );
+}
+
+/** Stays: import Airbnb + Booking.com calendars AND expose an export .ics feed
+ *  to paste back into those OTAs — a two-way availability sync. */
+function StayCalendarSync({ listing }: { listing: LiveListing }) {
+  const { setIcalFeeds, refresh } = useListings();
+  const feedUrl = (label: string) => listing.icalFeeds.find((f) => f.label.toLowerCase() === label.toLowerCase())?.url ?? "";
+  const [airbnb, setAirbnb] = useState(feedUrl("Airbnb") || (listing.icalUrl ?? ""));
+  const [booking, setBooking] = useState(feedUrl("Booking.com"));
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const exportUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/api/ical/${listing.id}.ics`;
+
+  const save = async () => {
+    setBusy(true);
+    setMsg(null);
+    setErr(null);
+    try {
+      const feeds = [{ label: "Airbnb", url: airbnb }, { label: "Booking.com", url: booking }].filter((f) => f.url.trim());
+      await setIcalFeeds(listing.id, feeds);
+      if (feeds.length) {
+        const res = await syncIcal(listing.id);
+        const n = res.feeds ?? feeds.length;
+        setMsg(`Synced ${n} calendar${n === 1 ? "" : "s"} — ${res.count} blocked date ${res.count === 1 ? "range" : "ranges"}.${res.errors?.length ? ` Issues: ${res.errors.join("; ")}` : ""}`);
+      } else {
+        setMsg("Calendars disconnected.");
+      }
+      await refresh();
+    } catch (e) {
+      setErr(e instanceof ApiError || e instanceof Error ? e.message : "Couldn't sync those calendars.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard?.writeText(exportUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const isError = !!err || (!msg && !!listing.icalError);
+  const isSynced = (!!msg && msg.startsWith("Synced")) || (!err && !msg && !!listing.icalSyncedAt && !listing.icalError);
+  const statusText = err
+    ? err
+    : msg
+      ? msg
+      : listing.icalError
+        ? `Last sync issue: ${listing.icalError}`
+        : listing.icalSyncedAt
+          ? `${listing.blockedRanges.length} blocked date ${listing.blockedRanges.length === 1 ? "range" : "ranges"} · last synced ${new Date(listing.icalSyncedAt).toLocaleString()}`
+          : "Paste your Airbnb and/or Booking.com calendar-export (.ics) links to block their dates on Revamp. One-way import, availability only.";
+
+  return (
+    <div className="mt-3 border-t border-basalt/10 pt-3">
+      <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-basalt/45">
+        <CalendarClock className="h-3.5 w-3.5" /> Import calendars
+      </p>
+      <div className="grid gap-2">
+        <div className="flex items-center gap-2">
+          <span className="w-24 shrink-0 text-xs font-semibold text-basalt/60">Airbnb</span>
+          <Input type="url" value={airbnb} onChange={(e) => { setAirbnb(e.target.value); setMsg(null); setErr(null); }} placeholder="https://www.airbnb.com/calendar/ical/….ics" className="h-9 min-w-0 flex-1 rounded-none text-xs" />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-24 shrink-0 text-xs font-semibold text-basalt/60">Booking.com</span>
+          <Input type="url" value={booking} onChange={(e) => { setBooking(e.target.value); setMsg(null); setErr(null); }} placeholder="https://admin.booking.com/hotel/…/ical.html?…" className="h-9 min-w-0 flex-1 rounded-none text-xs" />
+        </div>
+      </div>
+      <div className="mt-2 flex justify-end">
+        <Button type="button" variant="outline" size="sm" className={cn("h-9 rounded-none border-basalt/15 text-xs", isSynced && "border-green-600/40 bg-green-600/10 text-green-700 hover:bg-green-600/15")} disabled={busy} onClick={save}>
+          {busy ? "Syncing…" : isSynced ? <><Check className="mr-1.5 h-3.5 w-3.5" /> Synced</> : "Save & sync"}
+        </Button>
+      </div>
+      <p className={cn("mt-1.5 flex items-center gap-1.5 text-xs", isError ? "text-destructive" : isSynced ? "font-semibold text-green-700" : "text-basalt/45")}>
+        {isSynced && <Check className="h-3.5 w-3.5 shrink-0" />}
+        {statusText}
+      </p>
+
+      <p className="mb-2 mt-4 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-basalt/45">
+        <CalendarClock className="h-3.5 w-3.5" /> Export to Airbnb / Booking.com
+      </p>
+      <div className="flex items-center gap-2">
+        <Input readOnly value={exportUrl} onFocus={(e) => e.currentTarget.select()} className="h-9 min-w-0 flex-1 rounded-none bg-chalk text-xs" />
+        <Button type="button" variant="outline" size="sm" className="h-9 shrink-0 rounded-none border-basalt/15 text-xs" onClick={copy}>
+          {copied ? <><Check className="mr-1.5 h-3.5 w-3.5" /> Copied</> : <><Copy className="mr-1.5 h-3.5 w-3.5" /> Copy</>}
+        </Button>
+      </div>
+      <p className="mt-1.5 text-xs text-basalt/45">Add this link under “Import calendar” on Airbnb and Booking.com so your Revamp bookings and blocked dates sync there too.</p>
     </div>
   );
 }
