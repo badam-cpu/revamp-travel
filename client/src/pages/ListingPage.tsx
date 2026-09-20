@@ -235,7 +235,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   // concept shown in the House rules chips below — don't conflate the two here.
   if (checkInTime) glance.push({ label: "Check-in", value: `From ${checkInTime}`, icon: Clock });
   else if (selfCheckIn) glance.push({ label: "Check-in", value: "Self check-in", icon: KeyRound });
-  if (checkOutTime) glance.push({ label: "Checkout", value: `By ${checkOutTime}`, icon: LogOut });
+  if (checkOutTime) glance.push({ label: "Checkout", value: checkOutTime, icon: LogOut });
   glance.push({ label: "Type", value: typeLabels[listing.type], icon: Home });
 
   return (
