@@ -17,6 +17,8 @@ import { useListings } from "@/contexts/ListingsContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import type { BookingStatus } from "@shared/bookings";
 import { BookingDetailDialog } from "@/components/BookingDetailDialog";
+import { DirectBookingDialog } from "@/components/DirectBookingDialog";
+import type { LiveListing } from "@/contexts/ListingsContext";
 import { cn } from "@/lib/utils";
 
 const DAY_MS = 86_400_000;
@@ -72,6 +74,8 @@ export function OperatorBookingsTimeline() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [startDate, setStartDate] = useState(() => todayIso());
   const [openId, setOpenId] = useState<string | null>(null);
+  const [direct, setDirect] = useState<{ listing: LiveListing; date: string } | null>(null);
+  const [reload, setReload] = useState(0);
   const [typeFilter, setTypeFilter] = useState<"all" | "stay" | "tour" | "experience">("all");
 
   const allMine = useMemo(
@@ -96,7 +100,7 @@ export function OperatorBookingsTimeline() {
       .eq("listings.operator_id", user.id)
       .in("status", ["pending_payment", "confirmed", "completed"])
       .then(({ data }) => setRows((data ?? []) as unknown as Row[]));
-  }, [user]);
+  }, [user, reload]);
 
   const days = useMemo(() => Array.from({ length: DAYS }, (_, i) => addDaysIso(startDate, i)), [startDate]);
   const windowEnd = addDaysIso(startDate, DAYS);
@@ -215,7 +219,14 @@ export function OperatorBookingsTimeline() {
                     const past = d < today;
                     const p = rBase > 0 && !past ? priceOn(d) : null;
                     return (
-                      <div key={d} className={cn("absolute top-0 h-full border-r border-basalt/8", weekend && "bg-basalt/[0.02]", d === today && "bg-apricot/[0.06]")} style={{ left: i * CELL_W, width: CELL_W }}>
+                      <div
+                        key={d}
+                        onClick={() => setDirect({ listing, date: d })}
+                        title="Record a direct booking"
+                        className={cn("group/cell absolute top-0 h-full cursor-pointer border-r border-basalt/8 hover:bg-apricot/[0.07]", weekend && "bg-basalt/[0.02]", d === today && "bg-apricot/[0.06]")}
+                        style={{ left: i * CELL_W, width: CELL_W }}
+                      >
+                        <span className="pointer-events-none absolute left-1/2 top-2 hidden -translate-x-1/2 text-sm font-bold leading-none text-apricot group-hover/cell:block">+</span>
                         {p && <span className={cn("pointer-events-none absolute inset-x-0 bottom-1 text-center text-[9px] font-semibold tabular-nums", p.overridden ? "text-apricot" : "text-basalt/40")}>{compact(p.cents)}</span>}
                       </div>
                     );
@@ -254,6 +265,7 @@ export function OperatorBookingsTimeline() {
       </div>
       <p className="mt-3 text-xs text-basalt/45">Showing {startDate} → {addDaysIso(windowEnd, -1)}. Bars are your bookings; hatched blocks are dates synced as unavailable from a connected calendar. Tap a booking for full details.</p>
       <BookingDetailDialog bookingId={openId} onClose={() => setOpenId(null)} />
+      <DirectBookingDialog listing={direct?.listing ?? null} startDate={direct?.date ?? null} onClose={() => setDirect(null)} onCreated={() => setReload((k) => k + 1)} />
     </div>
   );
 }

@@ -163,6 +163,43 @@ export async function cancelBooking(bookingId: string): Promise<{ cancelled: boo
   });
 }
 
+export interface DirectBookingInput {
+  listingId: string;
+  startDate: string;
+  endDate: string;
+  guests: number;
+  guestName: string;
+  guestEmail?: string;
+  guestPhone?: string;
+  /** Pre-tax amount in AMD cents (rate×nights + cleaning, or the tour total). */
+  baseCents: number;
+  paymentStatus: "paid" | "unpaid";
+}
+
+/** Operator records an offline/direct booking that blocks the dates. */
+export async function createDirectBooking(input: DirectBookingInput): Promise<{ id: string; totalCents: number }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in as an operator.");
+  return request<{ id: string; totalCents: number }>("/api/operator-direct-booking", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(input),
+  });
+}
+
+/** Operator flips a direct booking's payment status (paid/unpaid). */
+export async function setBookingPayment(bookingId: string, paymentStatus: "paid" | "unpaid"): Promise<{ ok: boolean }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in as an operator.");
+  return request<{ ok: boolean }>("/api/operator-booking-payment", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ bookingId, paymentStatus }),
+  });
+}
+
 /**
  * Sends a traveler's message to Revamp support. The server stores it, has the
  * AI answer first (routing to a human when needed), and returns the reply.

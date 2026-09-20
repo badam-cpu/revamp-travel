@@ -9,6 +9,9 @@ import { useEffect, useState } from "react";
 import { Mail, Phone, User } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
+import { setBookingPayment } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import type { BookingStatus } from "@shared/bookings";
 
 interface AddonSnap { id: string; name: string; unit?: string; qty: number; amountCents: number; onRequest?: boolean }
@@ -24,6 +27,8 @@ interface FullBooking {
   addons: AddonSnap[] | null;
   currency: string;
   status: BookingStatus;
+  provider: string | null;
+  payment_status: string | null;
   created_at: string;
   guest_name: string | null;
   guest_email: string | null;
@@ -52,6 +57,8 @@ const EVENT_LABEL: Record<string, string> = {
   status_confirmed: "Booking confirmed",
   status_cancelled: "Booking cancelled",
   status_expired: "Unpaid hold expired (auto-cancelled)",
+  direct_created: "Direct booking recorded",
+  payment_status: "Payment status changed",
 };
 
 function money(cents: number | null | undefined, currency: string): string {
@@ -70,6 +77,7 @@ export function BookingDetailDialog({ bookingId, onClose }: { bookingId: string 
   const [booking, setBooking] = useState<FullBooking | null>(null);
   const [events, setEvents] = useState<BookingEvent[]>([]);
   const [loading, setLoading] = useState(false);
+  const [savingPay, setSavingPay] = useState(false);
 
   useEffect(() => {
     if (!bookingId) {
@@ -80,7 +88,8 @@ export function BookingDetailDialog({ bookingId, onClose }: { bookingId: string 
     setLoading(true);
     supabase
       .from("bookings")
-      .select("id, start_date, end_date, guests, amount_cents, base_cents, tax_cents, addons_cents, addons, currency, status, created_at, guest_name, guest_email, guest_phone, refund_amount_cents, listings!inner(title, type, city), profiles!traveler_id(display_name)")
+      // select("*") so a not-yet-run 0035 (payment_status) migration doesn't break the dialog.
+      .select("*, listings!inner(title, type, city), profiles!traveler_id(display_name)")
       .eq("id", bookingId)
       .maybeSingle()
       .then(({ data }) => {
@@ -156,6 +165,37 @@ export function BookingDetailDialog({ bookingId, onClose }: { bookingId: string 
                   <div className="flex justify-between border-t border-basalt/10 pt-1.5 font-semibold"><span>{totalLabel}</span><span>{money(b.amount_cents, b.currency)}</span></div>
                   {b.refund_amount_cents ? <div className="flex justify-between text-destructive"><span>Refund due</span><span>{money(b.refund_amount_cents, b.currency)}</span></div> : null}
                 </div>
+                {/* Direct (offline) bookings: manually-flipped payment status. */}
+                {b.provider === "direct" && (
+                  <div className="mt-3 flex items-center gap-2 border-t border-basalt/10 pt-3">
+                    <span className="text-sm text-basalt/55">Payment status</span>
+                    <div className="ml-auto flex border border-basalt/15">
+                      {(["unpaid", "paid"] as const).map((v) => (
+                        <button
+                          key={v}
+                          type="button"
+                          disabled={savingPay}
+                          onClick={async () => {
+                            if ((b.payment_status ?? "unpaid") === v) return;
+                            setSavingPay(true);
+                            try {
+                              await setBookingPayment(b.id, v);
+                              setBooking((prev) => (prev ? { ...prev, payment_status: v } : prev));
+                              toast(`Marked ${v}.`);
+                            } catch (e) {
+                              toast(e instanceof Error ? e.message : "Couldn't update payment.");
+                            } finally {
+                              setSavingPay(false);
+                            }
+                          }}
+                          className={cn("px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition-colors disabled:opacity-50", (b.payment_status ?? "unpaid") === v ? (v === "paid" ? "bg-sevan text-white" : "bg-tuff text-white") : "text-basalt/55 hover:text-basalt")}
+                        >
+                          {v}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {b.addons && b.addons.length > 0 && (
                   <ul className="mt-3 grid gap-1 border-t border-basalt/10 pt-3 text-xs text-basalt/55">
                     {b.addons.map((a) => (

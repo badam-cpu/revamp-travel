@@ -80,6 +80,23 @@ const cancelBookingSchema = z.object({
   bookingId: z.string().uuid(),
 });
 
+const directBookingSchema = z.object({
+  listingId: z.string().uuid(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  guests: z.number().int().min(1).max(50).default(1),
+  guestName: z.string().trim().min(1).max(120),
+  guestEmail: z.string().trim().max(200).optional().default(""),
+  guestPhone: z.string().trim().max(40).optional().default(""),
+  baseCents: z.number().int().min(0).max(1_000_000_000), // pre-tax: rate×nights + cleaning, or the tour total
+  paymentStatus: z.enum(["paid", "unpaid"]).default("unpaid"),
+});
+
+const bookingPaymentSchema = z.object({
+  bookingId: z.string().uuid(),
+  paymentStatus: z.enum(["paid", "unpaid"]),
+});
+
 const supportChatSchema = z.object({
   message: z.string().trim().min(1).max(2000),
 });
@@ -491,6 +508,96 @@ export function registerApiRoutes(app: Express) {
       console.error("[confirm-checkout]", err);
       res.status(500).json({ error: "Couldn't confirm your payment." });
     }
+  });
+
+  // POST /api/operator-direct-booking — an operator records an OFFLINE booking
+  // (phone/email/walk-in) that blocks the dates. Created server-side as a
+  // confirmed booking with provider='direct' and no traveler account; money is
+  // handled offline, so no PayLink, no Revamp payout, no automated email. The
+  // 10% tax is still recorded on top of the operator-entered base for their
+  // records.
+  app.post("/api/operator-direct-booking", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in as an operator." });
+    if (!adminConfigured()) return res.status(503).json({ error: "Direct bookings aren't available yet." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Direct bookings aren't available yet." });
+
+    const parsed = directBookingSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    const { listingId, startDate, endDate, guests, guestName, guestEmail, guestPhone, baseCents, paymentStatus } = parsed.data;
+    if (endDate <= startDate) return res.status(400).json({ error: "The end date must be after the start date." });
+
+    // The caller must own the listing.
+    const { data: listing, error: readErr } = await admin.from("listings").select("id, operator_id").eq("id", listingId).maybeSingle();
+    if (readErr || !listing) return res.status(404).json({ error: "Listing not found." });
+    if (listing.operator_id !== userId) return res.status(403).json({ error: "That listing isn't yours." });
+
+    const charge = computeBookingCharge(baseCents);
+    const { data, error } = await admin
+      .from("bookings")
+      .insert({
+        listing_id: listingId,
+        traveler_id: null,
+        start_date: startDate,
+        end_date: endDate,
+        guests,
+        amount_cents: charge.totalCents,
+        base_cents: charge.baseCents,
+        tax_cents: charge.taxCents,
+        currency: DEFAULT_CURRENCY,
+        status: "confirmed",
+        provider: "direct",
+        payment_status: paymentStatus,
+        guest_name: guestName,
+        guest_email: guestEmail || null,
+        guest_phone: guestPhone || null,
+      })
+      .select("id")
+      .single();
+    if (error) {
+      // 23P01 = exclusion_violation: overlaps an existing confirmed booking.
+      if ((error as { code?: string }).code === "23P01") {
+        return res.status(409).json({ error: "Those dates already have a confirmed booking." });
+      }
+      console.error("[direct-booking]", error);
+      return res.status(500).json({ error: "Couldn't create the booking." });
+    }
+    await logBookingEvent(admin, data.id, "direct_created", `Direct booking recorded by the operator (${paymentStatus}).`);
+    res.json({ id: data.id, totalCents: charge.totalCents });
+  });
+
+  // POST /api/operator-booking-payment — flip a direct booking's payment status
+  // (paid/unpaid). Operator-only, scoped to their own listings; service-role
+  // update (bookings have no client UPDATE policy).
+  app.post("/api/operator-booking-payment", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in as an operator." });
+    if (!adminConfigured()) return res.status(503).json({ error: "Not available yet." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available yet." });
+
+    const parsed = bookingPaymentSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    const { bookingId, paymentStatus } = parsed.data;
+
+    const { data: bk, error: readErr } = await admin
+      .from("bookings")
+      .select("id, listings!inner(operator_id)")
+      .eq("id", bookingId)
+      .maybeSingle();
+    if (readErr || !bk) return res.status(404).json({ error: "Booking not found." });
+    if ((bk as unknown as { listings: { operator_id: string } }).listings.operator_id !== userId) {
+      return res.status(403).json({ error: "That booking isn't on your listing." });
+    }
+    const { error: upErr } = await admin.from("bookings").update({ payment_status: paymentStatus }).eq("id", bookingId);
+    if (upErr) return res.status(500).json({ error: "Couldn't update the payment status." });
+    await logBookingEvent(admin, bookingId, "payment_status", `Marked ${paymentStatus} by the operator.`);
+    res.json({ ok: true });
   });
 
   // POST /api/cancel-booking — cancel a booking. Allowed for the traveler who
