@@ -32,6 +32,7 @@ import { useListings } from "@/contexts/ListingsContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { supabase } from "@/lib/supabase";
 import { confirmCheckout, cancelBooking } from "@/lib/api";
+import { trackEvent } from "@/lib/analytics";
 import type { BookingStatus } from "@shared/bookings";
 import { toast } from "sonner";
 
@@ -460,6 +461,13 @@ export default function Account() {
       .then((r) => {
         if (!active) return;
         if (r.confirmed > 0) {
+          // GA funnel: purchase (fires once — a second confirm reports 0).
+          trackEvent("purchase", {
+            transaction_id: r.bookingIds?.[0] ?? `booking_${Date.now()}`,
+            value: r.amountCents ? Math.round(r.amountCents / 100) : undefined,
+            currency: r.currency ?? "AMD",
+            items: r.confirmed,
+          });
           toast(r.confirmed === 1 ? "Booking confirmed — your trip is set!" : `${r.confirmed} bookings confirmed!`);
           setTab("trips");
           setTripsReload((k) => k + 1);

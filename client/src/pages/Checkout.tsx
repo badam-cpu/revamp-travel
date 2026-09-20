@@ -13,7 +13,7 @@
  *     server-side) and redirects to PayLink. A booking is only ever confirmed
  *     server-side after payment — never here.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { ArrowLeft, Minus, Plus } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -28,6 +28,7 @@ import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { startCheckout, ApiError } from "@/lib/api";
+import { trackEvent } from "@/lib/analytics";
 import {
   computeBookingAmountCents,
   computeBookingCharge,
@@ -104,6 +105,12 @@ export default function Checkout({ slug }: { slug: string }) {
   const visibleAddons = showAllAddons ? addons : addons.slice(0, ADDONS_PREVIEW);
   const addonsTotalCents = addons.reduce((sum, a) => sum + (addonQty[a.id] ?? 0) * addonUnitCost(a, { nights, guests }), 0);
   const amountCents = charge.totalCents + addonsTotalCents;
+
+  // GA funnel: checkout started (once per listing when the selection is valid).
+  useEffect(() => {
+    if (listing && valid) trackEvent("begin_checkout", { item_id: listing.id, item_name: listing.title, item_category: listing.type, value: Math.round(amountCents / 100), currency: "AMD" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listing?.id, valid]);
 
   // --- guards ----------------------------------------------------------------
   if (!listing && !offline && listings.length === 0) {

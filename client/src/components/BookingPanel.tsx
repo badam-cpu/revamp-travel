@@ -25,6 +25,7 @@ import { computeBookingAmountCents, computeBookingCharge, describeBookingBasis, 
 import { TAX_PERCENT } from "@shared/bookings";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
+import { trackEvent } from "@/lib/analytics";
 import { toast } from "sonner";
 
 const DAY_MS = 86_400_000;
@@ -132,6 +133,7 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
       toast(`This stay has a ${minStay}-night minimum. Choose at least ${minStay} nights.`);
       return;
     }
+    trackEvent("book_click", { item_id: listing.id, item_name: listing.title, item_category: listing.type, value: Math.round(amountCents / 100), currency: "AMD" });
     const q = new URLSearchParams({ start: selected.startDate, end: selected.endDate, guests: String(guests) });
     navigate(`/checkout/${listing.slug}?${q.toString()}`);
   };

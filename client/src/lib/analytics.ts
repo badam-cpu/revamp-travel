@@ -49,3 +49,15 @@ export function trackPageView(path: string): void {
     page_title: document.title,
   });
 }
+
+/**
+ * Fire a custom GA4 event. No-op when analytics is disabled or gtag hasn't
+ * loaded, so call sites don't need to guard. Used for the booking funnel:
+ * view_item → book_click → begin_checkout → purchase.
+ */
+export function trackEvent(name: string, params: Record<string, unknown> = {}): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w = window as any;
+  if (!GA_ID || typeof window === "undefined" || typeof w.gtag !== "function") return;
+  w.gtag("event", name, params);
+}

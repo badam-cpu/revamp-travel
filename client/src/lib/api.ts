@@ -136,11 +136,11 @@ export async function startCheckout(
  * load and on the post-payment return. Returns how many were just confirmed and
  * whether any are still awaiting payment.
  */
-export async function confirmCheckout(): Promise<{ confirmed: number; pending: boolean }> {
+export async function confirmCheckout(): Promise<{ confirmed: number; pending: boolean; amountCents?: number; currency?: string; bookingIds?: string[] }> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new ApiError("Sign in to confirm your booking.");
-  return request<{ confirmed: number; pending: boolean }>("/api/confirm-checkout", {
+  return request<{ confirmed: number; pending: boolean; amountCents?: number; currency?: string; bookingIds?: string[] }>("/api/confirm-checkout", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({}),

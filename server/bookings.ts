@@ -15,7 +15,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkPayment } from "./paylink.js";
 import { sendTravelerConfirmation, sendOperatorNewBooking, sendReviewRequest, type BookingEmailInfo } from "./email.js";
 import { payoutDueDate } from "../shared/payouts.js";
-import { computeBookingCharge } from "../shared/bookings.js";
+import { computeBookingCharge, DEFAULT_CURRENCY } from "../shared/bookings.js";
 import type { ListingType } from "../shared/listings.js";
 
 export interface BookingRow {
@@ -206,7 +206,7 @@ export async function confirmBookingRow(admin: SupabaseClient, row: BookingRow):
  * Poll all of one traveler's recent pending bookings (on return / account
  * load). Returns how many were confirmed this pass.
  */
-export async function reconcileUserBookings(admin: SupabaseClient, userId: string): Promise<{ confirmed: number; checked: number }> {
+export async function reconcileUserBookings(admin: SupabaseClient, userId: string): Promise<{ confirmed: number; checked: number; amountCents: number; currency: string; bookingIds: string[] }> {
   const { data, error } = await admin
     .from("bookings")
     .select(BOOKING_COLS)
@@ -214,13 +214,21 @@ export async function reconcileUserBookings(admin: SupabaseClient, userId: strin
     .eq("status", "pending_payment")
     .order("created_at", { ascending: false })
     .limit(10);
-  if (error || !data) return { confirmed: 0, checked: 0 };
+  if (error || !data) return { confirmed: 0, checked: 0, amountCents: 0, currency: DEFAULT_CURRENCY, bookingIds: [] };
   let confirmed = 0;
+  let amountCents = 0;
+  let currency = DEFAULT_CURRENCY;
+  const bookingIds: string[] = [];
   for (const row of data as BookingRow[]) {
     const r = await confirmBookingRow(admin, row);
-    if (r.granted) confirmed++;
+    if (r.granted) {
+      confirmed++;
+      amountCents += row.amount_cents ?? 0;
+      if (row.currency) currency = row.currency;
+      bookingIds.push(row.id);
+    }
   }
-  return { confirmed, checked: data.length };
+  return { confirmed, checked: data.length, amountCents, currency, bookingIds };
 }
 
 /**

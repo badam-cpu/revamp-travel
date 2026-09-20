@@ -21,6 +21,7 @@ import { useCurrency } from "@/contexts/CurrencyContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { cn } from "@/lib/utils";
 import { imgAttrs } from "@/lib/responsiveImg";
+import { trackEvent } from "@/lib/analytics";
 import { describeCancellationPolicy, averageNightlyCents } from "@shared/bookings";
 import { buildBreadcrumbJsonLd, buildListingJsonLd } from "@shared/seo";
 import { toast } from "sonner";
@@ -173,6 +174,11 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
     io.observe(el);
     return () => io.disconnect();
   }, [listing?.id, loading]);
+
+  // GA funnel: listing viewed.
+  useEffect(() => {
+    if (listing) trackEvent("view_item", { item_id: listing.id, item_name: listing.title, item_category: listing.type });
+  }, [listing?.id]);
 
   if (!listing) {
     // While the catalog is still loading (e.g. a hard refresh on this page,

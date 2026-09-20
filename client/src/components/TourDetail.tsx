@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { factValue, otherFacts } from "@/lib/tourFacts";
 import { cn } from "@/lib/utils";
 import { imgAttrs } from "@/lib/responsiveImg";
+import { trackEvent } from "@/lib/analytics";
 
 export function TourDetail({ listing }: { listing: Listing }) {
   const { listings } = useListings();
@@ -62,6 +63,11 @@ export function TourDetail({ listing }: { listing: Listing }) {
     () => listings.filter((item) => item.type === listing.type && item.id !== listing.id).slice(0, 3),
     [listings, listing.id, listing.type],
   );
+
+  // GA funnel: listing viewed.
+  useEffect(() => {
+    trackEvent("view_item", { item_id: listing.id, item_name: listing.title, item_category: listing.type });
+  }, [listing.id]);
 
   return (
     <>

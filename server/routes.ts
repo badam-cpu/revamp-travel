@@ -486,7 +486,7 @@ export function registerApiRoutes(app: Express) {
     if (!admin) return res.status(503).json({ error: "Payments aren't available yet." });
     try {
       const r = await reconcileUserBookings(admin, userId);
-      res.json({ confirmed: r.confirmed, pending: r.checked > 0 && r.confirmed === 0 });
+      res.json({ confirmed: r.confirmed, pending: r.checked > 0 && r.confirmed === 0, amountCents: r.amountCents, currency: r.currency, bookingIds: r.bookingIds });
     } catch (err) {
       console.error("[confirm-checkout]", err);
       res.status(500).json({ error: "Couldn't confirm your payment." });
