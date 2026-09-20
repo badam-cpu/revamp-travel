@@ -62,6 +62,8 @@ export interface Listing {
   eyebrow: string;
   city: string;
   region: string;
+  /** Exact full street address (operator-facing; not published publicly). */
+  address?: string;
   coordinates: { lat: number; lng: number };
   image: string;
   gallery: string[];
@@ -512,6 +514,7 @@ export interface ListingInput {
   eyebrow: string;
   city: string;
   region: string;
+  address?: string;
   coordinates: { lat: number; lng: number };
   image?: string;
   gallery?: string[];

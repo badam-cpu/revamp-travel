@@ -87,6 +87,7 @@ interface ListingRow {
   eyebrow: string;
   city: string;
   region: string;
+  address: string | null;
   lat: number;
   lng: number;
   image: string;
@@ -140,6 +141,7 @@ function mapListingRow(row: ListingRow): LiveListing {
     eyebrow: row.eyebrow,
     city: row.city,
     region: row.region,
+    address: row.address ?? undefined,
     coordinates: { lat: row.lat, lng: row.lng },
     image: row.image,
     gallery: row.gallery,
@@ -195,6 +197,7 @@ function toRow(input: ListingInput) {
     eyebrow: input.eyebrow,
     city: input.city,
     region: input.region,
+    address: input.address?.trim() || null,
     lat: input.coordinates.lat,
     lng: input.coordinates.lng,
     image,

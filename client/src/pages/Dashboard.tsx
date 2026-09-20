@@ -133,6 +133,7 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
     eyebrow: get("eyebrow").trim(),
     city: get("city").trim(),
     region: get("region").trim(),
+    address: get("address").trim(),
     coordinates: { lat: Number(get("lat")) || 0, lng: Number(get("lng")) || 0 },
     // No photos → leave undefined so toRow() falls back to a brand illustration.
     image: photos[0] || undefined,
@@ -496,13 +497,13 @@ function ListingFormDialog({
               <div hidden={step !== 1} className="mt-10 grid gap-6">
                 {/* Existing listing: show the saved address so it's clear the
                     location is already set — the search below only changes it. */}
-                {isEdit && draft.city && (
+                {isEdit && (draft.address || draft.city) && (
                   <div className="flex items-start gap-3 border border-basalt/12 bg-chalk p-4">
                     <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-apricot" />
                     <div className="min-w-0">
                       <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-basalt/45">Saved address</p>
                       <p className="mt-0.5 text-sm font-semibold text-basalt">
-                        {draft.city}{draft.region && draft.region !== draft.city ? `, ${draft.region}` : ""}
+                        {draft.address || `${draft.city}${draft.region && draft.region !== draft.city ? `, ${draft.region}` : ""}`}
                       </p>
                       {draft.coordinates?.lat && draft.coordinates?.lng && (
                         <p className="mt-0.5 text-xs text-basalt/45">{draft.coordinates.lat.toFixed(5)}, {draft.coordinates.lng.toFixed(5)}</p>
@@ -515,14 +516,21 @@ function ListingFormDialog({
                     fields below; the operator can still edit each by hand. */}
                 <PlaceAutocomplete
                   label={isEdit ? "Search for a new address (optional)" : "Search for the address (optional)"}
-                  helpText={isEdit ? "Only needed if the location changed — picking a result overwrites the city, region, and coordinates below." : undefined}
+                  helpText={isEdit ? "Only needed if the location changed — picking a result overwrites the full address, city, region, and coordinates below." : undefined}
                   onSelect={(place) => {
+                    if (place.formattedAddress) setField("address", place.formattedAddress);
                     if (place.city) setField("city", place.city);
                     if (place.region) setField("region", place.region);
                     if (typeof place.lat === "number") setField("lat", String(place.lat));
                     if (typeof place.lng === "number") setField("lng", String(place.lng));
                   }}
                 />
+                {/* Exact full street address (operator-facing; shared with the guest after booking, not published on the public listing). */}
+                <div className="grid gap-2">
+                  <Label htmlFor="address" className="text-sm font-semibold">Full address <span className="font-normal text-basalt/45">(exact street address)</span></Label>
+                  <Input id="address" name="address" placeholder="e.g. 12 Aram St, Apt 4, Yerevan 0010" defaultValue={draft.address} className={FIELD} />
+                  <p className="text-xs text-basalt/45">Kept private — shared with the guest after they book, not shown publicly.</p>
+                </div>
                 <div className="grid gap-6 sm:grid-cols-2">
                   <div className="grid gap-2">
                     <Label htmlFor="city" className="text-sm font-semibold">City</Label>
