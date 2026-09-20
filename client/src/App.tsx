@@ -32,6 +32,7 @@ import Blog from "./pages/Blog";
 import BlogPost from "./pages/BlogPost";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
+import Faq from "./pages/Faq";
 import Plan from "./pages/Plan";
 
 /** Loads GA4 (if configured) and reports a page view on every route change. */
@@ -67,6 +68,7 @@ function Router() {
       <Route path="/account" component={Account} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
+      <Route path="/faq" component={Faq} />
       <Route path="/blog" component={Blog} />
       <Route path="/blog/:slug">{(params) => <BlogPost params={params} />}</Route>
       <Route path="/checkout/:slug">{(params) => <Checkout slug={params.slug} />}</Route>

@@ -21,7 +21,8 @@ import type { PublicListing } from "./supabase.js";
 import { getPublishedCatalog, getPublishedPosts, getPublishedPostBySlug, type PublicPost } from "./supabase.js";
 import { regions, typeLabels } from "../shared/listings.js";
 import type { ListingType } from "../shared/listings.js";
-import { buildArticleJsonLd, buildBlogListJsonLd, buildBreadcrumbJsonLd, buildCollectionPageJsonLd, buildListingJsonLd, buildOrganizationJsonLd, buildWebsiteJsonLd } from "../shared/seo.js";
+import { buildArticleJsonLd, buildBlogListJsonLd, buildBreadcrumbJsonLd, buildCollectionPageJsonLd, buildFaqJsonLd, buildListingJsonLd, buildOrganizationJsonLd, buildWebsiteJsonLd } from "../shared/seo.js";
+import { FAQ_ITEMS } from "../shared/faq.js";
 import { renderMarkdown, markdownToPlain } from "../shared/markdown.js";
 
 export type PageKind =
@@ -32,6 +33,7 @@ export type PageKind =
   | "map"
   | "plan"
   | "listing-detail"
+  | "faq"
   | "blog"
   | "blog-post"
   | "login"
@@ -61,6 +63,7 @@ export function matchRoute(pathname: string): MatchedRoute {
   if (path === "/plan") return { kind: "plan" };
   if (path === "/login") return { kind: "login" };
   if (path === "/signup") return { kind: "signup" };
+  if (path === "/faq") return { kind: "faq" };
   if (path === "/blog") return { kind: "blog" };
   const postMatch = path.match(/^\/blog\/([^/]+)$/);
   if (postMatch) return { kind: "blog-post", slug: decodeURIComponent(postMatch[1]) };
@@ -92,6 +95,8 @@ export async function renderForBot(pathname: string, origin: string): Promise<Re
       return { status: 200, body: renderMap(catalog, origin) };
     case "plan":
       return { status: 200, body: renderPlan(origin) };
+    case "faq":
+      return { status: 200, body: renderFaq(origin) };
     case "login":
       return { status: 200, body: renderAuthPage(origin, "login") };
     case "signup":
@@ -335,6 +340,28 @@ function renderPlan(origin: string): string {
     description: "Generate a day-by-day Armenia itinerary grounded in Revamp Vacations's live, published catalog.",
     canonical: `${origin}/plan`,
     ogImage: `${origin}${OG_IMAGE}`,
+    bodyHtml,
+  });
+}
+
+function renderFaq(origin: string): string {
+  const bodyHtml = `
+<h1>Frequently asked questions</h1>
+<p>How booking works on Revamp Vacations, and essentials for planning a trip to Armenia.</p>
+${FAQ_ITEMS.map((it) => `<section><h2>${escapeHtml(it.q)}</h2><p>${escapeHtml(it.a)}</p></section>`).join("\n")}`;
+
+  return renderPageShell({
+    title: "FAQ — Booking & Traveling in Armenia | Revamp Vacations",
+    description: "Answers about booking stays, tours, and experiences on Revamp Vacations, payments in Armenian dram, cancellations, and traveling in Armenia.",
+    canonical: `${origin}/faq`,
+    ogImage: `${origin}${OG_IMAGE}`,
+    jsonLd: [
+      buildFaqJsonLd(FAQ_ITEMS),
+      buildBreadcrumbJsonLd(origin, [
+        { name: "Home", path: "/" },
+        { name: "FAQ", path: "/faq" },
+      ]),
+    ],
     bodyHtml,
   });
 }

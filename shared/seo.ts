@@ -134,6 +134,20 @@ export function buildWebsiteJsonLd(origin: string): JsonLd {
   };
 }
 
+/** FAQPage structured data — heavily used by Google rich results and by AI
+ *  answer engines, which quote Q&A directly. Items are the shared FAQ_ITEMS. */
+export function buildFaqJsonLd(items: { q: string; a: string }[]): JsonLd {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: items.map((it) => ({
+      "@type": "Question",
+      name: it.q,
+      acceptedAnswer: { "@type": "Answer", text: it.a },
+    })),
+  };
+}
+
 /** Structured data for a listing-grid page (explore, tours, map). */
 export function buildCollectionPageJsonLd(origin: string, path: string, title: string, listings: Listing[]): JsonLd {
   return {
