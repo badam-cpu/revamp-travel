@@ -42,6 +42,7 @@ function normalizeFeeds(icalFeeds: unknown, legacyUrl: unknown): IcalFeed[] {
 }
 import { robotsTxtHandler } from "./robots.js";
 import { sitemapHandler } from "./sitemap.js";
+import { llmsTxtHandler } from "./llms.js";
 import { renderForBot } from "./prerender.js";
 
 const planTripSchema = z.object({
@@ -195,6 +196,8 @@ export function registerApiRoutes(app: Express) {
   app.get("/api/robots.txt", robotsTxtHandler);
   app.get("/sitemap.xml", sitemapHandler);
   app.get("/api/sitemap.xml", sitemapHandler);
+  app.get("/llms.txt", llmsTxtHandler);
+  app.get("/api/llms.txt", llmsTxtHandler);
 
   // Bot-facing prerendered HTML for a given SPA route. Called by the Netlify
   // Edge Function (netlify/edge-functions/prerender.ts), which does the UA

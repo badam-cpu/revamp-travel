@@ -69,7 +69,54 @@ export function buildListingJsonLd(listing: Listing, origin: string): JsonLd {
     }
   }
 
+  // Amenities → LocationFeatureSpecification (rich results + clean facts for AI).
+  if (listing.amenities?.length) {
+    base.amenityFeature = listing.amenities.slice(0, 40).map((name) => ({ "@type": "LocationFeatureSpecification", name, value: true }));
+  }
+
+  const fact = (...labels: string[]) => listing.facts?.find((f) => labels.includes(f.label.toLowerCase()))?.value?.trim();
+
+  if (listing.type === "stay") {
+    const checkin = fact("check-in");
+    const checkout = fact("checkout");
+    if (checkin) base.checkinTime = checkin;
+    if (checkout) base.checkoutTime = checkout;
+    if (listing.maxGuests) base.occupancy = { "@type": "QuantitativeValue", maxValue: listing.maxGuests };
+  }
+
+  // Tours/experiences: publish the itinerary/highlights as an ordered list.
+  if ((listing.type === "tour" || listing.type === "experience") && listing.highlights?.length) {
+    base.itinerary = {
+      "@type": "ItemList",
+      itemListElement: listing.highlights.slice(0, 30).map((name, i) => ({ "@type": "ListItem", position: i + 1, name })),
+    };
+    const duration = fact("duration");
+    if (duration) base.tourDuration = duration;
+  }
+
   return base;
+}
+
+/**
+ * Site-wide Organization entity. The single strongest "who is this brand"
+ * signal for Google's Knowledge Graph and for AI answer engines deciding
+ * whether "Revamp Vacations" is a real, citable entity. Emitted on the home
+ * page. No fabricated ratings/review counts (see the file header).
+ */
+export function buildOrganizationJsonLd(origin: string): JsonLd {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "Revamp Vacations",
+    legalName: "Revamp Hospitality LLC",
+    url: origin,
+    logo: `${origin}/images/og-cover.jpg`,
+    image: `${origin}/images/og-cover.jpg`,
+    description: "Armenia's travel marketplace — curated places to stay, Armenian tables, and local tours and experiences across the country.",
+    email: "hello@revampvacations.com",
+    areaServed: { "@type": "Country", name: "Armenia" },
+    sameAs: ["https://www.instagram.com/revamphomes_yerevan"],
+  };
 }
 
 /** Site-wide structured data for the home page. */

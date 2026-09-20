@@ -48,6 +48,7 @@ interface CatalogRow {
   what_to_bring: string[] | null;
   important_info: string | null;
   not_suitable_for: string[] | null;
+  max_guests: number | null;
 }
 
 function mapCatalogRow(row: CatalogRow): PublicListing {
@@ -80,6 +81,7 @@ function mapCatalogRow(row: CatalogRow): PublicListing {
     whatToBring: row.what_to_bring ?? undefined,
     importantInfo: row.important_info ?? undefined,
     notSuitableFor: row.not_suitable_for ?? undefined,
+    maxGuests: row.max_guests ?? undefined,
   };
 }
 
@@ -101,7 +103,7 @@ export async function getPublishedCatalog(): Promise<PublicListing[]> {
   const { data, error } = await client
     .from("listings")
     .select(
-      "slug, type, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, facts, amenities, accent, updated_at, highlights, not_included, what_to_bring, important_info, not_suitable_for",
+      "slug, type, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, facts, amenities, accent, updated_at, highlights, not_included, what_to_bring, important_info, not_suitable_for, max_guests",
     )
     .eq("status", "published");
   const rows = error || !data ? [] : (data as CatalogRow[]).map(mapCatalogRow);

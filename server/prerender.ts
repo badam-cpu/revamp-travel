@@ -21,7 +21,7 @@ import type { PublicListing } from "./supabase.js";
 import { getPublishedCatalog, getPublishedPosts, getPublishedPostBySlug, type PublicPost } from "./supabase.js";
 import { regions, typeLabels } from "../shared/listings.js";
 import type { ListingType } from "../shared/listings.js";
-import { buildArticleJsonLd, buildBlogListJsonLd, buildBreadcrumbJsonLd, buildCollectionPageJsonLd, buildListingJsonLd, buildWebsiteJsonLd } from "../shared/seo.js";
+import { buildArticleJsonLd, buildBlogListJsonLd, buildBreadcrumbJsonLd, buildCollectionPageJsonLd, buildListingJsonLd, buildOrganizationJsonLd, buildWebsiteJsonLd } from "../shared/seo.js";
 import { renderMarkdown, markdownToPlain } from "../shared/markdown.js";
 
 export type PageKind =
@@ -271,7 +271,7 @@ ${regions.map((region) => `<li><a href="${origin}/explore?query=${encodeURICompo
     description: "Curated places to stay, Armenian restaurants, local tours, and memorable routes across Armenia.",
     canonical: `${origin}/`,
     ogImage: `${origin}${OG_IMAGE}`,
-    jsonLd: [buildWebsiteJsonLd(origin)],
+    jsonLd: [buildWebsiteJsonLd(origin), buildOrganizationJsonLd(origin)],
     bodyHtml,
   });
 }

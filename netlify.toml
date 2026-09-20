@@ -70,6 +70,12 @@
   status = 200
   force = true
 
+[[redirects]]
+  from = "/llms.txt"
+  to = "/.netlify/functions/api/llms.txt"
+  status = 200
+  force = true
+
 # SPA fallback: client-side routing is done by wouter, so every non-file,
 # non-API path must return the app shell. Not forced, so real static assets in
 # dist/public (JS, CSS, images) are served directly before this catch-all.

@@ -15,7 +15,7 @@ import { useListings } from "@/contexts/ListingsContext";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
-import { buildWebsiteJsonLd } from "@shared/seo";
+import { buildWebsiteJsonLd, buildOrganizationJsonLd } from "@shared/seo";
 
 // `name` is the canonical category word used everywhere else (nav, filters,
 // listing badges); it anchors the poetic `title` so a visitor can map a tile
@@ -110,7 +110,7 @@ export default function Home() {
     // Link previews can't render SVG — use the raster OG card unless the admin
     // set a real (raster) hero photo.
     ogImage: heroImage.endsWith(".svg") ? "/images/og-cover.jpg" : heroImage,
-    jsonLd: buildWebsiteJsonLd(window.location.origin),
+    jsonLd: [buildWebsiteJsonLd(window.location.origin), buildOrganizationJsonLd(window.location.origin)],
   });
 
   return (
