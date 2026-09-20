@@ -6,6 +6,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SearchBar } from "@/components/SearchBar";
 import { ListingCard } from "@/components/ListingCard";
+import { ListingCardSkeleton } from "@/components/ListingCardSkeleton";
 import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -24,7 +25,7 @@ const normalizeRegion = (r: string) => r.trim().replace(/\s+(province|marz)$/i, 
 
 export default function Explore({ initialType = "" }: { initialType?: string }) {
   const [, navigate] = useLocation();
-  const { listings } = useListings();
+  const { listings, loading } = useListings();
   const { settings } = useSiteSettings();
   const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
   const urlType = params.get("type") || initialType;
@@ -125,7 +126,7 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
           </div>
 
           <div className="mt-7 flex items-center justify-between">
-            <p className="text-sm text-basalt/55"><strong className="text-basalt">{filtered.length}</strong> places across Armenia</p>
+            <p className="text-sm text-basalt/55">{loading ? "Loading places…" : <><strong className="text-basalt">{filtered.length}</strong> places across Armenia</>}</p>
             <Sheet>
               <SheetTrigger asChild>
                 <Button className="rounded-none bg-basalt text-paper lg:hidden"><MapIcon className="mr-2 h-4 w-4" /> Show map</Button>
@@ -138,7 +139,16 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
             </Sheet>
           </div>
 
-          {filtered.length ? (
+          {loading ? (
+            <div className="mt-7 grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(390px,0.9fr)]">
+              <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2">
+                {Array.from({ length: 6 }).map((_, i) => <ListingCardSkeleton key={i} />)}
+              </div>
+              <div className="hidden lg:block">
+                <div className="sticky top-[100px] h-[calc(100vh-124px)] min-h-[560px] animate-pulse bg-basalt/5" />
+              </div>
+            </div>
+          ) : filtered.length ? (
             <div className="mt-7 grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(390px,0.9fr)]">
               <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2">
                 {filtered.map((listing) => <ListingCard key={listing.id} listing={listing} active={listing.id === selectedId} onHover={setSelectedId} />)}

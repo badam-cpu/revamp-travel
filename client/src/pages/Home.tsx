@@ -7,6 +7,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { SearchBar } from "@/components/SearchBar";
 import { imgAttrs } from "@/lib/responsiveImg";
 import { ListingCard } from "@/components/ListingCard";
+import { ListingCardSkeleton } from "@/components/ListingCardSkeleton";
 import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { Button } from "@/components/ui/button";
 import { brandAssets, regions } from "@/data/listings";
@@ -27,7 +28,7 @@ const categories = [
 ];
 
 export default function Home() {
-  const { listings } = useListings();
+  const { listings, loading } = useListings();
   const { settings } = useSiteSettings();
   const { format } = useCurrency();
 
@@ -163,7 +164,9 @@ export default function Home() {
               <Link href="/explore" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.17em] text-apricot hover:text-basalt">See every place <ArrowRight className="h-4 w-4" /></Link>
             </div>
             <div className="mt-12 grid gap-x-7 gap-y-12 md:grid-cols-2 lg:grid-cols-3">
-              {featured.map((listing, index) => <div key={listing.id} className={index === 0 ? "md:col-span-2 lg:col-span-2" : ""}><ListingCard listing={listing} large={index === 0} /></div>)}
+              {loading && featured.length === 0
+                ? Array.from({ length: 5 }).map((_, i) => <div key={i} className={i === 0 ? "md:col-span-2 lg:col-span-2" : ""}><ListingCardSkeleton large={i === 0} /></div>)
+                : featured.map((listing, index) => <div key={listing.id} className={index === 0 ? "md:col-span-2 lg:col-span-2" : ""}><ListingCard listing={listing} large={index === 0} /></div>)}
             </div>
           </div>
         </section>

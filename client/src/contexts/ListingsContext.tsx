@@ -240,7 +240,10 @@ function fallbackListings(): LiveListing[] {
 
 export function ListingsProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const [listings, setListings] = useState<LiveListing[]>(fallbackListings());
+  // Start empty (not seeded) so the first paint shows skeletons via `loading`,
+  // not the brand-illustration placeholders that then flash to the real photos.
+  // The seed is only used as an offline fallback when the fetch fails.
+  const [listings, setListings] = useState<LiveListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [offline, setOffline] = useState(false);
 

@@ -13,6 +13,7 @@ import { Map as MapIcon, Search } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { TourCard } from "@/components/TourCard";
+import { ListingCardSkeleton } from "@/components/ListingCardSkeleton";
 import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -39,7 +40,7 @@ const DURATION_BUCKETS: { key: string; label: string; test: (hours: number) => b
 ];
 
 export default function Tours() {
-  const { listings } = useListings();
+  const { listings, loading } = useListings();
   const tours = useMemo(() => listings.filter((listing) => listing.type === "tour"), [listings]);
   const initialQuery = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("query") || "" : "";
 
@@ -182,10 +183,14 @@ export default function Tours() {
           </div>
 
           <p className="mt-5 text-sm text-basalt/55">
-            <strong className="text-basalt">{filtered.length}</strong> of {tours.length} tours
+            {loading ? "Loading tours…" : <><strong className="text-basalt">{filtered.length}</strong> of {tours.length} tours</>}
           </p>
 
-          {filtered.length ? (
+          {loading ? (
+            <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, i) => <ListingCardSkeleton key={i} />)}
+            </div>
+          ) : filtered.length ? (
             <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {filtered.map((tour) => (
                 <TourCard key={tour.id} listing={tour} />
