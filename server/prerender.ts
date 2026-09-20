@@ -19,7 +19,7 @@
  */
 import type { PublicListing } from "./supabase.js";
 import { getPublishedCatalog, getPublishedPosts, getPublishedPostBySlug, type PublicPost } from "./supabase.js";
-import { brandAssets, regions, typeLabels } from "../shared/listings.js";
+import { regions, typeLabels } from "../shared/listings.js";
 import type { ListingType } from "../shared/listings.js";
 import { buildArticleJsonLd, buildBlogListJsonLd, buildBreadcrumbJsonLd, buildCollectionPageJsonLd, buildListingJsonLd, buildWebsiteJsonLd } from "../shared/seo.js";
 import { renderMarkdown, markdownToPlain } from "../shared/markdown.js";
@@ -200,6 +200,17 @@ function imgUrl(src: string, origin: string): string {
   return /^https?:\/\//i.test(src) ? src : `${origin}${src}`;
 }
 
+// Social/link-preview scrapers (WhatsApp, iMessage, Telegram, Facebook, X,
+// LinkedIn) don't render SVG og:images — they need a raster. This branded
+// 1200×630 JPG is the default whenever a page has no real uploaded photo.
+const OG_IMAGE = "/images/og-cover.jpg";
+
+/** A listing's og:image: its uploaded photo when it has one, else the raster
+ *  default (a brand SVG fallback wouldn't preview). */
+function listingOg(src: string, origin: string): string {
+  return src && !/\.svg($|\?)/i.test(src) && !src.startsWith("/images/") ? imgUrl(src, origin) : `${origin}${OG_IMAGE}`;
+}
+
 function listingCardHtml(listing: PublicListing, origin: string): string {
   return `<article>
 <h3><a href="${origin}/listing/${escapeHtml(listing.slug)}">${escapeHtml(listing.title)}</a></h3>
@@ -252,7 +263,7 @@ ${regions.map((region) => `<li><a href="${origin}/explore?query=${encodeURICompo
     title: "Revamp Vacations — Stays, Tours & Experiences in Armenia",
     description: "Curated places to stay, Armenian restaurants, local tours, and memorable routes across Armenia.",
     canonical: `${origin}/`,
-    ogImage: `${origin}${brandAssets.hero}`,
+    ogImage: `${origin}${OG_IMAGE}`,
     jsonLd: [buildWebsiteJsonLd(origin)],
     bodyHtml,
   });
@@ -276,7 +287,7 @@ ${listingGridHtml(filtered, origin)}`;
     title,
     description,
     canonical: `${origin}${canonicalPath}`,
-    ogImage: `${origin}${brandAssets.hero}`,
+    ogImage: `${origin}${OG_IMAGE}`,
     jsonLd: [buildCollectionPageJsonLd(origin, canonicalPath, title, filtered)],
     bodyHtml,
   });
@@ -301,7 +312,7 @@ ${Array.from(byRegion.entries())
     title: "Map — Revamp Vacations",
     description: "Every published Revamp Vacations listing across Armenia, browsable by region.",
     canonical: `${origin}/map`,
-    ogImage: `${origin}${brandAssets.hero}`,
+    ogImage: `${origin}${OG_IMAGE}`,
     jsonLd: [buildCollectionPageJsonLd(origin, "/map", "Map — Revamp Vacations", catalog)],
     bodyHtml,
   });
@@ -316,7 +327,7 @@ function renderPlan(origin: string): string {
     title: "AI Trip Planner | Revamp Vacations",
     description: "Generate a day-by-day Armenia itinerary grounded in Revamp Vacations's live, published catalog.",
     canonical: `${origin}/plan`,
-    ogImage: `${origin}${brandAssets.hero}`,
+    ogImage: `${origin}${OG_IMAGE}`,
     bodyHtml,
   });
 }
@@ -333,7 +344,7 @@ function renderAuthPage(origin: string, kind: "login" | "signup"): string {
     title,
     description,
     canonical: `${origin}/${kind}`,
-    ogImage: `${origin}${brandAssets.hero}`,
+    ogImage: `${origin}${OG_IMAGE}`,
     bodyHtml,
   });
 }
@@ -395,7 +406,7 @@ ${
     title,
     description: listing.shortDescription,
     canonical: `${origin}${canonicalPath}`,
-    ogImage: imgUrl(listing.image, origin),
+    ogImage: listingOg(listing.image, origin),
     jsonLd: [
       buildListingJsonLd(listing, origin),
       buildBreadcrumbJsonLd(origin, [
@@ -431,7 +442,7 @@ ${cardsHtml}`;
     title: "The Revamp Journal | Revamp Vacations",
     description: "Stories, guides, and field notes from across Armenia — from the Revamp Vacations team.",
     canonical: `${origin}/blog`,
-    ogImage: `${origin}${brandAssets.hero}`,
+    ogImage: `${origin}${OG_IMAGE}`,
     jsonLd: [buildBlogListJsonLd(origin, posts)],
     bodyHtml,
   });
@@ -456,7 +467,7 @@ ${renderMarkdown(post.body)}
     title: `${post.title} | Revamp Vacations`,
     description,
     canonical: `${origin}${canonicalPath}`,
-    ogImage: post.coverImage ? imgUrl(post.coverImage, origin) : `${origin}${brandAssets.hero}`,
+    ogImage: post.coverImage ? imgUrl(post.coverImage, origin) : `${origin}${OG_IMAGE}`,
     jsonLd: [
       buildArticleJsonLd(post, origin),
       buildBreadcrumbJsonLd(origin, [
@@ -475,7 +486,7 @@ function renderNotFound(origin: string): string {
     title: "Place not found | Revamp Vacations",
     description: "This listing or page could not be found.",
     canonical: `${origin}/404`,
-    ogImage: `${origin}${brandAssets.hero}`,
+    ogImage: `${origin}${OG_IMAGE}`,
     bodyHtml,
     robots: "noindex, follow",
   });

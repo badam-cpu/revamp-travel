@@ -107,7 +107,9 @@ export default function Home() {
     title: "Revamp Vacations — Stays, Tours & Experiences in Armenia",
     description: "Curated places to stay, Armenian restaurants, local tours, and memorable routes across Armenia.",
     canonicalPath: "/",
-    ogImage: heroImage,
+    // Link previews can't render SVG — use the raster OG card unless the admin
+    // set a real (raster) hero photo.
+    ogImage: heroImage.endsWith(".svg") ? "/images/og-cover.jpg" : heroImage,
     jsonLd: buildWebsiteJsonLd(window.location.origin),
   });
 
