@@ -112,6 +112,7 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
   // facts array the detail view already reads by label; they take precedence
   // over any same-label quick fact.
   const dedicatedFacts = [
+    { label: "Property type", value: get("fact_propertytype").trim() },
     { label: "Duration", value: get("tourDuration").trim() },
     { label: "Languages", value: get("tourLanguages").trim() },
     { label: "Starting point", value: get("fact_startpoint").trim() },
@@ -202,6 +203,14 @@ const LAST_STEP = STEPS.length - 1;
 
 /** Roomy, brand-radius field sizing shared across the onboarding inputs. */
 const FIELD = "h-12 rounded-none text-base";
+
+// Stay property types offered in the listing form (stored in facts as
+// "Property type"; shown in place of the generic "Stay" on the listing page).
+const PROPERTY_TYPES = [
+  "Apartment", "Condo", "House", "Villa", "Guesthouse", "Cottage", "Cabin",
+  "Studio", "Loft", "Hotel", "Boutique hotel", "Bed & breakfast", "Hostel",
+  "Private room", "Chalet", "Farm stay", "Townhouse",
+];
 
 /**
  * Per-type example [label, value] pairs for the Quick facts placeholders, so
@@ -509,6 +518,20 @@ function ListingFormDialog({
                 <AmenityPicker ref={amenitiesRef} type={draft.type} defaultValue={draft.amenities ?? []} />
 
                 {/* Stay-only sleeping arrangement, seasonal rates + house rules. */}
+                {draft.type === "stay" && (
+                  <div className="grid gap-2 sm:max-w-xs">
+                    <Label htmlFor="fact_propertytype" className="text-sm font-semibold">Property type</Label>
+                    <select
+                      id="fact_propertytype"
+                      name="fact_propertytype"
+                      defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "property type")?.value ?? ""}
+                      className="h-12 rounded-none border border-basalt/15 bg-paper px-3 text-base focus:border-apricot focus:outline-none"
+                    >
+                      <option value="">Select a type…</option>
+                      {PROPERTY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                )}
                 {draft.type === "stay" && <RoomsEditor ref={roomsRef} defaultValue={draft.rooms ?? []} />}
                 {draft.type === "stay" && <RatesEditor ref={ratesRef} defaultValue={draft.seasonalRates ?? []} rate={siteSettings.usdToAmdRate} />}
                 {draft.type === "stay" && (

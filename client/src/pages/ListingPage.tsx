@@ -236,7 +236,10 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   if (checkInTime) glance.push({ label: "Check-in", value: `From ${checkInTime}`, icon: Clock });
   else if (selfCheckIn) glance.push({ label: "Check-in", value: "Self check-in", icon: KeyRound });
   if (checkOutTime) glance.push({ label: "Checkout", value: checkOutTime, icon: LogOut });
-  glance.push({ label: "Type", value: typeLabels[listing.type], icon: Home });
+  // For stays, show the specific property type (Apartment, Guesthouse, …) the
+  // operator set, in place of the generic "Stay".
+  const propertyType = factVal("Property type");
+  glance.push({ label: "Type", value: propertyType || typeLabels[listing.type], icon: Home });
 
   return (
     <div className="min-h-screen bg-paper text-basalt">
