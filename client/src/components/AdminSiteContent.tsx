@@ -279,7 +279,7 @@ export function AdminSiteContent() {
         {/* Featured */}
         <div className="grid gap-3 border border-basalt/10 bg-paper p-5">
           <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Featured listings</p>
-          <p className="text-xs text-basalt/50">Pick which published listings appear in the home “Featured” row (leave all unchecked for the automatic pick).</p>
+          <p className="text-xs text-basalt/50">Pick which published listings appear in the home “Featured” row — up to 8 are shown (leave all unchecked for the automatic pick).</p>
           {published.length === 0 ? (
             <p className="text-sm text-basalt/45">No published listings yet.</p>
           ) : (

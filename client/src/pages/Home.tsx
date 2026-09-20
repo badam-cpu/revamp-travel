@@ -97,8 +97,10 @@ export default function Home() {
   const adminFeatured = settings.featuredSlugs
     .map((slug) => listings.find((l) => l.slug === slug))
     .filter((l): l is (typeof listings)[number] => Boolean(l));
-  const autoFeatured = (listings.filter((listing) => listing.featured).length ? listings.filter((listing) => listing.featured) : listings).slice(0, 6);
-  const featured = (adminFeatured.length ? adminFeatured : autoFeatured).slice(0, 6);
+  // Cap at 8: with the large first card spanning 2 columns, 8 fills the 3-column
+  // grid exactly (2+1, 3, 3) — 6 left a gap in the last row.
+  const autoFeatured = (listings.filter((listing) => listing.featured).length ? listings.filter((listing) => listing.featured) : listings).slice(0, 8);
+  const featured = (adminFeatured.length ? adminFeatured : autoFeatured).slice(0, 8);
   const [selectedId, setSelectedId] = useState(featured[0]?.id);
 
   useDocumentMeta({
