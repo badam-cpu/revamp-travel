@@ -1,6 +1,6 @@
 /** Revamp brandbook: detail pages combine rounded imagery, bold sans hierarchy, concise facts, white space, and orange actions. */
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowLeft, BedDouble, Bookmark, Check, ChevronLeft, ChevronRight, Clock, Coffee, Home, KeyRound, LayoutGrid, LogOut, MapPin, Navigation, Share2, ShieldCheck, Sparkles, SprayCan, Users, Wifi, X } from "lucide-react";
+import { ArrowLeft, BedDouble, Bookmark, CalendarRange, Check, ChevronLeft, ChevronRight, Clock, Coffee, Home, KeyRound, LayoutGrid, LogOut, MapPin, Navigation, Share2, ShieldCheck, Sparkles, SprayCan, Users, Wifi, X } from "lucide-react";
 import { Link } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -233,9 +233,11 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   glance.push({ label: "Cancellation", value: listing.cancellationPolicy === "non_refundable" ? "Non-refundable" : "Flexible", icon: ShieldCheck });
   // Check-in shows the TIME (a "when"); the self-check-in method is a separate
   // concept shown in the House rules chips below — don't conflate the two here.
-  if (checkInTime) glance.push({ label: "Check-in", value: `From ${checkInTime}`, icon: Clock });
+  if (checkInTime) glance.push({ label: "Check-in", value: checkInTime, icon: Clock });
   else if (selfCheckIn) glance.push({ label: "Check-in", value: "Self check-in", icon: KeyRound });
   if (checkOutTime) glance.push({ label: "Checkout", value: checkOutTime, icon: LogOut });
+  const minStay = factVal("Minimum stay");
+  if (minStay) glance.push({ label: "Minimum stay", value: minStay, icon: CalendarRange });
   // For stays, show the specific property type (Apartment, Guesthouse, …) the
   // operator set, in place of the generic "Stay".
   const propertyType = factVal("Property type");
@@ -303,7 +305,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
                   → Type tile, check-in/checkout times) are filtered out here to
                   avoid showing them twice. */}
               {(() => {
-                const shownInGlance = new Set(["property type", "check-in", "checkout"]);
+                const shownInGlance = new Set(["property type", "check-in", "checkout", "minimum stay"]);
                 const otherFacts = listing.facts.filter((f) => !shownInGlance.has(f.label.toLowerCase()));
                 return otherFacts.length > 0 ? (
                   <dl className="mt-8 grid max-w-3xl grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">

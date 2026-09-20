@@ -71,6 +71,15 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
     return null;
   }, [isStay, range]);
 
+  // Minimum stay (stays only): read from facts, enforce on the selection.
+  const minStay = useMemo(() => {
+    const raw = listing.facts?.find((f) => f.label.toLowerCase() === "minimum stay")?.value;
+    const n = raw ? parseInt(raw, 10) : 0;
+    return Number.isFinite(n) && n > 1 ? n : 1;
+  }, [listing.facts]);
+  const selectedNights = isStay && selected ? nightsBetween(selected.startDate, selected.endDate) : 0;
+  const belowMin = isStay && selected !== null && selectedNights < minStay;
+
   const accommodationCents = selected
     ? computeBookingAmountCents(
         {
@@ -117,6 +126,10 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
   const goToCheckout = () => {
     if (!selected) {
       toast(isStay ? "Choose your check-in and check-out dates." : "Pick a date first.");
+      return;
+    }
+    if (belowMin) {
+      toast(`This stay has a ${minStay}-night minimum. Choose at least ${minStay} nights.`);
       return;
     }
     const q = new URLSearchParams({ start: selected.startDate, end: selected.endDate, guests: String(guests) });
@@ -231,11 +244,14 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
       ) : (
         <Button
           onClick={goToCheckout}
-          disabled={!selected}
-          className={cn("mt-5 h-12 w-full rounded-none bg-apricot text-white hover:bg-apricot/90", !selected && "opacity-60")}
+          disabled={!selected || belowMin}
+          className={cn("mt-5 h-12 w-full rounded-none bg-apricot text-white hover:bg-apricot/90", (!selected || belowMin) && "opacity-60")}
         >
-          {selected ? `Book · ${format(amountCents)}` : "Select dates to book"}
+          {!selected ? "Select dates to book" : belowMin ? `${minStay}-night minimum` : `Book · ${format(amountCents)}`}
         </Button>
+      )}
+      {belowMin && (
+        <p className="mt-2 text-center text-xs font-medium text-apricot">This stay requires a minimum of {minStay} nights.</p>
       )}
       <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">
         You'll add your details{isStay ? " and any extras" : ""} on the next step, then pay securely via{" "}

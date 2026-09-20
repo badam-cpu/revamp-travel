@@ -309,6 +309,16 @@ export function registerApiRoutes(app: Express) {
     if (listing.status !== "published") return res.status(400).json({ error: "This listing isn't open for booking." });
     if (!isBookableType(listing.type)) return res.status(400).json({ error: "This listing can't be booked online." });
 
+    // Enforce the operator's minimum stay (stays only; stored in facts).
+    if (listing.type === "stay") {
+      const facts = Array.isArray(listing.facts) ? (listing.facts as { label?: string; value?: string }[]) : [];
+      const raw = facts.find((f) => f.label?.toLowerCase() === "minimum stay")?.value;
+      const minStay = raw ? parseInt(raw, 10) : 0;
+      if (Number.isFinite(minStay) && minStay > 1 && nightsBetween(startDate, endDate) < minStay) {
+        return res.status(400).json({ error: `This stay has a ${minStay}-night minimum.` });
+      }
+    }
+
     // Accommodation is discount-aware (non-refundable listing charged at its
     // discount); base = accommodation + the flat cleaning fee; the guest is
     // then charged base + tax on top.

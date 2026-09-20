@@ -111,6 +111,7 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
   // Dedicated tour fields (Duration / Languages) map into the loosely-typed
   // facts array the detail view already reads by label; they take precedence
   // over any same-label quick fact.
+  const minStayN = parseInt(get("fact_minstay"), 10);
   const dedicatedFacts = [
     { label: "Property type", value: get("fact_propertytype").trim() },
     { label: "Duration", value: get("tourDuration").trim() },
@@ -118,6 +119,8 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
     { label: "Starting point", value: get("fact_startpoint").trim() },
     { label: "Check-in", value: get("fact_checkin").trim() },
     { label: "Checkout", value: get("fact_checkout").trim() },
+    // Only store a minimum stay of 2+ nights (1 is the default no-op).
+    { label: "Minimum stay", value: Number.isFinite(minStayN) && minStayN >= 2 ? `${minStayN} nights` : "" },
   ].filter((f) => f.value);
   const quickFacts = [1, 2, 3, 4, 5, 6]
     .map((n) => ({ label: get(`fact${n}Label`).trim(), value: get(`fact${n}Value`).trim() }))
@@ -540,7 +543,7 @@ function ListingFormDialog({
                       <p className="text-sm font-semibold">Check-in & checkout times <span className="font-normal text-basalt/45">(optional)</span></p>
                       <p className="mt-0.5 text-xs text-basalt/45">Shown on your listing and in the guest's confirmation email.</p>
                     </div>
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid gap-4 sm:grid-cols-3">
                       <div className="grid gap-2">
                         <Label htmlFor="fact_checkin" className="text-sm font-semibold">Check-in from</Label>
                         <Input id="fact_checkin" name="fact_checkin" placeholder="e.g. 3:00 PM" defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "check-in")?.value ?? ""} className={FIELD} />
@@ -548,6 +551,10 @@ function ListingFormDialog({
                       <div className="grid gap-2">
                         <Label htmlFor="fact_checkout" className="text-sm font-semibold">Checkout by</Label>
                         <Input id="fact_checkout" name="fact_checkout" placeholder="e.g. 11:00 AM" defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "checkout")?.value ?? ""} className={FIELD} />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="fact_minstay" className="text-sm font-semibold">Minimum stay <span className="font-normal text-basalt/45">(nights)</span></Label>
+                        <Input id="fact_minstay" name="fact_minstay" type="number" min={1} max={365} placeholder="e.g. 2" defaultValue={parseInt(draft.facts?.find((f) => f.label.toLowerCase() === "minimum stay")?.value ?? "", 10) || ""} className={FIELD} />
                       </div>
                     </div>
                   </div>
