@@ -299,16 +299,23 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
                 <p className="mt-4 whitespace-pre-line text-[15px] leading-8 text-basalt/90">{listing.longDescription}</p>
               </div>
 
-              {listing.facts.length > 0 && (
-                <dl className="mt-8 grid max-w-3xl grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
-                  {listing.facts.map((fact) => (
-                    <div key={fact.label}>
-                      <dt className="text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/40">{fact.label}</dt>
-                      <dd className="mt-1 text-sm font-semibold">{fact.value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              )}
+              {/* Facts already surfaced in the "at a glance" strip (property type
+                  → Type tile, check-in/checkout times) are filtered out here to
+                  avoid showing them twice. */}
+              {(() => {
+                const shownInGlance = new Set(["property type", "check-in", "checkout"]);
+                const otherFacts = listing.facts.filter((f) => !shownInGlance.has(f.label.toLowerCase()));
+                return otherFacts.length > 0 ? (
+                  <dl className="mt-8 grid max-w-3xl grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
+                    {otherFacts.map((fact) => (
+                      <div key={fact.label}>
+                        <dt className="text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/40">{fact.label}</dt>
+                        <dd className="mt-1 text-sm font-semibold">{fact.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : null;
+              })()}
             </div>
 
             {rooms.length > 0 && (
