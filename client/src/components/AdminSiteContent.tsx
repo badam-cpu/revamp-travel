@@ -69,6 +69,7 @@ export function AdminSiteContent() {
   const [homeCats, setHomeCats] = useState<Record<string, { title: string; label: string }>>({});
   const [home, setHome] = useState(EMPTY_HOME);
   const [regionCards, setRegionCards] = useState<RegionCard[]>([]);
+  const [faq, setFaq] = useState<{ id: string; q: string; a: string }[]>([]);
   const regionPhotoRefs = useRef<Map<string, PhotoUploaderHandle | null>>(new Map());
   const catPhotoRefs = useRef<Map<string, PhotoUploaderHandle | null>>(new Map());
   const addonPhotoRefs = useRef<Map<string, PhotoUploaderHandle | null>>(new Map());
@@ -108,6 +109,7 @@ export function AdminSiteContent() {
     });
     const seedRegions = h.regionCards && h.regionCards.length ? h.regionCards : HOME_REGIONS;
     setRegionCards(seedRegions.map((r) => ({ id: crypto.randomUUID(), name: r.name ?? "", label: r.label ?? "", image: (r as { image?: string }).image ?? "" })));
+    setFaq((h.faq ?? []).map((f) => ({ id: crypto.randomUUID(), q: f.q ?? "", a: f.a ?? "" })));
     setAddons(settings.addons ?? []);
     setHydrated(true);
   }, [loading, hydrated, settings]);
@@ -210,6 +212,7 @@ export function AdminSiteContent() {
             mapIntro: home.mapIntro.trim(),
             footerTagline: home.footerTagline.trim(),
             footerSubcopy: home.footerSubcopy.trim(),
+            faq: faq.map((f) => ({ q: f.q.trim(), a: f.a.trim() })).filter((f) => f.q && f.a),
           },
         })
         .eq("id", 1);
@@ -553,6 +556,28 @@ export function AdminSiteContent() {
           <div className="grid gap-2">
             <Label className="text-sm font-semibold">Sub-copy</Label>
             <Textarea rows={2} value={home.footerSubcopy} onChange={(e) => setHome((p) => ({ ...p, footerSubcopy: e.target.value }))} placeholder="Curated stays, tables, and local routes…" className="rounded-none text-base" />
+          </div>
+          {sectionSave()}
+        </div>
+
+        {/* FAQ (shown on /faq, with FAQ structured data for Google + AI) */}
+        <div className="grid gap-4 border border-basalt/10 bg-paper p-5">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">FAQ <span className="font-normal normal-case tracking-normal text-basalt/45">(shown on /faq)</span></p>
+            <p className="mt-1 text-xs text-basalt/50">Questions &amp; answers about booking and Armenia travel. Leave empty to use the built-in defaults. Answer engines (Google, ChatGPT, Perplexity) quote these directly — keep them factual.</p>
+          </div>
+          {faq.map((item, i) => (
+            <div key={item.id} className="grid gap-2 border border-basalt/10 bg-chalk p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-[0.1em] text-basalt/45">Q{i + 1}</span>
+                <button type="button" onClick={() => setFaq((p) => p.filter((x) => x.id !== item.id))} className="text-xs font-semibold text-basalt/45 hover:text-destructive">Remove</button>
+              </div>
+              <Input value={item.q} onChange={(e) => setFaq((p) => p.map((x) => (x.id === item.id ? { ...x, q: e.target.value } : x)))} placeholder="Question" className="rounded-none" />
+              <Textarea rows={3} value={item.a} onChange={(e) => setFaq((p) => p.map((x) => (x.id === item.id ? { ...x, a: e.target.value } : x)))} placeholder="Answer" className="rounded-none text-base" />
+            </div>
+          ))}
+          <div>
+            <Button type="button" variant="outline" size="sm" onClick={() => setFaq((p) => [...p, { id: crypto.randomUUID(), q: "", a: "" }])} className="rounded-none border-basalt/20">+ Add question</Button>
           </div>
           {sectionSave()}
         </div>

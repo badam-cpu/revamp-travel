@@ -51,6 +51,8 @@ export interface HomeContent {
   mapIntro?: string;
   footerTagline?: string;
   footerSubcopy?: string;
+  /** Admin-editable FAQ (falls back to the built-in FAQ_ITEMS when empty). */
+  faq?: { q: string; a: string }[];
 }
 
 export interface SiteSettings {

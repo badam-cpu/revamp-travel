@@ -18,11 +18,10 @@
  * the JSON-LD block gets its own separate escaping (see jsonLdScript()).
  */
 import type { PublicListing } from "./supabase.js";
-import { getPublishedCatalog, getPublishedPosts, getPublishedPostBySlug, type PublicPost } from "./supabase.js";
+import { getPublishedCatalog, getPublishedPosts, getPublishedPostBySlug, getSiteFaq, type PublicPost } from "./supabase.js";
 import { regions, typeLabels } from "../shared/listings.js";
 import type { ListingType } from "../shared/listings.js";
 import { buildArticleJsonLd, buildBlogListJsonLd, buildBreadcrumbJsonLd, buildCollectionPageJsonLd, buildFaqJsonLd, buildListingJsonLd, buildOrganizationJsonLd, buildWebsiteJsonLd } from "../shared/seo.js";
-import { FAQ_ITEMS } from "../shared/faq.js";
 import { renderMarkdown, markdownToPlain } from "../shared/markdown.js";
 
 export type PageKind =
@@ -96,7 +95,7 @@ export async function renderForBot(pathname: string, origin: string): Promise<Re
     case "plan":
       return { status: 200, body: renderPlan(origin) };
     case "faq":
-      return { status: 200, body: renderFaq(origin) };
+      return { status: 200, body: await renderFaq(origin) };
     case "login":
       return { status: 200, body: renderAuthPage(origin, "login") };
     case "signup":
@@ -344,11 +343,12 @@ function renderPlan(origin: string): string {
   });
 }
 
-function renderFaq(origin: string): string {
+async function renderFaq(origin: string): Promise<string> {
+  const items = await getSiteFaq();
   const bodyHtml = `
 <h1>Frequently asked questions</h1>
 <p>How booking works on Revamp Vacations, and essentials for planning a trip to Armenia.</p>
-${FAQ_ITEMS.map((it) => `<section><h2>${escapeHtml(it.q)}</h2><p>${escapeHtml(it.a)}</p></section>`).join("\n")}`;
+${items.map((it) => `<section><h2>${escapeHtml(it.q)}</h2><p>${escapeHtml(it.a)}</p></section>`).join("\n")}`;
 
   return renderPageShell({
     title: "FAQ — Booking & Traveling in Armenia | Revamp Vacations",
@@ -356,7 +356,7 @@ ${FAQ_ITEMS.map((it) => `<section><h2>${escapeHtml(it.q)}</h2><p>${escapeHtml(it
     canonical: `${origin}/faq`,
     ogImage: `${origin}${OG_IMAGE}`,
     jsonLd: [
-      buildFaqJsonLd(FAQ_ITEMS),
+      buildFaqJsonLd(items),
       buildBreadcrumbJsonLd(origin, [
         { name: "Home", path: "/" },
         { name: "FAQ", path: "/faq" },

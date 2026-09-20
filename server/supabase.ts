@@ -242,6 +242,21 @@ export function userClient(accessToken: string) {
  * Anon-key only — everything read here is already public. Returns null when the
  * listing isn't found/published. Every `end` is EXCLUSIVE (iCal DTEND semantics).
  */
+/** Admin-edited FAQ from site_settings.home_content.faq, for the /faq prerender.
+ *  Falls back to the built-in FAQ_ITEMS when unset/empty. Anon-key public read. */
+export async function getSiteFaq(): Promise<{ q: string; a: string }[]> {
+  const { FAQ_ITEMS } = await import("../shared/faq.js");
+  if (!client) return FAQ_ITEMS;
+  try {
+    const { data } = await client.from("site_settings").select("home_content").eq("id", 1).maybeSingle();
+    const faq = (data?.home_content as { faq?: { q?: string; a?: string }[] } | null)?.faq;
+    const clean = Array.isArray(faq) ? faq.filter((f) => f?.q?.trim() && f?.a?.trim()).map((f) => ({ q: f.q!, a: f.a! })) : [];
+    return clean.length ? clean : FAQ_ITEMS;
+  } catch {
+    return FAQ_ITEMS;
+  }
+}
+
 export async function getListingBusyRanges(id: string): Promise<{ title: string; ranges: { start: string; end: string }[] } | null> {
   if (!client) return null;
   const { data: listing } = await client
