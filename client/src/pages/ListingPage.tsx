@@ -243,15 +243,10 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
           </div>
         </div>
 
-        {/* Title above the gallery (Airbnb-style showcase). */}
-        <div className="container">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-tuff">{typeLabels[listing.type]} · {listing.city}</p>
-          <h1 className="mt-1.5 font-display text-4xl leading-[1.0] tracking-[-0.035em] sm:text-5xl">{listing.title}</h1>
-        </div>
-
-        {/* Photo showcase: a single rolling hero carousel — each photo shown
-            large (minimal crop), with dots + arrows and "Show all photos". */}
-        <section className="container mt-4">
+        {/* Photo showcase first — gives the gallery the top of the page. A single
+            rolling hero carousel, each photo large (minimal crop), with dots +
+            arrows and "Show all photos". */}
+        <section className="container">
           <HeroCarousel
             photos={Array.from(new Set([listing.image, ...(listing.gallery ?? [])].filter(Boolean))) as string[]}
             title={listing.title}
@@ -259,6 +254,12 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
             badge={<DiscountBadge listing={listing} className="absolute left-4 top-4 z-10" />}
           />
         </section>
+
+        {/* Title below the gallery. */}
+        <div className="container mt-6">
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-tuff">{typeLabels[listing.type]} · {listing.city}</p>
+          <h1 className="mt-1.5 font-display text-4xl leading-[1.0] tracking-[-0.035em] sm:text-5xl">{listing.title}</h1>
+        </div>
 
         <section className="container grid gap-12 py-14 lg:grid-cols-[minmax(0,1fr)_340px] lg:py-20">
           <div>
