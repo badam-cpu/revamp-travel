@@ -97,6 +97,8 @@ async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promi
     meetingPoint: fact("starting point", "meeting point", "start"),
     duration: fact("duration"),
     languages: fact("languages", "language"),
+    checkIn: fact("check-in", "checkin", "check in"),
+    checkOut: fact("checkout", "check-out", "check out"),
   };
   const [{ data: traveler }, { data: operator }, { data: travelerProfile }] = await Promise.all([
     admin.auth.admin.getUserById(row.traveler_id),

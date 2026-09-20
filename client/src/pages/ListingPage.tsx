@@ -1,6 +1,6 @@
 /** Revamp brandbook: detail pages combine rounded imagery, bold sans hierarchy, concise facts, white space, and orange actions. */
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowLeft, BedDouble, Bookmark, Check, ChevronLeft, ChevronRight, Coffee, Home, KeyRound, LayoutGrid, MapPin, Navigation, Share2, ShieldCheck, Sparkles, SprayCan, Users, Wifi, X } from "lucide-react";
+import { ArrowLeft, BedDouble, Bookmark, Check, ChevronLeft, ChevronRight, Coffee, Home, KeyRound, LayoutGrid, LogOut, MapPin, Navigation, Share2, ShieldCheck, Sparkles, SprayCan, Users, Wifi, X } from "lucide-react";
 import { Link } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -224,10 +224,17 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
 
   // "At a glance" facts for the left column, so it's never empty even when the
   // operator added no custom facts (derived from data the listing already has).
+  const factVal = (label: string) => listing.facts?.find((f) => f.label.toLowerCase() === label.toLowerCase())?.value?.trim();
+  const checkInTime = factVal("Check-in");
+  const checkOutTime = factVal("Checkout");
+  const selfCheckIn = houseRules.includes("Self check-in");
   const glance: { label: string; value: string; icon: typeof ShieldCheck }[] = [];
   if (listing.maxGuests) glance.push({ label: "Guests", value: `Up to ${listing.maxGuests}`, icon: Users });
   glance.push({ label: "Cancellation", value: listing.cancellationPolicy === "non_refundable" ? "Non-refundable" : "Flexible", icon: ShieldCheck });
-  if (houseRules.includes("Self check-in")) glance.push({ label: "Check-in", value: "Self check-in", icon: KeyRound });
+  // Check-in: prefer the operator-set time (append "Self check-in" when both apply); fall back to just the self-check-in flag.
+  if (checkInTime) glance.push({ label: "Check-in", value: selfCheckIn ? `${checkInTime} · Self check-in` : `From ${checkInTime}`, icon: KeyRound });
+  else if (selfCheckIn) glance.push({ label: "Check-in", value: "Self check-in", icon: KeyRound });
+  if (checkOutTime) glance.push({ label: "Checkout", value: `By ${checkOutTime}`, icon: LogOut });
   glance.push({ label: "Type", value: typeLabels[listing.type], icon: Home });
 
   return (

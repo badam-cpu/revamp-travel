@@ -22,8 +22,10 @@ const baseLinks = [
 /** `minimal` drops the public browse nav + "field guide" CTA — used in the
  * operator dashboard, which has its own sidebar and its own "Homepage" link.
  * `flush` swaps the centered container for full-width padding (matching a
- * full-bleed page like the map, so the wordmark lines up with the content). */
-export function SiteHeader({ minimal = false, flush = false }: { minimal?: boolean; flush?: boolean } = {}) {
+ * full-bleed page like the map, so the wordmark lines up with the content).
+ * `wide` matches the operator dashboard's wider content wrapper (max-w-1680)
+ * so the wordmark lines up with that page's left edge. */
+export function SiteHeader({ minimal = false, flush = false, wide = false }: { minimal?: boolean; flush?: boolean; wide?: boolean } = {}) {
   const [location] = useLocation();
   const { user, profile, signOut } = useAuth();
 
@@ -45,7 +47,7 @@ export function SiteHeader({ minimal = false, flush = false }: { minimal?: boole
 
   return (
     <header className="sticky top-0 z-50 border-b border-basalt/10 bg-paper/94 text-basalt backdrop-blur-xl">
-      <div className={cn("flex h-[76px] items-center justify-between gap-5", flush ? "w-full px-5 lg:px-7" : "container")}>
+      <div className={cn("flex h-[76px] items-center justify-between gap-5", wide ? "mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-10" : flush ? "w-full px-5 lg:px-7" : "container")}>
         <BrandMark />
         <nav className="hidden items-center gap-6 xl:flex" aria-label="Primary navigation">
           {links.map((link) => (

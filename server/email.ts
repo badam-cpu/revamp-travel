@@ -97,6 +97,9 @@ export interface BookingEmailInfo {
   meetingPoint?: string;
   duration?: string;
   languages?: string;
+  // Stay extras.
+  checkIn?: string;
+  checkOut?: string;
 }
 
 function detailRows(b: BookingEmailInfo): string {
@@ -127,6 +130,9 @@ function detailRows(b: BookingEmailInfo): string {
   }
   const durationRow = isActivity && b.duration ? row("Duration", esc(b.duration)) : "";
   const languagesRow = isActivity && b.languages ? row("Languages", esc(b.languages)) : "";
+  // Stays: check-in / checkout times when the operator set them.
+  const checkInRow = !isActivity && b.checkIn ? row("Check-in", esc(b.checkIn)) : "";
+  const checkOutRow = !isActivity && b.checkOut ? row("Checkout", esc(b.checkOut)) : "";
   const addonsRow = (b.addons ?? []).length
     ? row("Add-ons", (b.addons ?? []).map((a) => esc(`${a.name}${a.qty > 1 ? ` ×${a.qty}` : ""}${a.onRequest ? " (on request)" : ""}`)).join("<br />"))
     : "";
@@ -134,6 +140,8 @@ function detailRows(b: BookingEmailInfo): string {
   return `
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;font-size:14px;line-height:1.5;border:1px solid #eee;border-radius:8px;padding:4px 0;margin:8px 0 18px;">
       ${dateRow}
+      ${checkInRow}
+      ${checkOutRow}
       ${meetingRow}
       ${durationRow}
       ${languagesRow}

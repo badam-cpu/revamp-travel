@@ -4,17 +4,19 @@ import { Link } from "wouter";
 import { BrandMark } from "./BrandMark";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
+import { cn } from "@/lib/utils";
 
-export function SiteFooter({ minimal = false }: { minimal?: boolean } = {}) {
+export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolean; wide?: boolean } = {}) {
   const { profile } = useAuth();
   const { settings } = useSiteSettings();
 
   // Slim footer for app surfaces (operator dashboard) — just the wordmark,
-  // copyright, and legal links, without the tall marketing columns.
+  // copyright, and legal links, without the tall marketing columns. `wide`
+  // matches the dashboard's wider content wrapper so it lines up with the page.
   if (minimal) {
     return (
       <footer className="border-t border-basalt/10 bg-paper text-basalt">
-        <div className="container flex flex-col gap-3 py-6 text-[13px] text-basalt/55 sm:flex-row sm:items-center sm:justify-between">
+        <div className={cn("flex flex-col gap-3 py-6 text-[13px] text-basalt/55 sm:flex-row sm:items-center sm:justify-between", wide ? "mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-10" : "container")}>
           <BrandMark />
           <span>© 2026 Revamp Hospitality.</span>
           <div className="flex items-center gap-4">

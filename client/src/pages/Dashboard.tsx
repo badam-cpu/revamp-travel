@@ -115,6 +115,8 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
     { label: "Duration", value: get("tourDuration").trim() },
     { label: "Languages", value: get("tourLanguages").trim() },
     { label: "Starting point", value: get("fact_startpoint").trim() },
+    { label: "Check-in", value: get("fact_checkin").trim() },
+    { label: "Checkout", value: get("fact_checkout").trim() },
   ].filter((f) => f.value);
   const quickFacts = [1, 2, 3, 4, 5, 6]
     .map((n) => ({ label: get(`fact${n}Label`).trim(), value: get(`fact${n}Value`).trim() }))
@@ -509,6 +511,24 @@ function ListingFormDialog({
                 {/* Stay-only sleeping arrangement, seasonal rates + house rules. */}
                 {draft.type === "stay" && <RoomsEditor ref={roomsRef} defaultValue={draft.rooms ?? []} />}
                 {draft.type === "stay" && <RatesEditor ref={ratesRef} defaultValue={draft.seasonalRates ?? []} rate={siteSettings.usdToAmdRate} />}
+                {draft.type === "stay" && (
+                  <div className="grid gap-3">
+                    <div>
+                      <p className="text-sm font-semibold">Check-in & checkout times <span className="font-normal text-basalt/45">(optional)</span></p>
+                      <p className="mt-0.5 text-xs text-basalt/45">Shown on your listing and in the guest's confirmation email.</p>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="grid gap-2">
+                        <Label htmlFor="fact_checkin" className="text-sm font-semibold">Check-in from</Label>
+                        <Input id="fact_checkin" name="fact_checkin" placeholder="e.g. 3:00 PM" defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "check-in")?.value ?? ""} className={FIELD} />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="fact_checkout" className="text-sm font-semibold">Checkout by</Label>
+                        <Input id="fact_checkout" name="fact_checkout" placeholder="e.g. 11:00 AM" defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "checkout")?.value ?? ""} className={FIELD} />
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {draft.type === "stay" && <HouseRulesPicker ref={houseRulesRef} defaultValue={draft.houseRules ?? []} />}
 
                 {/* Tour & experience-only detail fields. */}
@@ -1111,7 +1131,7 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen bg-paper text-basalt">
-      <SiteHeader minimal />
+      <SiteHeader minimal wide />
       <main className="mx-auto w-full max-w-[1680px] px-4 py-10 sm:px-6 lg:px-10 lg:py-14">
         <div className="grid gap-8 lg:grid-cols-[210px_minmax(0,1fr)]">
           <aside className="lg:sticky lg:top-[96px] lg:self-start">
@@ -1195,7 +1215,7 @@ function DashboardContent() {
           </div>
         </div>
       </main>
-      <SiteFooter minimal />
+      <SiteFooter minimal wide />
     </div>
   );
 }
