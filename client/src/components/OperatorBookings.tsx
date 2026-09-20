@@ -15,6 +15,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { cancelBooking } from "@/lib/api";
 import type { BookingStatus } from "@shared/bookings";
+import { BookingDetailDialog } from "@/components/BookingDetailDialog";
 import { toast } from "sonner";
 
 interface IncomingBooking {
@@ -50,8 +51,12 @@ function fmtDate(iso: string): string {
 }
 function fmtMoney(cents: number, currency: string): string {
   const major = cents / 100;
-  const n = major % 1 === 0 ? major.toString() : major.toFixed(2);
-  return currency === "USD" ? `$${n}` : `${n} ${currency}`;
+  if (currency === "USD") {
+    const n = major % 1 === 0 ? major.toString() : major.toFixed(2);
+    return `$${n}`;
+  }
+  // AMD (and anything else) — dram sign + thousands separator, whole numbers.
+  return `֏${Math.round(major).toLocaleString()}`;
 }
 
 export function OperatorBookings() {
@@ -59,6 +64,7 @@ export function OperatorBookings() {
   const [rows, setRows] = useState<IncomingBooking[] | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [activeType, setActiveType] = useState<string>("");
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const todayIso = new Date().toISOString().slice(0, 10);
   const canCancel = (b: IncomingBooking) => (b.status === "pending_payment" || b.status === "confirmed") && b.start_date >= todayIso;
@@ -147,7 +153,14 @@ export function OperatorBookings() {
         {visible.map((b) => {
           const s = STATUS_STYLE[b.status] ?? STATUS_STYLE.pending_payment!;
           return (
-            <div key={b.id} className="grid gap-2 border border-basalt/10 bg-paper p-4 sm:grid-cols-[1fr_auto] sm:items-center">
+            <div
+              key={b.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => setOpenId(b.id)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpenId(b.id); } }}
+              className="grid cursor-pointer gap-2 border border-basalt/10 bg-paper p-4 transition-colors hover:border-apricot/40 hover:bg-chalk sm:grid-cols-[1fr_auto] sm:items-center"
+            >
               <div>
                 <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${s.className}`}>{s.label}</span>
                 <h3 className="mt-1.5 font-semibold">{b.listings?.title ?? "Listing"}</h3>
@@ -161,7 +174,7 @@ export function OperatorBookings() {
                   <button
                     type="button"
                     disabled={cancelling === b.id}
-                    onClick={() => cancel(b)}
+                    onClick={(e) => { e.stopPropagation(); cancel(b); }}
                     className="text-xs font-semibold text-basalt/45 underline-offset-2 transition-colors hover:text-destructive hover:underline disabled:opacity-50"
                   >
                     {cancelling === b.id ? "Cancelling…" : "Cancel"}
@@ -172,6 +185,7 @@ export function OperatorBookings() {
           );
         })}
       </div>
+      <BookingDetailDialog bookingId={openId} onClose={() => setOpenId(null)} />
     </section>
   );
 }
