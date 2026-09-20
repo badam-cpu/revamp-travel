@@ -208,17 +208,6 @@ export function PricingCalendar({ listing }: { listing: LiveListing }) {
         <span className="ml-auto text-xs text-basalt/45">{base > 0 ? `Base rate ${format(base)}${unit}` : "Rate on request"}</span>
       </div>
 
-      {/* Minimum stay (stays only) — a per-listing setting, saved to facts. */}
-      {isStay && (
-        <div className="mb-3 flex flex-wrap items-center gap-2 border border-basalt/12 bg-chalk px-3 py-2 text-sm">
-          <span className="font-semibold">Minimum stay</span>
-          <Input type="number" min={1} max={365} value={minStayInput} onChange={(e) => setMinStayInput(e.target.value)} className="h-9 w-20 rounded-none" />
-          <span className="text-basalt/55">night{Number(minStayInput) === 1 ? "" : "s"}</span>
-          <Button size="sm" variant="outline" disabled={savingMin} onClick={saveMinStay} className="ml-1 rounded-none">{savingMin ? "Saving…" : "Save"}</Button>
-          <span className="text-xs text-basalt/45">Guests must book at least this many nights. Set 1 for no minimum.</span>
-        </div>
-      )}
-
       {/* Legend */}
       <div className="mb-3 flex flex-wrap items-center gap-4 text-xs text-basalt/55">
         <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-sevan" /> Booked</span>
@@ -293,6 +282,17 @@ export function PricingCalendar({ listing }: { listing: LiveListing }) {
         </div>
       )}
       <p className="mt-3 text-xs text-basalt/45">Click a day or drag across several, then set a price (AMD) or block/open those dates. Prices are per {listing.priceUnit || "booking"}. Confirmed bookings and externally-synced days can't be changed here.</p>
+
+      {/* Minimum stay (stays only) — a per-listing setting, saved to facts. */}
+      {isStay && (
+        <div className="mt-4 flex flex-wrap items-center gap-2 border border-basalt/12 bg-chalk px-3 py-2 text-sm">
+          <span className="font-semibold">Minimum stay</span>
+          <Input type="number" min={1} max={365} value={minStayInput} onChange={(e) => setMinStayInput(e.target.value)} className="h-9 w-20 rounded-none" />
+          <span className="text-basalt/55">night{Number(minStayInput) === 1 ? "" : "s"}</span>
+          <Button size="sm" variant="outline" disabled={savingMin} onClick={saveMinStay} className="ml-1 rounded-none">{savingMin ? "Saving…" : "Save"}</Button>
+          <span className="text-xs text-basalt/45">Guests must book at least this many nights. Set 1 for no minimum.</span>
+        </div>
+      )}
     </div>
   );
 }
