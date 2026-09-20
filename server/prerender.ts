@@ -166,6 +166,8 @@ function renderPageShell(opts: ShellOptions): string {
 <meta property="og:title" content="${escapeHtml(opts.title)}" />
 <meta property="og:description" content="${escapeHtml(opts.description)}" />
 <meta property="og:type" content="website" />
+<meta property="og:site_name" content="Revamp Vacations" />
+<meta property="og:locale" content="en_US" />
 <meta property="og:url" content="${escapeHtml(opts.canonical)}" />
 <meta property="og:image" content="${escapeHtml(image)}" />
 <meta property="og:image:secure_url" content="${escapeHtml(image)}" />
