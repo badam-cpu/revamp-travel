@@ -319,12 +319,36 @@ function ListingFormDialog({
     setStep((s) => Math.max(0, s - 1));
   };
 
+  // Jump straight to any step (clickable stepper) — no gating, so editors can
+  // hop to the section they want without pressing Continue through the rest.
+  const goToStep = (n: number) => {
+    setStepError(null);
+    setStep(Math.max(0, Math.min(LAST_STEP, n)));
+  };
+
+  // Validate every step; returns the first invalid step index, or -1 if all
+  // pass. validateStep sets the visible error message for the failing step.
+  const validateAll = (): number => {
+    for (let s = 0; s < STEPS.length; s++) {
+      if (!validateStep(s)) return s;
+    }
+    return -1;
+  };
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!validateStep(step)) return;
-    if (!isLast) {
+    // New listings keep the guided flow: validate the current step, then advance.
+    if (!isEdit && !isLast) {
+      if (!validateStep(step)) return;
       setStepError(null);
       setStep((s) => s + 1);
+      return;
+    }
+    // Editing (or the final step of a new listing): validate everything and jump
+    // to the first problem, otherwise save.
+    const bad = validateAll();
+    if (bad >= 0) {
+      setStep(bad);
       return;
     }
     persist(true);
@@ -336,7 +360,11 @@ function ListingFormDialog({
   // a draft is "finished but not submitted", not a half-filled row.
   const persist = async (submitForReview: boolean) => {
     const form = formRef.current;
-    if (!form || !validateStep(step)) return;
+    const bad = validateAll();
+    if (!form || bad >= 0) {
+      if (bad >= 0) setStep(bad);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -407,8 +435,27 @@ function ListingFormDialog({
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-apricot">
                 {isEdit ? `Editing ${draft.type}` : `New ${draft.type}`} · Step {step + 1} of {STEPS.length}
               </p>
+
+              {/* Clickable step navigator — jump straight to any section. */}
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {STEPS.map((s, i) => (
+                  <button
+                    key={s.title}
+                    type="button"
+                    onClick={() => goToStep(i)}
+                    aria-current={i === step}
+                    className={cn(
+                      "flex items-center gap-1.5 border px-3 py-1.5 text-xs font-semibold transition-colors",
+                      i === step ? "border-apricot bg-apricot text-white" : "border-basalt/15 text-basalt/60 hover:border-apricot hover:text-apricot",
+                    )}
+                  >
+                    <span className="tabular-nums opacity-60">{i + 1}</span> {s.title}
+                  </button>
+                ))}
+              </div>
+
               <DialogPrimitive.Title asChild>
-                <h2 className="mt-3 font-display text-4xl leading-[1.02] tracking-[-0.03em] sm:text-5xl">{meta.title}</h2>
+                <h2 className="mt-6 font-display text-4xl leading-[1.02] tracking-[-0.03em] sm:text-5xl">{meta.title}</h2>
               </DialogPrimitive.Title>
               <p className="mt-3 max-w-md text-base leading-7 text-basalt/55">{meta.blurb(draft.type)}</p>
 
@@ -737,13 +784,15 @@ function ListingFormDialog({
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back
               </Button>
               <div className="flex items-center gap-2">
-                {isLast && !isPublished && (
+                {/* When editing, save/submit is available from any step; a new
+                    listing keeps the guided flow (Continue until the last step). */}
+                {!isPublished && (isEdit || isLast) && (
                   <Button type="button" variant="outline" className="rounded-none px-5" disabled={saving} onClick={() => persist(false)}>
                     Save as draft
                   </Button>
                 )}
                 <Button type="submit" form="listing-onboarding" className="rounded-none bg-apricot px-6 text-white hover:bg-apricot/90" disabled={saving}>
-                  {isLast ? (saving ? "Saving…" : isPublished ? "Save changes" : "Submit for review") : "Continue"}
+                  {saving ? "Saving…" : !isEdit && !isLast ? "Continue" : isPublished ? "Save changes" : "Submit for review"}
                 </Button>
               </div>
             </div>
