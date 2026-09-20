@@ -23,7 +23,7 @@
  */
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, ArrowLeft, ArrowRight, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, Home, LayoutDashboard, Link2, List, Pencil, Plus, Settings, Sparkles, Trash2, Wallet, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, Home, LayoutDashboard, Link2, List, MapPin, Pencil, Plus, Settings, Sparkles, Trash2, Wallet, X } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -494,10 +494,28 @@ function ListingFormDialog({
 
               {/* Step 2 — where it is */}
               <div hidden={step !== 1} className="mt-10 grid gap-6">
+                {/* Existing listing: show the saved address so it's clear the
+                    location is already set — the search below only changes it. */}
+                {isEdit && draft.city && (
+                  <div className="flex items-start gap-3 border border-basalt/12 bg-chalk p-4">
+                    <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-apricot" />
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-basalt/45">Saved address</p>
+                      <p className="mt-0.5 text-sm font-semibold text-basalt">
+                        {draft.city}{draft.region && draft.region !== draft.city ? `, ${draft.region}` : ""}
+                      </p>
+                      {draft.coordinates?.lat && draft.coordinates?.lng && (
+                        <p className="mt-0.5 text-xs text-basalt/45">{draft.coordinates.lat.toFixed(5)}, {draft.coordinates.lng.toFixed(5)}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {/* Optional Google Places autofill — self-gates: renders nothing
                     unless VITE_GOOGLE_MAPS_API_KEY is set. Only ever sets the
                     fields below; the operator can still edit each by hand. */}
                 <PlaceAutocomplete
+                  label={isEdit ? "Search for a new address (optional)" : "Search for the address (optional)"}
+                  helpText={isEdit ? "Only needed if the location changed — picking a result overwrites the city, region, and coordinates below." : undefined}
                   onSelect={(place) => {
                     if (place.city) setField("city", place.city);
                     if (place.region) setField("region", place.region);
