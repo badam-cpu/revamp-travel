@@ -45,7 +45,7 @@ function collapse(set: Set<string>): BlockedRange[] {
 }
 
 export function PricingCalendar({ listing }: { listing: LiveListing }) {
-  const { setSeasonalRates, setManualBlocks } = useListings();
+  const { setSeasonalRates, setManualBlocks, setListingFacts } = useListings();
   const { format } = useCurrency();
   const [month, setMonth] = useState(() => {
     const d = new Date();
@@ -56,6 +56,13 @@ export function PricingCalendar({ listing }: { listing: LiveListing }) {
   const dragging = useRef(false);
   const [priceInput, setPriceInput] = useState("");
   const [saving, setSaving] = useState(false);
+  const currentMinStay = (() => {
+    const raw = listing.facts?.find((f) => f.label.toLowerCase() === "minimum stay")?.value;
+    const n = raw ? parseInt(raw, 10) : 0;
+    return Number.isFinite(n) && n > 1 ? n : 1;
+  })();
+  const [minStayInput, setMinStayInput] = useState(String(currentMinStay));
+  const [savingMin, setSavingMin] = useState(false);
 
   // Confirmed/pending bookings for this listing (to mark booked days).
   useEffect(() => {
@@ -67,6 +74,7 @@ export function PricingCalendar({ listing }: { listing: LiveListing }) {
       .then(({ data }) => setBooked((data ?? []).map((r) => ({ start: r.start_date as string, end: r.end_date as string }))));
   }, [listing.id]);
 
+  const isStay = listing.type === "stay";
   const base = Math.round(listing.price * 100);
   const rates = listing.seasonalRates ?? [];
   const manual = listing.manualBlockedRanges ?? [];
@@ -169,6 +177,21 @@ export function PricingCalendar({ listing }: { listing: LiveListing }) {
     }
   };
 
+  const saveMinStay = async () => {
+    const n = Math.round(Number(minStayInput) || 1);
+    setSavingMin(true);
+    try {
+      const others = (listing.facts ?? []).filter((f) => f.label.toLowerCase() !== "minimum stay");
+      const next = n >= 2 ? [...others, { label: "Minimum stay", value: `${n} nights` }] : others;
+      await setListingFacts(listing.id, next);
+      toast(n >= 2 ? `Minimum stay set to ${n} nights.` : "Minimum stay cleared.");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't save the minimum stay.");
+    } finally {
+      setSavingMin(false);
+    }
+  };
+
   const unit = listing.priceUnit ? ` / ${listing.priceUnit}` : "";
   // Does the selection contain any manually-blocked day (→ offer "Open")?
   const selHasBlocked = Boolean(selStart && selEnd && manual.some((r) => !(r.end <= selStart! || r.start > selEnd!)));
@@ -184,6 +207,17 @@ export function PricingCalendar({ listing }: { listing: LiveListing }) {
         <p className="font-display text-xl">{monthLabel}</p>
         <span className="ml-auto text-xs text-basalt/45">{base > 0 ? `Base rate ${format(base)}${unit}` : "Rate on request"}</span>
       </div>
+
+      {/* Minimum stay (stays only) — a per-listing setting, saved to facts. */}
+      {isStay && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 border border-basalt/12 bg-chalk px-3 py-2 text-sm">
+          <span className="font-semibold">Minimum stay</span>
+          <Input type="number" min={1} max={365} value={minStayInput} onChange={(e) => setMinStayInput(e.target.value)} className="h-9 w-20 rounded-none" />
+          <span className="text-basalt/55">night{Number(minStayInput) === 1 ? "" : "s"}</span>
+          <Button size="sm" variant="outline" disabled={savingMin} onClick={saveMinStay} className="ml-1 rounded-none">{savingMin ? "Saving…" : "Save"}</Button>
+          <span className="text-xs text-basalt/45">Guests must book at least this many nights. Set 1 for no minimum.</span>
+        </div>
+      )}
 
       {/* Legend */}
       <div className="mb-3 flex flex-wrap items-center gap-4 text-xs text-basalt/55">

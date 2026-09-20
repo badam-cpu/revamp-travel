@@ -62,6 +62,8 @@ interface ListingsContextType {
   setSeasonalRates: (id: string, rates: SeasonalRate[]) => Promise<LiveListing>;
   /** Save the operator's manual availability blocks (content-only; status untouched). */
   setManualBlocks: (id: string, ranges: BlockedRange[]) => Promise<LiveListing>;
+  /** Save a listing's facts array (content-only; status untouched). */
+  setListingFacts: (id: string, facts: { label: string; value: string }[]) => Promise<LiveListing>;
 }
 
 const ListingsContext = createContext<ListingsContextType | undefined>(undefined);
@@ -374,8 +376,23 @@ export function ListingsProvider({ children }: { children: React.ReactNode }) {
     return listing;
   }, []);
 
+  // Update only a listing's facts (from the calendar's min-stay control).
+  // Content-only — doesn't touch status.
+  const setListingFacts = useCallback(async (id: string, facts: { label: string; value: string }[]): Promise<LiveListing> => {
+    const { data, error } = await supabase
+      .from("listings")
+      .update({ facts })
+      .eq("id", id)
+      .select(ROW_COLUMNS)
+      .single();
+    if (error) throw new Error(error.message);
+    const listing = mapListingRow(data);
+    setListings((prev) => prev.map((item) => (item.id === id ? listing : item)));
+    return listing;
+  }, []);
+
   return (
-    <ListingsContext.Provider value={{ listings, loading, offline, refresh, createListing, updateListing, deleteListing, setIcalUrl, setSeasonalRates, setManualBlocks }}>
+    <ListingsContext.Provider value={{ listings, loading, offline, refresh, createListing, updateListing, deleteListing, setIcalUrl, setSeasonalRates, setManualBlocks, setListingFacts }}>
       {children}
     </ListingsContext.Provider>
   );
