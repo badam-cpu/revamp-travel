@@ -72,11 +72,21 @@ export function OperatorBookingsTimeline() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [startDate, setStartDate] = useState(() => todayIso());
   const [openId, setOpenId] = useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = useState<"all" | "stay" | "tour" | "experience">("all");
 
-  const mine = useMemo(
+  const allMine = useMemo(
     () => listings.filter((l) => l.operatorId === user?.id).sort((a, b) => a.title.localeCompare(b.title)),
     [listings, user?.id],
   );
+  const mine = useMemo(
+    () => (typeFilter === "all" ? allMine : allMine.filter((l) => l.type === typeFilter)),
+    [allMine, typeFilter],
+  );
+  // Which type filters to actually offer (only types the operator has).
+  const availableTypes = useMemo(() => {
+    const present = new Set(allMine.map((l) => l.type));
+    return (["all", "stay", "tour", "experience"] as const).filter((t) => t === "all" || present.has(t));
+  }, [allMine]);
 
   useEffect(() => {
     if (!user) return;
@@ -112,7 +122,7 @@ export function OperatorBookingsTimeline() {
   };
 
   if (rows === null) return <p className="text-sm text-basalt/50">Loading…</p>;
-  if (mine.length === 0) {
+  if (allMine.length === 0) {
     return <p className="border border-dashed border-basalt/20 bg-chalk px-6 py-10 text-center text-sm text-basalt/55">Add a listing to see it on the timeline.</p>;
   }
 
@@ -129,6 +139,25 @@ export function OperatorBookingsTimeline() {
         <p className="font-display text-xl">{monthLabel}</p>
         <button type="button" onClick={() => setStartDate(todayIso())} className="ml-auto border border-basalt/15 px-3 py-1.5 text-xs font-semibold hover:border-apricot hover:text-apricot">Today</button>
       </div>
+
+      {/* Product-type filter (only when the operator has more than one type). */}
+      {availableTypes.length > 2 && (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {availableTypes.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTypeFilter(t)}
+              className={cn(
+                "border px-3 py-1.5 text-xs font-semibold capitalize transition-colors",
+                typeFilter === t ? "border-basalt bg-basalt text-paper" : "border-basalt/15 text-basalt/60 hover:border-apricot hover:text-apricot",
+              )}
+            >
+              {t === "all" ? "All" : t === "stay" ? "Stays" : t === "tour" ? "Tours" : "Experiences"}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Legend */}
       <div className="mb-3 flex flex-wrap items-center gap-4 text-xs text-basalt/55">
