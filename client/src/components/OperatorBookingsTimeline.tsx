@@ -264,7 +264,7 @@ export function OperatorBookingsTimeline() {
         </div>
       </div>
       <p className="mt-3 text-xs text-basalt/45">Showing {startDate} → {addDaysIso(windowEnd, -1)}. Bars are your bookings; hatched blocks are dates synced as unavailable from a connected calendar. Tap a booking for full details.</p>
-      <BookingDetailDialog bookingId={openId} onClose={() => setOpenId(null)} />
+      <BookingDetailDialog bookingId={openId} onClose={() => setOpenId(null)} onChanged={() => setReload((k) => k + 1)} />
       <DirectBookingDialog listing={direct?.listing ?? null} startDate={direct?.date ?? null} onClose={() => setDirect(null)} onCreated={() => setReload((k) => k + 1)} />
     </div>
   );

@@ -9,7 +9,8 @@ import { useEffect, useState } from "react";
 import { Mail, Phone, User } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
-import { setBookingPayment } from "@/lib/api";
+import { setBookingPayment, cancelBooking } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { BookingStatus } from "@shared/bookings";
@@ -74,11 +75,12 @@ function nights(a: string, b: string): number {
   return Math.max(1, Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 86_400_000));
 }
 
-export function BookingDetailDialog({ bookingId, onClose }: { bookingId: string | null; onClose: () => void }) {
+export function BookingDetailDialog({ bookingId, onClose, onChanged }: { bookingId: string | null; onClose: () => void; onChanged?: () => void }) {
   const [booking, setBooking] = useState<FullBooking | null>(null);
   const [events, setEvents] = useState<BookingEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [savingPay, setSavingPay] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     if (!bookingId) {
@@ -108,6 +110,24 @@ export function BookingDetailDialog({ bookingId, onClose }: { bookingId: string 
 
   const b = booking;
   const guestName = b?.guest_name || b?.profiles?.display_name || "Guest";
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const canCancel = !!b && (b.status === "pending_payment" || b.status === "confirmed") && b.start_date >= todayIso;
+
+  const doCancel = async () => {
+    if (!b) return;
+    if (!window.confirm(`Cancel this booking for ${b.listings?.title ?? "your listing"}? The guest is emailed and the dates reopen.`)) return;
+    setCancelling(true);
+    try {
+      const { refundCents } = await cancelBooking(b.id);
+      setBooking((prev) => (prev ? { ...prev, status: "cancelled" } : prev));
+      toast(refundCents > 0 ? `Cancelled — refund ${money(refundCents, b.currency)} to process manually in PayLink.` : "Booking cancelled — the dates are reopened.");
+      onChanged?.();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't cancel that booking.");
+    } finally {
+      setCancelling(false);
+    }
+  };
   const baseCents = b ? (b.base_cents ?? b.amount_cents) : 0;
   const totalLabel =
     b?.status === "confirmed" || b?.status === "completed"
@@ -226,6 +246,16 @@ export function BookingDetailDialog({ bookingId, onClose }: { bookingId: string 
                   </ul>
                 )}
               </section>
+
+              {/* Cancel */}
+              {canCancel && (
+                <section className="border-t border-basalt/10 pt-4">
+                  <Button variant="outline" disabled={cancelling} onClick={doCancel} className="rounded-none border-destructive/30 text-destructive hover:bg-destructive/5">
+                    {cancelling ? "Cancelling…" : "Cancel booking"}
+                  </Button>
+                  <p className="mt-2 text-xs text-basalt/45">The guest is emailed and the dates reopen. A paid booking flags a manual refund — issue it in the PayLink dashboard (PayLink has no refund API).</p>
+                </section>
+              )}
             </div>
           </div>
         )}

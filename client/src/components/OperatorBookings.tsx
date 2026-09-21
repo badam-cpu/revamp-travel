@@ -65,6 +65,7 @@ export function OperatorBookings() {
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [activeType, setActiveType] = useState<string>("");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
 
   const todayIso = new Date().toISOString().slice(0, 10);
   const canCancel = (b: IncomingBooking) => (b.status === "pending_payment" || b.status === "confirmed") && b.start_date >= todayIso;
@@ -107,7 +108,7 @@ export function OperatorBookings() {
     return () => {
       active = false;
     };
-  }, [user]);
+  }, [user, reload]);
 
   if (rows === null) return <p className="text-sm text-basalt/50">Loading your bookings…</p>;
 
@@ -185,7 +186,7 @@ export function OperatorBookings() {
           );
         })}
       </div>
-      <BookingDetailDialog bookingId={openId} onClose={() => setOpenId(null)} />
+      <BookingDetailDialog bookingId={openId} onClose={() => setOpenId(null)} onChanged={() => setReload((k) => k + 1)} />
     </section>
   );
 }
