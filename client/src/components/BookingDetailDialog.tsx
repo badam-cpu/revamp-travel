@@ -59,6 +59,7 @@ const EVENT_LABEL: Record<string, string> = {
   status_expired: "Unpaid hold expired (auto-cancelled)",
   direct_created: "Direct booking recorded",
   payment_status: "Payment status changed",
+  email_failed: "⚠️ Email failed to send",
 };
 
 function money(cents: number | null | undefined, currency: string): string {

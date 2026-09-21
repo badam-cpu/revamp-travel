@@ -109,14 +109,21 @@ async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promi
   // gave at checkout so they still get a confirmation.
   const travelerEmail = traveler?.user?.email || row.guest_email || "";
   const travelerName = travelerProfile?.display_name && travelerProfile.display_name !== "Guest" ? travelerProfile.display_name : row.guest_name || "A traveler";
-  const tasks: Promise<unknown>[] = [];
-  if (travelerEmail) tasks.push(sendTravelerConfirmation(travelerEmail, info));
-  if (operator?.user?.email) tasks.push(sendOperatorNewBooking(operator.user.email, info, travelerName));
-  await Promise.allSettled(tasks);
-  // Record the activity for the booking's History log (best-effort).
+  const operatorEmail = operator?.user?.email || "";
+  const [travelerRes, operatorRes] = await Promise.all([
+    travelerEmail ? sendTravelerConfirmation(travelerEmail, info) : Promise.resolve({ sent: false, reason: "no_recipient" as const }),
+    operatorEmail ? sendOperatorNewBooking(operatorEmail, info, travelerName) : Promise.resolve({ sent: false, reason: "no_recipient" as const }),
+  ]);
+  // Record the activity for the booking's History log (best-effort). Log the
+  // TRUE send result so a delivery/config failure is visible here, not masked
+  // as "sent".
   await logBookingEvent(admin, row.id, "status_confirmed");
-  if (travelerEmail) await logBookingEvent(admin, row.id, "email_traveler_confirmation", travelerEmail);
-  if (operator?.user?.email) await logBookingEvent(admin, row.id, "email_operator_new_booking", operator.user.email);
+  if (travelerEmail) {
+    await logBookingEvent(admin, row.id, travelerRes.sent ? "email_traveler_confirmation" : "email_failed", travelerRes.sent ? travelerEmail : `Guest email to ${travelerEmail} failed (${travelerRes.reason ?? "unknown"}).`);
+  }
+  if (operatorEmail) {
+    await logBookingEvent(admin, row.id, operatorRes.sent ? "email_operator_new_booking" : "email_failed", operatorRes.sent ? operatorEmail : `Operator email to ${operatorEmail} failed (${operatorRes.reason ?? "unknown"}).`);
+  }
 }
 
 /**
