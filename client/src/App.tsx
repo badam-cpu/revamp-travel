@@ -50,6 +50,18 @@ function AnalyticsTracker() {
   return null;
 }
 
+/** Resets scroll to the top on every path change so a freshly opened page
+ *  (e.g. a listing) always starts at its header, not wherever the previous
+ *  page was scrolled. useLocation() tracks the pathname only, so query-string
+ *  changes (Explore filters, ?tab= on /account) don't jump the page. */
+function ScrollToTop() {
+  const [location] = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location]);
+  return null;
+}
+
 function Router() {
   return (
     <Switch>
@@ -93,6 +105,7 @@ function App() {
                   <TooltipProvider>
                     <Toaster />
                     <AnalyticsTracker />
+                    <ScrollToTop />
                     <AnnouncementBanner />
                     <Router />
                     <SupportWidget />

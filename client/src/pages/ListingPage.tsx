@@ -435,12 +435,14 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
                   <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/40">Sights nearby</p>
                   <ul className="mt-3 grid gap-2">
                     {nearby.map((place) => (
-                      <li key={place.name} className="flex items-center gap-3 text-sm text-basalt/75">
-                        <Navigation className="h-3.5 w-3.5 shrink-0 text-apricot" strokeWidth={2} />
-                        <span className="font-medium text-basalt">{place.name}</span>
-                        {place.category && <span className="text-basalt/45">· {place.category}</span>}
+                      <li key={place.name} className="flex items-start gap-3 text-sm text-basalt/75">
+                        <Navigation className="mt-[3px] h-3.5 w-3.5 shrink-0 text-apricot" strokeWidth={2} />
+                        <span className="min-w-0 flex-1 leading-5">
+                          <span className="font-medium text-basalt">{place.name}</span>
+                          {place.category && <span className="text-basalt/45"> · {place.category}</span>}
+                        </span>
                         {typeof place.distanceM === "number" && (
-                          <span className="ml-auto shrink-0 text-xs tabular-nums text-basalt/45">
+                          <span className="mt-[1px] shrink-0 text-xs tabular-nums text-basalt/45">
                             {place.distanceM < 1000 ? `${place.distanceM} m` : `${(place.distanceM / 1000).toFixed(1)} km`}
                           </span>
                         )}

@@ -83,7 +83,7 @@ export function SiteHeader({ minimal = false, flush = false, wide = false }: { m
           {user ? (
             <>
               <Link
-                href="/account"
+                href="/account?tab=profile"
                 className="inline-flex items-center gap-1.5 pl-1 pr-2 text-xs font-semibold text-basalt/60 transition-colors hover:text-basalt"
               >
                 <User className="h-3.5 w-3.5" /> {profile?.displayName || "Account"}
@@ -142,7 +142,7 @@ export function SiteHeader({ minimal = false, flush = false, wide = false }: { m
                 {user ? (
                   <div className="flex items-center justify-between text-sm text-paper/70">
                     <SheetClose asChild>
-                      <Link href="/account" className="inline-flex items-center gap-1.5 font-semibold hover:text-white"><User className="h-3.5 w-3.5" /> {profile?.displayName || "Account"}</Link>
+                      <Link href="/account?tab=profile" className="inline-flex items-center gap-1.5 font-semibold hover:text-white"><User className="h-3.5 w-3.5" /> {profile?.displayName || "Account"}</Link>
                     </SheetClose>
                     <SheetClose asChild>
                       <button onClick={handleSignOut} className="inline-flex items-center gap-1.5 font-semibold text-apricot">
