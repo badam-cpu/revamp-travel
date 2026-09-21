@@ -22,6 +22,7 @@ export interface Profile {
   displayName: string;
   businessName?: string | null;
   bio?: string | null;
+  logoUrl?: string | null;
 }
 
 interface SignUpParams {
@@ -36,6 +37,7 @@ interface ProfilePatch {
   displayName?: string;
   businessName?: string | null;
   bio?: string | null;
+  logoUrl?: string | null;
 }
 
 interface AuthContextType {
@@ -68,6 +70,7 @@ function mapProfile(row: {
   display_name: string;
   business_name: string | null;
   bio: string | null;
+  logo_url?: string | null;
 }): Profile {
   return {
     id: row.id,
@@ -75,6 +78,7 @@ function mapProfile(row: {
     displayName: row.display_name,
     businessName: row.business_name,
     bio: row.bio,
+    logoUrl: row.logo_url ?? null,
   };
 }
 
@@ -84,7 +88,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const loadProfile = useCallback(async (userId: string) => {
-    const { data, error } = await supabase.from("profiles").select("id, role, display_name, business_name, bio").eq("id", userId).maybeSingle();
+    // select("*") so a not-yet-run 0037 (logo_url) migration doesn't break profile loads.
+    const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
     if (error) {
       console.error("Failed to load profile", error);
       setProfile(null);
@@ -181,6 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (patch.displayName !== undefined) row.display_name = patch.displayName;
       if (patch.businessName !== undefined) row.business_name = patch.businessName;
       if (patch.bio !== undefined) row.bio = patch.bio;
+      if (patch.logoUrl !== undefined) row.logo_url = patch.logoUrl;
       const { error } = await supabase.from("profiles").update(row).eq("id", userId);
       if (error) throw error;
       await loadProfile(userId);

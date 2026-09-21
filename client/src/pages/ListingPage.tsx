@@ -22,6 +22,7 @@ import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { cn } from "@/lib/utils";
 import { imgAttrs } from "@/lib/responsiveImg";
 import { trackEvent } from "@/lib/analytics";
+import { OperatorBrand } from "@/components/OperatorBrand";
 import { describeCancellationPolicy, averageNightlyCents } from "@shared/bookings";
 import { buildBreadcrumbJsonLd, buildListingJsonLd } from "@shared/seo";
 import { toast } from "sonner";
@@ -285,6 +286,8 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
             <div className="border-b border-basalt/10 pb-10">
               <p className="eyebrow">{listing.eyebrow}</p>
               <p className="mt-3 flex items-center gap-2 text-sm font-semibold"><MapPin className="h-4 w-4 text-apricot" /> {listing.city}, {listing.region}</p>
+
+              <OperatorBrand operatorId={(listing as { operatorId?: string }).operatorId ?? ""} className="mt-5" />
 
               {/* At a glance — a horizontal strip, not a narrow sidebar. */}
               {glance.length > 0 && (

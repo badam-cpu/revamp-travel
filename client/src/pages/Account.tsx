@@ -32,6 +32,7 @@ import { useListings } from "@/contexts/ListingsContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { supabase } from "@/lib/supabase";
 import { confirmCheckout, cancelBooking } from "@/lib/api";
+import { uploadImage } from "@/lib/imageUpload";
 import { trackEvent } from "@/lib/analytics";
 import type { BookingStatus } from "@shared/bookings";
 import { toast } from "sonner";
@@ -79,6 +80,8 @@ export function ProfileTab() {
   const [displayName, setDisplayName] = useState(profile?.displayName ?? "");
   const [businessName, setBusinessName] = useState(profile?.businessName ?? "");
   const [bio, setBio] = useState(profile?.bio ?? "");
+  const [logoUrl, setLogoUrl] = useState(profile?.logoUrl ?? "");
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Re-seed if the profile loads/changes under us.
@@ -86,7 +89,22 @@ export function ProfileTab() {
     setDisplayName(profile?.displayName ?? "");
     setBusinessName(profile?.businessName ?? "");
     setBio(profile?.bio ?? "");
-  }, [profile?.displayName, profile?.businessName, profile?.bio]);
+    setLogoUrl(profile?.logoUrl ?? "");
+  }, [profile?.displayName, profile?.businessName, profile?.bio, profile?.logoUrl]);
+
+  const onLogoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setUploadingLogo(true);
+    try {
+      setLogoUrl(await uploadImage(file, user.id));
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Couldn't upload the logo.");
+    } finally {
+      setUploadingLogo(false);
+      e.target.value = "";
+    }
+  };
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
@@ -99,7 +117,14 @@ export function ProfileTab() {
       await updateProfile({
         displayName: displayName.trim(),
         bio: bio.trim() || null,
-        ...(isOperator ? { businessName: businessName.trim() || null } : {}),
+        ...(isOperator
+          ? {
+              businessName: businessName.trim() || null,
+              // Only write logo_url when it actually changed (keeps saves working
+              // even before migration 0037 adds the column).
+              ...(logoUrl !== (profile?.logoUrl ?? "") ? { logoUrl: logoUrl || null } : {}),
+            }
+          : {}),
       });
       toast("Profile updated.");
     } catch (err) {
@@ -118,9 +143,31 @@ export function ProfileTab() {
       {isOperator && (
         <div className="grid gap-2">
           <Label htmlFor="acc-business" className="text-sm font-semibold">
-            Business name <span className="font-normal text-basalt/45">(shown on your listings)</span>
+            Business / company name <span className="font-normal text-basalt/45">(shown on your listings)</span>
           </Label>
-          <Input id="acc-business" value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="e.g. Aragats Guesthouse" className="h-11 rounded-none" />
+          <Input id="acc-business" value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="e.g. Aragats Guesthouse LLC" className="h-11 rounded-none" />
+        </div>
+      )}
+      {isOperator && (
+        <div className="grid gap-2">
+          <Label className="text-sm font-semibold">Logo <span className="font-normal text-basalt/45">(shown on your listings)</span></Label>
+          <div className="flex items-center gap-4">
+            {logoUrl ? (
+              <img src={logoUrl} alt="Your logo" className="h-16 w-16 rounded-full border border-basalt/15 object-cover" />
+            ) : (
+              <div className="grid h-16 w-16 place-items-center rounded-full border border-dashed border-basalt/25 text-[10px] font-semibold uppercase tracking-wide text-basalt/40">Logo</div>
+            )}
+            <div className="flex items-center gap-3">
+              <label className="cursor-pointer rounded-none border border-basalt/15 px-3 py-2 text-sm font-semibold transition-colors hover:border-apricot hover:text-apricot">
+                {uploadingLogo ? "Uploading…" : logoUrl ? "Replace" : "Upload logo"}
+                <input type="file" accept="image/*" className="hidden" onChange={onLogoFile} disabled={uploadingLogo} />
+              </label>
+              {logoUrl && (
+                <button type="button" onClick={() => setLogoUrl("")} className="text-sm font-semibold text-basalt/45 hover:text-destructive">Remove</button>
+              )}
+            </div>
+          </div>
+          <p className="text-xs text-basalt/45">A square image works best. Shown next to your business name on your listings.</p>
         </div>
       )}
       <div className="grid gap-2">

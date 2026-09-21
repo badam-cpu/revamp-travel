@@ -28,6 +28,7 @@ import { factValue, otherFacts } from "@/lib/tourFacts";
 import { cn } from "@/lib/utils";
 import { imgAttrs } from "@/lib/responsiveImg";
 import { trackEvent } from "@/lib/analytics";
+import { OperatorBrand } from "@/components/OperatorBrand";
 
 export function TourDetail({ listing }: { listing: Listing }) {
   const { listings } = useListings();
@@ -68,6 +69,9 @@ export function TourDetail({ listing }: { listing: Listing }) {
   useEffect(() => {
     trackEvent("view_item", { item_id: listing.id, item_name: listing.title, item_category: listing.type });
   }, [listing.id]);
+
+  // The prop is typed as the base Listing, but the runtime object is a LiveListing.
+  const operatorId = (listing as { operatorId?: string }).operatorId;
 
   return (
     <>
@@ -128,6 +132,8 @@ export function TourDetail({ listing }: { listing: Listing }) {
           <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-basalt/70">
             <MapPin className="h-4 w-4 text-apricot" /> {listing.city}, {listing.region}
           </p>
+
+          {operatorId && <OperatorBrand operatorId={operatorId} className="mt-5" />}
 
           <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 border-y border-basalt/10 py-5">
             {duration && (
