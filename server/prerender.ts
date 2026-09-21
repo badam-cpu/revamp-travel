@@ -23,6 +23,7 @@ import { regions, typeLabels } from "../shared/listings.js";
 import type { ListingType } from "../shared/listings.js";
 import { buildArticleJsonLd, buildBlogListJsonLd, buildBreadcrumbJsonLd, buildCollectionPageJsonLd, buildFaqJsonLd, buildListingJsonLd, buildOrganizationJsonLd, buildWebsiteJsonLd } from "../shared/seo.js";
 import { renderMarkdown, markdownToPlain } from "../shared/markdown.js";
+import { findRegionGuide, listingInRegion, type RegionGuide } from "../shared/regionGuides.js";
 
 export type PageKind =
   | "home"
@@ -32,6 +33,7 @@ export type PageKind =
   | "map"
   | "plan"
   | "listing-detail"
+  | "region"
   | "faq"
   | "blog"
   | "blog-post"
@@ -63,6 +65,8 @@ export function matchRoute(pathname: string): MatchedRoute {
   if (path === "/login") return { kind: "login" };
   if (path === "/signup") return { kind: "signup" };
   if (path === "/faq") return { kind: "faq" };
+  const regionMatch = path.match(/^\/region\/([^/]+)$/);
+  if (regionMatch) return { kind: "region", slug: decodeURIComponent(regionMatch[1]) };
   if (path === "/blog") return { kind: "blog" };
   const postMatch = path.match(/^\/blog\/([^/]+)$/);
   if (postMatch) return { kind: "blog-post", slug: decodeURIComponent(postMatch[1]) };
@@ -96,6 +100,11 @@ export async function renderForBot(pathname: string, origin: string): Promise<Re
       return { status: 200, body: renderPlan(origin) };
     case "faq":
       return { status: 200, body: await renderFaq(origin) };
+    case "region": {
+      const guide = route.slug ? findRegionGuide(route.slug) : undefined;
+      if (!guide) return { status: 404, body: renderNotFound(origin) };
+      return { status: 200, body: renderRegion(guide, catalog, origin) };
+    }
     case "login":
       return { status: 200, body: renderAuthPage(origin, "login") };
     case "signup":
@@ -360,6 +369,35 @@ ${items.map((it) => `<section><h2>${escapeHtml(it.q)}</h2><p>${escapeHtml(it.a)}
       buildBreadcrumbJsonLd(origin, [
         { name: "Home", path: "/" },
         { name: "FAQ", path: "/faq" },
+      ]),
+    ],
+    bodyHtml,
+  });
+}
+
+function renderRegion(guide: RegionGuide, catalog: PublicListing[], origin: string): string {
+  const matched = catalog.filter((l) => listingInRegion(l.city, l.region, guide));
+  const description = guide.intro[0].slice(0, 155);
+  const bodyHtml = `
+<h1>Where to stay in ${escapeHtml(guide.name)}</h1>
+${guide.intro.map((p) => `<p>${escapeHtml(p)}</p>`).join("\n")}
+<p><strong>Climate:</strong> ${escapeHtml(guide.climate)}</p>
+<dl>${guide.facts.map((f) => `<dt>${escapeHtml(f.label)}</dt><dd>${escapeHtml(f.value)}</dd>`).join("")}</dl>
+${matched.length ? `<h2>Places to stay, tours &amp; experiences in ${escapeHtml(guide.name)}</h2>\n${listingGridHtml(matched, origin)}` : ""}
+<h2>Good to know</h2>
+${guide.faq.map((f) => `<section><h3>${escapeHtml(f.q)}</h3><p>${escapeHtml(f.a)}</p></section>`).join("\n")}`;
+
+  return renderPageShell({
+    title: `${guide.name}, Armenia — Where to Stay & What to Do | Revamp Vacations`,
+    description,
+    canonical: `${origin}/region/${guide.slug}`,
+    ogImage: `${origin}${OG_IMAGE}`,
+    jsonLd: [
+      buildCollectionPageJsonLd(origin, `/region/${guide.slug}`, `Where to stay and what to do in ${guide.name}`, matched),
+      buildFaqJsonLd(guide.faq),
+      buildBreadcrumbJsonLd(origin, [
+        { name: "Home", path: "/" },
+        { name: guide.name, path: `/region/${guide.slug}` },
       ]),
     ],
     bodyHtml,

@@ -16,6 +16,13 @@ import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { buildWebsiteJsonLd, buildOrganizationJsonLd } from "@shared/seo";
+import { findRegionGuide } from "@shared/regionGuides";
+
+/** Link a region card to its guide page when one exists, else to filtered explore. */
+function regionHref(name: string, query: string): string {
+  const slug = name.toLowerCase().replace(/\s+(province|marz)$/i, "").trim().replace(/\s+/g, "-");
+  return findRegionGuide(slug) ? `/region/${slug}` : `/explore?query=${encodeURIComponent(query)}`;
+}
 
 // `name` is the canonical category word used everywhere else (nav, filters,
 // listing badges); it anchors the poetic `title` so a visitor can map a tile
@@ -184,7 +191,7 @@ export default function Home() {
             </div>
             <div ref={regionScrollRef} className="mt-12 flex snap-x snap-mandatory gap-5 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {regionCards.map((region, index) => (
-                <Link key={`${region.name}-${index}`} href={`/explore?query=${encodeURIComponent(region.query)}`} className="region-card group relative w-[82%] shrink-0 snap-start overflow-hidden sm:w-[calc((100%-1.25rem)/2)] lg:w-[calc((100%-2.5rem)/3)]">
+                <Link key={`${region.name}-${index}`} href={regionHref(region.name, region.query)} className="region-card group relative w-[82%] shrink-0 snap-start overflow-hidden sm:w-[calc((100%-1.25rem)/2)] lg:w-[calc((100%-2.5rem)/3)]">
                   <img src={region.image} alt={region.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.025]" />
                   <div className="absolute inset-0 bg-gradient-to-t from-basalt/95 via-basalt/40 to-transparent" />
                   <div className="absolute inset-x-0 bottom-0 p-6 text-white [text-shadow:0_2px_14px_rgba(15,15,15,0.55)]"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-apricot">{region.label}</p><h3 className="mt-1 font-display text-4xl">{region.name}</h3></div>

@@ -33,6 +33,7 @@ import BlogPost from "./pages/BlogPost";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import Faq from "./pages/Faq";
+import Region from "./pages/Region";
 import Plan from "./pages/Plan";
 
 /** Loads GA4 (if configured) and reports a page view on every route change. */
@@ -69,6 +70,7 @@ function Router() {
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
       <Route path="/faq" component={Faq} />
+      <Route path="/region/:slug">{(params) => <Region slug={params.slug} />}</Route>
       <Route path="/blog" component={Blog} />
       <Route path="/blog/:slug">{(params) => <BlogPost params={params} />}</Route>
       <Route path="/checkout/:slug">{(params) => <Checkout slug={params.slug} />}</Route>
