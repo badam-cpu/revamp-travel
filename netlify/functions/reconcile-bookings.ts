@@ -40,6 +40,10 @@ export const handler = async () => {
 // released within ~1h of its 24h expiry window, and paid bookings whose
 // confirm-checkout never fired get confirmed promptly. Netlify reads this
 // export to schedule the function.
-export const config = { schedule: "0 * * * *" };
+// Every 10 minutes: PayLink production has no auto-redirect back to the site, so
+// confirm-on-return often doesn't fire — this sweep is the primary path that
+// flips paid holds to confirmed (and sends the emails), so it needs to be
+// prompt, not hourly. Cheap: it only polls bookings still in pending_payment.
+export const config = { schedule: "*/10 * * * *" };
 
 export default handler;
