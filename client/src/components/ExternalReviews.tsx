@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import { Star } from "lucide-react";
 import { fetchGoogleReviews, listHostReviews, type GoogleReviewsResult, type HostReview } from "@/lib/externalReviews";
+import { computeMentions } from "@/lib/reviewMentions";
 
 function Stars({ n }: { n: number }) {
   return (
@@ -39,10 +40,28 @@ export function ExternalReviews({ operatorId, listingId, className = "" }: { ope
   const hasGoogle = google?.configured && (google.reviews?.length || google.rating);
   if (!hasGoogle && airbnb.length === 0) return null;
 
+  // "Guest reviews mention" — themes across all the external review text we have.
+  const mentions = computeMentions([...airbnb.map((r) => r.body), ...((google?.reviews ?? []).map((r) => r.text))]).slice(0, 6);
+
   return (
     <section className={`border-t border-basalt/10 pt-8 ${className}`}>
       <p className="eyebrow">From around the web</p>
       <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">Reviews on other platforms.</h2>
+
+      {mentions.length > 0 && (
+        <div className="mt-6">
+          <p className="text-sm font-semibold text-basalt/70">Guests mention</p>
+          <div className="mt-3 flex flex-wrap gap-2.5">
+            {mentions.map((m) => (
+              <span key={m.key} className="inline-flex items-center gap-2 rounded-[0.875rem] border border-basalt/12 bg-paper px-3.5 py-2 text-sm">
+                <span aria-hidden="true">{m.emoji}</span>
+                <span className="font-semibold text-basalt">{m.label}</span>
+                <span className="text-basalt/45">{m.count}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {hasGoogle && (
         <div className="mt-6">
