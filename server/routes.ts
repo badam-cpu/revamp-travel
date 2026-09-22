@@ -1009,7 +1009,7 @@ export function registerApiRoutes(app: Express) {
       // articles ground in full; per-article and total caps keep the prompt lean.
       const { data: hub } = await supa
         .from("hub_articles")
-        .select("title, category, excerpt, body")
+        .select("title, category, excerpt, body, slug")
         .eq("status", "published")
         .order("pinned", { ascending: false })
         .order("published_at", { ascending: false, nullsFirst: false })
@@ -1018,13 +1018,13 @@ export function registerApiRoutes(app: Express) {
       const TOTAL_BUDGET = 48000; // chars — overall knowledge-base ceiling
       let used = 0;
       const knowledgeBase = (hub ?? [])
-        .map((a: { title: string; category: string; excerpt: string | null; body: string | null }) => {
+        .map((a: { title: string; category: string; excerpt: string | null; body: string | null; slug: string }) => {
           if (used >= TOTAL_BUDGET) return null;
           const full = (a.body || a.excerpt || "").replace(/\r\n/g, "\n").trim();
           const room = Math.min(PER_ARTICLE, TOTAL_BUDGET - used);
           const text = full.length > room ? full.slice(0, room).trimEnd() + "…" : full;
           used += text.length;
-          return `## ${a.title} [${a.category}]\n${text}`;
+          return `## ${a.title} [${a.category}] (slug: ${a.slug})\n${text}`;
         })
         .filter(Boolean)
         .join("\n\n");

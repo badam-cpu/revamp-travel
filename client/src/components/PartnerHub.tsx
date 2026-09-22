@@ -5,6 +5,7 @@
  * safe renderer. The dashboard AI assistant is grounded in the same articles.
  */
 import { useEffect, useMemo, useState } from "react";
+import { useSearch } from "wouter";
 import { Loader2, Pin, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { renderMarkdown } from "@shared/markdown";
@@ -14,10 +15,20 @@ export function PartnerHub() {
   const [articles, setArticles] = useState<HubArticle[] | null>(null);
   const [cat, setCat] = useState<HubCategory | "all">("all");
   const [openId, setOpenId] = useState<string | null>(null);
+  const search = useSearch();
 
   useEffect(() => {
     listHubArticles().then(setArticles);
   }, []);
+
+  // Deep link from the Aha assistant / a shared URL: ?section=hub&article=<slug>
+  useEffect(() => {
+    if (!articles) return;
+    const slug = new URLSearchParams(search).get("article");
+    if (!slug) return;
+    const a = articles.find((x) => x.slug === slug);
+    if (a) setOpenId(a.id);
+  }, [articles, search]);
 
   const filtered = useMemo(() => (articles ?? []).filter((a) => cat === "all" || a.category === cat), [articles, cat]);
   const open = articles?.find((a) => a.id === openId) ?? null;

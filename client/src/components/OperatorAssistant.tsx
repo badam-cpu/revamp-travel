@@ -9,8 +9,10 @@
  * operators) — this is the host's private helper and never sees other operators.
  */
 import { useEffect, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import { Sparkles, Send, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { renderMarkdown } from "@shared/markdown";
 import { askOperatorAssistant, ApiError, type OperatorChatTurn } from "@/lib/api";
 
 const SUGGESTIONS = ["How much am I owed?", "What bookings are coming up?", "When is my next payout?", "How many bookings this month?"];
@@ -22,6 +24,20 @@ export function OperatorAssistant() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [, navigate] = useLocation();
+
+  // Assistant replies are short Markdown; links to Partner Hub articles
+  // (/dashboard?section=hub&article=…) should open in-app, not a new tab.
+  const onReplyClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const anchor = (e.target as HTMLElement).closest("a");
+    if (!anchor) return;
+    const href = anchor.getAttribute("href") || "";
+    if (href.startsWith("/")) {
+      e.preventDefault();
+      navigate(href);
+      setOpen(false);
+    }
+  };
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -54,10 +70,10 @@ export function OperatorAssistant() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          aria-label="Open the operator assistant"
+          aria-label="Open Aha AI assistant"
           className="fixed bottom-20 right-4 z-50 inline-flex items-center gap-2 rounded-full bg-basalt px-4 py-3 text-sm font-semibold text-paper shadow-[0_16px_40px_rgba(35,35,33,0.32)] transition-transform hover:-translate-y-0.5 lg:bottom-4"
         >
-          <Sparkles className="h-4 w-4 text-apricot" /> Assistant
+          <Sparkles className="h-4 w-4 text-apricot" /> Aha AI
         </button>
       )}
 
@@ -66,7 +82,7 @@ export function OperatorAssistant() {
           <div className="flex items-center justify-between border-b border-basalt/10 bg-basalt px-4 py-3 text-paper">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-apricot" />
-              <span className="font-semibold">Operator assistant</span>
+              <span className="font-semibold">Aha AI assistant</span>
             </div>
             <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="text-paper/70 hover:text-white">
               <X className="h-5 w-5" />
@@ -76,7 +92,7 @@ export function OperatorAssistant() {
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
             {messages.length === 0 && (
               <div className="text-sm text-basalt/60">
-                <p>Hi! Ask me about your bookings and payouts — I only see your own data.</p>
+                <p>Hi, I'm Aha 👋 Ask me about your bookings and payouts (I only see your own data), or how to host well — I'll point you to the Partner Hub.</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {SUGGESTIONS.map((s) => (
                     <button
@@ -91,19 +107,21 @@ export function OperatorAssistant() {
                 </div>
               </div>
             )}
-            {messages.map((m, i) => (
-              <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
-                <div
-                  className={
-                    m.role === "user"
-                      ? "max-w-[85%] whitespace-pre-line rounded-2xl rounded-br-sm bg-apricot px-3.5 py-2 text-sm text-white"
-                      : "max-w-[90%] whitespace-pre-line rounded-2xl rounded-bl-sm bg-chalk px-3.5 py-2 text-sm text-basalt"
-                  }
-                >
-                  {m.body}
+            {messages.map((m, i) =>
+              m.role === "user" ? (
+                <div key={i} className="flex justify-end">
+                  <div className="max-w-[85%] whitespace-pre-line rounded-2xl rounded-br-sm bg-apricot px-3.5 py-2 text-sm text-white">{m.body}</div>
                 </div>
-              </div>
-            ))}
+              ) : (
+                <div key={i} className="flex justify-start">
+                  <div
+                    onClick={onReplyClick}
+                    className="max-w-[90%] rounded-2xl rounded-bl-sm bg-chalk px-3.5 py-2 text-sm text-basalt [&_a]:font-semibold [&_a]:text-apricot [&_a]:underline [&_li]:my-0.5 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5"
+                    dangerouslySetInnerHTML={{ __html: renderMarkdown(m.body) }}
+                  />
+                </div>
+              ),
+            )}
             {sending && <div className="text-xs text-basalt/40">Thinking…</div>}
           </div>
 
