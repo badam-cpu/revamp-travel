@@ -49,6 +49,7 @@ export default function Privacy() {
             <p><strong className="text-basalt">Bookings &amp; saved places.</strong> The listings you save, and the dates, guest counts, and amounts of bookings you make.</p>
             <p><strong className="text-basalt">Payments.</strong> Payments are processed by PayLink (Ameriabank). We do <strong className="text-basalt">not</strong> collect or store your card or bank details — those go directly to PayLink. We retain the booking amount, currency, and a payment reference to confirm and manage your booking.</p>
             <p><strong className="text-basalt">Support messages.</strong> Messages you send to our support chat, and an email address if you choose to leave one as a guest. An AI assistant helps answer first; our team may follow up.</p>
+            <p><strong className="text-basalt">Messages between guests and hosts.</strong> When you message a host (or, as a host, a guest) about a booking, we store those messages so both parties can see the conversation. For safety, fraud prevention, and support, our team may review these messages and step into a conversation when needed. Please keep bookings and payments on Revamp — arrangements made off-platform aren't covered by our protection.</p>
             <p><strong className="text-basalt">Technical &amp; preferences.</strong> Basic device and log data needed to run and secure the service, and small items stored in your browser (your currency choice, dismissed notices, unsent drafts). We do not run third-party advertising trackers.</p>
           </Section>
 

@@ -215,6 +215,35 @@ export async function sendSupportMessage(message: string): Promise<{ reply: stri
   });
 }
 
+/**
+ * Unified inbox — open (or fetch) the conversation for a booking. The server
+ * derives the operator from the listing and seeds both participants; idempotent.
+ */
+export async function ensureBookingThread(bookingId: string): Promise<string> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in to send a message.");
+  const res = await request<{ conversationId: string }>("/api/message-thread", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ bookingId }),
+  });
+  return res.conversationId;
+}
+
+/** Unified inbox — send a message into a conversation (guardrail-scanned server-side). */
+export async function sendInboxMessage(conversationId: string, body: string): Promise<{ id: string }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in to send a message.");
+  const res = await request<{ message: { id: string } }>("/api/message-send", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ conversationId, body }),
+  });
+  return res.message;
+}
+
 /** A guest optionally leaves an email/name so Revamp can follow up after they leave. */
 export async function submitSupportContact(email: string, name?: string): Promise<{ ok: boolean }> {
   const { data } = await supabase.auth.getSession();

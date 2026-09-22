@@ -16,7 +16,8 @@
  */
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { Bookmark, LogOut, MapPin, ShieldCheck, Star, Ticket, User as UserIcon } from "lucide-react";
+import { Bookmark, LogOut, MapPin, MessageSquare, ShieldCheck, Star, Ticket, User as UserIcon } from "lucide-react";
+import { Inbox } from "@/components/Inbox";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { ListingCard } from "@/components/ListingCard";
@@ -31,7 +32,7 @@ import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useListings } from "@/contexts/ListingsContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { supabase } from "@/lib/supabase";
-import { confirmCheckout, cancelBooking } from "@/lib/api";
+import { confirmCheckout, cancelBooking, ensureBookingThread } from "@/lib/api";
 import { uploadImage } from "@/lib/imageUpload";
 import { trackEvent } from "@/lib/analytics";
 import type { BookingStatus } from "@shared/bookings";
@@ -71,7 +72,7 @@ function fmtMoney(cents: number, currency: string): string {
   return currency === "USD" ? `$${n}` : currency === "AMD" ? `֏${n}` : `${n} ${currency}`;
 }
 
-const VALID_TABS = ["trips", "saved", "profile", "security"] as const;
+const VALID_TABS = ["trips", "messages", "saved", "profile", "security"] as const;
 type TabKey = (typeof VALID_TABS)[number];
 
 export function ProfileTab() {
@@ -289,8 +290,10 @@ function SavedTab() {
 function TripsTab({ reloadKey }: { reloadKey: number }) {
   const { user } = useAuth();
   const search = useSearch();
+  const [, navigate] = useLocation();
   const [trips, setTrips] = useState<TripRow[] | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const [messaging, setMessaging] = useState<string | null>(null);
   const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());
   const [openReview, setOpenReview] = useState<string | null>(null);
   const [rating, setRating] = useState(5);
@@ -339,6 +342,18 @@ function TripsTab({ reloadKey }: { reloadKey: number }) {
       toast(err instanceof Error ? err.message : "Couldn't save your review.");
     } finally {
       setSavingReview(false);
+    }
+  };
+
+  const messageHost = async (t: TripRow) => {
+    setMessaging(t.id);
+    try {
+      await ensureBookingThread(t.id);
+      navigate("/account?tab=messages");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Couldn't open the conversation.");
+    } finally {
+      setMessaging(null);
     }
   };
 
@@ -435,6 +450,14 @@ function TripsTab({ reloadKey }: { reloadKey: number }) {
                   {cancelling === t.id ? "Cancelling…" : "Cancel"}
                 </button>
               )}
+              <button
+                type="button"
+                disabled={messaging === t.id}
+                onClick={() => messageHost(t)}
+                className="text-xs font-semibold text-apricot underline-offset-2 hover:underline disabled:opacity-50"
+              >
+                {messaging === t.id ? "Opening…" : "Message host"}
+              </button>
               {reviewedIds.has(t.id) && <span className="inline-flex items-center gap-1 text-xs font-semibold text-basalt/45"><Star className="h-3.5 w-3.5 fill-apricot text-apricot" /> Reviewed</span>}
               {canReview(t) && openReview !== t.id && (
                 <button type="button" onClick={() => setOpenReview(t.id)} className="text-xs font-semibold text-apricot underline-offset-2 hover:underline">Leave a review</button>
@@ -556,6 +579,7 @@ export default function Account() {
           <TabsList className="flex h-auto flex-wrap justify-start gap-1 rounded-none border-b border-basalt/10 bg-transparent p-0">
             {[
               { key: "trips", label: "Trips", icon: Ticket },
+              { key: "messages", label: "Messages", icon: MessageSquare },
               { key: "saved", label: "Saved", icon: Bookmark },
               { key: "profile", label: "Profile", icon: UserIcon },
               { key: "security", label: "Security", icon: ShieldCheck },
@@ -571,6 +595,7 @@ export default function Account() {
           </TabsList>
 
           <TabsContent value="trips" className="mt-8"><TripsTab reloadKey={tripsReload} /></TabsContent>
+          <TabsContent value="messages" className="mt-8">{user && <Inbox userId={user.id} />}</TabsContent>
           <TabsContent value="saved" className="mt-8"><SavedTab /></TabsContent>
           <TabsContent value="profile" className="mt-8"><ProfileTab /></TabsContent>
           <TabsContent value="security" className="mt-8"><SecurityTab /></TabsContent>

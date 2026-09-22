@@ -16,13 +16,15 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, Check, ExternalLink, Home, LayoutDashboard, ListChecks, MapPin, MessageSquare, Newspaper, Palette, Wallet, X } from "lucide-react";
+import { AlertTriangle, Check, ExternalLink, Home, LayoutDashboard, ListChecks, MapPin, MessageSquare, MessagesSquare, Newspaper, Palette, Wallet, X } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { AdminSiteContent } from "@/components/AdminSiteContent";
 import { AdminSupportInbox } from "@/components/AdminSupportInbox";
 import { AdminPayouts } from "@/components/AdminPayouts";
 import { AdminBlog } from "@/components/AdminBlog";
+import { Inbox } from "@/components/Inbox";
+import { useAuth } from "@/contexts/AuthContext";
 import { RequireRole } from "@/components/RequireRole";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -223,11 +225,12 @@ function StatTile({ n, label, onClick }: { n: number | string; label: string; on
   );
 }
 
-type AdminSection = "overview" | "reviews" | "support" | "payouts" | "blog" | "site";
+type AdminSection = "overview" | "reviews" | "support" | "messages" | "payouts" | "blog" | "site";
 const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: typeof Home }[] = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
   { key: "reviews", label: "Reviews", icon: ListChecks },
   { key: "support", label: "Support", icon: MessageSquare },
+  { key: "messages", label: "All messages", icon: MessagesSquare },
   { key: "payouts", label: "Payouts", icon: Wallet },
   { key: "blog", label: "Blog", icon: Newspaper },
   { key: "site", label: "Site content", icon: Palette },
@@ -265,6 +268,7 @@ function OverviewPanel({ go }: { go: (s: AdminSection) => void }) {
 function AdminConsole() {
   const [, navigate] = useLocation();
   const search = useSearch();
+  const { user } = useAuth();
 
   useDocumentMeta({
     title: "Admin | Revamp Vacations",
@@ -316,6 +320,12 @@ function AdminConsole() {
             {section === "overview" && <OverviewPanel go={go} />}
             {section === "reviews" && <ReviewsPanel />}
             {section === "support" && <AdminSupportInbox />}
+            {section === "messages" && (
+              <div>
+                <SectionHead title="All messages" sub="Every guest ↔ host conversation, for oversight. Flagged messages (contact details / off-platform hints) are marked. You can reply as Revamp to step in." />
+                {user && <Inbox userId={user.id} admin />}
+              </div>
+            )}
             {section === "payouts" && <AdminPayouts />}
             {section === "blog" && <AdminBlog />}
             {section === "site" && <AdminSiteContent />}

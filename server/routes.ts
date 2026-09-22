@@ -17,6 +17,7 @@ import { paylinkConfigured, registerPayment } from "./paylink.js";
 import { reconcileUserBookings, logBookingEvent } from "./bookings.js";
 import { generateSupportReply, type SupportTurn } from "./support.js";
 import { generateOperatorReply, type OperatorTurn } from "./operatorAssistant.js";
+import { scanMessage } from "./messaging.js";
 import { payoutState } from "../shared/payouts.js";
 import { sendCancellation, sendSupportAlert, type BookingEmailInfo } from "./email.js";
 import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, promoDiscount, addonUnitCost, nightsBetween, type Addon, DEFAULT_CURRENCY } from "../shared/bookings.js";
@@ -107,6 +108,15 @@ const supportContactSchema = z.object({
   name: z.string().trim().max(120).optional(),
 });
 
+const messageThreadSchema = z.object({
+  bookingId: z.string().uuid(),
+});
+
+const messageSendSchema = z.object({
+  conversationId: z.string().uuid(),
+  body: z.string().trim().min(1).max(4000),
+});
+
 const operatorAssistantSchema = z.object({
   messages: z
     .array(z.object({ role: z.enum(["user", "assistant"]), body: z.string().max(2000) }))
@@ -121,6 +131,8 @@ function issuesToMessage(err: z.ZodError): string {
 // Soft, in-memory per-operator rate limit for the assistant. Best-effort across
 // serverless instances — a light guard on the Anthropic bill, not security.
 const operatorAssistantHits = new Map<string, number[]>();
+// Same soft per-user cap for inbox message sends (spam guard, not security).
+const messageSendHits = new Map<string, number[]>();
 
 function moneyByCurrency(map: Record<string, number>): string {
   const keys = Object.keys(map);
@@ -867,6 +879,118 @@ export function registerApiRoutes(app: Express) {
     } catch (err) {
       console.error("[operator-assistant]", err);
       res.status(500).json({ error: "Couldn't answer that right now. Please try again." });
+    }
+  });
+
+  // POST /api/message-thread — ensure (or fetch) the conversation for a booking,
+  // seeding both participants. Created server-side so the operator is derived
+  // from the listing (never client-supplied) and the caller must be one of the
+  // two parties. Idempotent — returns the same conversation on repeat calls.
+  app.post("/api/message-thread", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in to send a message." });
+
+    const parsed = messageThreadSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Messaging isn't available right now." });
+
+    try {
+      const { data: booking } = await admin
+        .from("bookings")
+        .select("id, traveler_id, listing_id, listings!inner(operator_id)")
+        .eq("id", parsed.data.bookingId)
+        .maybeSingle();
+      if (!booking) return res.status(404).json({ error: "Booking not found." });
+
+      const b = booking as unknown as { id: string; traveler_id: string | null; listing_id: string; listings: { operator_id: string } | null };
+      const operatorId = b.listings?.operator_id;
+      if (!operatorId) return res.status(400).json({ error: "This booking can't be messaged." });
+      if (!b.traveler_id) return res.status(400).json({ error: "This booking has no traveler account to message." });
+      if (userId !== b.traveler_id && userId !== operatorId) return res.status(403).json({ error: "You're not part of this booking." });
+
+      // Existing thread?
+      const { data: existing } = await admin.from("conversations").select("id").eq("booking_id", b.id).eq("kind", "booking").maybeSingle();
+      if (existing) return res.json({ conversationId: existing.id });
+
+      const { data: convo, error: cErr } = await admin
+        .from("conversations")
+        .insert({ kind: "booking", booking_id: b.id, listing_id: b.listing_id })
+        .select("id")
+        .single();
+      if (cErr || !convo) throw new Error(cErr?.message || "conversation create failed");
+
+      const { error: pErr } = await admin.from("conversation_participants").insert([
+        { conversation_id: convo.id, user_id: b.traveler_id, role: "traveler" },
+        { conversation_id: convo.id, user_id: operatorId, role: "operator" },
+      ]);
+      if (pErr) throw new Error(pErr.message);
+
+      res.json({ conversationId: convo.id });
+    } catch (err) {
+      console.error("[message-thread]", err);
+      res.status(500).json({ error: "Couldn't open the conversation. Please try again." });
+    }
+  });
+
+  // POST /api/message-send — post a message into a conversation. The caller must
+  // be a participant (posts as their role) or an admin (posts as 'support', i.e.
+  // "Revamp", to intervene). Rate-limited and guardrail-scanned server-side; the
+  // message always sends but a contact/off-platform hit is flagged for admins.
+  app.post("/api/message-send", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in to send a message." });
+
+    const parsed = messageSendSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Messaging isn't available right now." });
+
+    // Soft per-user rate limit.
+    const now = Date.now();
+    const hits = (messageSendHits.get(userId) ?? []).filter((t) => t > now - 60_000);
+    if (hits.length >= 20) return res.status(429).json({ error: "You're sending messages very quickly — give it a few seconds and try again." });
+
+    try {
+      // Determine the caller's role in this conversation. A participant posts as
+      // their own role; an admin who isn't a participant posts as 'support'.
+      const { data: part } = await admin
+        .from("conversation_participants")
+        .select("role")
+        .eq("conversation_id", parsed.data.conversationId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      let senderRole = part?.role as string | undefined;
+      if (!senderRole) {
+        const { data: prof } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+        if (prof?.role === "admin") senderRole = "support";
+        else return res.status(403).json({ error: "You're not part of this conversation." });
+      }
+
+      const { flagged } = scanMessage(parsed.data.body);
+
+      const { data: msg, error: mErr } = await admin
+        .from("messages")
+        .insert({ conversation_id: parsed.data.conversationId, sender_id: userId, sender_role: senderRole, body: parsed.data.body, flagged })
+        .select("id, conversation_id, sender_id, sender_role, body, flagged, created_at")
+        .single();
+      if (mErr || !msg) throw new Error(mErr?.message || "message insert failed");
+
+      await admin.from("conversations").update({ last_message_at: new Date().toISOString() }).eq("id", parsed.data.conversationId);
+
+      hits.push(now);
+      messageSendHits.set(userId, hits);
+      res.json({ message: msg });
+    } catch (err) {
+      console.error("[message-send]", err);
+      res.status(500).json({ error: "Couldn't send your message. Please try again." });
     }
   });
 }
