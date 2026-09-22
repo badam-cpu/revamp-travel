@@ -24,8 +24,11 @@ import { buyGiftCard, confirmGiftPurchase, ApiError } from "@/lib/api";
 
 export default function GiftCards() {
   const { user } = useAuth();
-  const { format } = useCurrency();
+  const { format, rate, currency } = useCurrency();
   const search = useSearch();
+  // Whole-dollar USD reference under the AMD value (shown when a rate is set and
+  // AMD is the active display). Math.round gives $101.45→$101, $101.50→$102.
+  const usdRef = (amdCents: number) => (rate > 0 && currency === "AMD" ? `$${Math.round(amdCents / 100 / rate).toLocaleString()}` : null);
   const [amount, setAmount] = useState<number>(GIFT_CARD_AMOUNTS_CENTS[1]);
   const [recipientName, setRecipientName] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
@@ -129,6 +132,7 @@ export default function GiftCards() {
                   className={`flex flex-col items-center justify-center border px-4 py-6 text-center transition-colors ${amount === a ? "border-apricot bg-apricot/5" : "border-basalt/15 hover:border-basalt/30"}`}
                 >
                   <span className="font-display text-2xl tracking-[-0.02em]">{format(a)}</span>
+                  {usdRef(a) && <span className="mt-1 text-xs text-basalt/45">≈ {usdRef(a)}</span>}
                 </button>
               ))}
             </div>
@@ -156,7 +160,10 @@ export default function GiftCards() {
             <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Summary</p>
             <div className="mt-4 flex items-baseline justify-between border-b border-basalt/10 pb-4">
               <span className="text-sm text-basalt/60">Gift card value</span>
-              <span className="font-display text-3xl tracking-[-0.02em]">{format(amount)}</span>
+              <span className="text-right">
+                <span className="block font-display text-3xl tracking-[-0.02em]">{format(amount)}</span>
+                {usdRef(amount) && <span className="block text-xs text-basalt/45">≈ {usdRef(amount)}</span>}
+              </span>
             </div>
             <ul className="mt-4 space-y-2 text-sm text-basalt/60">
               <li>• Emailed to your recipient with a unique code.</li>

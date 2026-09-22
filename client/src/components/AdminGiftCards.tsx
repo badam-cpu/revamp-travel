@@ -37,7 +37,8 @@ interface Event {
 }
 
 export function AdminGiftCards() {
-  const { format } = useCurrency();
+  const { format, rate, currency } = useCurrency();
+  const usdRef = (amdCents: number) => (rate > 0 && currency === "AMD" ? `$${Math.round(amdCents / 100 / rate).toLocaleString()}` : null);
   const [cards, setCards] = useState<Card[] | null>(null);
   const [q, setQ] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -122,7 +123,10 @@ export function AdminGiftCards() {
                   {c.code ?? "— (unpaid)"}
                 </button>
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${badge(c.status)}`}>{c.status.replace(/_/g, " ")}</span>
-                <span className="text-sm text-basalt/70">{format(c.balance_cents)} <span className="text-basalt/40">/ {format(c.initial_amount_cents)}</span></span>
+                <span className="text-sm text-basalt/70">
+                  {format(c.balance_cents)} <span className="text-basalt/40">/ {format(c.initial_amount_cents)}</span>
+                  {usdRef(c.initial_amount_cents) && <span className="ml-1 text-xs text-basalt/40">(≈ {usdRef(c.initial_amount_cents)})</span>}
+                </span>
                 <span className="min-w-0 flex-1 truncate text-sm text-basalt/55">→ {c.recipient_name || c.recipient_email || "—"}</span>
                 <span className="shrink-0 text-xs text-basalt/40">{c.expires_at ? `exp ${new Date(c.expires_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : ""}</span>
                 {c.status !== "cancelled" && c.code && (
