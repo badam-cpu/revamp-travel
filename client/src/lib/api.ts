@@ -309,7 +309,8 @@ export async function pricelabsMap(input: { revampListingId: string; pricelabsLi
 export async function pricelabsUnmap(revampListingId: string): Promise<{ ok: boolean }> {
   return plPost("/api/pricelabs/unmap", { revampListingId });
 }
-export async function pricelabsSync(revampListingId?: string): Promise<{ synced: number; dates: number; skipped: string[] }> {
+export interface ListingSyncSummary { id: string; days: number; minCents: number; maxCents: number; avgCents: number; firstDate: string; lastDate: string }
+export async function pricelabsSync(revampListingId?: string): Promise<{ synced: number; dates: number; skipped: string[]; perListing: ListingSyncSummary[] }> {
   return plPost("/api/pricelabs/sync", revampListingId ? { revampListingId } : {});
 }
 

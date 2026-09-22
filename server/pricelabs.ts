@@ -70,10 +70,21 @@ async function usdRate(admin: SupabaseClient): Promise<number> {
   }
 }
 
+export interface ListingSyncSummary {
+  id: string;
+  days: number; // dates with a price written
+  minCents: number;
+  maxCents: number;
+  avgCents: number;
+  firstDate: string;
+  lastDate: string;
+}
+
 export interface SyncResult {
   synced: number; // listings updated
   dates: number; // total date-rates written
   skipped: string[]; // reasons
+  perListing: ListingSyncSummary[]; // for validation (coverage + price range)
 }
 
 /**
@@ -82,7 +93,7 @@ export interface SyncResult {
  * mapped Revamp listing. Best-effort per listing. Service-role client required.
  */
 export async function syncOperatorPrices(admin: SupabaseClient, operatorId: string, onlyListingId?: string): Promise<SyncResult> {
-  const result: SyncResult = { synced: 0, dates: 0, skipped: [] };
+  const result: SyncResult = { synced: 0, dates: 0, skipped: [], perListing: [] };
 
   const { data: secret } = await admin.from("operator_secrets").select("pricelabs_api_key").eq("operator_id", operatorId).maybeSingle();
   const apiKey = secret?.pricelabs_api_key as string | undefined;
@@ -129,6 +140,16 @@ export async function syncOperatorPrices(admin: SupabaseClient, operatorId: stri
       await admin.from("pricelabs_listing_map").update({ currency, last_synced_at: new Date().toISOString() }).eq("revamp_listing_id", m.revamp_listing_id);
       result.synced++;
       result.dates += seasonal.length;
+      const cents = seasonal.map((s) => s.priceCents);
+      result.perListing.push({
+        id: m.revamp_listing_id,
+        days: cents.length,
+        minCents: Math.min(...cents),
+        maxCents: Math.max(...cents),
+        avgCents: Math.round(cents.reduce((a, b) => a + b, 0) / cents.length),
+        firstDate: seasonal[0].start,
+        lastDate: seasonal[seasonal.length - 1].start,
+      });
     } catch (err) {
       console.error("[pricelabs] sync listing failed", m.revamp_listing_id, err);
       result.skipped.push(err instanceof Error ? err.message : "error");

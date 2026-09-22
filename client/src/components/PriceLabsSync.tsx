@@ -13,11 +13,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Check, ExternalLink, Lock, RefreshCw, TrendingUp } from "lucide-react";
-import { pricelabsConnect, pricelabsData, pricelabsDisconnect, pricelabsMap, pricelabsUnmap, pricelabsSync, ApiError, type PriceLabsListing, type PriceLabsMap } from "@/lib/api";
+import { pricelabsConnect, pricelabsData, pricelabsDisconnect, pricelabsMap, pricelabsUnmap, pricelabsSync, ApiError, type PriceLabsListing, type PriceLabsMap, type ListingSyncSummary } from "@/lib/api";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 export function PriceLabsSync() {
   const { user } = useAuth();
   const { listings } = useListings();
+  const { format } = useCurrency();
+  const [summary, setSummary] = useState<ListingSyncSummary[]>([]);
   const myStays = listings.filter((l) => (l as { operatorId?: string }).operatorId === user?.id && l.type === "stay");
 
   const [connected, setConnected] = useState<boolean | null>(null);
@@ -94,6 +97,7 @@ export function PriceLabsSync() {
     setSyncing(true);
     try {
       const r = await pricelabsSync();
+      setSummary(r.perListing ?? []);
       if (r.synced > 0) {
         toast(`Synced ${r.synced} listing${r.synced === 1 ? "" : "s"} (${r.dates} dates).`);
       } else if (r.skipped?.includes("no_mappings")) {
@@ -174,6 +178,26 @@ export function PriceLabsSync() {
             )}
             {plListings.length === 0 && <p className="mt-2 text-xs text-amber-600">No PriceLabs listings loaded — make sure your listings are active in PriceLabs.</p>}
           </div>
+
+          {summary.length > 0 && (
+            <div className="border border-basalt/10 bg-chalk/40 p-3">
+              <p className="text-sm font-semibold">Last sync — coverage &amp; price range</p>
+              <p className="mt-1 text-xs text-basalt/55">Any day without a synced price falls back to your base nightly rate. Set a floor in PriceLabs → Configure Prices → Minimum so no day syncs below it.</p>
+              <ul className="mt-3 grid gap-2">
+                {summary.map((s) => {
+                  const stay = myStays.find((l) => (l as { id: string }).id === s.id);
+                  return (
+                    <li key={s.id} className="grid gap-1 border-t border-basalt/10 pt-2 first:border-t-0 first:pt-0">
+                      <span className="truncate text-sm font-medium text-basalt">{stay?.title ?? s.id}</span>
+                      <span className="text-xs text-basalt/60">
+                        <strong>{s.days}</strong> day{s.days === 1 ? "" : "s"} priced ({s.firstDate} → {s.lastDate}) · low <strong>{format(s.minCents)}</strong> · high <strong>{format(s.maxCents)}</strong> · avg <strong>{format(s.avgCents)}</strong>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
           <p className="text-[11px] leading-relaxed text-basalt/45">Prices are converted to AMD (dram) using your admin rate for USD listings. Set the rate in Admin → Site content if your PriceLabs prices aren't in AMD.</p>
         </div>
       )}

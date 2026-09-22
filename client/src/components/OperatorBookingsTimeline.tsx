@@ -8,9 +8,9 @@
  * Data: bookings on listings this operator owns (same RLS as OperatorBookings),
  * plus each listing's iCal blocked_ranges (from useListings).
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useListings } from "@/contexts/ListingsContext";
@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 const DAY_MS = 86_400_000;
 const CELL_W = 46; // px per day
 const NAME_W = 210; // px, sticky left column
-const DAYS = 35; // window length
+const DAYS = 180; // rolling window length (~6 months), scrolled horizontally
 
 function addDaysIso(iso: string, days: number): string {
   return new Date(Date.parse(iso + "T00:00:00Z") + days * DAY_MS).toISOString().slice(0, 10);
@@ -72,7 +72,9 @@ export function OperatorBookingsTimeline() {
   const { listings } = useListings();
   const compact = useCompactPrice();
   const [rows, setRows] = useState<Row[] | null>(null);
-  const [startDate, setStartDate] = useState(() => todayIso());
+  // Rolling window: always anchored at today, scrolled horizontally rather than paged.
+  const startDate = useMemo(() => todayIso(), []);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [direct, setDirect] = useState<{ listing: LiveListing; date: string } | null>(null);
   const [reload, setReload] = useState(0);
@@ -104,8 +106,22 @@ export function OperatorBookingsTimeline() {
 
   const days = useMemo(() => Array.from({ length: DAYS }, (_, i) => addDaysIso(startDate, i)), [startDate]);
   const windowEnd = addDaysIso(startDate, DAYS);
-  const monthLabel = new Date(startDate + "T00:00:00Z").toLocaleDateString(undefined, { month: "long", year: "numeric", timeZone: "UTC" });
   const today = todayIso();
+
+  // Months present in the rolling window → jump targets for the "Today ▾" dropdown.
+  const months = useMemo(() => {
+    const seen = new Map<string, { key: string; label: string; offset: number }>();
+    days.forEach((d, i) => {
+      const key = d.slice(0, 7);
+      if (!seen.has(key)) {
+        const dt = new Date(d + "T00:00:00Z");
+        seen.set(key, { key, label: dt.toLocaleDateString(undefined, { month: "long", year: "numeric", timeZone: "UTC" }), offset: i });
+      }
+    });
+    return Array.from(seen.values());
+  }, [days]);
+
+  const jumpTo = (offset: number) => scrollRef.current?.scrollTo({ left: offset * CELL_W, behavior: "smooth" });
 
   const byListing = useMemo(() => {
     const map = new Map<string, Row[]>();
@@ -134,14 +150,25 @@ export function OperatorBookingsTimeline() {
 
   return (
     <div>
-      {/* Controls */}
+      {/* Controls — a single "Today ▾" jump menu; the grid is one long rolling strip you scroll. */}
       <div className="mb-4 flex items-center gap-3">
-        <div className="flex items-center gap-1">
-          <button type="button" onClick={() => setStartDate((d) => addDaysIso(d, -14))} aria-label="Earlier" className="grid h-8 w-8 place-items-center border border-basalt/15 hover:border-apricot hover:text-apricot"><ChevronLeft className="h-4 w-4" /></button>
-          <button type="button" onClick={() => setStartDate((d) => addDaysIso(d, 14))} aria-label="Later" className="grid h-8 w-8 place-items-center border border-basalt/15 hover:border-apricot hover:text-apricot"><ChevronRight className="h-4 w-4" /></button>
+        <div className="relative inline-flex items-center">
+          <select
+            aria-label="Jump to month"
+            onChange={(e) => {
+              jumpTo(Number(e.target.value));
+              e.target.selectedIndex = 0; // snap back to "Today" label
+            }}
+            className="h-9 min-w-[150px] appearance-none border border-basalt/15 bg-paper pl-3 pr-9 text-sm font-semibold hover:border-apricot focus:border-apricot focus:outline-none"
+          >
+            <option value={0}>Today</option>
+            {months.map((m) => (
+              <option key={m.key} value={m.offset}>{m.label}</option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-basalt/45" />
         </div>
-        <p className="font-display text-xl">{monthLabel}</p>
-        <button type="button" onClick={() => setStartDate(todayIso())} className="ml-auto border border-basalt/15 px-3 py-1.5 text-xs font-semibold hover:border-apricot hover:text-apricot">Today</button>
+        <p className="text-xs text-basalt/45">Scroll right for later dates → showing {DAYS} days from today.</p>
       </div>
 
       {/* Product-type filter (only when the operator has more than one type). */}
@@ -172,18 +199,24 @@ export function OperatorBookingsTimeline() {
       </div>
 
       {/* Grid */}
-      <div className="overflow-x-auto border border-basalt/12">
+      <div ref={scrollRef} className="overflow-x-auto border border-basalt/12">
         <div style={{ width: NAME_W + trackW }}>
           {/* Header: date columns */}
           <div className="flex border-b border-basalt/12 bg-chalk">
             <div className="sticky left-0 z-10 shrink-0 border-r border-basalt/12 bg-chalk" style={{ width: NAME_W }} />
-            {days.map((d) => {
+            {days.map((d, i) => {
               const dt = new Date(d + "T00:00:00Z");
               const isToday = d === today;
               const weekend = [0, 6].includes(dt.getUTCDay());
+              const monthStart = i === 0 || dt.getUTCDate() === 1;
               return (
-                <div key={d} style={{ width: CELL_W }} className={cn("shrink-0 border-r border-basalt/8 py-1.5 text-center", weekend && "bg-basalt/[0.03]", isToday && "bg-apricot/10")}>
-                  <div className="text-[9px] font-bold uppercase tracking-wide text-basalt/40">{dt.toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" }).slice(0, 2)}</div>
+                <div key={d} style={{ width: CELL_W }} className={cn("relative shrink-0 border-r border-basalt/8 py-1.5 text-center", monthStart && "border-l-2 border-l-basalt/25", weekend && "bg-basalt/[0.03]", isToday && "bg-apricot/10")}>
+                  {monthStart && (
+                    <div className="absolute -top-0 left-0 whitespace-nowrap px-1 text-[9px] font-bold uppercase tracking-wide text-apricot">
+                      {dt.toLocaleDateString(undefined, { month: "short", timeZone: "UTC" })}
+                    </div>
+                  )}
+                  <div className="mt-2 text-[9px] font-bold uppercase tracking-wide text-basalt/40">{dt.toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" }).slice(0, 2)}</div>
                   <div className={cn("text-sm font-semibold tabular-nums", isToday && "text-apricot")}>{dt.getUTCDate()}</div>
                 </div>
               );
@@ -215,7 +248,9 @@ export function OperatorBookingsTimeline() {
                 <div className="relative shrink-0" style={{ width: trackW, height: 62 }}>
                   {/* day gridlines + per-day price */}
                   {days.map((d, i) => {
-                    const weekend = [0, 6].includes(new Date(d + "T00:00:00Z").getUTCDay());
+                    const dt = new Date(d + "T00:00:00Z");
+                    const weekend = [0, 6].includes(dt.getUTCDay());
+                    const monthStart = i !== 0 && dt.getUTCDate() === 1;
                     const past = d < today;
                     const p = rBase > 0 && !past ? priceOn(d) : null;
                     return (
@@ -223,7 +258,7 @@ export function OperatorBookingsTimeline() {
                         key={d}
                         onClick={() => setDirect({ listing, date: d })}
                         title="Record a direct booking"
-                        className={cn("group/cell absolute top-0 h-full cursor-pointer border-r border-basalt/8 hover:bg-apricot/[0.07]", weekend && "bg-basalt/[0.02]", d === today && "bg-apricot/[0.06]")}
+                        className={cn("group/cell absolute top-0 h-full cursor-pointer border-r border-basalt/8 hover:bg-apricot/[0.07]", monthStart && "border-l-2 border-l-basalt/25", weekend && "bg-basalt/[0.02]", d === today && "bg-apricot/[0.06]")}
                         style={{ left: i * CELL_W, width: CELL_W }}
                       >
                         <span className="pointer-events-none absolute left-1/2 top-2 hidden -translate-x-1/2 text-sm font-bold leading-none text-apricot group-hover/cell:block">+</span>
@@ -263,7 +298,7 @@ export function OperatorBookingsTimeline() {
           })}
         </div>
       </div>
-      <p className="mt-3 text-xs text-basalt/45">Showing {startDate} → {addDaysIso(windowEnd, -1)}. Bars are your bookings; hatched blocks are dates synced as unavailable from a connected calendar. Tap a booking for full details.</p>
+      <p className="mt-3 text-xs text-basalt/45">Rolling {startDate} → {addDaysIso(windowEnd, -1)}. Scroll sideways or use the month menu to move ahead. Bars are your bookings; hatched blocks are dates synced as unavailable from a connected calendar. Tap a booking for full details.</p>
       <BookingDetailDialog bookingId={openId} onClose={() => setOpenId(null)} onChanged={() => setReload((k) => k + 1)} />
       <DirectBookingDialog listing={direct?.listing ?? null} startDate={direct?.date ?? null} onClose={() => setDirect(null)} onCreated={() => setReload((k) => k + 1)} />
     </div>
