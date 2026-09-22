@@ -330,7 +330,7 @@ export function AdminSiteContent() {
             key={t.key}
             type="button"
             onClick={() => setTab(t.key)}
-            className={`rounded-none border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${tab === t.key ? "border-apricot text-basalt" : "border-transparent text-basalt/50 hover:text-basalt"}`}
+            className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${tab === t.key ? "border-apricot text-basalt" : "border-transparent text-basalt/50 hover:text-basalt"}`}
           >
             {t.label}
           </button>
