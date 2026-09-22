@@ -20,9 +20,12 @@ function Stars({ n }: { n: number }) {
   );
 }
 
+const AIRBNB_PREVIEW = 6;
+
 export function ExternalReviews({ operatorId, listingId, className = "" }: { operatorId: string; listingId?: string; className?: string }) {
   const [google, setGoogle] = useState<GoogleReviewsResult | null>(null);
   const [airbnb, setAirbnb] = useState<HostReview[]>([]);
+  const [showAllAirbnb, setShowAllAirbnb] = useState(false);
 
   useEffect(() => {
     if (!operatorId || operatorId === "seed") return;
@@ -103,7 +106,7 @@ export function ExternalReviews({ operatorId, listingId, className = "" }: { ope
             )}
           </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {airbnb.map((r) => (
+            {(showAllAirbnb ? airbnb : airbnb.slice(0, AIRBNB_PREVIEW)).map((r) => (
               <div key={r.id} className="rounded-none border border-basalt/12 bg-paper p-4">
                 {typeof r.rating === "number" && <Stars n={r.rating} />}
                 <p className="mt-2 line-clamp-5 text-sm leading-6 text-basalt/75">{r.body}</p>
@@ -111,6 +114,11 @@ export function ExternalReviews({ operatorId, listingId, className = "" }: { ope
               </div>
             ))}
           </div>
+          {airbnb.length > AIRBNB_PREVIEW && (
+            <button type="button" onClick={() => setShowAllAirbnb((s) => !s)} className="mt-4 rounded-[0.875rem] border border-basalt/20 px-4 py-2 text-sm font-semibold text-basalt transition-colors hover:border-apricot hover:text-apricot">
+              {showAllAirbnb ? "Show fewer" : `Show all ${airbnb.length} reviews`}
+            </button>
+          )}
           <p className="mt-3 text-[11px] text-basalt/40">Imported from Airbnb by the host.</p>
         </div>
         );
