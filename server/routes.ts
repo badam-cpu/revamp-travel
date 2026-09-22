@@ -1005,17 +1005,28 @@ export function registerApiRoutes(app: Express) {
       const payouts = (payoutsRes.data ?? []) as unknown as Parameters<typeof buildOperatorSummary>[1];
       const summary = buildOperatorSummary(bookings, payouts, today);
       // Ground the assistant in the Partner Hub: published articles (RLS lets an
-      // operator read published). Bodies are truncated to keep the prompt lean.
+      // operator read published). Pinned + newest first so the most important
+      // articles ground in full; per-article and total caps keep the prompt lean.
       const { data: hub } = await supa
         .from("hub_articles")
         .select("title, category, excerpt, body")
         .eq("status", "published")
-        .limit(40);
+        .order("pinned", { ascending: false })
+        .order("published_at", { ascending: false, nullsFirst: false })
+        .limit(60);
+      const PER_ARTICLE = 3500; // chars — enough for a full Hub article
+      const TOTAL_BUDGET = 48000; // chars — overall knowledge-base ceiling
+      let used = 0;
       const knowledgeBase = (hub ?? [])
         .map((a: { title: string; category: string; excerpt: string | null; body: string | null }) => {
-          const text = (a.body || a.excerpt || "").replace(/\s+/g, " ").slice(0, 900);
+          if (used >= TOTAL_BUDGET) return null;
+          const full = (a.body || a.excerpt || "").replace(/\r\n/g, "\n").trim();
+          const room = Math.min(PER_ARTICLE, TOTAL_BUDGET - used);
+          const text = full.length > room ? full.slice(0, room).trimEnd() + "…" : full;
+          used += text.length;
           return `## ${a.title} [${a.category}]\n${text}`;
         })
+        .filter(Boolean)
         .join("\n\n");
       const reply = await generateOperatorReply(parsed.data.messages as OperatorTurn[], summary, knowledgeBase);
       res.json({ reply });
