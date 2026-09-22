@@ -1001,7 +1001,20 @@ export function registerApiRoutes(app: Express) {
       const bookings = (bookingsRes.data ?? []) as unknown as Parameters<typeof buildOperatorSummary>[0];
       const payouts = (payoutsRes.data ?? []) as unknown as Parameters<typeof buildOperatorSummary>[1];
       const summary = buildOperatorSummary(bookings, payouts, today);
-      const reply = await generateOperatorReply(parsed.data.messages as OperatorTurn[], summary);
+      // Ground the assistant in the Partner Hub: published articles (RLS lets an
+      // operator read published). Bodies are truncated to keep the prompt lean.
+      const { data: hub } = await supa
+        .from("hub_articles")
+        .select("title, category, excerpt, body")
+        .eq("status", "published")
+        .limit(40);
+      const knowledgeBase = (hub ?? [])
+        .map((a: { title: string; category: string; excerpt: string | null; body: string | null }) => {
+          const text = (a.body || a.excerpt || "").replace(/\s+/g, " ").slice(0, 900);
+          return `## ${a.title} [${a.category}]\n${text}`;
+        })
+        .join("\n\n");
+      const reply = await generateOperatorReply(parsed.data.messages as OperatorTurn[], summary, knowledgeBase);
       res.json({ reply });
     } catch (err) {
       console.error("[operator-assistant]", err);

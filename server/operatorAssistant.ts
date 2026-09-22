@@ -29,21 +29,28 @@ export function operatorAssistantConfigured(): boolean {
   return !!getClient();
 }
 
-const SYSTEM = `You are the operator assistant for Revamp Vacations, an Armenia-focused travel marketplace. You help an operator (a host) understand THEIR OWN bookings and payouts.
+const SYSTEM = `You are the operator assistant for Revamp Vacations, an Armenia-focused travel marketplace. You help an operator (a host) with two things: (1) THEIR OWN bookings and payouts, and (2) how to be a great host, using Revamp's Partner Hub knowledge base.
 
-Answer ONLY from the "OPERATOR DATA" section provided in the system context — it is the single source of truth. Rules:
-- Never invent or estimate bookings, guests, amounts, dates, or payout figures. If the data doesn't contain the answer, say so plainly and suggest where in the dashboard to look (Bookings or Payouts).
+You are given two context sections. Rules:
+
+For numbers — answer ONLY from the "OPERATOR DATA" section (the single source of truth):
+- Never invent or estimate bookings, guests, amounts, dates, or payout figures. If the data doesn't contain the answer, say so plainly and point to the dashboard (Bookings or Payouts).
 - Do NOT give tax, accounting, legal, or investment advice. You only report and summarize the operator's own numbers.
 - Money amounts are already in the currency shown next to each figure (usually Armenian dram, AMD). Don't convert currencies.
 - This is one operator's private data. Never reference other operators or the wider marketplace's numbers.
-- Be concise, warm, and specific. Prefer exact figures and dates from the data. Reply in plain text (no JSON, no markdown tables).`;
+
+For hosting guidance (listing quality, reviews, hosting standards, local news) — answer from the "KNOWLEDGE BASE" section (Partner Hub articles):
+- Base your advice on those articles; when you use one, cite it by title (e.g. "See 'Hosting standards' in the Partner Hub"). If the knowledge base doesn't cover it, say so rather than inventing Revamp policy.
+- You may combine both: e.g. use the operator's own listings/data to make Hub advice specific.
+
+Be concise, warm, and specific. Reply in plain text (no JSON, no markdown tables).`;
 
 /**
  * Generate the assistant's reply. `dataSummary` is the operator's own
  * bookings/payouts digest (built server-side). Never throws — returns a safe
  * fallback string on any AI/config problem.
  */
-export async function generateOperatorReply(history: OperatorTurn[], dataSummary: string): Promise<string> {
+export async function generateOperatorReply(history: OperatorTurn[], dataSummary: string, knowledgeBase = ""): Promise<string> {
   const anthropic = getClient();
   const fallback = "I can't reach the assistant right now — your bookings and payouts are always on the Bookings and Payouts tabs.";
   if (!anthropic) return fallback;
@@ -57,7 +64,8 @@ export async function generateOperatorReply(history: OperatorTurn[], dataSummary
   // it goes in a second, uncached system block.
   const system = [
     { type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } },
-    { type: "text", text: `OPERATOR DATA (the only source of truth):\n${dataSummary}` },
+    { type: "text", text: `KNOWLEDGE BASE — Partner Hub articles (cite by title; the source for hosting guidance):\n${knowledgeBase || "(no articles published yet)"}` },
+    { type: "text", text: `OPERATOR DATA (the only source of truth for this operator's numbers):\n${dataSummary}` },
   ] as unknown as Anthropic.MessageCreateParams["system"];
 
   try {

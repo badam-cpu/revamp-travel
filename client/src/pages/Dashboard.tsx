@@ -23,8 +23,9 @@
  */
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, ArrowLeft, ArrowRight, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, Pencil, Plus, Settings, Sparkles, Trash2, Wallet, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, BookOpen, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, Pencil, Plus, Settings, Sparkles, Trash2, Wallet, X } from "lucide-react";
 import { Inbox } from "@/components/Inbox";
+import { PartnerHub } from "@/components/PartnerHub";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -1191,12 +1192,13 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
   );
 }
 
-type OperatorSection = "overview" | "listings" | "bookings" | "messages" | "payouts" | "settings";
+type OperatorSection = "overview" | "listings" | "bookings" | "messages" | "hub" | "payouts" | "settings";
 const OPERATOR_SECTIONS: { key: OperatorSection; label: string; icon: typeof Home }[] = [
   { key: "overview", label: "Dashboard", icon: LayoutDashboard },
   { key: "listings", label: "Listings", icon: List },
   { key: "bookings", label: "Bookings", icon: CalendarCheck },
   { key: "messages", label: "Messages", icon: MessageSquare },
+  { key: "hub", label: "Partner Hub", icon: BookOpen },
   { key: "payouts", label: "Payouts", icon: Wallet },
   { key: "settings", label: "Settings", icon: Settings },
 ];
@@ -1405,6 +1407,8 @@ function DashboardContent() {
                 {user && <Inbox userId={user.id} />}
               </div>
             )}
+
+            {section === "hub" && <PartnerHub />}
 
             {section === "payouts" && (
               <div>
