@@ -13,6 +13,7 @@ import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { listPublishedForPlanner, verifyUser, userClient, getListingBusyRanges, getOperatorGooglePlaceId } from "./supabase.js";
 import { fetchPlaceReviews } from "./googlePlaces.js";
+import { translateTexts } from "./translate.js";
 import { supabaseAdmin, adminConfigured } from "./supabaseAdmin.js";
 import { paylinkConfigured, registerPayment } from "./paylink.js";
 import { reconcileUserBookings, logBookingEvent, finalizeConfirmedBooking } from "./bookings.js";
@@ -1263,6 +1264,21 @@ export function registerApiRoutes(app: Express) {
     if (!data) return res.json({ configured: false });
     res.setHeader("Cache-Control", "public, max-age=900");
     res.json({ configured: true, ...data });
+  });
+
+  // POST /api/translate — translate up to 50 short texts to a target language
+  // (default en) for the "Translate reviews" toggle. Public, rate-limited, cached
+  // server-side. Returns [] silently if the Translation API isn't configured.
+  app.post("/api/translate", async (req: Request, res: Response) => {
+    if (rateLimited(giftLookupHits, `tr:${req.ip || "?"}`, 30)) return res.status(429).json({ error: "Slow down." });
+    const body = req.body as { texts?: unknown; target?: unknown };
+    const texts = Array.isArray(body.texts) ? body.texts.filter((t): t is string => typeof t === "string").slice(0, 50) : [];
+    const target = typeof body.target === "string" && /^[a-z]{2}(-[A-Za-z]{2})?$/.test(body.target) ? body.target : "en";
+    if (!texts.length) return res.json({ results: [] });
+    // Cap total size to keep costs bounded.
+    if (texts.join("").length > 20000) return res.status(413).json({ error: "Too much text." });
+    const results = await translateTexts(texts, target);
+    res.json({ results });
   });
 
   // --- Gift cards ------------------------------------------------------

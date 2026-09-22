@@ -6,8 +6,8 @@
  * nothing to show. These are NEVER folded into Revamp's own aggregateRating.
  */
 import { useEffect, useState } from "react";
-import { Star } from "lucide-react";
-import { fetchGoogleReviews, listHostReviews, type GoogleReviewsResult, type HostReview } from "@/lib/externalReviews";
+import { Languages, Star } from "lucide-react";
+import { fetchGoogleReviews, listHostReviews, translateReviews, type GoogleReviewsResult, type HostReview } from "@/lib/externalReviews";
 import { computeMentions } from "@/lib/reviewMentions";
 
 function Stars({ n }: { n: number }) {
@@ -26,6 +26,8 @@ export function ExternalReviews({ operatorId, listingId, className = "" }: { ope
   const [google, setGoogle] = useState<GoogleReviewsResult | null>(null);
   const [airbnb, setAirbnb] = useState<HostReview[]>([]);
   const [showAllAirbnb, setShowAllAirbnb] = useState(false);
+  const [translated, setTranslated] = useState<Map<string, string> | null>(null);
+  const [translating, setTranslating] = useState(false);
 
   useEffect(() => {
     if (!operatorId || operatorId === "seed") return;
@@ -43,13 +45,48 @@ export function ExternalReviews({ operatorId, listingId, className = "" }: { ope
   const hasGoogle = google?.configured && (google.reviews?.length || google.rating);
   if (!hasGoogle && airbnb.length === 0) return null;
 
+  const show = (t: string) => (translated?.get(t) ?? t);
+  const toggleTranslate = async () => {
+    if (translated) {
+      setTranslated(null);
+      return;
+    }
+    setTranslating(true);
+    try {
+      const target = (typeof navigator !== "undefined" ? navigator.language : "en").slice(0, 2) || "en";
+      const texts = Array.from(new Set([...airbnb.map((r) => r.body), ...((google?.reviews ?? []).map((r) => r.text))].filter(Boolean)));
+      const results = await translateReviews(texts, target);
+      const map = new Map<string, string>();
+      texts.forEach((t, i) => {
+        const tr = results[i];
+        if (tr && tr.text && tr.text !== t) map.set(t, tr.text);
+      });
+      setTranslated(map);
+    } finally {
+      setTranslating(false);
+    }
+  };
+
   // "Guest reviews mention" — themes across all the external review text we have.
   const mentions = computeMentions([...airbnb.map((r) => r.body), ...((google?.reviews ?? []).map((r) => r.text))]).slice(0, 6);
 
   return (
     <section className={`border-t border-basalt/10 pt-8 ${className}`}>
-      <p className="eyebrow">From around the web</p>
-      <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">Reviews on other platforms.</h2>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="eyebrow">From around the web</p>
+          <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">Reviews on other platforms.</h2>
+        </div>
+        <button
+          type="button"
+          onClick={toggleTranslate}
+          disabled={translating}
+          className="mt-1 inline-flex items-center gap-1.5 rounded-[0.875rem] border border-basalt/20 px-3.5 py-2 text-sm font-semibold text-basalt transition-colors hover:border-apricot hover:text-apricot disabled:opacity-50"
+        >
+          <Languages className="h-4 w-4" /> {translating ? "Translating…" : translated ? "Show original" : "Translate"}
+        </button>
+      </div>
+      {translated && <p className="mt-1 text-[11px] text-basalt/40">Translated by Google.</p>}
 
       {mentions.length > 0 && (
         <div className="mt-6">
@@ -82,7 +119,7 @@ export function ExternalReviews({ operatorId, listingId, className = "" }: { ope
             {(google?.reviews ?? []).map((r, i) => (
               <div key={i} className="rounded-none border border-basalt/12 bg-paper p-4">
                 <Stars n={r.rating} />
-                <p className="mt-2 line-clamp-5 text-sm leading-6 text-basalt/75">{r.text}</p>
+                <p className="mt-2 line-clamp-5 text-sm leading-6 text-basalt/75">{show(r.text)}</p>
                 <p className="mt-3 text-xs text-basalt/50">{r.author}{r.relativeTime ? ` · ${r.relativeTime}` : ""}</p>
               </div>
             ))}
@@ -109,7 +146,7 @@ export function ExternalReviews({ operatorId, listingId, className = "" }: { ope
             {(showAllAirbnb ? airbnb : airbnb.slice(0, AIRBNB_PREVIEW)).map((r) => (
               <div key={r.id} className="rounded-none border border-basalt/12 bg-paper p-4">
                 {typeof r.rating === "number" && <Stars n={r.rating} />}
-                <p className="mt-2 line-clamp-5 text-sm leading-6 text-basalt/75">{r.body}</p>
+                <p className="mt-2 line-clamp-5 text-sm leading-6 text-basalt/75">{show(r.body)}</p>
                 <p className="mt-3 text-xs text-basalt/50">{r.reviewerName}{r.reviewDate ? ` · ${r.reviewDate}` : ""}</p>
               </div>
             ))}

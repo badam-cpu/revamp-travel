@@ -71,6 +71,22 @@ export interface GoogleReviewsResult {
   reviews?: { author: string; rating: number; text: string; relativeTime: string; photo: string | null }[];
 }
 
+/** Translate review texts to `target` (server → Google Translation API, cached). */
+export async function translateReviews(texts: string[], target = "en"): Promise<{ text: string; detected: string }[]> {
+  try {
+    const res = await fetch("/api/translate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ texts, target }),
+    });
+    if (!res.ok) return [];
+    const j = (await res.json()) as { results?: { text: string; detected: string }[] };
+    return j.results ?? [];
+  } catch {
+    return [];
+  }
+}
+
 /** Live Google Business reviews for an operator (server fetches via Places API). */
 export async function fetchGoogleReviews(operatorId: string): Promise<GoogleReviewsResult> {
   try {
