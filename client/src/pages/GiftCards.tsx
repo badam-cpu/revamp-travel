@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Check, Gift, Loader2 } from "lucide-react";
+import { Check, Gift, HandHeart, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
@@ -96,16 +96,9 @@ export default function GiftCards() {
                 One card, all of Armenia — stays, tours, and experiences. Choose an amount, send it to anyone by email, and they redeem it at checkout.
               </p>
             </div>
-            {/* Subtle hand-holding-a-heart line art. */}
+            {/* Subtle open-hand-offering-a-heart mark (lucide, brand apricot). */}
             <div className="hidden justify-self-end lg:block" aria-hidden="true">
-              <svg width="176" height="176" viewBox="0 0 120 120" fill="none" className="text-apricot/70">
-                {/* heart */}
-                <path d="M60 38c-4-8-16-7-16 3 0 7 9 13 16 18 7-5 16-11 16-18 0-10-12-11-16-3z" fill="currentColor" fillOpacity="0.12" stroke="currentColor" strokeWidth="2.6" strokeLinejoin="round" />
-                {/* cupped hand holding it */}
-                <path d="M30 72c-2 15 11 28 30 28s32-13 30-28" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
-                <path d="M30 72c-3-6-1-12 5-12 5 0 7 4 8 8" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M90 72c3-6 1-12-5-12-5 0-7 4-8 8" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+              <HandHeart className="h-40 w-40 text-apricot/75" strokeWidth={1.25} />
             </div>
           </div>
         </section>
