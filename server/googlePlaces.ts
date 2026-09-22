@@ -1,13 +1,14 @@
 /**
- * Google Business reviews via the Google Places API (Place Details). Fetched
- * server-side so the key isn't exposed and results can be cached briefly (Google
- * policy: Place IDs may be stored, but review content should be refreshed, not
- * cached long-term). Returns up to 5 reviews (Google's cap) plus the overall
- * rating, total count, and the link to the Google listing for attribution.
+ * Google Business reviews via the Google **Places API (New)** — the v1 Place
+ * Details endpoint (places.googleapis.com/v1/places/{id}). Fetched server-side
+ * so the key isn't exposed and results can be cached briefly (Google policy:
+ * Place IDs may be stored, but review content should be refreshed, not cached
+ * long-term). Returns up to 5 reviews (Google's cap) plus the overall rating,
+ * total count, and the Google Maps link for attribution.
  *
- * Key: GOOGLE_PLACES_API_KEY (a server-usable key with the Places API enabled).
- * Falls back to VITE_GOOGLE_MAPS_API_KEY only if that key allows server calls
- * (a browser key restricted to HTTP referrers will NOT work here).
+ * Key: GOOGLE_PLACES_API_KEY (a server-usable key with "Places API (New)"
+ * enabled — no HTTP-referrer restriction). Falls back to VITE_GOOGLE_MAPS_API_KEY
+ * only if that key allows server calls.
  */
 export interface GoogleReview {
   author: string;
@@ -44,42 +45,44 @@ export async function fetchPlaceReviews(placeId: string): Promise<GooglePlaceRev
   if (cached && cached.expires > Date.now()) return cached.data;
 
   try {
-    const url = new URL("https://maps.googleapis.com/maps/api/place/details/json");
-    url.searchParams.set("place_id", placeId);
-    url.searchParams.set("fields", "name,rating,user_ratings_total,url,reviews");
-    url.searchParams.set("reviews_sort", "newest");
-    url.searchParams.set("key", key);
-    const res = await fetch(url.toString());
+    const res = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`, {
+      headers: {
+        "X-Goog-Api-Key": key,
+        "X-Goog-FieldMask": "displayName,rating,userRatingCount,googleMapsUri,reviews",
+      },
+    });
     const json = (await res.json()) as {
-      status?: string;
-      result?: {
-        name?: string;
+      displayName?: { text?: string };
+      rating?: number;
+      userRatingCount?: number;
+      googleMapsUri?: string;
+      reviews?: {
         rating?: number;
-        user_ratings_total?: number;
-        url?: string;
-        reviews?: { author_name?: string; rating?: number; text?: string; relative_time_description?: string; profile_photo_url?: string }[];
-      };
+        text?: { text?: string };
+        originalText?: { text?: string };
+        relativePublishTimeDescription?: string;
+        authorAttribution?: { displayName?: string; photoUri?: string };
+      }[];
     };
-    if (json.status !== "OK" || !json.result) {
+    if (!res.ok || (!json.reviews && json.rating === undefined)) {
       cache.set(placeId, { data: null, expires: Date.now() + CACHE_TTL_MS });
       return null;
     }
-    const r = json.result;
     const data: GooglePlaceReviews = {
-      businessName: r.name ?? "",
-      rating: typeof r.rating === "number" ? r.rating : null,
-      total: r.user_ratings_total ?? 0,
-      url: r.url ?? null,
-      reviews: (r.reviews ?? [])
-        .filter((rv) => (rv.text ?? "").trim())
-        .slice(0, 5)
+      businessName: json.displayName?.text ?? "",
+      rating: typeof json.rating === "number" ? json.rating : null,
+      total: json.userRatingCount ?? 0,
+      url: json.googleMapsUri ?? null,
+      reviews: (json.reviews ?? [])
         .map((rv) => ({
-          author: rv.author_name ?? "Google user",
+          author: rv.authorAttribution?.displayName ?? "Google user",
           rating: rv.rating ?? 0,
-          text: rv.text ?? "",
-          relativeTime: rv.relative_time_description ?? "",
-          photo: rv.profile_photo_url ?? null,
-        })),
+          text: (rv.text?.text || rv.originalText?.text || "").trim(),
+          relativeTime: rv.relativePublishTimeDescription ?? "",
+          photo: rv.authorAttribution?.photoUri ?? null,
+        }))
+        .filter((rv) => rv.text)
+        .slice(0, 5),
     };
     cache.set(placeId, { data, expires: Date.now() + CACHE_TTL_MS });
     return data;
