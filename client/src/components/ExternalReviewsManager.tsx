@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { ExternalLink, Star, Trash2 } from "lucide-react";
 import { listHostReviews, addHostReview, deleteHostReview, type HostReview } from "@/lib/externalReviews";
+import { GooglePlaceFinder } from "@/components/GooglePlaceFinder";
 
 export function ExternalReviewsManager() {
   const { user, profile, updateProfile } = useAuth();
@@ -37,11 +38,13 @@ export function ExternalReviewsManager() {
     setPlaceId(profile?.googlePlaceId ?? "");
   }, [profile?.googlePlaceId]);
 
-  const savePlaceId = async () => {
+  const savePlaceId = async (idOverride?: string, name?: string) => {
+    const id = idOverride ?? placeId.trim();
     setSavingPlace(true);
     try {
-      await updateProfile({ googlePlaceId: placeId.trim() || null });
-      toast(placeId.trim() ? "Google Business connected." : "Google Business disconnected.");
+      await updateProfile({ googlePlaceId: id || null });
+      if (idOverride) setPlaceId(idOverride);
+      toast(id ? `Google Business connected${name ? ` — ${name}` : ""}.` : "Google Business disconnected.");
     } catch (e) {
       toast(e instanceof Error ? e.message : "Couldn't save.");
     } finally {
@@ -89,14 +92,22 @@ export function ExternalReviewsManager() {
       {/* Google Business */}
       <div className="grid gap-2 border-t border-basalt/10 pt-5">
         <p className="text-sm font-bold uppercase tracking-[0.1em] text-basalt/50">Google Business</p>
-        <p className="text-xs text-basalt/55">
-          Paste your business's Google <strong>Place ID</strong>. Your Google rating and latest reviews then appear on your listings.{" "}
-          <a href="https://developers.google.com/maps/documentation/places/web-service/place-id" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-apricot hover:underline">Find your Place ID <ExternalLink className="h-3 w-3" /></a>
-        </p>
-        <div className="flex items-end gap-2">
-          <Input value={placeId} onChange={(e) => setPlaceId(e.target.value)} placeholder="ChIJ… (Google Place ID)" className="h-11 max-w-md rounded-none font-mono text-sm" />
-          <Button onClick={savePlaceId} disabled={savingPlace} className="h-11 rounded-none bg-apricot text-white hover:bg-apricot/90">{savingPlace ? "Saving…" : "Save"}</Button>
+        <p className="text-xs text-basalt/55">Search your business below and pick it — we'll capture the Google details automatically. Your Google rating and latest reviews then appear on your listings.</p>
+        <div className="max-w-md">
+          <Label className="mb-1.5 block text-xs font-semibold text-basalt/60">Search your business on Google</Label>
+          <GooglePlaceFinder onFound={(r) => savePlaceId(r.id, r.name)} />
         </div>
+        {profile?.googlePlaceId && (
+          <p className="text-xs text-emerald-700">Connected · <span className="font-mono text-basalt/50">{profile.googlePlaceId}</span> <button type="button" onClick={() => savePlaceId("")} className="ml-1 font-semibold text-basalt/45 hover:text-destructive">Disconnect</button></p>
+        )}
+        <details className="text-xs text-basalt/50">
+          <summary className="cursor-pointer font-semibold text-basalt/55">Or paste a Place ID manually</summary>
+          <div className="mt-2 flex items-end gap-2">
+            <Input value={placeId} onChange={(e) => setPlaceId(e.target.value)} placeholder="ChIJ… (Google Place ID)" className="h-10 max-w-xs rounded-none font-mono text-sm" />
+            <Button onClick={() => savePlaceId()} disabled={savingPlace} variant="outline" className="h-10 rounded-none border-basalt/20">Save</Button>
+            <a href="https://developers.google.com/maps/documentation/places/web-service/place-id" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-apricot hover:underline">Finder <ExternalLink className="h-3 w-3" /></a>
+          </div>
+        </details>
       </div>
 
       {/* Airbnb self-import */}

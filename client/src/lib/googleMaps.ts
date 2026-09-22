@@ -95,6 +95,36 @@ export async function geocodeQuery(query: string): Promise<{ lat: number; lng: n
   }
 }
 
+/**
+ * Reads the Google Place ID (+ display name) from a `gmp-select` event — for the
+ * "search your Google Business" finder. Handles both known event shapes like
+ * extractResolvedPlace. Returns null if it can't read an id.
+ */
+export async function extractPlaceId(event: Event): Promise<{ id: string; name: string } | null> {
+  const raw = event as unknown as {
+    placePrediction?: { toPlace: () => google.maps.places.Place };
+    place?: google.maps.places.Place;
+  };
+  try {
+    let place: google.maps.places.Place | undefined;
+    if (raw.placePrediction && typeof raw.placePrediction.toPlace === "function") {
+      place = raw.placePrediction.toPlace();
+      await place.fetchFields({ fields: ["id", "displayName"] });
+    } else if (raw.place) {
+      place = raw.place;
+    }
+    if (!place) return null;
+    const id = (place as unknown as { id?: string }).id;
+    if (!id) return null;
+    const dn = place.displayName as unknown;
+    const name = typeof dn === "string" ? dn : ((dn as { text?: string } | null)?.text ?? "");
+    return { id, name };
+  } catch (err) {
+    console.error("Couldn't read the selected place id", err);
+    return null;
+  }
+}
+
 export interface ResolvedPlace {
   city?: string;
   region?: string;
