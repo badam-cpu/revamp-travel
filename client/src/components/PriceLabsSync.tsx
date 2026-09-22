@@ -94,7 +94,15 @@ export function PriceLabsSync() {
     setSyncing(true);
     try {
       const r = await pricelabsSync();
-      toast(r.synced > 0 ? `Synced ${r.synced} listing${r.synced === 1 ? "" : "s"} (${r.dates} dates).` : "Nothing to sync yet — map a listing first.");
+      if (r.synced > 0) {
+        toast(`Synced ${r.synced} listing${r.synced === 1 ? "" : "s"} (${r.dates} dates).`);
+      } else if (r.skipped?.includes("no_mappings")) {
+        toast("Link a stay to a PriceLabs listing first (the dropdowns below), then sync.");
+      } else if (r.skipped?.length) {
+        toast(`Couldn't sync: ${r.skipped.join("; ")}`);
+      } else {
+        toast("Nothing to sync.");
+      }
       load();
     } catch (e) {
       toast(e instanceof Error ? e.message : "Sync failed.");

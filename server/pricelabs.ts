@@ -43,7 +43,7 @@ async function pricelabsPrices(apiKey: string, id: string, pms: string, dateFrom
     headers: { "X-API-Key": apiKey, "content-type": "application/json" },
     body: JSON.stringify({ listings: [{ id, pms, dateFrom, dateTo }] }),
   });
-  if (!res.ok) throw new Error(`PriceLabs prices error ${res.status}`);
+  if (!res.ok) throw new Error(`PriceLabs prices ${res.status}: ${(await res.text().catch(() => "")).slice(0, 140)}`);
   const json = (await res.json()) as { id?: string; pms?: string; currency?: string | null; data?: { date?: string; price?: number }[] }[];
   const entry = Array.isArray(json) ? json.find((e) => String(e.id) === id) ?? json[0] : undefined;
   const rows = (entry?.data ?? [])
@@ -131,7 +131,7 @@ export async function syncOperatorPrices(admin: SupabaseClient, operatorId: stri
       result.dates += seasonal.length;
     } catch (err) {
       console.error("[pricelabs] sync listing failed", m.revamp_listing_id, err);
-      result.skipped.push(`${m.revamp_listing_id}:error`);
+      result.skipped.push(err instanceof Error ? err.message : "error");
     }
   }
   return result;
