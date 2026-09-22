@@ -69,9 +69,20 @@ export function ExternalReviews({ operatorId, listingId, className = "" }: { ope
         </div>
       )}
 
-      {airbnb.length > 0 && (
+      {airbnb.length > 0 && (() => {
+        const rated = airbnb.filter((r) => typeof r.rating === "number") as (HostReview & { rating: number })[];
+        const avg = rated.length ? rated.reduce((s, r) => s + r.rating, 0) / rated.length : null;
+        return (
         <div className="mt-8">
-          <p className="text-sm font-semibold">Airbnb <span className="font-normal text-basalt/45">— imported by the host</span></p>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <p className="text-sm font-semibold">Airbnb <span className="font-normal text-basalt/45">— imported by the host</span></p>
+            {avg !== null && (
+              <span className="inline-flex items-center gap-1.5">
+                <Stars n={avg} /> <span className="font-semibold">{avg.toFixed(1)}</span>
+                <span className="text-basalt/50">({airbnb.length} review{airbnb.length === 1 ? "" : "s"})</span>
+              </span>
+            )}
+          </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {airbnb.map((r) => (
               <div key={r.id} className="rounded-none border border-basalt/12 bg-paper p-4">
@@ -83,7 +94,8 @@ export function ExternalReviews({ operatorId, listingId, className = "" }: { ope
           </div>
           <p className="mt-3 text-[11px] text-basalt/40">Imported from Airbnb by the host.</p>
         </div>
-      )}
+        );
+      })()}
     </section>
   );
 }
