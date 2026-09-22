@@ -33,6 +33,7 @@ import BlogPost from "./pages/BlogPost";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import Faq from "./pages/Faq";
+import Partners from "./pages/Partners";
 import Region from "./pages/Region";
 import Plan from "./pages/Plan";
 
@@ -82,6 +83,7 @@ function Router() {
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
       <Route path="/faq" component={Faq} />
+      <Route path="/partners" component={Partners} />
       <Route path="/region/:slug">{(params) => <Region slug={params.slug} />}</Route>
       <Route path="/blog" component={Blog} />
       <Route path="/blog/:slug">{(params) => <BlogPost params={params} />}</Route>

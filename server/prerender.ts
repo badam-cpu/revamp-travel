@@ -18,7 +18,7 @@
  * the JSON-LD block gets its own separate escaping (see jsonLdScript()).
  */
 import type { PublicListing } from "./supabase.js";
-import { getPublishedCatalog, getPublishedPosts, getPublishedPostBySlug, getSiteFaq, type PublicPost } from "./supabase.js";
+import { getPublishedCatalog, getPublishedPosts, getPublishedPostBySlug, getSiteFaq, getPartnerOperators, getSitePartners, type PublicPost } from "./supabase.js";
 import { regions, typeLabels } from "../shared/listings.js";
 import type { ListingType } from "../shared/listings.js";
 import { buildArticleJsonLd, buildBlogListJsonLd, buildBreadcrumbJsonLd, buildCollectionPageJsonLd, buildFaqJsonLd, buildListingJsonLd, buildOrganizationJsonLd, buildWebsiteJsonLd } from "../shared/seo.js";
@@ -35,6 +35,7 @@ export type PageKind =
   | "listing-detail"
   | "region"
   | "faq"
+  | "partners"
   | "blog"
   | "blog-post"
   | "login"
@@ -65,6 +66,7 @@ export function matchRoute(pathname: string): MatchedRoute {
   if (path === "/login") return { kind: "login" };
   if (path === "/signup") return { kind: "signup" };
   if (path === "/faq") return { kind: "faq" };
+  if (path === "/partners") return { kind: "partners" };
   const regionMatch = path.match(/^\/region\/([^/]+)$/);
   if (regionMatch) return { kind: "region", slug: decodeURIComponent(regionMatch[1]) };
   if (path === "/blog") return { kind: "blog" };
@@ -100,6 +102,8 @@ export async function renderForBot(pathname: string, origin: string): Promise<Re
       return { status: 200, body: renderPlan(origin) };
     case "faq":
       return { status: 200, body: await renderFaq(origin) };
+    case "partners":
+      return { status: 200, body: await renderPartners(origin) };
     case "region": {
       const guide = route.slug ? findRegionGuide(route.slug) : undefined;
       if (!guide) return { status: 404, body: renderNotFound(origin) };
@@ -369,6 +373,32 @@ ${items.map((it) => `<section><h2>${escapeHtml(it.q)}</h2><p>${escapeHtml(it.a)}
       buildBreadcrumbJsonLd(origin, [
         { name: "Home", path: "/" },
         { name: "FAQ", path: "/faq" },
+      ]),
+    ],
+    bodyHtml,
+  });
+}
+
+async function renderPartners(origin: string): Promise<string> {
+  const [operators, partners] = await Promise.all([getPartnerOperators(), getSitePartners()]);
+  const bodyHtml = `
+<h1>Our partners</h1>
+<p>Every stay, tour, and experience on Revamp Vacations is run by a real, independent host in Armenia. Meet the operators building the marketplace — and the services that keep it running.</p>
+<h2>Hosts &amp; operators</h2>
+${operators.length ? `<ul>${operators.map((o) => `<li>${escapeHtml(o.name)} — ${o.total} listing${o.total === 1 ? "" : "s"}</li>`).join("")}</ul>` : "<p>Operators appear here as listings go live.</p>"}
+<h2>Services we use</h2>
+${partners.map((p) => `<section><h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.blurb)}</p></section>`).join("\n")}
+<p><a href="${origin}/signup">Become an operator</a></p>`;
+
+  return renderPageShell({
+    title: "Partners — Hosts & services | Revamp Vacations",
+    description: "The hosts, guides, and businesses behind Revamp Vacations — every operator with a published stay, tour, or experience in Armenia — plus the services that power the platform.",
+    canonical: `${origin}/partners`,
+    ogImage: `${origin}${OG_IMAGE}`,
+    jsonLd: [
+      buildBreadcrumbJsonLd(origin, [
+        { name: "Home", path: "/" },
+        { name: "Partners", path: "/partners" },
       ]),
     ],
     bodyHtml,

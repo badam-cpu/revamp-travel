@@ -257,6 +257,43 @@ export async function getSiteFaq(): Promise<{ q: string; a: string }[]> {
   }
 }
 
+/** Distinct operators with a published listing, for the /partners prerender.
+ *  Anon-key public read; degrades to [] on any error. */
+export async function getPartnerOperators(): Promise<{ name: string; total: number }[]> {
+  if (!client) return [];
+  try {
+    const { data } = await client
+      .from("listings")
+      .select("operator_id, profiles!operator_id(business_name, display_name)")
+      .eq("status", "published");
+    const map = new Map<string, { name: string; total: number }>();
+    for (const r of (data ?? []) as { operator_id: string; profiles: { business_name?: string | null; display_name?: string | null } | null }[]) {
+      if (!r.operator_id) continue;
+      const existing = map.get(r.operator_id);
+      if (existing) existing.total += 1;
+      else map.set(r.operator_id, { name: r.profiles?.business_name || r.profiles?.display_name || "Host", total: 1 });
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  } catch {
+    return [];
+  }
+}
+
+/** Admin-edited "services we use" partners from site_settings.home_content.partners,
+ *  for the /partners prerender. Falls back to a factual PayLink line. */
+export async function getSitePartners(): Promise<{ name: string; blurb: string; url?: string }[]> {
+  const fallback = [{ name: "PayLink", blurb: "Secure online card payments for every booking, processed by PayLink (Ameriabank).", url: "https://www.ameriabank.am" }];
+  if (!client) return fallback;
+  try {
+    const { data } = await client.from("site_settings").select("home_content").eq("id", 1).maybeSingle();
+    const partners = (data?.home_content as { partners?: { name?: string; blurb?: string; url?: string }[] } | null)?.partners;
+    const clean = Array.isArray(partners) ? partners.filter((p) => p?.name?.trim() && p?.blurb?.trim()).map((p) => ({ name: p.name!, blurb: p.blurb!, url: p.url })) : [];
+    return clean.length ? clean : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export async function getListingBusyRanges(id: string): Promise<{ title: string; ranges: { start: string; end: string }[] } | null> {
   if (!client) return null;
   const { data: listing } = await client

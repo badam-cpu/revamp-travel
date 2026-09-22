@@ -10,7 +10,7 @@ import type { Request, Response } from "express";
 import { getPublishedCatalog, getPublishedPosts } from "./supabase.js";
 import { REGION_GUIDES } from "../shared/regionGuides.js";
 
-const STATIC_ROUTES = ["/", "/explore", "/explore/stay", "/explore/eat", "/explore/tour", "/explore/experience", "/map", "/plan", "/faq", "/blog", "/login", "/signup", ...REGION_GUIDES.map((g) => `/region/${g.slug}`)];
+const STATIC_ROUTES = ["/", "/explore", "/explore/stay", "/explore/eat", "/explore/tour", "/explore/experience", "/map", "/plan", "/faq", "/partners", "/blog", "/login", "/signup", ...REGION_GUIDES.map((g) => `/region/${g.slug}`)];
 
 export async function sitemapHandler(req: Request, res: Response): Promise<void> {
   const origin = `${req.protocol}://${req.get("host")}`;

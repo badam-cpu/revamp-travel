@@ -53,7 +53,23 @@ export interface HomeContent {
   footerSubcopy?: string;
   /** Admin-editable FAQ (falls back to the built-in FAQ_ITEMS when empty). */
   faq?: { q: string; a: string }[];
+  /** Operator profile ids pinned to the top of /partners ("big names first"). */
+  featuredOperatorIds?: string[];
+  /** "Services we use" partners on /partners (falls back to DEFAULT_SERVICE_PARTNERS). */
+  partners?: ServicePartner[];
 }
+
+export interface ServicePartner {
+  name: string;
+  blurb: string;
+  url?: string;
+}
+
+/** Seed for the /partners services strip until an admin edits it. Only lists
+ *  integrations the app genuinely uses; no third-party logos (permission). */
+export const DEFAULT_SERVICE_PARTNERS: ServicePartner[] = [
+  { name: "PayLink", blurb: "Secure online card payments for every booking, processed by PayLink (Ameriabank).", url: "https://www.ameriabank.am" },
+];
 
 export interface SiteSettings {
   heroImage: string;

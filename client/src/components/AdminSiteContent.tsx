@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Minus, Plus, Save } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { useSiteSettings } from "@/contexts/SiteSettingsContext";
+import { useSiteSettings, DEFAULT_SERVICE_PARTNERS } from "@/contexts/SiteSettingsContext";
 import { useListings } from "@/contexts/ListingsContext";
 import { PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
 import { Button } from "@/components/ui/button";
@@ -70,6 +70,9 @@ export function AdminSiteContent() {
   const [home, setHome] = useState(EMPTY_HOME);
   const [regionCards, setRegionCards] = useState<RegionCard[]>([]);
   const [faq, setFaq] = useState<{ id: string; q: string; a: string }[]>([]);
+  const [partners, setPartners] = useState<{ id: string; name: string; blurb: string; url: string }[]>([]);
+  const [featuredOps, setFeaturedOps] = useState<string[]>([]);
+  const [operatorOptions, setOperatorOptions] = useState<{ id: string; name: string; count: number }[]>([]);
   const regionPhotoRefs = useRef<Map<string, PhotoUploaderHandle | null>>(new Map());
   const catPhotoRefs = useRef<Map<string, PhotoUploaderHandle | null>>(new Map());
   const addonPhotoRefs = useRef<Map<string, PhotoUploaderHandle | null>>(new Map());
@@ -110,11 +113,51 @@ export function AdminSiteContent() {
     const seedRegions = h.regionCards && h.regionCards.length ? h.regionCards : HOME_REGIONS;
     setRegionCards(seedRegions.map((r) => ({ id: crypto.randomUUID(), name: r.name ?? "", label: r.label ?? "", image: (r as { image?: string }).image ?? "" })));
     setFaq((h.faq ?? []).map((f) => ({ id: crypto.randomUUID(), q: f.q ?? "", a: f.a ?? "" })));
+    setPartners((h.partners ?? DEFAULT_SERVICE_PARTNERS).map((p) => ({ id: crypto.randomUUID(), name: p.name ?? "", blurb: p.blurb ?? "", url: p.url ?? "" })));
+    setFeaturedOps(h.featuredOperatorIds ?? []);
     setAddons(settings.addons ?? []);
     setHydrated(true);
   }, [loading, hydrated, settings]);
 
   const published = listings.filter((l) => l.status === "published");
+
+  // Operator options for the "featured (big names first)" picker — distinct
+  // operators with a published listing, with their business/display name.
+  useEffect(() => {
+    const counts = new Map<string, number>();
+    for (const l of published) {
+      const id = (l as { operatorId?: string }).operatorId;
+      if (id && id !== "seed") counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    const ids = Array.from(counts.keys());
+    if (!ids.length) {
+      setOperatorOptions([]);
+      return;
+    }
+    let active = true;
+    supabase
+      .from("profiles")
+      .select("*")
+      .in("id", ids)
+      .then(({ data }) => {
+        if (!active || !data) return;
+        const opts = ids.map((id) => {
+          const p = (data as { id: string; business_name?: string | null; display_name?: string | null }[]).find((r) => r.id === id);
+          return { id, name: p?.business_name || p?.display_name || "Host", count: counts.get(id) ?? 0 };
+        });
+        opts.sort((a, b) => a.name.localeCompare(b.name));
+        setOperatorOptions(opts);
+      });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [published.length]);
+
+  const toggleFeaturedOp = (id: string) => setFeaturedOps((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const updatePartner = (id: string, key: "name" | "blurb" | "url", val: string) => setPartners((prev) => prev.map((p) => (p.id === id ? { ...p, [key]: val } : p)));
+  const removePartner = (id: string) => setPartners((prev) => prev.filter((p) => p.id !== id));
+  const addPartner = () => setPartners((prev) => [...prev, { id: crypto.randomUUID(), name: "", blurb: "", url: "" }]);
 
   const toggleFeatured = (slug: string) =>
     setFeaturedSlugs((prev) => (prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]));
@@ -213,6 +256,8 @@ export function AdminSiteContent() {
             footerTagline: home.footerTagline.trim(),
             footerSubcopy: home.footerSubcopy.trim(),
             faq: faq.map((f) => ({ q: f.q.trim(), a: f.a.trim() })).filter((f) => f.q && f.a),
+            featuredOperatorIds: featuredOps,
+            partners: partners.map((p) => ({ name: p.name.trim(), blurb: p.blurb.trim(), url: p.url.trim() || undefined })).filter((p) => p.name && p.blurb),
           },
         })
         .eq("id", 1);
@@ -578,6 +623,49 @@ export function AdminSiteContent() {
           ))}
           <div>
             <Button type="button" variant="outline" size="sm" onClick={() => setFaq((p) => [...p, { id: crypto.randomUUID(), q: "", a: "" }])} className="rounded-none border-basalt/20">+ Add question</Button>
+          </div>
+          {sectionSave()}
+        </div>
+
+        {/* Partners page (/partners) — featured operators + services we use */}
+        <div className="grid gap-5 border border-basalt/10 bg-paper p-5">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Partners page <span className="font-normal normal-case tracking-normal text-basalt/45">(shown on /partners)</span></p>
+            <p className="mt-1 text-xs text-basalt/50">All published operators show automatically. Pin your "big names" here to move them to the top; the rest stay alphabetical.</p>
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-[0.1em] text-basalt/45">Featured operators (pinned first)</p>
+            {operatorOptions.length === 0 ? (
+              <p className="text-xs text-basalt/45">No operators with published listings yet.</p>
+            ) : (
+              <div className="grid gap-1.5 sm:grid-cols-2">
+                {operatorOptions.map((o) => (
+                  <label key={o.id} className="flex items-center gap-2 rounded-none border border-basalt/10 bg-chalk px-3 py-2 text-sm">
+                    <input type="checkbox" checked={featuredOps.includes(o.id)} onChange={() => toggleFeaturedOp(o.id)} className="h-4 w-4 accent-apricot" />
+                    <span className="min-w-0 flex-1 truncate">{o.name}</span>
+                    <span className="shrink-0 text-xs text-basalt/40">{o.count}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-[0.1em] text-basalt/45">Services we use</p>
+            <p className="mb-3 text-xs text-basalt/50">Name + a factual line. No third-party logos unless you have permission. Leave empty to use the built-in default (PayLink).</p>
+            {partners.map((p, i) => (
+              <div key={p.id} className="mb-3 grid gap-2 border border-basalt/10 bg-chalk p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-[0.1em] text-basalt/45">#{i + 1}</span>
+                  <button type="button" onClick={() => removePartner(p.id)} className="text-xs font-semibold text-basalt/45 hover:text-destructive">Remove</button>
+                </div>
+                <Input value={p.name} onChange={(e) => updatePartner(p.id, "name", e.target.value)} placeholder="Service name (e.g. PayLink)" className="rounded-none" />
+                <Textarea rows={2} value={p.blurb} onChange={(e) => updatePartner(p.id, "blurb", e.target.value)} placeholder="One factual line about what they do for Revamp." className="rounded-none text-base" />
+                <Input value={p.url} onChange={(e) => updatePartner(p.id, "url", e.target.value)} placeholder="https://… (optional)" className="rounded-none" />
+              </div>
+            ))}
+            <Button type="button" variant="outline" size="sm" onClick={addPartner} className="rounded-none border-basalt/20">+ Add service</Button>
           </div>
           {sectionSave()}
         </div>
