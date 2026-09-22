@@ -18,7 +18,7 @@ import { reconcileUserBookings, logBookingEvent, finalizeConfirmedBooking } from
 import { generateSupportReply, type SupportTurn } from "./support.js";
 import { generateOperatorReply, type OperatorTurn } from "./operatorAssistant.js";
 import { scanMessage } from "./messaging.js";
-import { reserveGift, releaseGift, refundGiftForBooking, lookupRedeemableGift, reconcilePurchaserGiftCards } from "./giftcards.js";
+import { reserveGift, releaseGift, refundGiftForBooking, lookupRedeemableGift, reconcilePurchaserGiftCards, logGiftEvent, voidGiftCard } from "./giftcards.js";
 import { isAllowedGiftAmount } from "../shared/giftcards.js";
 import { payoutState } from "../shared/payouts.js";
 import { sendCancellation, sendSupportAlert, sendNewMessage, type BookingEmailInfo } from "./email.js";
@@ -95,6 +95,11 @@ const giftLookupSchema = z.object({
   code: z.string().trim().min(4).max(40),
 });
 
+const giftVoidSchema = z.object({
+  giftCardId: z.string().uuid(),
+  reason: z.string().trim().max(200).optional(),
+});
+
 const cancelBookingSchema = z.object({
   bookingId: z.string().uuid(),
 });
@@ -161,6 +166,17 @@ function issuesToMessage(err: z.ZodError): string {
 const operatorAssistantHits = new Map<string, number[]>();
 // Same soft per-user cap for inbox message sends (spam guard, not security).
 const messageSendHits = new Map<string, number[]>();
+// Per-user caps for gift-card code lookups (anti-enumeration) and purchases (spam).
+const giftLookupHits = new Map<string, number[]>();
+const giftPurchaseHits = new Map<string, number[]>();
+function rateLimited(map: Map<string, number[]>, key: string, max: number, windowMs = 60_000): boolean {
+  const now = Date.now();
+  const hits = (map.get(key) ?? []).filter((t) => t > now - windowMs);
+  if (hits.length >= max) return true;
+  hits.push(now);
+  map.set(key, hits);
+  return false;
+}
 
 function moneyByCurrency(map: Record<string, number>): string {
   const keys = Object.keys(map);
@@ -487,6 +503,7 @@ export function registerApiRoutes(app: Express) {
     // are non-refundable, so a *cancelled confirmed* booking forfeits the gift.
     let giftId: string | null = null;
     let giftApplied = 0;
+    let giftBalanceAfter = 0;
     if (parsed.data.giftCode) {
       if (!adminClient) return res.status(503).json({ error: "Gift cards aren't available right now." });
       const look = await lookupRedeemableGift(adminClient, parsed.data.giftCode, currency);
@@ -495,6 +512,7 @@ export function registerApiRoutes(app: Express) {
       const reserved = await reserveGift(adminClient, look.id, giftApplied);
       if (!reserved) return res.status(409).json({ error: "That gift card balance just changed — please try again." });
       giftId = look.id;
+      giftBalanceAfter = look.balanceCents - giftApplied;
     }
     const remainingCents = finalTotalCents - giftApplied;
 
@@ -536,6 +554,7 @@ export function registerApiRoutes(app: Express) {
         console.error("[start-checkout] gift-covered insert failed", insErr.message);
         return res.status(500).json({ error: "Couldn't record your booking." });
       }
+      await logGiftEvent(adminClient, giftId, "redeemed", { amountCents: giftApplied, balanceAfter: giftBalanceAfter, bookingId: created.id, detail: `Fully covered booking · ${listing.title}` });
       try {
         await finalizeConfirmedBooking(adminClient, created.id);
       } catch (e) {
@@ -560,17 +579,24 @@ export function registerApiRoutes(app: Express) {
         return res.status(502).json({ error: "Couldn't start checkout." });
       }
       // Insert the pending hold as the traveler (RLS allows own + pending only).
-      const { error: insErr } = await supa.from("bookings").insert({
-        ...baseRow,
-        status: "pending_payment",
-        provider: "paylink",
-        paylink_request_id: pay.requestId,
-        paylink_order_id: pay.orderId,
-      });
+      const { data: pendingRow, error: insErr } = await supa
+        .from("bookings")
+        .insert({
+          ...baseRow,
+          status: "pending_payment",
+          provider: "paylink",
+          paylink_request_id: pay.requestId,
+          paylink_order_id: pay.orderId,
+        })
+        .select("id")
+        .maybeSingle();
       if (insErr) {
         if (giftId && adminClient) await releaseGift(adminClient, giftId, giftApplied);
         console.error("[start-checkout] insert failed", insErr.message);
         return res.status(500).json({ error: "Couldn't record your booking." });
+      }
+      if (giftId && adminClient) {
+        await logGiftEvent(adminClient, giftId, "redeemed", { amountCents: giftApplied, balanceAfter: giftBalanceAfter, bookingId: pendingRow?.id ?? null, detail: `Applied to booking · ${listing.title}` });
       }
       res.json({ redirectUrl: pay.redirectUrl });
     } catch (err) {
@@ -1212,6 +1238,7 @@ export function registerApiRoutes(app: Express) {
     if (!userId || !token) return res.status(401).json({ error: "Sign in to buy a gift card." });
     if (!paylinkConfigured()) return res.status(503).json({ error: "Payments aren't available yet." });
 
+    if (rateLimited(giftPurchaseHits, userId, 8)) return res.status(429).json({ error: "You're going a bit fast — give it a few seconds and try again." });
     const parsed = giftCardStartSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
     if (!isAllowedGiftAmount(parsed.data.amountCents)) return res.status(400).json({ error: "Pick one of the available gift-card amounts." });
@@ -1281,6 +1308,7 @@ export function registerApiRoutes(app: Express) {
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
     const userId = token ? await verifyUser(token) : null;
     if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    if (rateLimited(giftLookupHits, userId, 20)) return res.status(429).json({ error: "Too many attempts — wait a moment and try again." });
     const parsed = giftLookupSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
     const admin = supabaseAdmin();
@@ -1289,5 +1317,23 @@ export function registerApiRoutes(app: Express) {
     const look = await lookupRedeemableGift(admin, parsed.data.code, currency);
     if ("error" in look) return res.status(404).json({ error: look.error });
     res.json({ balanceCents: look.balanceCents, currency: look.currency });
+  });
+
+  // POST /api/admin-gift-void — admin-only: void a gift card so it can no longer
+  // be redeemed (fraud / chargeback). Keeps the row + balance + full ledger.
+  app.post("/api/admin-gift-void", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const parsed = giftVoidSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: prof } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (prof?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+    const ok = await voidGiftCard(admin, parsed.data.giftCardId, parsed.data.reason ? `Voided by admin: ${parsed.data.reason}` : "Voided by admin");
+    if (!ok) return res.status(400).json({ error: "Couldn't void that gift card." });
+    res.json({ ok: true });
   });
 }

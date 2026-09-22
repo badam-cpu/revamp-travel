@@ -280,6 +280,18 @@ export async function sendInboxMessage(conversationId: string, body: string): Pr
   return res.message;
 }
 
+/** Admin-only: void a gift card so it can no longer be redeemed (kept in the ledger). */
+export async function adminVoidGiftCard(giftCardId: string, reason?: string): Promise<{ ok: boolean }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<{ ok: boolean }>("/api/admin-gift-void", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ giftCardId, reason }),
+  });
+}
+
 /** Admin moderation for the unified inbox: redact a message, or close/reopen a thread. */
 export async function moderateInbox(input: { action: "redact" | "close" | "reopen"; messageId?: string; conversationId?: string }): Promise<{ ok: boolean }> {
   const { data } = await supabase.auth.getSession();

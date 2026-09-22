@@ -85,12 +85,25 @@ export default function GiftCards() {
       <SiteHeader />
       <main>
         <section className="border-b border-basalt/10 bg-chalk">
-          <div className="container py-14 lg:py-20">
-            <p className="eyebrow inline-flex items-center gap-2"><Gift className="h-4 w-4" /> Give the gift of travel</p>
-            <h1 className="mt-3 max-w-3xl font-display text-5xl leading-[1.02] tracking-[-0.04em] lg:text-6xl">Revamp gift cards.</h1>
-            <p className="mt-5 max-w-xl text-base leading-7 text-basalt/60">
-              One card, all of Armenia — stays, tours, and experiences. Choose an amount, send it to anyone by email, and they redeem it at checkout.
-            </p>
+          <div className="container grid items-center gap-8 py-14 lg:grid-cols-[1.4fr_0.6fr] lg:py-20">
+            <div>
+              <p className="eyebrow inline-flex items-center gap-2"><Gift className="h-4 w-4" /> Give the gift of travel</p>
+              <h1 className="mt-3 max-w-3xl font-display text-5xl leading-[1.02] tracking-[-0.04em] lg:text-6xl">Revamp gift cards.</h1>
+              <p className="mt-5 max-w-xl text-base leading-7 text-basalt/60">
+                One card, all of Armenia — stays, tours, and experiences. Choose an amount, send it to anyone by email, and they redeem it at checkout.
+              </p>
+            </div>
+            {/* Subtle hand-holding-a-heart line art. */}
+            <div className="hidden justify-self-end lg:block" aria-hidden="true">
+              <svg width="176" height="176" viewBox="0 0 120 120" fill="none" className="text-apricot/70">
+                {/* heart */}
+                <path d="M60 38c-4-8-16-7-16 3 0 7 9 13 16 18 7-5 16-11 16-18 0-10-12-11-16-3z" fill="currentColor" fillOpacity="0.12" stroke="currentColor" strokeWidth="2.6" strokeLinejoin="round" />
+                {/* cupped hand holding it */}
+                <path d="M30 72c-2 15 11 28 30 28s32-13 30-28" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
+                <path d="M30 72c-3-6-1-12 5-12 5 0 7 4 8 8" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M90 72c3-6 1-12-5-12-5 0-7 4-8 8" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
           </div>
         </section>
 

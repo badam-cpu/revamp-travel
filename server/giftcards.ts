@@ -41,6 +41,28 @@ function randomCode(): string {
 
 const TERMINAL_FAIL = /fail|declin|cancel|expire|reject/i;
 
+/** Append one entry to a gift card's audit ledger (gift_card_events). Best-effort
+ *  and append-only — nothing here is ever updated or deleted. */
+export async function logGiftEvent(
+  admin: SupabaseClient,
+  giftId: string,
+  type: "activated" | "redeemed" | "released" | "refunded" | "voided" | "expired",
+  opts: { amountCents?: number; balanceAfter?: number | null; bookingId?: string | null; detail?: string } = {},
+): Promise<void> {
+  try {
+    await admin.from("gift_card_events").insert({
+      gift_card_id: giftId,
+      type,
+      amount_cents: opts.amountCents ?? 0,
+      balance_after: opts.balanceAfter ?? null,
+      booking_id: opts.bookingId ?? null,
+      detail: opts.detail ?? null,
+    });
+  } catch (err) {
+    console.error("[giftcards] ledger write failed", giftId, type, err);
+  }
+}
+
 /** Activate a paid gift card: assign a unique code, set the balance + 12-month
  *  expiry, then email the recipient (and the purchaser a receipt). Idempotent —
  *  only acts on a row still `pending_payment`. */
@@ -80,6 +102,8 @@ export async function activateGiftCard(admin: SupabaseClient, row: GiftCardRow, 
     if (cur?.status === "active") return true;
   }
   if (!assigned) return false;
+
+  await logGiftEvent(admin, row.id, "activated", { amountCents: row.initial_amount_cents, balanceAfter: row.initial_amount_cents, detail: `Activated as ${assigned}` });
 
   // Emails are best-effort — a delivery failure never un-activates the card.
   try {
@@ -213,7 +237,9 @@ export async function releaseGift(admin: SupabaseClient, giftId: string, amount:
   const { data: card } = await admin.from("gift_cards").select("balance_cents, expires_at").eq("id", giftId).maybeSingle();
   if (!card) return;
   const expired = card.expires_at && Date.parse(card.expires_at) < Date.now();
-  await admin.from("gift_cards").update({ balance_cents: card.balance_cents + amount, status: expired ? "expired" : "active" }).eq("id", giftId);
+  const balanceAfter = card.balance_cents + amount;
+  await admin.from("gift_cards").update({ balance_cents: balanceAfter, status: expired ? "expired" : "active" }).eq("id", giftId);
+  await logGiftEvent(admin, giftId, "released", { amountCents: amount, balanceAfter, detail: "Reservation released (checkout not completed)" });
 }
 
 /** Refund a booking's reserved gift amount back to its card (idempotent — zeroes
@@ -227,10 +253,45 @@ export async function refundGiftForBooking(admin: SupabaseClient, bookingId: str
   const { data: card } = await admin.from("gift_cards").select("balance_cents, status, expires_at").eq("id", giftId).maybeSingle();
   if (card) {
     const expired = card.expires_at && Date.parse(card.expires_at) < Date.now();
+    const balanceAfter = card.balance_cents + applied;
     await admin
       .from("gift_cards")
-      .update({ balance_cents: card.balance_cents + applied, status: expired ? "expired" : "active" })
+      .update({ balance_cents: balanceAfter, status: expired ? "expired" : "active" })
       .eq("id", giftId);
+    await logGiftEvent(admin, giftId, "refunded", { amountCents: applied, balanceAfter, bookingId, detail: "Booking didn't stand — gift released back" });
   }
   await admin.from("bookings").update({ gift_applied_cents: 0, gift_card_id: null }).eq("id", bookingId);
+}
+
+/** Cron cleanup: flip active/depleted cards past their expiry to `expired`. The
+ *  balance and the card row are kept (nothing removed) and each is logged. */
+export async function expireOverdueGiftCards(admin: SupabaseClient, { limit = 200 }: { limit?: number } = {}): Promise<{ expired: number }> {
+  const nowIso = new Date().toISOString();
+  const { data } = await admin
+    .from("gift_cards")
+    .select("id, balance_cents")
+    .in("status", ["active", "depleted"])
+    .lt("expires_at", nowIso)
+    .limit(limit);
+  let expired = 0;
+  for (const c of (data ?? []) as { id: string; balance_cents: number }[]) {
+    const { data: upd } = await admin.from("gift_cards").update({ status: "expired" }).eq("id", c.id).in("status", ["active", "depleted"]).select("id");
+    if (upd && upd.length) {
+      expired++;
+      await logGiftEvent(admin, c.id, "expired", { balanceAfter: c.balance_cents, detail: "Reached expiry date" });
+    }
+  }
+  return { expired };
+}
+
+/** Admin: void a gift card so it can no longer be redeemed (fraud / chargeback).
+ *  Sets status `cancelled` and logs it — the balance and history are preserved. */
+export async function voidGiftCard(admin: SupabaseClient, giftId: string, detail: string): Promise<boolean> {
+  const { data: card } = await admin.from("gift_cards").select("balance_cents, status").eq("id", giftId).maybeSingle();
+  if (!card) return false;
+  if (card.status === "cancelled") return true;
+  const { data: upd } = await admin.from("gift_cards").update({ status: "cancelled" }).eq("id", giftId).select("id");
+  if (!upd || !upd.length) return false;
+  await logGiftEvent(admin, giftId, "voided", { balanceAfter: card.balance_cents, detail });
+  return true;
 }
