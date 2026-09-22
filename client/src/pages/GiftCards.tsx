@@ -88,12 +88,15 @@ export default function GiftCards() {
       <SiteHeader />
       <main>
         <section className="border-b border-basalt/10 bg-chalk">
-          <div className="container py-14 lg:py-20">
-            <p className="eyebrow inline-flex items-center gap-2"><Gift className="h-4 w-4" /> Give the gift of travel</p>
-            <h1 className="mt-3 max-w-3xl font-display text-5xl leading-[1.02] tracking-[-0.04em] lg:text-6xl">Revamp gift cards.</h1>
-            <p className="mt-5 max-w-xl text-base leading-7 text-basalt/60">
-              One card, all of Armenia — stays, tours, and experiences. Choose an amount, send it to anyone by email, and they redeem it at checkout.
-            </p>
+          <div className="container grid items-center gap-8 py-14 lg:grid-cols-[1.4fr_0.6fr] lg:py-20">
+            <div>
+              <p className="eyebrow inline-flex items-center gap-2"><Gift className="h-4 w-4" /> Give the gift of travel</p>
+              <h1 className="mt-3 max-w-3xl font-display text-5xl leading-[1.02] tracking-[-0.04em] lg:text-6xl">Revamp gift cards.</h1>
+              <p className="mt-5 max-w-xl text-base leading-7 text-basalt/60">
+                One card, all of Armenia — stays, tours, and experiences. Choose an amount, send it to anyone by email, and they redeem it at checkout.
+              </p>
+            </div>
+            <img src="/images/gift-hug-heart.png" alt="" aria-hidden="true" className="hidden h-auto w-full max-w-[300px] justify-self-center lg:block" />
           </div>
         </section>
 
