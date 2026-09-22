@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { slugify } from "@/lib/slug";
+import { renderMarkdown } from "@shared/markdown";
 import { Loader2, Pin } from "lucide-react";
 import { listAllHubArticles, createHubArticle, updateHubArticle, deleteHubArticle, HUB_CATEGORIES, hubCategoryLabel, type HubArticle, type HubArticleInput, type HubCategory } from "@/lib/hub";
 
@@ -83,6 +84,7 @@ function Editor({ existing, onDone }: { existing: HubArticle | null; onDone: () 
   const [excerpt, setExcerpt] = useState(existing?.excerpt ?? "");
   const [body, setBody] = useState(existing?.body ?? "");
   const [pinned, setPinned] = useState(existing?.pinned ?? false);
+  const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const publishedAt = useRef(existing?.publishedAt ?? null);
 
@@ -132,8 +134,23 @@ function Editor({ existing, onDone }: { existing: HubArticle | null; onDone: () 
           <Textarea rows={2} value={excerpt} onChange={(e) => setExcerpt(e.target.value)} className="rounded-none text-base" />
         </div>
         <div className="grid gap-1.5">
-          <Label className="text-sm font-semibold">Body <span className="font-normal text-basalt/45">(Markdown)</span></Label>
-          <Textarea rows={14} value={body} onChange={(e) => setBody(e.target.value)} className="rounded-none font-mono text-sm" />
+          <div className="flex items-center justify-between gap-3">
+            <Label className="text-sm font-semibold">Body <span className="font-normal text-basalt/45">(Markdown)</span></Label>
+            <div className="inline-flex text-xs font-semibold">
+              <button type="button" onClick={() => setPreview(false)} className={`border px-3 py-1 ${!preview ? "border-apricot bg-apricot/5 text-basalt" : "border-basalt/15 text-basalt/55 hover:border-basalt/30"}`}>Write</button>
+              <button type="button" onClick={() => setPreview(true)} className={`-ml-px border px-3 py-1 ${preview ? "border-apricot bg-apricot/5 text-basalt" : "border-basalt/15 text-basalt/55 hover:border-basalt/30"}`}>Preview</button>
+            </div>
+          </div>
+          {preview ? (
+            body.trim() ? (
+              <div className="prose-blog min-h-[20rem] border border-basalt/15 bg-paper p-5 text-[1.02rem] leading-8 text-basalt/85" dangerouslySetInnerHTML={{ __html: renderMarkdown(body) }} />
+            ) : (
+              <p className="min-h-[20rem] border border-dashed border-basalt/20 bg-chalk/40 p-5 text-sm text-basalt/50">Nothing to preview yet.</p>
+            )
+          ) : (
+            <Textarea rows={16} value={body} onChange={(e) => setBody(e.target.value)} className="rounded-none font-mono text-sm" />
+          )}
+          <p className="text-xs text-basalt/45">Use <code className="bg-basalt/[0.06] px-1">## Heading</code> for section titles and <code className="bg-basalt/[0.06] px-1">- item</code> for bullet lists. Paste the <strong>raw</strong> Markdown, not copied-and-formatted text, or headings and bullets flatten into plain paragraphs. Check <strong>Preview</strong> before publishing.</p>
         </div>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={pinned} onChange={(e) => setPinned(e.target.checked)} className="h-4 w-4 accent-apricot" /> Pin to the top
