@@ -256,6 +256,18 @@ export async function moderateInbox(input: { action: "redact" | "close" | "reope
   });
 }
 
+/** Admin-only: promote a traveler to operator (or demote back). */
+export async function adminSetRole(userId: string, role: "traveler" | "operator"): Promise<{ ok: boolean }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<{ ok: boolean }>("/api/admin-set-role", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ userId, role }),
+  });
+}
+
 /** A guest optionally leaves an email/name so Revamp can follow up after they leave. */
 export async function submitSupportContact(email: string, name?: string): Promise<{ ok: boolean }> {
   const { data } = await supabase.auth.getSession();

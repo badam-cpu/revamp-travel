@@ -123,6 +123,11 @@ const adminModerateSchema = z.object({
   conversationId: z.string().uuid().optional(),
 });
 
+const adminSetRoleSchema = z.object({
+  userId: z.string().uuid(),
+  role: z.enum(["traveler", "operator"]),
+});
+
 const operatorAssistantSchema = z.object({
   messages: z
     .array(z.object({ role: z.enum(["user", "assistant"]), body: z.string().max(2000) }))
@@ -1072,6 +1077,45 @@ export function registerApiRoutes(app: Express) {
     } catch (err) {
       console.error("[admin-moderate]", err);
       res.status(500).json({ error: "Couldn't apply that action. Please try again." });
+    }
+  });
+
+  // POST /api/admin-set-role — admin-only: promote a traveler to operator (so
+  // they can own/manage listings and appear in the assign dropdown) or demote an
+  // operator back. Service-role write (profiles RLS lets a user edit only their
+  // own non-role fields). Never touches admin accounts; refuses to demote an
+  // operator who still owns listings (would orphan editable products).
+  app.post("/api/admin-set-role", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+
+    const parsed = adminSetRoleSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+
+    try {
+      const { data: target } = await admin.from("profiles").select("role").eq("id", parsed.data.userId).maybeSingle();
+      if (!target) return res.status(404).json({ error: "Account not found." });
+      if (target.role === "admin") return res.status(400).json({ error: "Admin accounts can't be changed here." });
+
+      if (parsed.data.role === "traveler" && target.role === "operator") {
+        const { count } = await admin.from("listings").select("id", { count: "exact", head: true }).eq("operator_id", parsed.data.userId);
+        if ((count ?? 0) > 0) return res.status(400).json({ error: "Reassign this operator's listings before demoting them." });
+      }
+
+      const { error } = await admin.from("profiles").update({ role: parsed.data.role }).eq("id", parsed.data.userId);
+      if (error) throw new Error(error.message);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[admin-set-role]", err);
+      res.status(500).json({ error: "Couldn't change that account's role. Please try again." });
     }
   });
 }
