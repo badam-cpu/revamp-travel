@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { imgAttrs } from "@/lib/responsiveImg";
 import { trackEvent } from "@/lib/analytics";
 import { OperatorBrand } from "@/components/OperatorBrand";
+import { ExternalReviews } from "@/components/ExternalReviews";
 import { describeCancellationPolicy, averageNightlyCents } from "@shared/bookings";
 import { buildBreadcrumbJsonLd, buildListingJsonLd } from "@shared/seo";
 import { toast } from "sonner";
@@ -455,6 +456,10 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
             <ArmeniaMap listings={[listing]} single className="h-[430px]" />
           </div>
         </section>
+
+        <div className="container">
+          <ExternalReviews operatorId={(listing as { operatorId?: string }).operatorId ?? ""} className="pt-12 lg:pt-16" />
+        </div>
 
         <section className="container py-16 lg:py-24">
           <div className="flex items-end justify-between gap-5">

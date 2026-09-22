@@ -257,6 +257,17 @@ export async function getSiteFaq(): Promise<{ q: string; a: string }[]> {
   }
 }
 
+/** An operator's Google Business Place ID (profiles are public-read). */
+export async function getOperatorGooglePlaceId(operatorId: string): Promise<string | null> {
+  if (!client) return null;
+  try {
+    const { data } = await client.from("profiles").select("google_place_id").eq("id", operatorId).maybeSingle();
+    return (data?.google_place_id as string | null) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Distinct operators with a published listing, for the /partners prerender.
  *  Anon-key public read; degrades to [] on any error. */
 export async function getPartnerOperators(): Promise<{ name: string; total: number }[]> {

@@ -27,6 +27,7 @@ import { AlertTriangle, ArrowLeft, ArrowRight, BookOpen, CalendarCheck, Calendar
 import { Inbox } from "@/components/Inbox";
 import { PartnerHub } from "@/components/PartnerHub";
 import { PriceLabsConnect } from "@/components/PriceLabsConnect";
+import { ExternalReviewsManager } from "@/components/ExternalReviewsManager";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -1415,7 +1416,10 @@ function DashboardContent() {
             {section === "integrations" && (
               <div>
                 <SectionHead title="Integrations" sub="Connect Revamp with the tools you already use." />
-                <PriceLabsConnect />
+                <div className="grid gap-8">
+                  <PriceLabsConnect />
+                  <ExternalReviewsManager />
+                </div>
               </div>
             )}
 

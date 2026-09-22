@@ -11,7 +11,8 @@
  */
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
-import { listPublishedForPlanner, verifyUser, userClient, getListingBusyRanges } from "./supabase.js";
+import { listPublishedForPlanner, verifyUser, userClient, getListingBusyRanges, getOperatorGooglePlaceId } from "./supabase.js";
+import { fetchPlaceReviews } from "./googlePlaces.js";
 import { supabaseAdmin, adminConfigured } from "./supabaseAdmin.js";
 import { paylinkConfigured, registerPayment } from "./paylink.js";
 import { reconcileUserBookings, logBookingEvent, finalizeConfirmedBooking } from "./bookings.js";
@@ -1246,6 +1247,22 @@ export function registerApiRoutes(app: Express) {
       console.error("[admin-set-role]", err);
       res.status(500).json({ error: "Couldn't change that account's role. Please try again." });
     }
+  });
+
+  // GET /api/google-reviews?operatorId=… — public Google Business reviews for an
+  // operator's business (their Place ID lives on their profile). Server-side +
+  // cached; returns { configured:false } when the operator hasn't set a Place ID
+  // or the Places key isn't set. Attributed to Google on the client.
+  app.get("/api/google-reviews", async (req: Request, res: Response) => {
+    const operatorId = String(req.query.operatorId || "");
+    if (!/^[0-9a-f-]{36}$/i.test(operatorId)) return res.status(400).json({ error: "Bad operator id." });
+    if (rateLimited(giftLookupHits, `gr:${req.ip || "?"}`, 60)) return res.status(429).json({ error: "Slow down." });
+    const placeId = await getOperatorGooglePlaceId(operatorId);
+    if (!placeId) return res.json({ configured: false });
+    const data = await fetchPlaceReviews(placeId);
+    if (!data) return res.json({ configured: false });
+    res.setHeader("Cache-Control", "public, max-age=900");
+    res.json({ configured: true, ...data });
   });
 
   // --- Gift cards ------------------------------------------------------

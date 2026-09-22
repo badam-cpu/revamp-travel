@@ -25,6 +25,7 @@ export interface Profile {
   logoUrl?: string | null;
   pricelabsAccount?: string | null;
   pricelabsConnectedAt?: string | null;
+  googlePlaceId?: string | null;
 }
 
 interface SignUpParams {
@@ -42,6 +43,7 @@ interface ProfilePatch {
   logoUrl?: string | null;
   pricelabsAccount?: string | null;
   pricelabsConnectedAt?: string | null;
+  googlePlaceId?: string | null;
 }
 
 interface AuthContextType {
@@ -77,6 +79,7 @@ function mapProfile(row: {
   logo_url?: string | null;
   pricelabs_account?: string | null;
   pricelabs_connected_at?: string | null;
+  google_place_id?: string | null;
 }): Profile {
   return {
     id: row.id,
@@ -87,6 +90,7 @@ function mapProfile(row: {
     logoUrl: row.logo_url ?? null,
     pricelabsAccount: row.pricelabs_account ?? null,
     pricelabsConnectedAt: row.pricelabs_connected_at ?? null,
+    googlePlaceId: row.google_place_id ?? null,
   };
 }
 
@@ -197,6 +201,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (patch.logoUrl !== undefined) row.logo_url = patch.logoUrl;
       if (patch.pricelabsAccount !== undefined) row.pricelabs_account = patch.pricelabsAccount;
       if (patch.pricelabsConnectedAt !== undefined) row.pricelabs_connected_at = patch.pricelabsConnectedAt;
+      if (patch.googlePlaceId !== undefined) row.google_place_id = patch.googlePlaceId;
       const { error } = await supabase.from("profiles").update(row).eq("id", userId);
       if (error) throw error;
       await loadProfile(userId);

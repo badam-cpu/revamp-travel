@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { imgAttrs } from "@/lib/responsiveImg";
 import { trackEvent } from "@/lib/analytics";
 import { OperatorBrand } from "@/components/OperatorBrand";
+import { ExternalReviews } from "@/components/ExternalReviews";
 
 export function TourDetail({ listing }: { listing: Listing }) {
   const { listings } = useListings();
@@ -305,6 +306,12 @@ export function TourDetail({ listing }: { listing: Listing }) {
           )}
         </aside>
       </section>
+
+      {operatorId && (
+        <div className="container">
+          <ExternalReviews operatorId={operatorId} className="pt-12 lg:pt-16" />
+        </div>
+      )}
 
       {relatedItems.length > 0 && (
         <section className="container py-16 lg:py-24">
