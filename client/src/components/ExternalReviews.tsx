@@ -19,7 +19,7 @@ function Stars({ n }: { n: number }) {
   );
 }
 
-export function ExternalReviews({ operatorId, className = "" }: { operatorId: string; className?: string }) {
+export function ExternalReviews({ operatorId, listingId, className = "" }: { operatorId: string; listingId?: string; className?: string }) {
   const [google, setGoogle] = useState<GoogleReviewsResult | null>(null);
   const [airbnb, setAirbnb] = useState<HostReview[]>([]);
 
@@ -27,11 +27,14 @@ export function ExternalReviews({ operatorId, className = "" }: { operatorId: st
     if (!operatorId || operatorId === "seed") return;
     let active = true;
     fetchGoogleReviews(operatorId).then((g) => active && setGoogle(g));
-    listHostReviews(operatorId).then((r) => active && setAirbnb(r.filter((x) => x.source === "airbnb")));
+    // Show a host review if it's operator-wide (no listing) or assigned to THIS listing.
+    listHostReviews(operatorId).then(
+      (r) => active && setAirbnb(r.filter((x) => x.source === "airbnb" && (!x.listingId || x.listingId === listingId))),
+    );
     return () => {
       active = false;
     };
-  }, [operatorId]);
+  }, [operatorId, listingId]);
 
   const hasGoogle = google?.configured && (google.reviews?.length || google.rating);
   if (!hasGoogle && airbnb.length === 0) return null;

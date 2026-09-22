@@ -14,6 +14,8 @@ export interface HostReview {
   rating: number | null;
   body: string;
   reviewDate: string | null;
+  /** null = applies to all the operator's listings; else this listing only. */
+  listingId: string | null;
 }
 
 export interface HostReviewInput {
@@ -22,19 +24,21 @@ export interface HostReviewInput {
   rating: number | null;
   body: string;
   reviewDate: string | null;
+  listingId: string | null;
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function mapRow(r: any): HostReview {
-  return { id: r.id, source: r.source, reviewerName: r.reviewer_name, rating: r.rating ?? null, body: r.body ?? "", reviewDate: r.review_date ?? null };
+  return { id: r.id, source: r.source, reviewerName: r.reviewer_name, rating: r.rating ?? null, body: r.body ?? "", reviewDate: r.review_date ?? null, listingId: r.listing_id ?? null };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-/** Host-imported reviews for an operator (public read). */
+/** Host-imported reviews for an operator (public read). select("*") stays
+ *  resilient if the listing_id column (0047) hasn't been added yet. */
 export async function listHostReviews(operatorId: string): Promise<HostReview[]> {
   const { data } = await supabase
     .from("external_reviews")
-    .select("id, source, reviewer_name, rating, body, review_date")
+    .select("*")
     .eq("operator_id", operatorId)
     .order("created_at", { ascending: false });
   return (data ?? []).map(mapRow);
@@ -48,6 +52,7 @@ export async function addHostReview(operatorId: string, input: HostReviewInput):
     rating: input.rating,
     body: input.body,
     review_date: input.reviewDate,
+    ...(input.listingId ? { listing_id: input.listingId } : {}),
   });
   if (error) throw new Error(error.message);
 }

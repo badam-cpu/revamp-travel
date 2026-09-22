@@ -7,6 +7,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useListings } from "@/contexts/ListingsContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,6 +19,9 @@ import { GooglePlaceFinder } from "@/components/GooglePlaceFinder";
 
 export function ExternalReviewsManager() {
   const { user, profile, updateProfile } = useAuth();
+  const { listings } = useListings();
+  const myListings = listings.filter((l) => (l as { operatorId?: string }).operatorId === user?.id);
+  const listingTitle = (id: string | null) => (id ? myListings.find((l) => (l as { id: string }).id === id)?.title ?? "a listing" : "All my listings");
   const [placeId, setPlaceId] = useState(profile?.googlePlaceId ?? "");
   const [savingPlace, setSavingPlace] = useState(false);
 
@@ -26,6 +30,7 @@ export function ExternalReviewsManager() {
   const [rating, setRating] = useState(5);
   const [date, setDate] = useState("");
   const [body, setBody] = useState("");
+  const [listingId, setListingId] = useState<string>(""); // "" = all listings
   const [adding, setAdding] = useState(false);
 
   const load = useCallback(() => {
@@ -59,7 +64,7 @@ export function ExternalReviewsManager() {
     }
     setAdding(true);
     try {
-      await addHostReview(user.id, { source: "airbnb", reviewerName: name.trim(), rating, body: body.trim(), reviewDate: date || null });
+      await addHostReview(user.id, { source: "airbnb", reviewerName: name.trim(), rating, body: body.trim(), reviewDate: date || null, listingId: listingId || null });
       setName("");
       setBody("");
       setDate("");
@@ -123,6 +128,13 @@ export function ExternalReviewsManager() {
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-10 rounded-none" />
           </div>
           <Textarea rows={2} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Review text" className="rounded-none text-base" />
+          <div className="grid gap-1">
+            <Label className="text-xs font-semibold text-basalt/60">Show on</Label>
+            <select value={listingId} onChange={(e) => setListingId(e.target.value)} className="h-10 max-w-md rounded-none border border-basalt/20 bg-paper px-2 text-sm">
+              <option value="">All my listings</option>
+              {myListings.map((l) => <option key={l.id} value={(l as { id: string }).id}>{l.title}</option>)}
+            </select>
+          </div>
           <div><Button onClick={add} disabled={adding} variant="outline" className="rounded-none border-basalt/20">{adding ? "Adding…" : "+ Add Airbnb review"}</Button></div>
         </div>
 
@@ -135,6 +147,7 @@ export function ExternalReviewsManager() {
                     <span className="font-semibold text-basalt">{r.reviewerName}</span>
                     <span className="inline-flex text-apricot">{Array.from({ length: r.rating ?? 0 }).map((_, i) => <Star key={i} className="h-3 w-3 fill-apricot" />)}</span>
                     <span className="text-basalt/40">Airbnb{r.reviewDate ? ` · ${r.reviewDate}` : ""}</span>
+                    <span className="rounded-full bg-basalt/5 px-2 py-0.5 text-[10px] font-semibold text-basalt/50">{listingTitle(r.listingId)}</span>
                   </div>
                   <p className="mt-0.5 line-clamp-2 text-sm text-basalt/70">{r.body}</p>
                 </div>
