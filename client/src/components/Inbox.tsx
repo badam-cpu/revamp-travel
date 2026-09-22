@@ -11,7 +11,7 @@ import { Loader2, ShieldAlert, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { listConversations, getMessages, markConversationRead, type InboxConversation, type InboxMessage } from "@/lib/messaging";
-import { sendInboxMessage } from "@/lib/api";
+import { sendInboxMessage, moderateInbox } from "@/lib/api";
 import { toast } from "sonner";
 
 function timeAgo(iso: string): string {
@@ -65,6 +65,29 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
   }, [activeId]);
 
   const active = convos?.find((c) => c.id === activeId) ?? null;
+
+  const redact = async (messageId: string) => {
+    if (!window.confirm("Redact this message? Both parties will see it removed.")) return;
+    try {
+      await moderateInbox({ action: "redact", messageId });
+      if (activeId) setMessages(await getMessages(activeId));
+      toast("Message redacted.");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Couldn't redact that message.");
+    }
+  };
+
+  const toggleClose = async () => {
+    if (!active) return;
+    const action = active.status === "closed" ? "reopen" : "close";
+    try {
+      await moderateInbox({ action, conversationId: active.id });
+      await loadConvos();
+      toast(action === "close" ? "Conversation closed." : "Conversation reopened.");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Couldn't update the conversation.");
+    }
+  };
 
   const send = async () => {
     const body = draft.trim();
@@ -150,10 +173,18 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
               <button type="button" onClick={() => setActiveId(null)} className="text-xs font-semibold text-apricot md:hidden">
                 ← Back
               </button>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">{admin ? active.parties.map((p) => `${p.name} (${p.role})`).join(" ↔ ") : active.counterpart?.name ?? "Revamp"}</p>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">
+                  {admin ? active.parties.map((p) => `${p.name} (${p.role})`).join(" ↔ ") : active.counterpart?.name ?? "Revamp"}
+                  {active.status === "closed" && <span className="ml-2 rounded-full bg-basalt/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-basalt/50">Closed</span>}
+                </p>
                 {active.listing?.title && <p className="truncate text-[11px] text-basalt/45">{active.listing.title}</p>}
               </div>
+              {admin && (
+                <button type="button" onClick={toggleClose} className="shrink-0 text-xs font-semibold text-basalt/55 underline-offset-2 hover:text-basalt hover:underline">
+                  {active.status === "closed" ? "Reopen" : "Close"}
+                </button>
+              )}
             </div>
 
             <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto bg-chalk/30 px-4 py-4" style={{ maxHeight: 380 }}>
@@ -173,6 +204,11 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
                       <p className={cn("mt-1 text-[10px]", mine || isSupport ? "text-white/60" : "text-basalt/40")}>
                         {new Date(m.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                         {m.flagged && <span className="ml-1 font-semibold text-amber-300">· flagged</span>}
+                        {admin && !m.redacted && (
+                          <button type="button" onClick={() => redact(m.id)} className="ml-2 font-semibold text-amber-600 underline-offset-2 hover:underline">
+                            redact
+                          </button>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -181,6 +217,9 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
               {!messages.length && <p className="py-8 text-center text-sm text-basalt/40">No messages yet — say hello.</p>}
             </div>
 
+            {active.status === "closed" && !admin ? (
+              <div className="border-t border-basalt/10 p-4 text-center text-sm text-basalt/50">This conversation has been closed by Revamp.</div>
+            ) : (
             <div className="border-t border-basalt/10 p-3">
               {!admin && (
                 <p className="mb-1.5 text-[10px] leading-tight text-basalt/40">
@@ -206,6 +245,7 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
                 </Button>
               </div>
             </div>
+            )}
           </>
         )}
       </div>

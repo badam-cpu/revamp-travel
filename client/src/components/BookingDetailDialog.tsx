@@ -9,7 +9,8 @@ import { useEffect, useState } from "react";
 import { Mail, Phone, User } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
-import { setBookingPayment, cancelBooking } from "@/lib/api";
+import { setBookingPayment, cancelBooking, ensureBookingThread } from "@/lib/api";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -34,6 +35,7 @@ interface FullBooking {
   guest_name: string | null;
   guest_email: string | null;
   guest_phone: string | null;
+  traveler_id: string | null;
   refund_amount_cents: number | null;
   listings: { title: string; type: string; city: string } | null;
   profiles: { display_name: string } | null;
@@ -81,6 +83,8 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
   const [loading, setLoading] = useState(false);
   const [savingPay, setSavingPay] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [messaging, setMessaging] = useState(false);
+  const [, navigate] = useLocation();
 
   useEffect(() => {
     if (!bookingId) {
@@ -112,6 +116,20 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
   const guestName = b?.guest_name || b?.profiles?.display_name || "Guest";
   const todayIso = new Date().toISOString().slice(0, 10);
   const canCancel = !!b && (b.status === "pending_payment" || b.status === "confirmed") && b.start_date >= todayIso;
+
+  const messageGuest = async () => {
+    if (!b) return;
+    setMessaging(true);
+    try {
+      await ensureBookingThread(b.id);
+      onClose();
+      navigate("/dashboard?section=messages");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't open the conversation.");
+    } finally {
+      setMessaging(false);
+    }
+  };
 
   const doCancel = async () => {
     if (!b) return;
@@ -246,6 +264,16 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
                   </ul>
                 )}
               </section>
+
+              {/* Message the guest (in-app, only when they have an account) */}
+              {b.traveler_id && (
+                <section className="border-t border-basalt/10 pt-4">
+                  <Button variant="outline" disabled={messaging} onClick={messageGuest} className="rounded-none border-basalt/20">
+                    {messaging ? "Opening…" : "Message guest"}
+                  </Button>
+                  <p className="mt-2 text-xs text-basalt/45">Opens a conversation in your inbox. Keep bookings and payments on Revamp.</p>
+                </section>
+              )}
 
               {/* Cancel */}
               {canCancel && (

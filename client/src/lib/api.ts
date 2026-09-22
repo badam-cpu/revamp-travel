@@ -244,6 +244,18 @@ export async function sendInboxMessage(conversationId: string, body: string): Pr
   return res.message;
 }
 
+/** Admin moderation for the unified inbox: redact a message, or close/reopen a thread. */
+export async function moderateInbox(input: { action: "redact" | "close" | "reopen"; messageId?: string; conversationId?: string }): Promise<{ ok: boolean }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<{ ok: boolean }>("/api/admin-moderate", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(input),
+  });
+}
+
 /** A guest optionally leaves an email/name so Revamp can follow up after they leave. */
 export async function submitSupportContact(email: string, name?: string): Promise<{ ok: boolean }> {
   const { data } = await supabase.auth.getSession();

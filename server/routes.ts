@@ -19,7 +19,7 @@ import { generateSupportReply, type SupportTurn } from "./support.js";
 import { generateOperatorReply, type OperatorTurn } from "./operatorAssistant.js";
 import { scanMessage } from "./messaging.js";
 import { payoutState } from "../shared/payouts.js";
-import { sendCancellation, sendSupportAlert, type BookingEmailInfo } from "./email.js";
+import { sendCancellation, sendSupportAlert, sendNewMessage, type BookingEmailInfo } from "./email.js";
 import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, promoDiscount, addonUnitCost, nightsBetween, type Addon, DEFAULT_CURRENCY } from "../shared/bookings.js";
 import { planTrip, PlannerError } from "./planner.js";
 import { fetchPrefill, PrefillError } from "./urlPrefill.js";
@@ -115,6 +115,12 @@ const messageThreadSchema = z.object({
 const messageSendSchema = z.object({
   conversationId: z.string().uuid(),
   body: z.string().trim().min(1).max(4000),
+});
+
+const adminModerateSchema = z.object({
+  action: z.enum(["redact", "close", "reopen"]),
+  messageId: z.string().uuid().optional(),
+  conversationId: z.string().uuid().optional(),
 });
 
 const operatorAssistantSchema = z.object({
@@ -958,6 +964,15 @@ export function registerApiRoutes(app: Express) {
     if (hits.length >= 20) return res.status(429).json({ error: "You're sending messages very quickly — give it a few seconds and try again." });
 
     try {
+      // The conversation must exist and be open.
+      const { data: convo } = await admin
+        .from("conversations")
+        .select("id, status, listing_id, listings(title)")
+        .eq("id", parsed.data.conversationId)
+        .maybeSingle();
+      if (!convo) return res.status(404).json({ error: "Conversation not found." });
+      if ((convo as { status?: string }).status === "closed") return res.status(403).json({ error: "This conversation has been closed by Revamp." });
+
       // Determine the caller's role in this conversation. A participant posts as
       // their own role; an admin who isn't a participant posts as 'support'.
       const { data: part } = await admin
@@ -988,9 +1003,75 @@ export function registerApiRoutes(app: Express) {
       hits.push(now);
       messageSendHits.set(userId, hits);
       res.json({ message: msg });
+
+      // Best-effort email notification to the OTHER participants — after responding
+      // so it never delays the send. Skips muted participants and anyone active in
+      // the last 5 min (avoids pinging someone mid-conversation).
+      try {
+        const senderName =
+          senderRole === "support"
+            ? "Revamp"
+            : (await admin.from("profiles").select("display_name, business_name").eq("id", userId).maybeSingle()).data?.business_name ||
+              (await admin.from("profiles").select("display_name").eq("id", userId).maybeSingle()).data?.display_name ||
+              "Someone";
+        const { data: recips } = await admin
+          .from("conversation_participants")
+          .select("user_id, role, muted, last_read_at")
+          .eq("conversation_id", parsed.data.conversationId)
+          .neq("user_id", userId);
+        const listingTitle = (convo as { listings?: { title?: string } | null }).listings?.title;
+        const snippet = parsed.data.body.length > 140 ? `${parsed.data.body.slice(0, 140)}…` : parsed.data.body;
+        const activeCutoff = Date.now() - 5 * 60_000;
+        for (const r of recips ?? []) {
+          const rr = r as { user_id: string; role: string; muted: boolean; last_read_at: string | null };
+          if (rr.muted || rr.role === "support") continue;
+          if (rr.last_read_at && Date.parse(rr.last_read_at) > activeCutoff) continue;
+          const { data: u } = await admin.auth.admin.getUserById(rr.user_id);
+          const to = u?.user?.email;
+          if (to) await sendNewMessage(to, { fromName: String(senderName), listingTitle, snippet, recipientRole: rr.role === "operator" ? "operator" : "traveler" });
+        }
+      } catch (emailErr) {
+        console.error("[message-send] notify failed", emailErr);
+      }
     } catch (err) {
       console.error("[message-send]", err);
       res.status(500).json({ error: "Couldn't send your message. Please try again." });
+    }
+  });
+
+  // POST /api/admin-moderate — admin-only moderation for the unified inbox:
+  // redact a message, or close/reopen a conversation (a closed conversation
+  // rejects new sends). Service-role writes, gated by an admin role check.
+  app.post("/api/admin-moderate", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+
+    const parsed = adminModerateSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+
+    const { data: prof } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (prof?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+
+    try {
+      if (parsed.data.action === "redact") {
+        if (!parsed.data.messageId) return res.status(400).json({ error: "messageId required." });
+        const { error } = await admin.from("messages").update({ redacted: true }).eq("id", parsed.data.messageId);
+        if (error) throw new Error(error.message);
+      } else {
+        if (!parsed.data.conversationId) return res.status(400).json({ error: "conversationId required." });
+        const status = parsed.data.action === "close" ? "closed" : "open";
+        const { error } = await admin.from("conversations").update({ status }).eq("id", parsed.data.conversationId);
+        if (error) throw new Error(error.message);
+      }
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[admin-moderate]", err);
+      res.status(500).json({ error: "Couldn't apply that action. Please try again." });
     }
   });
 }

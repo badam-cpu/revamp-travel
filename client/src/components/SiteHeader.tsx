@@ -9,6 +9,7 @@ import { CurrencyToggle } from "./CurrencyToggle";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 
 const baseLinks = [
   { href: "/explore/stay", label: "Stay" },
@@ -28,6 +29,7 @@ const baseLinks = [
 export function SiteHeader({ minimal = false, flush = false, wide = false }: { minimal?: boolean; flush?: boolean; wide?: boolean } = {}) {
   const [location] = useLocation();
   const { user, profile, signOut } = useAuth();
+  const unread = useUnreadMessages();
 
   const links = useMemo(() => {
     if (minimal) return [];
@@ -84,9 +86,13 @@ export function SiteHeader({ minimal = false, flush = false, wide = false }: { m
             <>
               <Link
                 href="/account?tab=profile"
-                className="inline-flex items-center gap-1.5 pl-1 pr-2 text-xs font-semibold text-basalt/60 transition-colors hover:text-basalt"
+                className="relative inline-flex items-center gap-1.5 pl-1 pr-2 text-xs font-semibold text-basalt/60 transition-colors hover:text-basalt"
               >
-                <User className="h-3.5 w-3.5" /> {profile?.displayName || "Account"}
+                <span className="relative">
+                  <User className="h-3.5 w-3.5" />
+                  {unread > 0 && <span className="absolute -right-1.5 -top-1.5 h-2 w-2 rounded-full bg-apricot ring-2 ring-paper" />}
+                </span>
+                {profile?.displayName || "Account"}
               </Link>
               <Button variant="ghost" size="sm" className="rounded-none text-basalt/70 hover:text-basalt" onClick={handleSignOut}>
                 <LogOut className="mr-2 h-3.5 w-3.5" /> Sign out
@@ -142,7 +148,7 @@ export function SiteHeader({ minimal = false, flush = false, wide = false }: { m
                 {user ? (
                   <div className="flex items-center justify-between text-sm text-paper/70">
                     <SheetClose asChild>
-                      <Link href="/account?tab=profile" className="inline-flex items-center gap-1.5 font-semibold hover:text-white"><User className="h-3.5 w-3.5" /> {profile?.displayName || "Account"}</Link>
+                      <Link href="/account?tab=profile" className="inline-flex items-center gap-1.5 font-semibold hover:text-white"><User className="h-3.5 w-3.5" /> {profile?.displayName || "Account"}{unread > 0 && <span className="ml-1 grid h-5 min-w-5 place-items-center rounded-full bg-apricot px-1.5 text-[10px] font-bold text-white">{unread}</span>}</Link>
                     </SheetClose>
                     <SheetClose asChild>
                       <button onClick={handleSignOut} className="inline-flex items-center gap-1.5 font-semibold text-apricot">

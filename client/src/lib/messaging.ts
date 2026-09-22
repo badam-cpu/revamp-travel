@@ -30,6 +30,7 @@ export interface InboxConversation {
   listingId: string | null;
   bookingId: string | null;
   lastMessageAt: string;
+  status: "open" | "closed";
   listing: { title: string; slug: string | null; image: string | null } | null;
   /** Who the current user is talking to (first other participant). */
   counterpart: { name: string; logo: string | null } | null;
@@ -59,7 +60,7 @@ export async function listConversations(userId: string): Promise<InboxConversati
   const { data: convos, error } = await supabase
     .from("conversations")
     .select(
-      "id, kind, listing_id, booking_id, last_message_at, conversation_participants(user_id, role, last_read_at), listings(title, slug, image)",
+      "id, kind, listing_id, booking_id, last_message_at, status, conversation_participants(user_id, role, last_read_at), listings(title, slug, image)",
     )
     .order("last_message_at", { ascending: false })
     .limit(100);
@@ -110,6 +111,7 @@ export async function listConversations(userId: string): Promise<InboxConversati
       listingId: c.listing_id,
       bookingId: c.booking_id,
       lastMessageAt: c.last_message_at,
+      status: c.status === "closed" ? "closed" : "open",
       listing: c.listings ? { title: c.listings.title, slug: c.listings.slug ?? null, image: c.listings.image ?? null } : null,
       counterpart: cp,
       parties: parts.map((p: any) => ({ name: profMap.get(p.user_id)?.name ?? "Someone", role: p.role })),
@@ -138,5 +140,19 @@ export async function markConversationRead(conversationId: string, userId: strin
     .update({ last_read_at: new Date().toISOString() })
     .eq("conversation_id", conversationId)
     .eq("user_id", userId);
+  // Let the header's unread badge refresh promptly (see useUnreadMessages).
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("revamp:messages-read"));
+}
+
+/** Total unread messages across the user's conversations — powers the header badge. */
+export async function getUnreadTotal(userId: string): Promise<number> {
+  const { data: parts } = await supabase.from("conversation_participants").select("conversation_id, last_read_at").eq("user_id", userId);
+  if (!parts?.length) return 0;
+  const ids = parts.map((p: any) => p.conversation_id);
+  const readMap = new Map<string, number>(parts.map((p: any) => [p.conversation_id, p.last_read_at ? Date.parse(p.last_read_at) : 0]));
+  const { data: msgs } = await supabase.from("messages").select("conversation_id, created_at, sender_id").in("conversation_id", ids).limit(2000);
+  let n = 0;
+  for (const m of msgs ?? []) if (m.sender_id !== userId && Date.parse(m.created_at) > (readMap.get(m.conversation_id) ?? 0)) n++;
+  return n;
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */

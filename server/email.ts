@@ -232,6 +232,24 @@ export function sendReviewRequest(
   return send(to, `How was your ${noun}?`, html);
 }
 
+/** Notify an inbox participant that they received a new message (unified inbox). */
+export function sendNewMessage(
+  to: string,
+  opts: { fromName: string; listingTitle?: string; snippet: string; recipientRole: "traveler" | "operator" },
+) {
+  const site = SITE();
+  const dest = opts.recipientRole === "operator" ? `${site}/dashboard?section=messages` : `${site}/account?tab=messages`;
+  const html = shell(
+    `New message from ${esc(opts.fromName)}`,
+    `${opts.listingTitle ? `<p style="font-size:13px;color:#6B6357;margin:0 0 8px;">Re: ${esc(opts.listingTitle)}</p>` : ""}
+     <p style="font-size:15px;line-height:1.6;margin:0 0 14px;padding:12px 14px;background:#f6f3ec;border-radius:8px;">${esc(opts.snippet)}</p>
+     <p style="margin:0 0 8px;"><a href="${esc(dest)}" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Reply on Revamp</a></p>
+     <p style="font-size:12px;color:#8B8478;margin:8px 0 0;">Keep the conversation on Revamp so your booking stays protected.</p>`,
+    site,
+  );
+  return send(to, `New message from ${opts.fromName}`, html);
+}
+
 /** Alert an admin that a support chat needs a human reply. */
 export function sendSupportAlert(to: string, opts: { travelerName: string; message: string }) {
   const site = SITE();
