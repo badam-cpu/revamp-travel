@@ -28,6 +28,7 @@ function inline(text: string): string {
   let t = text;
   t = t.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_m, alt, u) => `<img src="${safeUrl(u)}" alt="${alt}" loading="lazy" />`);
   t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, label, u) => `<a href="${safeUrl(u)}" target="_blank" rel="noopener noreferrer">${label}</a>`);
+  t = t.replace(/~~([^~]+)~~/g, "<del>$1</del>");
   t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   t = t.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
   t = t.replace(/(^|[^_])_([^_\n]+)_/g, "$1<em>$2</em>");

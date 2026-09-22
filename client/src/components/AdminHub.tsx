@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { slugify } from "@/lib/slug";
 import { renderMarkdown } from "@shared/markdown";
-import { Loader2, Pin } from "lucide-react";
+import { Loader2, Pin, Bold, Italic, Strikethrough, Link2, List, ListOrdered, Quote, Code, Heading2, Heading3, Image } from "lucide-react";
 import { listAllHubArticles, createHubArticle, updateHubArticle, deleteHubArticle, HUB_CATEGORIES, hubCategoryLabel, type HubArticle, type HubArticleInput, type HubCategory } from "@/lib/hub";
 
 const BLANK: HubArticleInput = { category: "listing_quality", slug: "", title: "", excerpt: "", body: "", status: "draft", pinned: false };
@@ -87,6 +87,67 @@ function Editor({ existing, onDone }: { existing: HubArticle | null; onDone: () 
   const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const publishedAt = useRef(existing?.publishedAt ?? null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+
+  // --- Formatting toolbar: insert Markdown around the current selection. ---
+  const restoreSelection = (el: HTMLTextAreaElement, start: number, end: number) => {
+    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(start, end); });
+  };
+  // Wrap the selection with `before`/`after` (e.g. **bold**). No selection → caret lands between.
+  const wrap = (before: string, after = before, placeholder = "") => {
+    const el = bodyRef.current;
+    if (!el) return;
+    const { selectionStart: s, selectionEnd: e, value } = el;
+    const sel = value.slice(s, e) || placeholder;
+    const next = value.slice(0, s) + before + sel + after + value.slice(e);
+    setBody(next);
+    restoreSelection(el, s + before.length, s + before.length + sel.length);
+  };
+  // Prefix each selected line (headings, lists, quote). `prefix` may vary by row.
+  const linePrefix = (prefix: string | ((i: number) => string)) => {
+    const el = bodyRef.current;
+    if (!el) return;
+    const { selectionStart: s, selectionEnd: e, value } = el;
+    const from = value.lastIndexOf("\n", s - 1) + 1;
+    let to = value.indexOf("\n", e);
+    if (to === -1) to = value.length;
+    const block = value.slice(from, to) || "";
+    const lines = block.split("\n");
+    const newBlock = lines.map((ln, i) => (typeof prefix === "function" ? prefix(i) : prefix) + ln).join("\n");
+    const next = value.slice(0, from) + newBlock + value.slice(to);
+    setBody(next);
+    restoreSelection(el, from, from + newBlock.length);
+  };
+  const insertLink = () => {
+    const url = window.prompt("Link URL (https://…)");
+    if (!url) return;
+    wrap("[", `](${url.trim()})`, "link text");
+  };
+  const insertImage = () => {
+    const url = window.prompt("Image URL (https://… or /images/…)");
+    if (!url) return;
+    wrap("![", `](${url.trim()})`, "alt text");
+  };
+
+  const TB_BTN = "grid h-8 w-8 place-items-center border border-basalt/12 bg-paper text-basalt/70 hover:border-apricot hover:text-apricot";
+  const toolbar = (
+    <div className="flex flex-wrap items-center gap-1">
+      <button type="button" title="Heading" onClick={() => linePrefix("## ")} className={TB_BTN}><Heading2 className="h-4 w-4" /></button>
+      <button type="button" title="Subheading" onClick={() => linePrefix("### ")} className={TB_BTN}><Heading3 className="h-4 w-4" /></button>
+      <span className="mx-0.5 h-5 w-px bg-basalt/12" />
+      <button type="button" title="Bold" onClick={() => wrap("**", "**", "bold text")} className={TB_BTN}><Bold className="h-4 w-4" /></button>
+      <button type="button" title="Italic" onClick={() => wrap("*", "*", "italic text")} className={TB_BTN}><Italic className="h-4 w-4" /></button>
+      <button type="button" title="Strikethrough" onClick={() => wrap("~~", "~~", "struck text")} className={TB_BTN}><Strikethrough className="h-4 w-4" /></button>
+      <button type="button" title="Inline code" onClick={() => wrap("`", "`", "code")} className={TB_BTN}><Code className="h-4 w-4" /></button>
+      <span className="mx-0.5 h-5 w-px bg-basalt/12" />
+      <button type="button" title="Bulleted list" onClick={() => linePrefix("- ")} className={TB_BTN}><List className="h-4 w-4" /></button>
+      <button type="button" title="Numbered list" onClick={() => linePrefix((i) => `${i + 1}. `)} className={TB_BTN}><ListOrdered className="h-4 w-4" /></button>
+      <button type="button" title="Quote" onClick={() => linePrefix("> ")} className={TB_BTN}><Quote className="h-4 w-4" /></button>
+      <span className="mx-0.5 h-5 w-px bg-basalt/12" />
+      <button type="button" title="Link" onClick={insertLink} className={TB_BTN}><Link2 className="h-4 w-4" /></button>
+      <button type="button" title="Image" onClick={insertImage} className={TB_BTN}><Image className="h-4 w-4" /></button>
+    </div>
+  );
 
   useEffect(() => {
     if (!slugTouched) setSlug(slugify(title));
@@ -148,7 +209,10 @@ function Editor({ existing, onDone }: { existing: HubArticle | null; onDone: () 
               <p className="min-h-[20rem] border border-dashed border-basalt/20 bg-chalk/40 p-5 text-sm text-basalt/50">Nothing to preview yet.</p>
             )
           ) : (
-            <Textarea rows={16} value={body} onChange={(e) => setBody(e.target.value)} className="rounded-none font-mono text-sm" />
+            <div className="grid gap-2">
+              {toolbar}
+              <Textarea ref={bodyRef} rows={16} value={body} onChange={(e) => setBody(e.target.value)} className="rounded-none font-mono text-sm" />
+            </div>
           )}
           <p className="text-xs text-basalt/45">Use <code className="bg-basalt/[0.06] px-1">## Heading</code> for section titles and <code className="bg-basalt/[0.06] px-1">- item</code> for bullet lists. Paste the <strong>raw</strong> Markdown, not copied-and-formatted text, or headings and bullets flatten into plain paragraphs. Check <strong>Preview</strong> before publishing.</p>
         </div>
