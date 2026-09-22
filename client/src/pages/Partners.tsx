@@ -181,6 +181,9 @@ export default function Partners() {
               <ul className="mt-9 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {services.map((s) => (
                   <li key={s.name} className="rounded-none border border-basalt/12 bg-paper p-6">
+                    {s.logo ? (
+                      <img src={s.logo} alt={s.name} className="mb-3 h-10 w-auto max-w-[160px] object-contain" />
+                    ) : null}
                     <p className="font-display text-xl leading-tight">{s.name}</p>
                     <p className="mt-2 text-sm leading-6 text-basalt/60">{s.blurb}</p>
                     {s.url && (

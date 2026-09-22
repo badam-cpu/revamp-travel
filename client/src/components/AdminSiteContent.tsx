@@ -51,6 +51,15 @@ const EMPTY_HOME = {
 
 type RegionCard = { id: string; name: string; label: string; image: string };
 
+const CONTENT_TABS = [
+  { key: "hero", label: "Hero & featured" },
+  { key: "home", label: "Home sections" },
+  { key: "pages", label: "Pages" },
+  { key: "addons", label: "Add-ons" },
+  { key: "global", label: "Site-wide" },
+] as const;
+type ContentTab = (typeof CONTENT_TABS)[number]["key"];
+
 export function AdminSiteContent() {
   const { settings, loading, loaded, refresh } = useSiteSettings();
   const { listings } = useListings();
@@ -70,15 +79,17 @@ export function AdminSiteContent() {
   const [home, setHome] = useState(EMPTY_HOME);
   const [regionCards, setRegionCards] = useState<RegionCard[]>([]);
   const [faq, setFaq] = useState<{ id: string; q: string; a: string }[]>([]);
-  const [partners, setPartners] = useState<{ id: string; name: string; blurb: string; url: string }[]>([]);
+  const [partners, setPartners] = useState<{ id: string; name: string; blurb: string; url: string; logo: string }[]>([]);
   const [featuredOps, setFeaturedOps] = useState<string[]>([]);
   const [operatorOptions, setOperatorOptions] = useState<{ id: string; name: string; count: number }[]>([]);
   const regionPhotoRefs = useRef<Map<string, PhotoUploaderHandle | null>>(new Map());
   const catPhotoRefs = useRef<Map<string, PhotoUploaderHandle | null>>(new Map());
   const addonPhotoRefs = useRef<Map<string, PhotoUploaderHandle | null>>(new Map());
+  const partnerPhotoRefs = useRef<Map<string, PhotoUploaderHandle | null>>(new Map());
   const [addons, setAddons] = useState<Addon[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<ContentTab>("hero");
 
   // Seed the form only after a SUCCESSFUL load (loaded), never merely when
   // loading finished — a failed load must not seed defaults into the form, or a
@@ -113,7 +124,7 @@ export function AdminSiteContent() {
     const seedRegions = h.regionCards && h.regionCards.length ? h.regionCards : HOME_REGIONS;
     setRegionCards(seedRegions.map((r) => ({ id: crypto.randomUUID(), name: r.name ?? "", label: r.label ?? "", image: (r as { image?: string }).image ?? "" })));
     setFaq((h.faq ?? []).map((f) => ({ id: crypto.randomUUID(), q: f.q ?? "", a: f.a ?? "" })));
-    setPartners((h.partners ?? DEFAULT_SERVICE_PARTNERS).map((p) => ({ id: crypto.randomUUID(), name: p.name ?? "", blurb: p.blurb ?? "", url: p.url ?? "" })));
+    setPartners((h.partners ?? DEFAULT_SERVICE_PARTNERS).map((p) => ({ id: crypto.randomUUID(), name: p.name ?? "", blurb: p.blurb ?? "", url: p.url ?? "", logo: p.logo ?? "" })));
     setFeaturedOps(h.featuredOperatorIds ?? []);
     setAddons(settings.addons ?? []);
     setHydrated(true);
@@ -156,8 +167,11 @@ export function AdminSiteContent() {
 
   const toggleFeaturedOp = (id: string) => setFeaturedOps((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const updatePartner = (id: string, key: "name" | "blurb" | "url", val: string) => setPartners((prev) => prev.map((p) => (p.id === id ? { ...p, [key]: val } : p)));
-  const removePartner = (id: string) => setPartners((prev) => prev.filter((p) => p.id !== id));
-  const addPartner = () => setPartners((prev) => [...prev, { id: crypto.randomUUID(), name: "", blurb: "", url: "" }]);
+  const removePartner = (id: string) => {
+    partnerPhotoRefs.current.delete(id);
+    setPartners((prev) => prev.filter((p) => p.id !== id));
+  };
+  const addPartner = () => setPartners((prev) => [...prev, { id: crypto.randomUUID(), name: "", blurb: "", url: "", logo: "" }]);
 
   const toggleFeatured = (slug: string) =>
     setFeaturedSlugs((prev) => (prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]));
@@ -257,7 +271,14 @@ export function AdminSiteContent() {
             footerSubcopy: home.footerSubcopy.trim(),
             faq: faq.map((f) => ({ q: f.q.trim(), a: f.a.trim() })).filter((f) => f.q && f.a),
             featuredOperatorIds: featuredOps,
-            partners: partners.map((p) => ({ name: p.name.trim(), blurb: p.blurb.trim(), url: p.url.trim() || undefined })).filter((p) => p.name && p.blurb),
+            partners: partners
+              .map((p) => ({
+                name: p.name.trim(),
+                blurb: p.blurb.trim(),
+                url: p.url.trim() || undefined,
+                logo: partnerPhotoRefs.current.get(p.id)?.getValue()[0] ?? p.logo ?? "",
+              }))
+              .filter((p) => p.name && p.blurb),
           },
         })
         .eq("id", 1);
@@ -301,9 +322,24 @@ export function AdminSiteContent() {
         </div>
       )}
 
+      {/* Category tabs — every section stays mounted (just hidden) so the save,
+          which reads uncontrolled inputs + PhotoUploader refs, still sees them. */}
+      <div className="mt-8 flex flex-wrap gap-1 border-b border-basalt/10">
+        {CONTENT_TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            className={`rounded-none border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${tab === t.key ? "border-apricot text-basalt" : "border-transparent text-basalt/50 hover:text-basalt"}`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       <div className="mt-8 grid max-w-3xl gap-8">
         {/* Hero */}
-        <div className="grid gap-4 border border-basalt/10 bg-paper p-5">
+        <div hidden={tab !== "hero"} className="grid gap-4 border border-basalt/10 bg-paper p-5">
           <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Home hero</p>
           <div className="grid gap-2">
             <Label className="text-sm font-semibold">Hero photos <span className="font-normal text-basalt/45">(add several — they cross-fade automatically)</span></Label>
@@ -325,7 +361,7 @@ export function AdminSiteContent() {
         </div>
 
         {/* Featured */}
-        <div className="grid gap-3 border border-basalt/10 bg-paper p-5">
+        <div hidden={tab !== "hero"} className="grid gap-3 border border-basalt/10 bg-paper p-5">
           <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Featured listings</p>
           <p className="text-xs text-basalt/50">Pick which published listings appear in the home “Featured” row — up to 8 are shown (leave all unchecked for the automatic pick).</p>
           {published.length === 0 ? (
@@ -378,7 +414,7 @@ export function AdminSiteContent() {
         </div>
 
         {/* Announcement */}
-        <div className="grid gap-4 border border-basalt/10 bg-paper p-5">
+        <div hidden={tab !== "global"} className="grid gap-4 border border-basalt/10 bg-paper p-5">
           <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Announcement banner</p>
           <label className="flex items-center gap-3 text-sm">
             <Checkbox
@@ -400,7 +436,7 @@ export function AdminSiteContent() {
         </div>
 
         {/* Display currency */}
-        <div className="grid gap-2 border border-basalt/10 bg-paper p-5">
+        <div hidden={tab !== "global"} className="grid gap-2 border border-basalt/10 bg-paper p-5">
           <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Display currency</p>
           <p className="text-xs text-basalt/50">Prices settle in USD; this rate powers the AMD/USD switcher (display only). Set 0 to hide AMD.</p>
           <Label htmlFor="usdToAmd" className="text-sm font-semibold">AMD per 1 USD</Label>
@@ -409,7 +445,7 @@ export function AdminSiteContent() {
         </div>
 
         {/* Home "choose the route" section */}
-        <div className="grid gap-4 border border-basalt/10 bg-paper p-5">
+        <div hidden={tab !== "home"} className="grid gap-4 border border-basalt/10 bg-paper p-5">
           <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Home “choose the route” section</p>
           <div className="grid gap-2">
             <Label htmlFor="catEyebrow" className="text-sm font-semibold">Eyebrow</Label>
@@ -453,7 +489,7 @@ export function AdminSiteContent() {
         </div>
 
         {/* Concierge add-ons */}
-        <div className="grid gap-4 border border-basalt/10 bg-paper p-5">
+        <div hidden={tab !== "addons"} className="grid gap-4 border border-basalt/10 bg-paper p-5">
           <div>
             <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Concierge add-ons</p>
             <p className="mt-1 text-xs text-basalt/50">Extra services guests can add at checkout on stay listings. Toggle Enabled to show one to guests (Hidden keeps it here but off the checkout page). Needs a name and a price, or mark it "On request". Prices are in AMD. "On request" items show but aren't charged online.</p>
@@ -512,7 +548,7 @@ export function AdminSiteContent() {
         </div>
 
         {/* Home "the revamp. edit" (featured) section */}
-        <div className="grid gap-4 border border-basalt/10 bg-paper p-5">
+        <div hidden={tab !== "home"} className="grid gap-4 border border-basalt/10 bg-paper p-5">
           <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Home featured section</p>
           <div className="grid gap-2">
             <Label className="text-sm font-semibold">Eyebrow</Label>
@@ -526,7 +562,7 @@ export function AdminSiteContent() {
         </div>
 
         {/* Home regions section */}
-        <div className="grid gap-4 border border-basalt/10 bg-paper p-5">
+        <div hidden={tab !== "home"} className="grid gap-4 border border-basalt/10 bg-paper p-5">
           <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Home regions section</p>
           <div className="grid gap-2">
             <Label className="text-sm font-semibold">Eyebrow</Label>
@@ -574,7 +610,7 @@ export function AdminSiteContent() {
         </div>
 
         {/* Home map section */}
-        <div className="grid gap-4 border border-basalt/10 bg-paper p-5">
+        <div hidden={tab !== "home"} className="grid gap-4 border border-basalt/10 bg-paper p-5">
           <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Home map section</p>
           <div className="grid gap-2">
             <Label className="text-sm font-semibold">Eyebrow</Label>
@@ -592,7 +628,7 @@ export function AdminSiteContent() {
         </div>
 
         {/* Footer brand statement (site-wide) */}
-        <div className="grid gap-4 border border-basalt/10 bg-paper p-5">
+        <div hidden={tab !== "home"} className="grid gap-4 border border-basalt/10 bg-paper p-5">
           <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Footer statement <span className="font-normal normal-case tracking-normal text-basalt/45">(shown site-wide)</span></p>
           <div className="grid gap-2">
             <Label className="text-sm font-semibold">Tagline</Label>
@@ -606,7 +642,7 @@ export function AdminSiteContent() {
         </div>
 
         {/* FAQ (shown on /faq, with FAQ structured data for Google + AI) */}
-        <div className="grid gap-4 border border-basalt/10 bg-paper p-5">
+        <div hidden={tab !== "pages"} className="grid gap-4 border border-basalt/10 bg-paper p-5">
           <div>
             <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">FAQ <span className="font-normal normal-case tracking-normal text-basalt/45">(shown on /faq)</span></p>
             <p className="mt-1 text-xs text-basalt/50">Questions &amp; answers about booking and Armenia travel. Leave empty to use the built-in defaults. Answer engines (Google, ChatGPT, Perplexity) quote these directly — keep them factual.</p>
@@ -628,7 +664,7 @@ export function AdminSiteContent() {
         </div>
 
         {/* Partners page (/partners) — featured operators + services we use */}
-        <div className="grid gap-5 border border-basalt/10 bg-paper p-5">
+        <div hidden={tab !== "pages"} className="grid gap-5 border border-basalt/10 bg-paper p-5">
           <div>
             <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Partners page <span className="font-normal normal-case tracking-normal text-basalt/45">(shown on /partners)</span></p>
             <p className="mt-1 text-xs text-basalt/50">All published operators show automatically. Pin your "big names" here to move them to the top; the rest stay alphabetical.</p>
@@ -663,6 +699,17 @@ export function AdminSiteContent() {
                 <Input value={p.name} onChange={(e) => updatePartner(p.id, "name", e.target.value)} placeholder="Service name (e.g. PayLink)" className="rounded-none" />
                 <Textarea rows={2} value={p.blurb} onChange={(e) => updatePartner(p.id, "blurb", e.target.value)} placeholder="One factual line about what they do for Revamp." className="rounded-none text-base" />
                 <Input value={p.url} onChange={(e) => updatePartner(p.id, "url", e.target.value)} placeholder="https://… (optional)" className="rounded-none" />
+                <div className="grid gap-1">
+                  <Label className="text-xs font-semibold text-basalt/60">Logo <span className="font-normal text-basalt/45">(optional — only upload logos you have permission to use)</span></Label>
+                  <PhotoUploader
+                    key={hydrated ? `partner-${p.id}` : `partner-${p.id}-loading`}
+                    ref={(el) => {
+                      if (el) partnerPhotoRefs.current.set(p.id, el);
+                      else partnerPhotoRefs.current.delete(p.id);
+                    }}
+                    defaultValue={p.logo ? [p.logo] : []}
+                  />
+                </div>
               </div>
             ))}
             <Button type="button" variant="outline" size="sm" onClick={addPartner} className="rounded-none border-basalt/20">+ Add service</Button>

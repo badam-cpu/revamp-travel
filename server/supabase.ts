@@ -281,13 +281,13 @@ export async function getPartnerOperators(): Promise<{ name: string; total: numb
 
 /** Admin-edited "services we use" partners from site_settings.home_content.partners,
  *  for the /partners prerender. Falls back to a factual PayLink line. */
-export async function getSitePartners(): Promise<{ name: string; blurb: string; url?: string }[]> {
+export async function getSitePartners(): Promise<{ name: string; blurb: string; url?: string; logo?: string }[]> {
   const fallback = [{ name: "PayLink", blurb: "Secure online card payments for every booking, processed by PayLink (Ameriabank).", url: "https://www.ameriabank.am" }];
   if (!client) return fallback;
   try {
     const { data } = await client.from("site_settings").select("home_content").eq("id", 1).maybeSingle();
-    const partners = (data?.home_content as { partners?: { name?: string; blurb?: string; url?: string }[] } | null)?.partners;
-    const clean = Array.isArray(partners) ? partners.filter((p) => p?.name?.trim() && p?.blurb?.trim()).map((p) => ({ name: p.name!, blurb: p.blurb!, url: p.url })) : [];
+    const partners = (data?.home_content as { partners?: { name?: string; blurb?: string; url?: string; logo?: string }[] } | null)?.partners;
+    const clean = Array.isArray(partners) ? partners.filter((p) => p?.name?.trim() && p?.blurb?.trim()).map((p) => ({ name: p.name!, blurb: p.blurb!, url: p.url, logo: p.logo })) : [];
     return clean.length ? clean : fallback;
   } catch {
     return fallback;

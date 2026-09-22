@@ -93,6 +93,9 @@
 
 @layer base {
   * { @apply border-border outline-ring/50; }
+  /* The `hidden` HTML attribute must win over display utilities like `grid`
+     (equal specificity → source order would otherwise let the class show it). */
+  [hidden] { display: none !important; }
   html { scroll-behavior: smooth; }
   body { @apply bg-background font-sans text-foreground antialiased; overflow-x: hidden; }
   ::selection { background: rgb(241 88 34 / 24%); }

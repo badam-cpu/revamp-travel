@@ -63,6 +63,8 @@ export interface ServicePartner {
   name: string;
   blurb: string;
   url?: string;
+  /** Optional logo URL (admin-uploaded; the admin is responsible for permission). */
+  logo?: string;
 }
 
 /** Seed for the /partners services strip until an admin edits it. Only lists

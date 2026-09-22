@@ -387,7 +387,7 @@ async function renderPartners(origin: string): Promise<string> {
 <h2>Hosts &amp; operators</h2>
 ${operators.length ? `<ul>${operators.map((o) => `<li>${escapeHtml(o.name)} — ${o.total} listing${o.total === 1 ? "" : "s"}</li>`).join("")}</ul>` : "<p>Operators appear here as listings go live.</p>"}
 <h2>Services we use</h2>
-${partners.map((p) => `<section><h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.blurb)}</p></section>`).join("\n")}
+${partners.map((p) => `<section>${p.logo ? `<img src="${escapeHtml(p.logo)}" alt="${escapeHtml(p.name)}" />` : ""}<h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.blurb)}</p></section>`).join("\n")}
 <p><a href="${origin}/signup">Become an operator</a></p>`;
 
   return renderPageShell({
