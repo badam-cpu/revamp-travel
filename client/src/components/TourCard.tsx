@@ -7,7 +7,7 @@
  * so the card leads with information that's actually true instead.
  */
 import { useState } from "react";
-import { Bookmark, ChevronLeft, ChevronRight, Clock, Gauge, MapPin, Users } from "lucide-react";
+import { Bookmark, ChevronLeft, ChevronRight, Clock, Gauge, MapPin, Star, Users } from "lucide-react";
 import { Link } from "wouter";
 import { Listing } from "@/data/listings";
 import { factValue } from "@/lib/tourFacts";
@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { imgAttrs } from "@/lib/responsiveImg";
 import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { useExternalRatings } from "@/hooks/useExternalRatings";
 import { DiscountBadge } from "@/components/DiscountBadge";
 
 export function TourCard({ listing }: { listing: Listing }) {
@@ -22,6 +23,8 @@ export function TourCard({ listing }: { listing: Listing }) {
   const [index, setIndex] = useState(0);
   const { isSaved, toggleSaved } = useSavedPlaces();
   const { format } = useCurrency();
+  const ratingFor = useExternalRatings();
+  const rating = ratingFor((listing as { operatorId?: string }).operatorId, listing.id);
   const saved = isSaved(listing.id);
   const priceLabel = listing.price > 0 ? format(Math.round(listing.price * 100)) : "Rate on request";
 
@@ -110,6 +113,12 @@ export function TourCard({ listing }: { listing: Listing }) {
           <p className="line-clamp-2 text-sm leading-6 text-basalt/58">{listing.shortDescription}</p>
 
           <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-basalt/10 pt-3 text-xs text-basalt/60">
+            {rating && (
+              <span className="inline-flex items-center gap-1 font-semibold text-basalt">
+                <Star className="h-3.5 w-3.5 fill-apricot text-apricot" /> {rating.avg.toFixed(1)}
+                <span className="font-normal text-basalt/45">({rating.count})</span>
+              </span>
+            )}
             {duration && (
               <span className="inline-flex items-center gap-1.5">
                 <Clock className="h-3.5 w-3.5 text-apricot" /> {duration}
