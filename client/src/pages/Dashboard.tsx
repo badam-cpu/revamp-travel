@@ -26,6 +26,7 @@ import { Link, useLocation, useSearch } from "wouter";
 import { AlertTriangle, ArrowLeft, ArrowRight, BookOpen, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, Pencil, Plus, Settings, Sparkles, Trash2, Wallet, X } from "lucide-react";
 import { Inbox } from "@/components/Inbox";
 import { PartnerHub } from "@/components/PartnerHub";
+import { PriceLabsConnect } from "@/components/PriceLabsConnect";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -1424,6 +1425,10 @@ function DashboardContent() {
                   <div>
                     <p className="mb-5 text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Profile</p>
                     <ProfileTab />
+                  </div>
+                  <div className="border-t border-basalt/10 pt-10">
+                    <p className="mb-5 text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Integrations</p>
+                    <PriceLabsConnect />
                   </div>
                   <div className="border-t border-basalt/10 pt-10">
                     <p className="mb-5 text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Security</p>
