@@ -169,6 +169,8 @@ const messageSendHits = new Map<string, number[]>();
 // Per-user caps for gift-card code lookups (anti-enumeration) and purchases (spam).
 const giftLookupHits = new Map<string, number[]>();
 const giftPurchaseHits = new Map<string, number[]>();
+// Per-IP cap for the public (unauthenticated) AI trip planner — protects the Anthropic bill.
+const planTripHits = new Map<string, number[]>();
 function rateLimited(map: Map<string, number[]>, key: string, max: number, windowMs = 60_000): boolean {
   const now = Date.now();
   const hits = (map.get(key) ?? []).filter((t) => t > now - windowMs);
@@ -279,6 +281,13 @@ export function registerApiRoutes(app: Express) {
   });
 
   app.post("/api/plan-trip", async (req: Request, res: Response) => {
+    // Public (no sign-in) but hits Anthropic — throttle per IP so it can't be
+    // hammered to run up the AI bill. trust proxy is set, so req.ip is the real client.
+    // 20/min/IP: generous enough that even a shared IP (café/office/mobile NAT)
+    // won't hit it in normal use, but still stops a runaway script cold.
+    if (rateLimited(planTripHits, req.ip || "unknown", 20)) {
+      return res.status(429).json({ error: "You're planning a lot of trips very fast — give it a minute and try again." });
+    }
     const parsed = planTripSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: issuesToMessage(parsed.error) });
