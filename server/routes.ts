@@ -1305,7 +1305,14 @@ export function registerApiRoutes(app: Express) {
     if (apiKey.length < 8) return res.status(400).json({ error: "Enter your PriceLabs API key." });
     try {
       const listings = await pricelabsListings(apiKey); // throws on a bad key
-      await ctx.admin.from("operator_secrets").upsert({ operator_id: ctx.userId, pricelabs_api_key: apiKey, updated_at: new Date().toISOString() }, { onConflict: "operator_id" });
+      const { error: storeErr } = await ctx.admin
+        .from("operator_secrets")
+        .upsert({ operator_id: ctx.userId, pricelabs_api_key: apiKey, updated_at: new Date().toISOString() }, { onConflict: "operator_id" });
+      if (storeErr) {
+        // Almost always: migration 0048 (operator_secrets) hasn't been run yet.
+        console.error("[pricelabs/connect] store failed", storeErr.message);
+        return res.status(500).json({ error: "Your key is valid, but couldn't be saved — the price-sync tables aren't set up yet (run migration 0048)." });
+      }
       res.json({ ok: true, listings });
     } catch (err) {
       res.status(400).json({ error: err instanceof Error ? err.message : "Couldn't connect to PriceLabs." });
