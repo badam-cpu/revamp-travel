@@ -14,10 +14,12 @@ import { z } from "zod";
 import { listPublishedForPlanner, verifyUser, userClient, getListingBusyRanges } from "./supabase.js";
 import { supabaseAdmin, adminConfigured } from "./supabaseAdmin.js";
 import { paylinkConfigured, registerPayment } from "./paylink.js";
-import { reconcileUserBookings, logBookingEvent } from "./bookings.js";
+import { reconcileUserBookings, logBookingEvent, finalizeConfirmedBooking } from "./bookings.js";
 import { generateSupportReply, type SupportTurn } from "./support.js";
 import { generateOperatorReply, type OperatorTurn } from "./operatorAssistant.js";
 import { scanMessage } from "./messaging.js";
+import { reserveGift, releaseGift, refundGiftForBooking, lookupRedeemableGift, reconcilePurchaserGiftCards } from "./giftcards.js";
+import { isAllowedGiftAmount } from "../shared/giftcards.js";
 import { payoutState } from "../shared/payouts.js";
 import { sendCancellation, sendSupportAlert, sendNewMessage, type BookingEmailInfo } from "./email.js";
 import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, promoDiscount, addonUnitCost, nightsBetween, type Addon, DEFAULT_CURRENCY } from "../shared/bookings.js";
@@ -76,6 +78,21 @@ const startCheckoutSchema = z.object({
   guestPhone: z.string().trim().max(40).optional(),
   // Selected concierge add-ons (priced server-side from the admin catalog).
   addons: z.array(z.object({ id: z.string().max(80), qty: z.number().int().min(1).max(20) })).max(20).optional(),
+  // Optional gift-card code to apply to this booking.
+  giftCode: z.string().trim().max(40).optional(),
+});
+
+const giftCardStartSchema = z.object({
+  amountCents: z.number().int().positive(),
+  recipientName: z.string().trim().min(1).max(120),
+  recipientEmail: z.string().trim().email().max(200),
+  message: z.string().trim().max(500).optional(),
+  // Must tick "I accept the terms" — recorded (with time + IP) for chargebacks.
+  acceptTerms: z.literal(true),
+});
+
+const giftLookupSchema = z.object({
+  code: z.string().trim().min(4).max(40),
 });
 
 const cancelBookingSchema = z.object({
@@ -461,53 +478,103 @@ export function registerApiRoutes(app: Express) {
 
     const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
     const currency = process.env.PAYLINK_CURRENCY || DEFAULT_CURRENCY;
+    const adminClient = supabaseAdmin();
+
+    // --- Optional gift-card redemption ---------------------------------
+    // Validate + reserve the applied amount up front (conditional decrement, so
+    // no double-spend). Released again on any path where the booking doesn't
+    // stand (register/insert failure, later payment failure, expiry). Gift cards
+    // are non-refundable, so a *cancelled confirmed* booking forfeits the gift.
+    let giftId: string | null = null;
+    let giftApplied = 0;
+    if (parsed.data.giftCode) {
+      if (!adminClient) return res.status(503).json({ error: "Gift cards aren't available right now." });
+      const look = await lookupRedeemableGift(adminClient, parsed.data.giftCode, currency);
+      if ("error" in look) return res.status(400).json({ error: look.error });
+      giftApplied = Math.min(look.balanceCents, finalTotalCents);
+      const reserved = await reserveGift(adminClient, look.id, giftApplied);
+      if (!reserved) return res.status(409).json({ error: "That gift card balance just changed — please try again." });
+      giftId = look.id;
+    }
+    const remainingCents = finalTotalCents - giftApplied;
+
+    // Shared booking fields. Snapshot the cancellation terms so a later listing
+    // change can't alter them.
+    const baseRow: Record<string, unknown> = {
+      listing_id: listingId,
+      traveler_id: userId,
+      start_date: startDate,
+      end_date: endDate,
+      guests,
+      amount_cents: finalTotalCents,
+      base_cents: charge.baseCents,
+      tax_cents: charge.taxCents,
+      addons: addonSnapshot,
+      addons_cents: addonsCents,
+      currency,
+      cancellation_policy: listing.cancellation_policy ?? "flexible",
+      free_cancel_days: listing.free_cancel_days ?? 7,
+      gift_card_id: giftId,
+      gift_applied_cents: giftApplied,
+    };
+    if (guestName || guestEmail || guestPhone) {
+      baseRow.guest_name = guestName || null;
+      baseRow.guest_email = guestEmail || null;
+      baseRow.guest_phone = guestPhone || null;
+    }
+
+    // Fully covered by the gift card → no PayLink charge; confirm server-side now.
+    if (remainingCents <= 0 && giftId && adminClient) {
+      const { data: created, error: insErr } = await adminClient
+        .from("bookings")
+        .insert({ ...baseRow, status: "confirmed", provider: "gift", paid_at: new Date().toISOString() })
+        .select("id")
+        .single();
+      if (insErr) {
+        await releaseGift(adminClient, giftId, giftApplied);
+        if ((insErr as { code?: string }).code === "23P01") return res.status(409).json({ error: "Those dates were just taken. Try different dates." });
+        console.error("[start-checkout] gift-covered insert failed", insErr.message);
+        return res.status(500).json({ error: "Couldn't record your booking." });
+      }
+      try {
+        await finalizeConfirmedBooking(adminClient, created.id);
+      } catch (e) {
+        console.error("[start-checkout] gift-covered finalize failed", e);
+      }
+      return res.json({ confirmed: true, fullyCovered: true, bookingId: created.id });
+    }
+
+    // Otherwise charge the remainder via PayLink.
     try {
       const pay = await registerPayment({
-        // PayLink's `amount` is in major currency units; charge the tax-inclusive
-        // total. AMD (our settlement currency) has no minor unit, so round to a
-        // whole dram — every stored *_cents value is AMD hundredths.
-        amount: currency === "AMD" ? Math.round(finalTotalCents / 100) : finalTotalCents / 100,
+        // PayLink's `amount` is in major currency units. AMD (our settlement
+        // currency) has no minor unit, so round to a whole dram — every stored
+        // *_cents value is AMD hundredths. Charge only the amount left after any gift.
+        amount: currency === "AMD" ? Math.round(remainingCents / 100) : remainingCents / 100,
         currency,
         returnUrl: `${site}/account?checkout=return`,
         info: `Revamp booking · ${listing.title}`,
       });
-      if (!pay.redirectUrl) return res.status(502).json({ error: "Couldn't start checkout." });
-
+      if (!pay.redirectUrl) {
+        if (giftId && adminClient) await releaseGift(adminClient, giftId, giftApplied);
+        return res.status(502).json({ error: "Couldn't start checkout." });
+      }
       // Insert the pending hold as the traveler (RLS allows own + pending only).
-      // Snapshot the cancellation terms so a later listing change can't alter them.
-      const bookingRow: Record<string, unknown> = {
-        listing_id: listingId,
-        traveler_id: userId,
-        start_date: startDate,
-        end_date: endDate,
-        guests,
-        amount_cents: finalTotalCents,
-        base_cents: charge.baseCents,
-        tax_cents: charge.taxCents,
-        addons: addonSnapshot,
-        addons_cents: addonsCents,
-        currency,
+      const { error: insErr } = await supa.from("bookings").insert({
+        ...baseRow,
         status: "pending_payment",
         provider: "paylink",
         paylink_request_id: pay.requestId,
         paylink_order_id: pay.orderId,
-        cancellation_policy: listing.cancellation_policy ?? "flexible",
-        free_cancel_days: listing.free_cancel_days ?? 7,
-      };
-      // Only touch the guest_* columns for an actual guest checkout, so a
-      // signed-in booking still works even if migration 0024 hasn't run yet.
-      if (guestName || guestEmail || guestPhone) {
-        bookingRow.guest_name = guestName || null;
-        bookingRow.guest_email = guestEmail || null;
-        bookingRow.guest_phone = guestPhone || null;
-      }
-      const { error: insErr } = await supa.from("bookings").insert(bookingRow);
+      });
       if (insErr) {
+        if (giftId && adminClient) await releaseGift(adminClient, giftId, giftApplied);
         console.error("[start-checkout] insert failed", insErr.message);
         return res.status(500).json({ error: "Couldn't record your booking." });
       }
       res.json({ redirectUrl: pay.redirectUrl });
     } catch (err) {
+      if (giftId && adminClient) await releaseGift(adminClient, giftId, giftApplied);
       console.error("[start-checkout]", err);
       res.status(502).json({ error: "Couldn't start checkout." });
     }
@@ -645,7 +712,7 @@ export function registerApiRoutes(app: Express) {
 
     const { data: booking } = await admin
       .from("bookings")
-      .select("id, listing_id, traveler_id, status, start_date, end_date, guests, amount_cents, currency, paid_at, cancellation_policy, free_cancel_days, guest_email")
+      .select("id, listing_id, traveler_id, status, start_date, end_date, guests, amount_cents, currency, paid_at, cancellation_policy, free_cancel_days, guest_email, gift_card_id, gift_applied_cents")
       .eq("id", parsed.data.bookingId)
       .maybeSingle();
     if (!booking) return res.status(404).json({ error: "Booking not found." });
@@ -672,7 +739,8 @@ export function registerApiRoutes(app: Express) {
     // Refund owed is computed from the policy SNAPSHOT on the booking (fair to
     // the traveler even if the listing changed since). PayLink has no refund
     // API, so this is what the operator issues by hand; we record it.
-    const refundCents = computeRefundCents(
+    const giftApplied = (booking as { gift_applied_cents?: number }).gift_applied_cents ?? 0;
+    let refundCents = computeRefundCents(
       {
         status: booking.status,
         paidAt: booking.paid_at,
@@ -683,6 +751,15 @@ export function registerApiRoutes(app: Express) {
       },
       new Date().toISOString(),
     );
+    // Gift cards are NON-REFUNDABLE. On a confirmed booking, only the cash the
+    // guest actually paid (total minus the gift portion) can be refunded per
+    // policy — the gift value is forfeited. (A never-completed pending hold is
+    // different: its gift reservation is released below, no cash was captured.)
+    if (booking.status === "confirmed") {
+      refundCents = Math.max(0, Math.min(refundCents, booking.amount_cents - giftApplied));
+    } else {
+      refundCents = 0;
+    }
     const refundOwed = refundCents > 0;
 
     const { data: upd, error: updErr } = await admin
@@ -694,6 +771,10 @@ export function registerApiRoutes(app: Express) {
     if (updErr || !upd || upd.length === 0) {
       return res.status(409).json({ error: "Couldn't cancel — it may have already changed." });
     }
+
+    // A never-completed pending hold releases its gift reservation (no purchase
+    // happened). A confirmed booking's gift is non-refundable → left forfeited.
+    if (booking.status === "pending_payment" && giftApplied > 0) await refundGiftForBooking(admin, booking.id);
 
     // Void the operator payout for this booking (unless it was already paid out).
     await admin.from("payouts").update({ status: "cancelled" }).eq("booking_id", booking.id).neq("status", "paid");
@@ -1117,5 +1198,96 @@ export function registerApiRoutes(app: Express) {
       console.error("[admin-set-role]", err);
       res.status(500).json({ error: "Couldn't change that account's role. Please try again." });
     }
+  });
+
+  // --- Gift cards ------------------------------------------------------
+  // POST /api/gift-card/start-checkout — buy a fixed-denomination gift card. The
+  // buyer must be signed in and must accept the terms (recorded with time + IP
+  // for chargebacks). Creates a pending card + a PayLink link; the card is only
+  // activated (code assigned, recipient emailed) once payment is server-verified.
+  app.post("/api/gift-card/start-checkout", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in to buy a gift card." });
+    if (!paylinkConfigured()) return res.status(503).json({ error: "Payments aren't available yet." });
+
+    const parsed = giftCardStartSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    if (!isAllowedGiftAmount(parsed.data.amountCents)) return res.status(400).json({ error: "Pick one of the available gift-card amounts." });
+
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Gift cards aren't available right now." });
+
+    const currency = process.env.PAYLINK_CURRENCY || DEFAULT_CURRENCY;
+    const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
+    const { data: buyer } = await admin.auth.admin.getUserById(userId);
+    try {
+      const pay = await registerPayment({
+        amount: currency === "AMD" ? Math.round(parsed.data.amountCents / 100) : parsed.data.amountCents / 100,
+        currency,
+        returnUrl: `${site}/gift-cards?purchase=return`,
+        info: `Revamp gift card · ${parsed.data.recipientName}`,
+      });
+      if (!pay.redirectUrl) return res.status(502).json({ error: "Couldn't start checkout." });
+
+      const { error: insErr } = await admin.from("gift_cards").insert({
+        status: "pending_payment",
+        initial_amount_cents: parsed.data.amountCents,
+        balance_cents: 0,
+        currency,
+        purchaser_id: userId,
+        purchaser_email: buyer?.user?.email ?? null,
+        recipient_name: parsed.data.recipientName,
+        recipient_email: parsed.data.recipientEmail,
+        message: parsed.data.message ?? null,
+        paylink_request_id: pay.requestId,
+        terms_accepted_at: new Date().toISOString(),
+        terms_ip: req.ip ?? null,
+      });
+      if (insErr) {
+        console.error("[gift-card/start] insert failed", insErr.message);
+        return res.status(500).json({ error: "Couldn't record your gift card." });
+      }
+      res.json({ redirectUrl: pay.redirectUrl });
+    } catch (err) {
+      console.error("[gift-card/start]", err);
+      res.status(502).json({ error: "Couldn't start checkout." });
+    }
+  });
+
+  // POST /api/gift-card/confirm — server-verified activation on the buyer's
+  // return (mirrors confirm-checkout). The reconcile cron also sweeps these.
+  app.post("/api/gift-card/confirm", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    try {
+      const r = await reconcilePurchaserGiftCards(admin, userId);
+      res.json({ activated: r.activated });
+    } catch (err) {
+      console.error("[gift-card/confirm]", err);
+      res.status(500).json({ error: "Couldn't confirm your purchase." });
+    }
+  });
+
+  // POST /api/gift-card/lookup — check a code's balance for redemption preview at
+  // booking checkout. Signed-in only (the booking flow is anyway).
+  app.post("/api/gift-card/lookup", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const parsed = giftLookupSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const currency = process.env.PAYLINK_CURRENCY || DEFAULT_CURRENCY;
+    const look = await lookupRedeemableGift(admin, parsed.data.code, currency);
+    if ("error" in look) return res.status(404).json({ error: look.error });
+    res.json({ balanceCents: look.balanceCents, currency: look.currency });
   });
 }

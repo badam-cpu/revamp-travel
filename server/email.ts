@@ -250,6 +250,42 @@ export function sendNewMessage(
   return send(to, `New message from ${opts.fromName}`, html);
 }
 
+/** To the recipient: they've received a Revamp gift card. */
+export function sendGiftCard(
+  to: string,
+  opts: { code: string; amountCents: number; currency: string; recipientName?: string; message?: string; expiresAt: string },
+) {
+  const site = SITE();
+  const expiry = prettyDate(opts.expiresAt.slice(0, 10));
+  const html = shell(
+    "You've received a Revamp gift card 🎁",
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 12px;">${opts.recipientName ? `Hi ${esc(opts.recipientName)}, ` : ""}someone sent you a Revamp Vacations gift card to spend on stays, tours, and experiences across Armenia.</p>
+     ${opts.message ? `<p style="font-size:14px;line-height:1.6;color:#6B6357;font-style:italic;margin:0 0 14px;padding:12px 14px;background:#f6f3ec;border-radius:8px;">“${esc(opts.message)}”</p>` : ""}
+     <div style="border:1px dashed #c9c2b4;border-radius:12px;padding:18px;text-align:center;margin:0 0 16px;">
+       <p style="font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:#8B8478;margin:0 0 6px;">Gift card value</p>
+       <p style="font-size:30px;font-weight:800;letter-spacing:-.02em;color:#212121;margin:0 0 10px;">${esc(money(opts.amountCents, opts.currency))}</p>
+       <p style="font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:#8B8478;margin:0 0 4px;">Your code</p>
+       <p style="font-size:22px;font-weight:700;letter-spacing:.08em;color:#F15822;margin:0;font-family:monospace;">${esc(opts.code)}</p>
+     </div>
+     <p style="margin:0 0 12px;"><a href="${esc(site)}/explore" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Browse & book</a></p>
+     <p style="font-size:13px;line-height:1.6;color:#6B6357;margin:0;">Enter your code at checkout to apply the balance. You can use it across multiple bookings until it runs out. Valid until <strong>${esc(expiry)}</strong>. Non-refundable and not exchangeable for cash.</p>`,
+    site,
+  );
+  return send(to, `You've received a ${money(opts.amountCents, opts.currency)} Revamp gift card`, html);
+}
+
+/** To the purchaser: their gift-card payment went through. */
+export function sendGiftReceipt(to: string, opts: { amountCents: number; currency: string; recipientName: string }) {
+  const site = SITE();
+  const html = shell(
+    "Your gift card is on its way 🎁",
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 6px;">Thanks for your purchase. A <strong>${esc(money(opts.amountCents, opts.currency))}</strong> Revamp gift card has been emailed to <strong>${esc(opts.recipientName)}</strong>.</p>
+     <p style="font-size:14px;line-height:1.6;color:#6B6357;margin:0;">They can redeem it at checkout on any stay, tour, or experience.</p>`,
+    site,
+  );
+  return send(to, "Your Revamp gift card purchase", html);
+}
+
 /** Alert an admin that a support chat needs a human reply. */
 export function sendSupportAlert(to: string, opts: { travelerName: string; message: string }) {
   const site = SITE();

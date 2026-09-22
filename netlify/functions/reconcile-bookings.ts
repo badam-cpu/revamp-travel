@@ -16,6 +16,7 @@
  */
 import { supabaseAdmin, adminConfigured } from "../../server/supabaseAdmin.js";
 import { reconcileAllPendingBookings, requestReviewsForCompleted } from "../../server/bookings.js";
+import { reconcileAllPendingGiftCards } from "../../server/giftcards.js";
 
 export const handler = async () => {
   if (!adminConfigured()) {
@@ -28,8 +29,10 @@ export const handler = async () => {
     const result = await reconcileAllPendingBookings(admin, { limit: 200 });
     // Also email travelers whose trip has ended, asking for a review (once each).
     const reviews = await requestReviewsForCompleted(admin, { limit: 200 });
-    console.log("[reconcile-bookings]", { ...result, reviewEmails: reviews.sent });
-    return { statusCode: 200, body: JSON.stringify({ ...result, reviewEmails: reviews.sent }) };
+    // Activate paid gift cards whose buyer never returned; expire stale holds.
+    const gifts = await reconcileAllPendingGiftCards(admin, { limit: 200 });
+    console.log("[reconcile-bookings]", { ...result, reviewEmails: reviews.sent, gifts });
+    return { statusCode: 200, body: JSON.stringify({ ...result, reviewEmails: reviews.sent, gifts }) };
   } catch (err) {
     console.error("[reconcile-bookings] failed", err);
     return { statusCode: 500, body: JSON.stringify({ error: String(err).slice(0, 200) }) };

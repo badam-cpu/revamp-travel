@@ -16,7 +16,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, Check, ExternalLink, Home, LayoutDashboard, ListChecks, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, Users, Wallet, X } from "lucide-react";
+import { AlertTriangle, Check, ExternalLink, Gift, Home, LayoutDashboard, ListChecks, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, Users, Wallet, X } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { AdminSiteContent } from "@/components/AdminSiteContent";
@@ -26,6 +26,7 @@ import { AdminBlog } from "@/components/AdminBlog";
 import { Inbox } from "@/components/Inbox";
 import { AdminListings } from "@/components/AdminListings";
 import { AdminAccounts } from "@/components/AdminAccounts";
+import { AdminGiftCards } from "@/components/AdminGiftCards";
 import { useAuth } from "@/contexts/AuthContext";
 import { RequireRole } from "@/components/RequireRole";
 import { Button } from "@/components/ui/button";
@@ -227,12 +228,13 @@ function StatTile({ n, label, onClick }: { n: number | string; label: string; on
   );
 }
 
-type AdminSection = "overview" | "reviews" | "listings" | "accounts" | "support" | "messages" | "payouts" | "blog" | "site";
+type AdminSection = "overview" | "reviews" | "listings" | "accounts" | "giftcards" | "support" | "messages" | "payouts" | "blog" | "site";
 const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: typeof Home }[] = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
   { key: "reviews", label: "Reviews", icon: ListChecks },
   { key: "listings", label: "Listings", icon: Package },
   { key: "accounts", label: "Accounts", icon: Users },
+  { key: "giftcards", label: "Gift cards", icon: Gift },
   { key: "support", label: "Support", icon: MessageSquare },
   { key: "messages", label: "All messages", icon: MessagesSquare },
   { key: "payouts", label: "Payouts", icon: Wallet },
@@ -325,6 +327,7 @@ function AdminConsole() {
             {section === "reviews" && <ReviewsPanel />}
             {section === "listings" && <AdminListings />}
             {section === "accounts" && <AdminAccounts />}
+            {section === "giftcards" && <AdminGiftCards />}
             {section === "support" && <AdminSupportInbox />}
             {section === "messages" && (
               <div>

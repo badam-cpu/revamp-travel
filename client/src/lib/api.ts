@@ -118,15 +118,51 @@ export interface StartCheckoutParams {
  * happens server-side after the traveler returns — see confirmCheckout.
  */
 export async function startCheckout(
-  params: StartCheckoutParams & { guestName?: string; guestEmail?: string; guestPhone?: string; addons?: { id: string; qty: number }[] },
-): Promise<{ redirectUrl: string }> {
+  params: StartCheckoutParams & { guestName?: string; guestEmail?: string; guestPhone?: string; addons?: { id: string; qty: number }[]; giftCode?: string },
+): Promise<{ redirectUrl?: string; confirmed?: boolean; fullyCovered?: boolean; bookingId?: string }> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new ApiError("Sign in to book.");
-  return request<{ redirectUrl: string }>("/api/start-checkout", {
+  return request<{ redirectUrl?: string; confirmed?: boolean; fullyCovered?: boolean; bookingId?: string }>("/api/start-checkout", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify(params),
+  });
+}
+
+/** Look up a gift-card code's remaining balance (for the checkout redemption preview). */
+export async function lookupGiftCard(code: string): Promise<{ balanceCents: number; currency: string }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<{ balanceCents: number; currency: string }>("/api/gift-card/lookup", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ code }),
+  });
+}
+
+/** Buy a gift card — returns a PayLink redirect URL. */
+export async function buyGiftCard(params: { amountCents: number; recipientName: string; recipientEmail: string; message?: string; acceptTerms: true }): Promise<{ redirectUrl: string }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in to buy a gift card.");
+  return request<{ redirectUrl: string }>("/api/gift-card/start-checkout", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(params),
+  });
+}
+
+/** Activate the buyer's paid gift card(s) on their return from PayLink. */
+export async function confirmGiftPurchase(): Promise<{ activated: number }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<{ activated: number }>("/api/gift-card/confirm", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({}),
   });
 }
 

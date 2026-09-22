@@ -27,7 +27,7 @@ import { useListings } from "@/contexts/ListingsContext";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
-import { startCheckout, ApiError } from "@/lib/api";
+import { startCheckout, lookupGiftCard, ApiError } from "@/lib/api";
 import { trackEvent } from "@/lib/analytics";
 import {
   computeBookingAmountCents,
@@ -78,6 +78,9 @@ export default function Checkout({ slug }: { slug: string }) {
   const [addonQty, setAddonQty] = useState<Record<string, number>>({});
   const [showAllAddons, setShowAllAddons] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [giftCode, setGiftCode] = useState("");
+  const [giftBalance, setGiftBalance] = useState<number | null>(null);
+  const [giftApplying, setGiftApplying] = useState(false);
 
   // --- pricing (mirrors BookingPanel / the server) --------------------------
   const valid = !!listing && isBookableType(listing.type) && !!startDate && !!endDate && listing.price > 0;
@@ -147,6 +150,27 @@ export default function Checkout({ slug }: { slug: string }) {
     discountPercent: listing!.nonrefundableDiscountPercent,
   });
 
+  // Gift card preview (server re-validates + reserves authoritatively at pay).
+  const giftAppliedCents = giftBalance != null ? Math.min(giftBalance, amountCents) : 0;
+  const dueCents = Math.max(0, amountCents - giftAppliedCents);
+
+  const applyGift = async () => {
+    const code = giftCode.trim();
+    if (!code) return;
+    setGiftApplying(true);
+    try {
+      if (!user) await signInAnonymously();
+      const r = await lookupGiftCard(code);
+      setGiftBalance(r.balanceCents);
+      toast(`Gift card applied — ${format(r.balanceCents)} available.`);
+    } catch (e) {
+      setGiftBalance(null);
+      toast(e instanceof ApiError ? e.message : "Couldn't apply that code.");
+    } finally {
+      setGiftApplying(false);
+    }
+  };
+
   const pay = async () => {
     if (isGuest) {
       if (!guestName.trim() || !guestEmail.trim() || !guestPhone.trim()) {
@@ -166,15 +190,26 @@ export default function Checkout({ slug }: { slug: string }) {
       const addonSel = Object.entries(addonQty)
         .filter(([, q]) => q > 0)
         .map(([id, qty]) => ({ id, qty }));
-      const { redirectUrl } = await startCheckout({
+      const result = await startCheckout({
         listingId: listing!.id,
         startDate,
         endDate,
         guests,
         ...(addonSel.length ? { addons: addonSel } : {}),
+        ...(giftBalance != null && giftCode.trim() ? { giftCode: giftCode.trim() } : {}),
         ...(isGuest ? { guestName: guestName.trim(), guestEmail: guestEmail.trim(), guestPhone: guestPhone.trim() } : {}),
       });
-      window.location.href = redirectUrl;
+      // Fully covered by the gift card → no PayLink; already confirmed server-side.
+      if (result.confirmed) {
+        toast("Booking confirmed with your gift card!");
+        navigate("/account?tab=trips");
+        return;
+      }
+      if (result.redirectUrl) {
+        window.location.href = result.redirectUrl;
+        return;
+      }
+      throw new ApiError("Couldn't start checkout. Please try again.");
     } catch (err) {
       toast(err instanceof ApiError ? err.message : "Couldn't start checkout. Please try again.");
       setSubmitting(false);
@@ -262,6 +297,29 @@ export default function Checkout({ slug }: { slug: string }) {
                 )}
               </section>
             )}
+
+            {/* Gift card redemption */}
+            <section>
+              <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-basalt/50">Gift card</h2>
+              <p className="mt-1 text-sm text-basalt/55">Have a Revamp gift card? Apply it to this booking.</p>
+              <div className="mt-3 flex items-start gap-2">
+                <Input
+                  value={giftCode}
+                  onChange={(e) => {
+                    setGiftCode(e.target.value.toUpperCase());
+                    setGiftBalance(null);
+                  }}
+                  placeholder="RV-XXXX-XXXX-XXXX"
+                  className="h-12 flex-1 rounded-none font-mono uppercase"
+                />
+                <Button type="button" variant="outline" onClick={applyGift} disabled={giftApplying || !giftCode.trim()} className="h-12 shrink-0 rounded-none border-basalt/20">
+                  {giftApplying ? "…" : "Apply"}
+                </Button>
+              </div>
+              {giftBalance != null && (
+                <p className="mt-2 text-xs font-semibold text-apricot">Applied — {format(giftAppliedCents)} covered{dueCents === 0 ? " (fully covered)" : ""}.</p>
+              )}
+            </section>
           </div>
 
           {/* Right: summary */}
@@ -317,6 +375,18 @@ export default function Checkout({ slug }: { slug: string }) {
                   <span className="font-semibold">Total</span>
                   <strong className="font-display text-xl font-normal">{format(amountCents)}</strong>
                 </div>
+                {giftAppliedCents > 0 && (
+                  <>
+                    <div className="flex items-center justify-between font-semibold text-apricot">
+                      <span>Gift card</span>
+                      <span>−{format(giftAppliedCents)}</span>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-basalt/10 pt-1.5">
+                      <span className="font-semibold">Due today</span>
+                      <strong className="font-display text-xl font-normal">{format(dueCents)}</strong>
+                    </div>
+                  </>
+                )}
               </div>
 
               <p className="mt-3 text-xs leading-5 text-basalt/55">
@@ -329,7 +399,7 @@ export default function Checkout({ slug }: { slug: string }) {
                 disabled={submitting || authLoading}
                 className={cn("mt-5 h-12 w-full rounded-none bg-apricot text-white hover:bg-apricot/90", (submitting || authLoading) && "opacity-60")}
               >
-                {submitting ? "Taking you to payment…" : `Pay · ${format(amountCents)}`}
+                {submitting ? "Taking you to payment…" : dueCents === 0 && giftAppliedCents > 0 ? "Complete booking (gift card)" : `Pay · ${format(dueCents)}`}
               </Button>
               <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">
                 You'll pay securely via{" "}

@@ -23,6 +23,7 @@ import { regions, typeLabels } from "../shared/listings.js";
 import type { ListingType } from "../shared/listings.js";
 import { buildArticleJsonLd, buildBlogListJsonLd, buildBreadcrumbJsonLd, buildCollectionPageJsonLd, buildFaqJsonLd, buildListingJsonLd, buildOrganizationJsonLd, buildWebsiteJsonLd } from "../shared/seo.js";
 import { renderMarkdown, markdownToPlain } from "../shared/markdown.js";
+import { GIFT_CARD_AMOUNTS_CENTS, GIFT_CARD_VALID_MONTHS } from "../shared/giftcards.js";
 import { findRegionGuide, listingInRegion, type RegionGuide } from "../shared/regionGuides.js";
 
 export type PageKind =
@@ -36,6 +37,7 @@ export type PageKind =
   | "region"
   | "faq"
   | "partners"
+  | "gift-cards"
   | "blog"
   | "blog-post"
   | "login"
@@ -67,6 +69,7 @@ export function matchRoute(pathname: string): MatchedRoute {
   if (path === "/signup") return { kind: "signup" };
   if (path === "/faq") return { kind: "faq" };
   if (path === "/partners") return { kind: "partners" };
+  if (path === "/gift-cards") return { kind: "gift-cards" };
   const regionMatch = path.match(/^\/region\/([^/]+)$/);
   if (regionMatch) return { kind: "region", slug: decodeURIComponent(regionMatch[1]) };
   if (path === "/blog") return { kind: "blog" };
@@ -104,6 +107,8 @@ export async function renderForBot(pathname: string, origin: string): Promise<Re
       return { status: 200, body: await renderFaq(origin) };
     case "partners":
       return { status: 200, body: await renderPartners(origin) };
+    case "gift-cards":
+      return { status: 200, body: renderGiftCards(origin) };
     case "region": {
       const guide = route.slug ? findRegionGuide(route.slug) : undefined;
       if (!guide) return { status: 404, body: renderNotFound(origin) };
@@ -399,6 +404,30 @@ ${partners.map((p) => `<section>${p.logo ? `<img src="${escapeHtml(p.logo)}" alt
       buildBreadcrumbJsonLd(origin, [
         { name: "Home", path: "/" },
         { name: "Partners", path: "/partners" },
+      ]),
+    ],
+    bodyHtml,
+  });
+}
+
+function renderGiftCards(origin: string): string {
+  const amounts = GIFT_CARD_AMOUNTS_CENTS.map((c) => `֏${Math.round(c / 100).toLocaleString("en-US")}`);
+  const bodyHtml = `
+<h1>Revamp gift cards</h1>
+<p>Give the gift of travel in Armenia — a Revamp Vacations gift card for stays, tours, and experiences. Choose an amount, send it to anyone by email, and they redeem it at checkout.</p>
+<h2>Amounts</h2>
+<ul>${amounts.map((a) => `<li>${a}</li>`).join("")}</ul>
+<p>Gift cards are valid for ${GIFT_CARD_VALID_MONTHS} months from purchase, can be used across multiple bookings until spent, and are non-refundable. Paid securely via PayLink.</p>
+<p><a href="${origin}/gift-cards">Buy a gift card</a></p>`;
+  return renderPageShell({
+    title: "Gift cards | Revamp Vacations",
+    description: "Give the gift of travel in Armenia — a Revamp Vacations gift card for stays, tours, and experiences, redeemable at checkout.",
+    canonical: `${origin}/gift-cards`,
+    ogImage: `${origin}${OG_IMAGE}`,
+    jsonLd: [
+      buildBreadcrumbJsonLd(origin, [
+        { name: "Home", path: "/" },
+        { name: "Gift cards", path: "/gift-cards" },
       ]),
     ],
     bodyHtml,

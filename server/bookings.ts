@@ -17,6 +17,7 @@ import { sendTravelerConfirmation, sendOperatorNewBooking, sendReviewRequest, ty
 import { payoutDueDate } from "../shared/payouts.js";
 import { computeBookingCharge, DEFAULT_CURRENCY } from "../shared/bookings.js";
 import type { ListingType } from "../shared/listings.js";
+import { refundGiftForBooking } from "./giftcards.js";
 
 export interface BookingRow {
   id: string;
@@ -146,6 +147,14 @@ export interface ConfirmResult {
   conflict?: boolean;
 }
 
+/** Run the post-confirm side effects (operator payout + confirmation emails) for
+ *  a booking that was inserted already-confirmed (e.g. fully covered by a gift
+ *  card, so it never went through PayLink). Best-effort. */
+export async function finalizeConfirmedBooking(admin: SupabaseClient, bookingId: string): Promise<void> {
+  const { data } = await admin.from("bookings").select(BOOKING_COLS).eq("id", bookingId).maybeSingle();
+  if (data) await onBookingConfirmed(admin, data as BookingRow);
+}
+
 const TERMINAL_FAIL = /fail|declin|cancel|expire|reject/i;
 
 /**
@@ -164,6 +173,7 @@ export async function confirmBookingRow(admin: SupabaseClient, row: BookingRow):
     // Record a terminal failure so we stop polling it forever.
     if (TERMINAL_FAIL.test(String(check.status))) {
       await admin.from("bookings").update({ status: "payment_failed" }).eq("id", row.id).eq("status", "pending_payment");
+      await refundGiftForBooking(admin, row.id); // release any gift-card hold
       return { granted: false, status: "payment_failed" };
     }
     return { granted: false, status: check.status };
@@ -190,6 +200,9 @@ export async function confirmBookingRow(admin: SupabaseClient, row: BookingRow):
     if (/exclu|overlap|conflict|23P01/i.test(error.message)) {
       console.error("[bookings] confirm overlap conflict", row.id, error.message);
       return { granted: false, status: "conflict", conflict: true };
+      // Note: gift hold is intentionally NOT released here — the row stays
+      // pending_payment for manual resolution, and releasing then re-charging
+      // would be wrong. It's released when the booking is finally cancelled.
     }
     console.error("[bookings] confirm write failed", row.id, error.message);
     return { granted: false, status: "unconfirmed" };
@@ -278,6 +291,7 @@ export async function reconcileAllPendingBookings(
           .select("id");
         if (upd && upd.length) {
           expired++;
+          await refundGiftForBooking(admin, row.id); // release any gift-card hold
           await logBookingEvent(admin, row.id, "status_expired", `Unpaid hold expired after ${expireAfterHours}h`);
         }
       }
