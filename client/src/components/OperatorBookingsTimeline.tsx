@@ -133,6 +133,25 @@ export function OperatorBookingsTimeline() {
     return map;
   }, [rows]);
 
+  // Per-day availability across the shown listings: "available/total" units.
+  // A unit is unavailable that day if a booking covers it or it's blocked.
+  const availByDay = useMemo(() => {
+    const counts = days.map(() => mine.length);
+    mine.forEach((listing) => {
+      const bks = byListing.get(listing.id) ?? [];
+      const blocked = listing.blockedRanges ?? []; // iCal: inclusive end
+      const manual = listing.manualBlockedRanges ?? []; // exclusive end
+      days.forEach((d, i) => {
+        const taken =
+          bks.some((b) => b.start_date <= d && d < b.end_date) ||
+          blocked.some((b) => b.start <= d && d <= b.end) ||
+          manual.some((b) => b.start <= d && d < b.end);
+        if (taken) counts[i] -= 1;
+      });
+    });
+    return counts;
+  }, [days, mine, byListing]);
+
   // Clip a [start,end) span to the visible window, in px offset + width.
   const spanBox = (s: string, e: string) => {
     const from = Math.max(0, dayDiff(startDate, s));
@@ -218,6 +237,7 @@ export function OperatorBookingsTimeline() {
                   )}
                   <div className="mt-2 text-[9px] font-bold uppercase tracking-wide text-basalt/40">{dt.toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" }).slice(0, 2)}</div>
                   <div className={cn("text-sm font-semibold tabular-nums", isToday && "text-apricot")}>{dt.getUTCDate()}</div>
+                  <div className={cn("text-[9px] font-semibold tabular-nums", availByDay[i] === 0 ? "text-tuff" : "text-basalt/45")} title={`${availByDay[i]} of ${mine.length} available`}>{availByDay[i]}/{mine.length}</div>
                 </div>
               );
             })}
