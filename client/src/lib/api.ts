@@ -280,6 +280,39 @@ export async function sendInboxMessage(conversationId: string, body: string): Pr
   return res.message;
 }
 
+// --- PriceLabs price sync (operator) --- the API key is sent once and never returned.
+async function plPost<T>(path: string, body: unknown): Promise<T> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in as an operator.");
+  return request<T>(path, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
+}
+
+export interface PriceLabsListing { id: string; name: string; pms: string; currency: string | null }
+export interface PriceLabsMap { revamp_listing_id: string; pricelabs_listing_id: string; pricelabs_pms: string; currency: string | null; last_synced_at: string | null }
+
+export async function pricelabsConnect(apiKey: string): Promise<{ ok: boolean; listings: PriceLabsListing[] }> {
+  return plPost("/api/pricelabs/connect", { apiKey });
+}
+export async function pricelabsData(): Promise<{ connected: boolean; listings?: PriceLabsListing[]; maps?: PriceLabsMap[] }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in as an operator.");
+  return request("/api/pricelabs/data", { headers: { Authorization: `Bearer ${token}` } });
+}
+export async function pricelabsDisconnect(): Promise<{ ok: boolean }> {
+  return plPost("/api/pricelabs/disconnect", {});
+}
+export async function pricelabsMap(input: { revampListingId: string; pricelabsListingId: string; pricelabsPms: string }): Promise<{ ok: boolean }> {
+  return plPost("/api/pricelabs/map", input);
+}
+export async function pricelabsUnmap(revampListingId: string): Promise<{ ok: boolean }> {
+  return plPost("/api/pricelabs/unmap", { revampListingId });
+}
+export async function pricelabsSync(revampListingId?: string): Promise<{ synced: number; dates: number; skipped: string[] }> {
+  return plPost("/api/pricelabs/sync", revampListingId ? { revampListingId } : {});
+}
+
 /** Admin-only: void a gift card so it can no longer be redeemed (kept in the ledger). */
 export async function adminVoidGiftCard(giftCardId: string, reason?: string): Promise<{ ok: boolean }> {
   const { data } = await supabase.auth.getSession();

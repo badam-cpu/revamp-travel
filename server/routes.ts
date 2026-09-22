@@ -14,6 +14,7 @@ import { z } from "zod";
 import { listPublishedForPlanner, verifyUser, userClient, getListingBusyRanges, getOperatorGooglePlaceId } from "./supabase.js";
 import { fetchPlaceReviews } from "./googlePlaces.js";
 import { translateTexts } from "./translate.js";
+import { pricelabsListings, syncOperatorPrices } from "./pricelabs.js";
 import { supabaseAdmin, adminConfigured } from "./supabaseAdmin.js";
 import { paylinkConfigured, registerPayment } from "./paylink.js";
 import { reconcileUserBookings, logBookingEvent, finalizeConfirmedBooking } from "./bookings.js";
@@ -1279,6 +1280,103 @@ export function registerApiRoutes(app: Express) {
     if (texts.join("").length > 20000) return res.status(413).json({ error: "Too much text." });
     const results = await translateTexts(texts, target);
     res.json({ results });
+  });
+
+  // --- PriceLabs price sync -------------------------------------------
+  // The operator's PriceLabs API key is a SECRET: stored in operator_secrets
+  // (service-role only, migration 0048), never returned to any client. All these
+  // routes require an operator sign-in and act only on that operator's data.
+  const requireOperator = async (req: Request): Promise<{ userId: string; admin: NonNullable<ReturnType<typeof supabaseAdmin>> } | null> => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId) return null;
+    const admin = supabaseAdmin();
+    if (!admin) return null;
+    return { userId, admin };
+  };
+
+  // POST /api/pricelabs/connect { apiKey } — validate the key against PriceLabs,
+  // then store it (service role). Returns the account's listings for mapping.
+  app.post("/api/pricelabs/connect", async (req: Request, res: Response) => {
+    const ctx = await requireOperator(req);
+    if (!ctx) return res.status(401).json({ error: "Sign in as an operator." });
+    const apiKey = typeof (req.body as { apiKey?: unknown }).apiKey === "string" ? (req.body as { apiKey: string }).apiKey.trim() : "";
+    if (apiKey.length < 8) return res.status(400).json({ error: "Enter your PriceLabs API key." });
+    try {
+      const listings = await pricelabsListings(apiKey); // throws on a bad key
+      await ctx.admin.from("operator_secrets").upsert({ operator_id: ctx.userId, pricelabs_api_key: apiKey, updated_at: new Date().toISOString() }, { onConflict: "operator_id" });
+      res.json({ ok: true, listings });
+    } catch (err) {
+      res.status(400).json({ error: err instanceof Error ? err.message : "Couldn't connect to PriceLabs." });
+    }
+  });
+
+  // GET /api/pricelabs/data — connection status + PriceLabs listings + current
+  // mappings, for the operator's Integrations UI. Never returns the key.
+  app.get("/api/pricelabs/data", async (req: Request, res: Response) => {
+    const ctx = await requireOperator(req);
+    if (!ctx) return res.status(401).json({ error: "Sign in as an operator." });
+    const { data: secret } = await ctx.admin.from("operator_secrets").select("pricelabs_api_key").eq("operator_id", ctx.userId).maybeSingle();
+    const apiKey = secret?.pricelabs_api_key as string | undefined;
+    if (!apiKey) return res.json({ connected: false });
+    const { data: maps } = await ctx.admin.from("pricelabs_listing_map").select("revamp_listing_id, pricelabs_listing_id, pricelabs_pms, currency, last_synced_at").eq("operator_id", ctx.userId);
+    let listings: unknown[] = [];
+    try {
+      listings = await pricelabsListings(apiKey);
+    } catch {
+      /* key may have been revoked upstream — still report connected + let them reconnect */
+    }
+    res.json({ connected: true, listings, maps: maps ?? [] });
+  });
+
+  // POST /api/pricelabs/disconnect — remove the key + mappings.
+  app.post("/api/pricelabs/disconnect", async (req: Request, res: Response) => {
+    const ctx = await requireOperator(req);
+    if (!ctx) return res.status(401).json({ error: "Sign in as an operator." });
+    await ctx.admin.from("pricelabs_listing_map").delete().eq("operator_id", ctx.userId);
+    await ctx.admin.from("operator_secrets").delete().eq("operator_id", ctx.userId);
+    res.json({ ok: true });
+  });
+
+  // POST /api/pricelabs/map { revampListingId, pricelabsListingId, pricelabsPms } —
+  // link a Revamp listing (must be the caller's) to a PriceLabs listing.
+  app.post("/api/pricelabs/map", async (req: Request, res: Response) => {
+    const ctx = await requireOperator(req);
+    if (!ctx) return res.status(401).json({ error: "Sign in as an operator." });
+    const b = req.body as { revampListingId?: string; pricelabsListingId?: string; pricelabsPms?: string };
+    if (!b.revampListingId || !b.pricelabsListingId || !b.pricelabsPms) return res.status(400).json({ error: "Missing fields." });
+    const { data: listing } = await ctx.admin.from("listings").select("operator_id").eq("id", b.revampListingId).maybeSingle();
+    if (!listing || listing.operator_id !== ctx.userId) return res.status(403).json({ error: "That listing isn't yours." });
+    await ctx.admin.from("pricelabs_listing_map").upsert(
+      { revamp_listing_id: b.revampListingId, operator_id: ctx.userId, pricelabs_listing_id: b.pricelabsListingId, pricelabs_pms: b.pricelabsPms },
+      { onConflict: "revamp_listing_id" },
+    );
+    res.json({ ok: true });
+  });
+
+  // POST /api/pricelabs/unmap { revampListingId }
+  app.post("/api/pricelabs/unmap", async (req: Request, res: Response) => {
+    const ctx = await requireOperator(req);
+    if (!ctx) return res.status(401).json({ error: "Sign in as an operator." });
+    const id = (req.body as { revampListingId?: string }).revampListingId;
+    if (!id) return res.status(400).json({ error: "Missing listing." });
+    await ctx.admin.from("pricelabs_listing_map").delete().eq("revamp_listing_id", id).eq("operator_id", ctx.userId);
+    res.json({ ok: true });
+  });
+
+  // POST /api/pricelabs/sync { revampListingId? } — pull prices now.
+  app.post("/api/pricelabs/sync", async (req: Request, res: Response) => {
+    const ctx = await requireOperator(req);
+    if (!ctx) return res.status(401).json({ error: "Sign in as an operator." });
+    if (rateLimited(giftPurchaseHits, `pls:${ctx.userId}`, 6)) return res.status(429).json({ error: "You're syncing very fast — wait a moment." });
+    try {
+      const result = await syncOperatorPrices(ctx.admin, ctx.userId, (req.body as { revampListingId?: string }).revampListingId);
+      res.json(result);
+    } catch (err) {
+      console.error("[pricelabs/sync]", err);
+      res.status(500).json({ error: "Sync failed. Please try again." });
+    }
   });
 
   // --- Gift cards ------------------------------------------------------

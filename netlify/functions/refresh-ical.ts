@@ -14,6 +14,7 @@
  */
 import { supabaseAdmin, adminConfigured } from "../../server/supabaseAdmin.js";
 import { fetchMergedBlockedRanges } from "../../server/ical.js";
+import { syncAllPricelabs } from "../../server/pricelabs.js";
 
 /** Legacy single `ical_url` → one Airbnb feed; otherwise use `ical_feeds`. */
 function feedsFor(row: { ical_url?: string | null; ical_feeds?: unknown }) {
@@ -63,7 +64,15 @@ export const handler = async () => {
     }
   }
 
-  const result = { total: data.length, refreshed, failed };
+  // Also pull PriceLabs recommended prices into mapped listings' calendars.
+  let pricelabs: { operators: number; synced: number } = { operators: 0, synced: 0 };
+  try {
+    pricelabs = await syncAllPricelabs(admin);
+  } catch (err) {
+    console.error("[refresh-ical] pricelabs sync failed", err);
+  }
+
+  const result = { total: data.length, refreshed, failed, pricelabs };
   console.log("[refresh-ical]", result);
   return { statusCode: 200, body: JSON.stringify(result) };
 };
