@@ -207,18 +207,29 @@ export function sendCancellation(to: string, b: BookingEmailInfo, opts: { toRole
   return send(to, `Cancelled: ${b.listingTitle}`, html);
 }
 
-/** Ask a traveler to review a listing after their trip completes. */
-export function sendReviewRequest(to: string, opts: { listingTitle: string; slug?: string; bookingId: string }) {
+/** Ask a traveler to review a listing after their trip completes. Type-aware
+ *  ("your stay" / "tour" / "experience") and leads with the listing's cover photo. */
+export function sendReviewRequest(
+  to: string,
+  opts: { listingTitle: string; slug?: string; bookingId: string; type?: string; image?: string },
+) {
   const site = SITE();
   const link = `${site}/account?tab=trips&review=${encodeURIComponent(opts.bookingId)}`;
+  const noun = opts.type === "stay" ? "stay" : opts.type === "tour" ? "tour" : opts.type === "experience" ? "experience" : "trip";
+  // Brand illustrations are root-relative (/images/…) and need the origin;
+  // operator-uploaded photos are already absolute URLs.
+  const img = opts.image ? (opts.image.startsWith("/") ? `${site}${opts.image}` : opts.image) : "";
+  const cover = img
+    ? `<img src="${esc(img)}" alt="" width="100%" style="display:block;width:100%;height:auto;max-height:220px;object-fit:cover;border-radius:10px;margin:0 0 18px;" />`
+    : "";
   const html = shell(
-    "How was your trip? ✨",
-    `<p style="font-size:15px;line-height:1.6;margin:0 0 6px;">We hope <strong>${esc(opts.listingTitle)}</strong> was everything you'd hoped for. A quick review helps other travelers — and the host — a lot.</p>
+    `How was your ${noun}? ✨`,
+    `${cover}<p style="font-size:15px;line-height:1.6;margin:0 0 6px;">We hope <strong>${esc(opts.listingTitle)}</strong> was everything you'd hoped for. A quick review helps other travelers — and the host — a lot.</p>
      <p style="font-size:14px;line-height:1.6;color:#6B6357;margin:0 0 16px;">It takes less than a minute.</p>
      <p style="margin:0 0 8px;"><a href="${esc(link)}" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Leave a review</a></p>`,
     site,
   );
-  return send(to, `How was ${opts.listingTitle}?`, html);
+  return send(to, `How was your ${noun}?`, html);
 }
 
 /** Alert an admin that a support chat needs a human reply. */

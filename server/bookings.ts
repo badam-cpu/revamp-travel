@@ -288,30 +288,69 @@ export async function reconcileAllPendingBookings(
   return { polled: data.length, confirmed, expired };
 }
 
+/** How long after an experience ends before we ask the guest to review it. */
+const REVIEW_DELAY_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 /**
- * Daily sweep: for confirmed bookings whose trip has ended, mark them completed
- * and email the traveler once to ask for a review (guarded by review_requested_at
- * so it never re-sends). Uses the auth email, falling back to a guest's email.
- * Best-effort — a failure on one booking never blocks the rest.
+ * The instant a booking's experience is actually *over*, so we can wait a full
+ * 24h from there regardless of product type. We only store dates, so we treat
+ * the experience as ending at midday of its final active day (a reasonable
+ * proxy for checkout / an activity wrapping up):
+ *   - stay: `end_date` is the checkout day → that's the final day.
+ *   - tour / experience: a single-day activity is stored with an *exclusive*
+ *     `end_date = start_date + 1`, so the activity itself happens on
+ *     `start_date` — that's the final day. Using `end_date` here would push the
+ *     email a full day late for every tour/experience.
+ */
+function experienceEndInstant(type: string | undefined, startDate: string, endDate: string): number {
+  const finalDay = type === "stay" ? endDate : startDate;
+  return Date.parse(`${finalDay}T12:00:00Z`);
+}
+
+/**
+ * Sweep (runs on the reconcile cron, every 10 min): for confirmed bookings whose
+ * experience ended at least 24h ago — stays, tours, and experiences alike — mark
+ * them completed and email the traveler once to ask for a review (guarded by
+ * review_requested_at so it never re-sends). Uses the auth email, falling back to
+ * a guest's email. Best-effort — a failure on one booking never blocks the rest.
  */
 export async function requestReviewsForCompleted(admin: SupabaseClient, { limit = 200 }: { limit?: number } = {}): Promise<{ sent: number }> {
   const today = new Date().toISOString().slice(0, 10);
+  // Coarse date prefilter (a superset): anything whose end date is today or past
+  // is a candidate; the precise ">=24h after it ended" gate is applied per-row
+  // below, so a same-day checkout or a just-finished tour is never emailed early.
   const { data, error } = await admin
     .from("bookings")
-    .select("id, traveler_id, end_date, status, guest_email, listings!inner(title, slug)")
+    .select("id, traveler_id, start_date, end_date, status, guest_email, listings!inner(title, slug, type, image)")
     .in("status", ["confirmed", "completed"])
-    .lt("end_date", today)
+    .lte("end_date", today)
     .is("review_requested_at", null)
     .limit(limit);
   if (error || !data) return { sent: 0 };
 
+  const now = Date.now();
   let sent = 0;
-  for (const row of data as unknown as { id: string; traveler_id: string; guest_email: string | null; listings: { title?: string; slug?: string } | null }[]) {
+  for (const row of data as unknown as {
+    id: string;
+    traveler_id: string;
+    start_date: string;
+    end_date: string;
+    guest_email: string | null;
+    listings: { title?: string; slug?: string; type?: string; image?: string } | null;
+  }[]) {
+    // Only once a full 24h has passed since the experience actually ended.
+    if (now - experienceEndInstant(row.listings?.type, row.start_date, row.end_date) < REVIEW_DELAY_MS) continue;
     try {
       const { data: traveler } = await admin.auth.admin.getUserById(row.traveler_id);
       const to = traveler?.user?.email || row.guest_email || "";
       if (to) {
-        await sendReviewRequest(to, { listingTitle: row.listings?.title ?? "your trip", slug: row.listings?.slug, bookingId: row.id });
+        await sendReviewRequest(to, {
+          listingTitle: row.listings?.title ?? "your trip",
+          slug: row.listings?.slug,
+          bookingId: row.id,
+          type: row.listings?.type,
+          image: row.listings?.image,
+        });
         await logBookingEvent(admin, row.id, "email_review_request", to);
         sent++;
       }
