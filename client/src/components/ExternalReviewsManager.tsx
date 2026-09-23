@@ -94,7 +94,7 @@ export function ExternalReviewsManager() {
     <div className="grid gap-6 border border-basalt/12 bg-paper p-6">
       <div>
         <p className="font-display text-lg leading-tight">Reviews from other platforms</p>
-        <p className="mt-1 text-sm text-basalt/60">Show your Google and Airbnb reputation on your Revamp listings — clearly attributed, alongside your Revamp reviews.</p>
+        <p className="mt-1 text-sm text-basalt/60">Show your Google, Airbnb, and GetYourGuide reputation on your Revamp listings — clearly attributed, alongside your Revamp reviews.</p>
       </div>
 
       {/* Google Business */}
