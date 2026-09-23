@@ -19,6 +19,7 @@ export default function EatGuide() {
   const { listings, loading } = useListings();
   const [cuisine, setCuisine] = useState("all");
   const [loc, setLoc] = useState("all");
+  const [minRating, setMinRating] = useState(0);
 
   useDocumentMeta({
     title: "Where to eat in Armenia — Revamp Vacations",
@@ -48,17 +49,21 @@ export default function EatGuide() {
     return Array.from(seen.values()).sort((a, b) => a.city.localeCompare(b.city));
   }, [eateries]);
 
+  // Best available rating for a spot (Google preferred, else Tripadvisor).
+  const bestRating = (l: LiveListing) => l.googleRating ?? l.tripadvisorRating ?? 0;
+
   const shown = useMemo(
     () =>
       eateries.filter(
         (l) =>
           (cuisine === "all" || (l.venueType?.trim() || OTHER) === cuisine) &&
-          (loc === "all" || l.city?.trim() === loc),
+          (loc === "all" || l.city?.trim() === loc) &&
+          (minRating === 0 || bestRating(l) >= minRating),
       ),
-    [eateries, cuisine, loc],
+    [eateries, cuisine, loc, minRating],
   );
 
-  // Group the shown set by venue type for the section headings.
+  // Group by venue type; within each group, best-rated first.
   const groups = useMemo(() => {
     const map = new Map<string, LiveListing[]>();
     shown.forEach((l) => {
@@ -67,6 +72,7 @@ export default function EatGuide() {
       arr.push(l);
       map.set(key, arr);
     });
+    map.forEach((arr) => arr.sort((a, b) => bestRating(b) - bestRating(a)));
     return Array.from(map.entries()).sort((a, b) => b[1].length - a[1].length);
   }, [shown]);
 
@@ -85,21 +91,36 @@ export default function EatGuide() {
         {(types.length > 0 || locations.length > 0) && (
           <section className="container mt-8">
             <div className="flex flex-col gap-4 border-b border-basalt/10 pb-6">
-              {locations.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-bold uppercase tracking-[0.12em] text-basalt/45">Location</span>
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+                {locations.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-[0.12em] text-basalt/45">Location</span>
+                    <select
+                      value={loc}
+                      onChange={(e) => setLoc(e.target.value)}
+                      className="h-9 border border-basalt/15 bg-paper px-3 text-sm outline-none focus:border-apricot"
+                    >
+                      <option value="all">All of Armenia</option>
+                      {locations.map((l) => (
+                        <option key={l.city} value={l.city}>{l.region && l.region !== l.city ? `${l.city} · ${l.region}` : l.city}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-[0.12em] text-basalt/45">Rating</span>
                   <select
-                    value={loc}
-                    onChange={(e) => setLoc(e.target.value)}
+                    value={minRating}
+                    onChange={(e) => setMinRating(Number(e.target.value))}
                     className="h-9 border border-basalt/15 bg-paper px-3 text-sm outline-none focus:border-apricot"
                   >
-                    <option value="all">All of Armenia</option>
-                    {locations.map((l) => (
-                      <option key={l.city} value={l.city}>{l.region && l.region !== l.city ? `${l.city} · ${l.region}` : l.city}</option>
-                    ))}
+                    <option value={0}>Any rating</option>
+                    <option value={4.5}>4.5★ &amp; up</option>
+                    <option value={4}>4.0★ &amp; up</option>
+                    <option value={3.5}>3.5★ &amp; up</option>
                   </select>
                 </div>
-              )}
+              </div>
               {types.length > 0 && (
                 <div className="flex flex-wrap gap-x-2 gap-y-3">
                   <button onClick={() => setCuisine("all")} className={cn("filter-chip", cuisine === "all" && "active")}>All types</button>
@@ -122,7 +143,7 @@ export default function EatGuide() {
           ) : shown.length === 0 ? (
             <div className="border border-dashed border-basalt/20 bg-chalk px-6 py-16 text-center">
               <p className="text-sm text-basalt/55">No spots match these filters.</p>
-              <button type="button" onClick={() => { setCuisine("all"); setLoc("all"); }} className="mt-3 text-sm font-semibold text-apricot hover:underline">Clear filters</button>
+              <button type="button" onClick={() => { setCuisine("all"); setLoc("all"); setMinRating(0); }} className="mt-3 text-sm font-semibold text-apricot hover:underline">Clear filters</button>
             </div>
           ) : (
             <div className="grid gap-14">
