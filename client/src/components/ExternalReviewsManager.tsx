@@ -5,7 +5,7 @@
  *   - Airbnb: self-import your own reviews (no Airbnb API exists); shown labeled
  *     "imported from Airbnb, added by the host".
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useListings } from "@/contexts/ListingsContext";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,13 @@ import { listHostReviews, addHostReview, deleteHostReview, type HostReview, type
 import { GooglePlaceFinder } from "@/components/GooglePlaceFinder";
 
 const SOURCE_LABELS: Record<HostReviewSource, string> = { airbnb: "Airbnb", getyourguide: "GetYourGuide", booking: "Booking.com" };
+// Which listing types each platform applies to, so operators only ever see
+// sources relevant to what they actually list (no GetYourGuide without tours).
+const SOURCE_FOR_TYPE: Record<HostReviewSource, ReadonlyArray<"stay" | "tour" | "experience">> = {
+  airbnb: ["stay"],
+  booking: ["stay"],
+  getyourguide: ["tour", "experience"],
+};
 
 export function ExternalReviewsManager() {
   const { user, profile, updateProfile } = useAuth();
@@ -28,7 +35,22 @@ export function ExternalReviewsManager() {
   const [savingPlace, setSavingPlace] = useState(false);
 
   const [reviews, setReviews] = useState<HostReview[]>([]);
-  const [source, setSource] = useState<HostReviewSource>("airbnb");
+  // Only offer platforms that match the operator's listing types.
+  const sourceOptions = useMemo(() => {
+    const types = new Set(myListings.map((l) => l.type));
+    const all = Object.keys(SOURCE_LABELS) as HostReviewSource[];
+    const filtered = all.filter((s) => SOURCE_FOR_TYPE[s].some((t) => types.has(t)));
+    return filtered.length ? filtered : all; // fall back to all when there are no listings yet
+  }, [myListings]);
+  const [source, setSource] = useState<HostReviewSource>(sourceOptions[0]);
+  useEffect(() => {
+    if (!sourceOptions.includes(source)) setSource(sourceOptions[0]);
+  }, [sourceOptions, source]);
+  // Listings that match the selected platform's type (GetYourGuide → tours/experiences).
+  const listingOptions = useMemo(
+    () => myListings.filter((l) => (SOURCE_FOR_TYPE[source] as ReadonlyArray<string>).includes(l.type)),
+    [myListings, source],
+  );
   const [name, setName] = useState("");
   const [rating, setRating] = useState(5);
   const [date, setDate] = useState("");
@@ -120,13 +142,13 @@ export function ExternalReviewsManager() {
 
       {/* Self-imported platform reviews (Airbnb / GetYourGuide / Booking.com) */}
       <div className="grid gap-3 border-t border-basalt/10 pt-5">
-        <p className="text-sm font-bold uppercase tracking-[0.1em] text-basalt/50">Airbnb &amp; GetYourGuide reviews</p>
-        <p className="text-xs text-basalt/55">These platforms have no import API, so add your own reviews here (Airbnb for stays, GetYourGuide for tours). They'll show as "imported from {SOURCE_LABELS[source]} — added by the host". Only add real reviews you received.</p>
+        <p className="text-sm font-bold uppercase tracking-[0.1em] text-basalt/50">{sourceOptions.map((s) => SOURCE_LABELS[s]).join(" · ")} reviews</p>
+        <p className="text-xs text-basalt/55">These platforms have no import API, so add your own reviews here. Pick the platform, and they'll show as "imported from {SOURCE_LABELS[source]} — added by the host". Only add real reviews you received.</p>
         <div className="grid gap-2 border border-basalt/10 bg-chalk/40 p-4">
           <div className="grid gap-1">
             <Label className="text-xs font-semibold text-basalt/60">Source</Label>
-            <select value={source} onChange={(e) => setSource(e.target.value as HostReviewSource)} className="h-10 max-w-xs rounded-none border border-basalt/20 bg-paper px-2 text-sm">
-              {(Object.keys(SOURCE_LABELS) as HostReviewSource[]).map((s) => <option key={s} value={s}>{SOURCE_LABELS[s]}</option>)}
+            <select value={source} onChange={(e) => { setSource(e.target.value as HostReviewSource); setListingId(""); }} className="h-10 max-w-xs rounded-none border border-basalt/20 bg-paper px-2 text-sm">
+              {sourceOptions.map((s) => <option key={s} value={s}>{SOURCE_LABELS[s]}</option>)}
             </select>
           </div>
           <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
@@ -141,7 +163,7 @@ export function ExternalReviewsManager() {
             <Label className="text-xs font-semibold text-basalt/60">Show on</Label>
             <select value={listingId} onChange={(e) => setListingId(e.target.value)} className="h-10 max-w-md rounded-none border border-basalt/20 bg-paper px-2 text-sm">
               <option value="">All my listings</option>
-              {myListings.map((l) => <option key={l.id} value={(l as { id: string }).id}>{l.title}</option>)}
+              {listingOptions.map((l) => <option key={l.id} value={(l as { id: string }).id}>{l.title}</option>)}
             </select>
           </div>
           <div><Button onClick={add} disabled={adding} variant="outline" className="rounded-none border-basalt/20">{adding ? "Adding…" : `+ Add ${SOURCE_LABELS[source]} review`}</Button></div>
