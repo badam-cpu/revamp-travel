@@ -18,6 +18,7 @@ const OTHER = "More spots";
 export default function EatGuide() {
   const { listings, loading } = useListings();
   const [cuisine, setCuisine] = useState("all");
+  const [loc, setLoc] = useState("all");
 
   useDocumentMeta({
     title: "Where to eat in Armenia — Revamp Vacations",
@@ -37,9 +38,24 @@ export default function EatGuide() {
     return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).map(([c]) => c);
   }, [eateries]);
 
+  // Distinct locations (city + its region) for the location filter.
+  const locations = useMemo(() => {
+    const seen = new Map<string, { city: string; region: string }>();
+    eateries.forEach((l) => {
+      const city = l.city?.trim();
+      if (city && !seen.has(city.toLowerCase())) seen.set(city.toLowerCase(), { city, region: l.region?.trim() || "" });
+    });
+    return Array.from(seen.values()).sort((a, b) => a.city.localeCompare(b.city));
+  }, [eateries]);
+
   const shown = useMemo(
-    () => (cuisine === "all" ? eateries : eateries.filter((l) => (l.venueType?.trim() || OTHER) === cuisine)),
-    [eateries, cuisine],
+    () =>
+      eateries.filter(
+        (l) =>
+          (cuisine === "all" || (l.venueType?.trim() || OTHER) === cuisine) &&
+          (loc === "all" || l.city?.trim() === loc),
+      ),
+    [eateries, cuisine, loc],
   );
 
   // Group the shown set by venue type for the section headings.
@@ -66,13 +82,32 @@ export default function EatGuide() {
           </p>
         </section>
 
-        {types.length > 0 && (
+        {(types.length > 0 || locations.length > 1) && (
           <section className="container mt-8">
-            <div className="flex flex-wrap gap-x-2 gap-y-3 border-b border-basalt/10 pb-6">
-              <button onClick={() => setCuisine("all")} className={cn("filter-chip", cuisine === "all" && "active")}>All types</button>
-              {types.map((c) => (
-                <button key={c} onClick={() => setCuisine(c)} className={cn("filter-chip", cuisine === c && "active")}>{c}</button>
-              ))}
+            <div className="flex flex-col gap-4 border-b border-basalt/10 pb-6">
+              {locations.length > 1 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-[0.12em] text-basalt/45">Location</span>
+                  <select
+                    value={loc}
+                    onChange={(e) => setLoc(e.target.value)}
+                    className="h-9 border border-basalt/15 bg-paper px-3 text-sm outline-none focus:border-apricot"
+                  >
+                    <option value="all">All of Armenia</option>
+                    {locations.map((l) => (
+                      <option key={l.city} value={l.city}>{l.region && l.region !== l.city ? `${l.city} · ${l.region}` : l.city}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {types.length > 0 && (
+                <div className="flex flex-wrap gap-x-2 gap-y-3">
+                  <button onClick={() => setCuisine("all")} className={cn("filter-chip", cuisine === "all" && "active")}>All types</button>
+                  {types.map((c) => (
+                    <button key={c} onClick={() => setCuisine(c)} className={cn("filter-chip", cuisine === c && "active")}>{c}</button>
+                  ))}
+                </div>
+              )}
             </div>
           </section>
         )}
@@ -84,6 +119,11 @@ export default function EatGuide() {
             </div>
           ) : eateries.length === 0 ? (
             <p className="border border-dashed border-basalt/20 bg-chalk px-6 py-16 text-center text-sm text-basalt/55">No restaurant recommendations yet — check back soon.</p>
+          ) : shown.length === 0 ? (
+            <div className="border border-dashed border-basalt/20 bg-chalk px-6 py-16 text-center">
+              <p className="text-sm text-basalt/55">No spots match these filters.</p>
+              <button type="button" onClick={() => { setCuisine("all"); setLoc("all"); }} className="mt-3 text-sm font-semibold text-apricot hover:underline">Clear filters</button>
+            </div>
           ) : (
             <div className="grid gap-14">
               {groups.map(([name, items]) => (
