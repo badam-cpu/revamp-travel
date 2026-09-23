@@ -46,9 +46,8 @@ export function EatGuidePanel({ listing }: { listing: LiveListing }) {
             ) : (
               <span className="font-semibold">{listing.tripadvisorRating.toFixed(1)}</span>
             )}
-            <span className="text-xs text-basalt/55">{listing.tripadvisorRatingCount ? `${listing.tripadvisorRatingCount.toLocaleString()} reviews` : ""}</span>
+            <span className="text-xs text-basalt/55">{listing.tripadvisorRatingCount ? `${listing.tripadvisorRatingCount.toLocaleString()} Tripadvisor reviews` : "on Tripadvisor"}</span>
           </div>
-          <a href={listing.tripadvisorUrl || "https://www.tripadvisor.com"} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs font-semibold text-apricot hover:underline">on Tripadvisor</a>
         </div>
       )}
 
@@ -79,6 +78,16 @@ export function EatGuidePanel({ listing }: { listing: LiveListing }) {
             className="inline-flex items-center justify-center gap-2 border border-basalt/20 bg-paper px-4 py-3 text-sm font-semibold text-basalt transition-colors hover:border-apricot hover:text-apricot"
           >
             <ExternalLink className="h-4 w-4" /> View on Google
+          </a>
+        )}
+        {listing.tripadvisorUrl && (
+          <a
+            href={listing.tripadvisorUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 border border-basalt/20 bg-paper px-4 py-3 text-sm font-semibold text-basalt transition-colors hover:border-apricot hover:text-apricot"
+          >
+            <ExternalLink className="h-4 w-4" /> View on Tripadvisor
           </a>
         )}
         <button
