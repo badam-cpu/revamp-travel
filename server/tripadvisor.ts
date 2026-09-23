@@ -6,8 +6,8 @@
  * link back. We cache those on the listing.
  *
  * Auth: X-API-Key header, key = TRIPADVISOR_API_KEY (a Terra Discover key).
- *   POST /recommendations/search?version=1  → find a Location by name near a geo
- *   GET  /locations/{id}?version=1          → rating, count, icon_url, urls, name
+ *   GET /catalog/locations/search?version=1 → find a Location by name (Discover)
+ *   GET /locations/{id}?version=1           → rating, count, icon_url, urls, name
  */
 const BASE = "https://terra.tripadvisor.com/api";
 
@@ -66,20 +66,15 @@ async function parseOrThrow(res: Response): Promise<Record<string, unknown>> {
   return json;
 }
 
-/** Find the best-matching Terra Location for a name near a place (geo name). */
+/** Find the best-matching Terra Location for a name (Discover catalog search). */
 async function searchLocation(query: string, geoName?: string): Promise<TerraLocation | null> {
-  const body: Record<string, unknown> = {
-    query,
-    geo: geoName ? { name: geoName } : {},
-    top_level_categories: ["Eat & Drink"],
-    limit: 5,
-    response_preference: "quality",
-  };
-  const res = await fetch(`${BASE}/recommendations/search?version=1`, { method: "POST", headers: authHeaders(), body: JSON.stringify(body) });
-  const json = (await parseOrThrow(res)) as { search_results?: { type?: string; location?: TerraLocation }[] };
-  const locs = (json.search_results ?? []).filter((r) => r.type === "location" && r.location?.id).map((r) => r.location as TerraLocation);
+  const params = new URLSearchParams({ version: "1", query, category: "RESTAURANT", search_type: "NAME", country_code: "AM", size: "10" });
+  if (geoName) params.set("geo_name", geoName);
+  const res = await fetch(`${BASE}/catalog/locations/search?${params.toString()}`, { headers: authHeaders() });
+  const json = (await parseOrThrow(res)) as { data?: { location?: TerraLocation }[] };
+  const locs = (json.data ?? []).map((d) => d.location).filter((l): l is TerraLocation => !!l?.id);
   if (!locs.length) return null;
-  // Prefer an exact-ish name match, else the top (quality-ranked) result.
+  // Prefer an exact-ish name match, else the first result.
   const want = query.trim().toLowerCase();
   return locs.find((l) => primaryName(l.names).toLowerCase().includes(want)) ?? locs[0];
 }
