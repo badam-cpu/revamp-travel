@@ -5,7 +5,7 @@
  * saves it as a type='eat' listing (owned by the admin, published, price 0).
  * Operators can't create these — only admins, via the RLS policy in 0051.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { adminPlaceDetails, ApiError } from "@/lib/api";
@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Loader2, Star, Trash2, Utensils } from "lucide-react";
 import { GooglePlaceFinder } from "@/components/GooglePlaceFinder";
+import { PhotoUploader, type PhotoUploaderHandle } from "@/components/PhotoUploader";
 
 interface EatRow {
   id: string;
@@ -44,6 +45,8 @@ export function AdminEateries() {
   const [f, setF] = useState({ ...BLANK });
   const [enriching, setEnriching] = useState(false);
   const [saving, setSaving] = useState(false);
+  const photosRef = useRef<PhotoUploaderHandle>(null);
+  const [uploaderKey, setUploaderKey] = useState(0); // bump to reset the uploader after save
 
   const load = useCallback(async () => {
     const { data } = await supabase
@@ -86,10 +89,12 @@ export function AdminEateries() {
 
   const save = async () => {
     if (!user) return;
-    if (!f.title.trim() || !f.city.trim() || !f.image.trim()) {
-      toast("Add at least a name, city, and photo URL.");
+    const photos = photosRef.current?.getValue() ?? [];
+    if (!f.title.trim() || !f.city.trim() || photos.length === 0) {
+      toast("Add at least a name, city, and one photo.");
       return;
     }
+    const cover = photos[0];
     setSaving(true);
     try {
       const slug = `${slugify(f.title)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -105,8 +110,8 @@ export function AdminEateries() {
         address: f.address.trim() || null,
         lat: f.lat ?? 0,
         lng: f.lng ?? 0,
-        image: f.image.trim(),
-        gallery: [f.image.trim()],
+        image: cover,
+        gallery: photos,
         short_description: f.shortDescription.trim() || `A Revamp-recommended spot in ${f.city.trim()}.`,
         long_description: f.shortDescription.trim(),
         price_cents: 0,
@@ -126,6 +131,7 @@ export function AdminEateries() {
       if (error) throw new Error(error.message);
       toast("Restaurant added to the guide.");
       setF({ ...BLANK });
+      setUploaderKey((k) => k + 1); // clear the uploaded photos for the next entry
       load();
     } catch (e) {
       toast(e instanceof Error ? e.message : "Couldn't save.");
@@ -174,9 +180,9 @@ export function AdminEateries() {
               <option value="$$$">$$$ · high-end</option>
             </select>
           </Field>
-          <Field label="Photo URL"><Input value={f.image} onChange={(e) => set({ image: e.target.value })} placeholder="https://…" className="h-10 rounded-none" /></Field>
           <Field label="Website"><Input value={f.website} onChange={(e) => set({ website: e.target.value })} placeholder="https://…" className="h-10 rounded-none" /></Field>
           <div className="sm:col-span-2"><Field label="Short description"><Textarea rows={2} value={f.shortDescription} onChange={(e) => set({ shortDescription: e.target.value })} className="rounded-none text-base" /></Field></div>
+          <div className="sm:col-span-2"><PhotoUploader key={uploaderKey} ref={photosRef} /></div>
         </div>
 
         <div className="flex items-center gap-3 border-t border-basalt/10 pt-4">
