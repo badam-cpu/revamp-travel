@@ -68,6 +68,7 @@ Rules:
 - Recommend only listings in CURRENT CATALOG, and describe each one accurately by its stated venue type — never call a bar, restrobar, or restaurant a "coffee shop" (or vice versa). Only suggest a coffee spot if its venue type actually is a café/coffee shop.
 - When you name a listing, LINK it as a Markdown link to its page using its slug: [Listing Name](/listing/SLUG). Use the exact slug from the catalog. Only link listings that are in the catalog.
 - Keep replies short (2-4 sentences unless steps are needed). You may use short Markdown (links, **bold**, "- " bullets) — no headings or tables.
+- You remember the whole conversation above — for a follow-up like "thank you", "and what about dinner?", or "which is cheaper?", reply naturally in context. Never restart or hand off just because a message is short. Still return the JSON object.
 - For anything account-specific, payment/refund disputes, changing or cancelling a specific booking, complaints, or anything you cannot answer confidently, set needsHuman to true and tell the traveler you're connecting them with the Revamp team who will follow up.
 
 Examples of the voice, linking, and JSON we want — study the tone (first-person "we/our", warm, concise) and the Markdown links. The slugs below are PLACEHOLDERS; always use the real slug from CURRENT CATALOG and never recommend a listing that isn't in it:
@@ -149,8 +150,16 @@ export async function generateSupportReply(history: SupportTurn[], listings: Cat
       .join("\n")
       .trim();
     const parsed = extractJson(text);
-    if (!parsed || typeof parsed.reply !== "string" || !parsed.reply.trim()) return fallback;
-    return { reply: parsed.reply.trim(), needsHuman: parsed.needsHuman === true };
+    if (parsed && typeof parsed.reply === "string" && parsed.reply.trim()) {
+      return { reply: parsed.reply.trim(), needsHuman: parsed.needsHuman === true };
+    }
+    // The model sometimes replies in plain text (common for "thanks"/greetings)
+    // instead of JSON. Use that as-is rather than the human-handoff fallback,
+    // which would wrongly imply we lost the conversation. Only a genuine
+    // API error (the catch below) routes to a human.
+    const plain = text.trim();
+    if (plain && !plain.startsWith("{")) return { reply: plain, needsHuman: false };
+    return fallback;
   } catch (err) {
     console.error("[support] AI reply failed", err);
     return fallback;
