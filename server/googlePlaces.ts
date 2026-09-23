@@ -37,6 +37,12 @@ export function googlePlacesConfigured(): boolean {
   return !!apiKey();
 }
 
+/** True only when a dedicated SERVER key is set (a referrer-restricted browser
+ *  key can't make server-side Places calls, so the VITE fallback doesn't count). */
+export function placesServerKeySet(): boolean {
+  return !!process.env.GOOGLE_PLACES_API_KEY;
+}
+
 /** Details used to pre-fill a curated "eat" listing from a Google Place. */
 export interface GooglePlaceDetails {
   placeId: string;
@@ -90,7 +96,10 @@ export async function fetchPlaceDetails(placeId: string): Promise<GooglePlaceDet
       location?: { latitude?: number; longitude?: number };
       editorialSummary?: { text?: string };
     };
-    if (!res.ok || !json.id) return null;
+    if (!res.ok || !json.id) {
+      console.error("[google-places] details non-ok", res.status, JSON.stringify(json).slice(0, 300));
+      return null;
+    }
     return {
       placeId: json.id,
       name: json.displayName?.text ?? "",

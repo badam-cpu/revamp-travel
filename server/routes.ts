@@ -12,7 +12,7 @@
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { listPublishedForPlanner, verifyUser, userClient, getListingBusyRanges, getOperatorGooglePlaceId } from "./supabase.js";
-import { fetchPlaceReviews, fetchPlaceDetails } from "./googlePlaces.js";
+import { fetchPlaceReviews, fetchPlaceDetails, placesServerKeySet } from "./googlePlaces.js";
 import { translateTexts } from "./translate.js";
 import { pricelabsListings, syncOperatorPrices } from "./pricelabs.js";
 import { supabaseAdmin, adminConfigured } from "./supabaseAdmin.js";
@@ -1279,7 +1279,12 @@ export function registerApiRoutes(app: Express) {
     if (!placeId) return res.status(400).json({ error: "Missing placeId." });
     try {
       const details = await fetchPlaceDetails(placeId);
-      if (!details) return res.status(404).json({ error: "Couldn't fetch that place from Google." });
+      if (!details) {
+        const hint = placesServerKeySet()
+          ? "Couldn't fetch that place — check the key has Places API (New) enabled with billing. Fill the details in manually and save."
+          : "Google enrichment needs a server key (GOOGLE_PLACES_API_KEY in Netlify — a Places API New key with no HTTP-referrer restriction). Fill the details in manually and save for now.";
+        return res.status(502).json({ error: hint });
+      }
       res.json(details);
     } catch (err) {
       console.error("[admin-place-details]", err);

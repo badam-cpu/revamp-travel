@@ -58,6 +58,9 @@ export function AdminEateries() {
   const set = (patch: Partial<typeof BLANK>) => setF((prev) => ({ ...prev, ...patch }));
 
   const onFound = async (r: { id: string; name: string }) => {
+    // Fill the name straight away so curation still works even if the
+    // server-side Google enrichment call fails (e.g. key not configured).
+    set({ title: r.name, placeId: r.id });
     setEnriching(true);
     try {
       const d = await adminPlaceDetails(r.id);
@@ -75,7 +78,7 @@ export function AdminEateries() {
       });
       toast(`Pulled "${d.name}" from Google — set cuisine and neighborhood, then save.`);
     } catch (e) {
-      toast(e instanceof ApiError ? e.message : "Couldn't fetch that place.");
+      toast(e instanceof ApiError ? e.message : "Couldn't fetch that place. Fill the details in manually and save.");
     } finally {
       setEnriching(false);
     }
