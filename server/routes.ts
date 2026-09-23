@@ -905,7 +905,12 @@ export function registerApiRoutes(app: Express) {
         .limit(30);
 
       const listings = await listPublishedForPlanner();
-      const { reply, needsHuman } = await generateSupportReply((hist ?? []) as SupportTurn[], listings);
+      const aiResult = await generateSupportReply((hist ?? []) as SupportTurn[], listings);
+      // Deterministic escalation: if the traveler explicitly asks for a human,
+      // always route to a person regardless of what the model decided.
+      const explicitHuman = /\b(human|real person|live (agent|person|chat)|customer (service|support)|representative|agent|speak (to|with) (a|an|someone|somebody|the team)|talk to (a|an|someone|somebody|the team)|connect me|contact (the|your) team)\b/i.test(parsed.data.message);
+      const needsHuman = aiResult.needsHuman || explicitHuman;
+      const reply = aiResult.reply;
 
       await admin.from("support_messages").insert({ thread_id: thread.id, sender: "ai", body: reply });
       await admin
@@ -913,8 +918,10 @@ export function registerApiRoutes(app: Express) {
         .update({ status: needsHuman || thread.status === "needs_human" ? "needs_human" : "open", last_message_at: new Date().toISOString() })
         .eq("id", thread.id);
 
-      // Email the admin(s) when a chat newly escalates to a human (best-effort).
-      if (needsHuman && thread.status !== "needs_human") {
+      // Email the admin(s) when a chat escalates to a human: on the first
+      // escalation, and again whenever the traveler explicitly asks for one
+      // (best-effort).
+      if (needsHuman && (thread.status !== "needs_human" || explicitHuman)) {
         try {
           const emails = new Set<string>();
           if (process.env.ADMIN_EMAIL) emails.add(process.env.ADMIN_EMAIL);
@@ -924,6 +931,9 @@ export function registerApiRoutes(app: Express) {
             if (u?.user?.email) emails.add(u.user.email);
           }
           const { data: prof } = await admin.from("profiles").select("display_name").eq("id", userId).maybeSingle();
+          if (emails.size === 0) {
+            console.warn("[support-chat] escalation had NO admin recipients — set ADMIN_EMAIL, or ensure an admin profile has a resolvable email.");
+          }
           for (const email of Array.from(emails)) await sendSupportAlert(email, { travelerName: prof?.display_name ?? "A traveler", message: parsed.data.message });
         } catch (alertErr) {
           console.error("[support-chat] admin alert failed", alertErr);
