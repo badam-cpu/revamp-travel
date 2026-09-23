@@ -18,8 +18,6 @@ function googleUrl(l: LiveListing): string | null {
   return l.googlePlaceId ? `https://www.google.com/maps/place/?q=place_id:${l.googlePlaceId}` : null;
 }
 
-const PRICE_WORD: Record<string, string> = { $: "Budget", $$: "Mid-range", $$$: "High-end" };
-
 export function EatGuidePanel({ listing }: { listing: LiveListing }) {
   const { isSaved, toggleSaved } = useSavedPlaces();
   const saved = isSaved(listing.id);
@@ -39,35 +37,7 @@ export function EatGuidePanel({ listing }: { listing: LiveListing }) {
         <p className="font-display text-2xl font-normal text-basalt/70">Recommended</p>
       )}
 
-      {/* Clearly-labelled facts. */}
-      <dl className="mt-4 grid gap-2 border-t border-basalt/10 pt-4 text-sm">
-        {listing.priceBand && (
-          <div className="flex items-center justify-between gap-3">
-            <dt className="text-basalt/50">Price</dt>
-            <dd className="font-semibold text-basalt"><span className="tracking-wide">{listing.priceBand}</span> <span className="font-normal text-basalt/55">· {PRICE_WORD[listing.priceBand]}</span></dd>
-          </div>
-        )}
-        {listing.venueType && (
-          <div className="flex items-center justify-between gap-3">
-            <dt className="text-basalt/50">Type</dt>
-            <dd className="font-semibold text-basalt">{listing.venueType}</dd>
-          </div>
-        )}
-        {listing.cuisine && (
-          <div className="flex items-center justify-between gap-3">
-            <dt className="text-basalt/50">Cuisine</dt>
-            <dd className="font-semibold text-basalt">{listing.cuisine}</dd>
-          </div>
-        )}
-        {(listing.neighborhood || listing.city) && (
-          <div className="flex items-center justify-between gap-3">
-            <dt className="text-basalt/50">Area</dt>
-            <dd className="font-semibold text-basalt">{listing.neighborhood || listing.city}</dd>
-          </div>
-        )}
-      </dl>
-
-      <div className="mt-5 grid gap-2">
+      <div className="mt-5 grid gap-2 border-t border-basalt/10 pt-5">
         <a
           href={directionsUrl(listing)}
           target="_blank"

@@ -238,10 +238,16 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   const checkInTime = factVal("Check-in");
   const checkOutTime = factVal("Checkout");
   const selfCheckIn = houseRules.includes("Self check-in");
+  const priceWord: Record<string, string> = { $: "Budget", $$: "Mid-range", $$$: "High-end" };
   const glance: { label: string; value: string; icon: typeof ShieldCheck }[] = [];
-  // Eat: the facts (price/cuisine/area/rating) live in the guide panel, so keep
-  // the inline "at a glance" strip empty to avoid showing everything twice.
-  if (!isEat) {
+  if (isEat) {
+    // Restaurants: descriptive facts in the inline strip; the panel keeps the
+    // rating + actions.
+    if (listing.venueType) glance.push({ label: "Type", value: listing.venueType, icon: Utensils });
+    if (listing.cuisine) glance.push({ label: "Cuisine", value: listing.cuisine, icon: Coffee });
+    if (listing.priceBand) glance.push({ label: "Price", value: `${listing.priceBand} · ${priceWord[listing.priceBand]}`, icon: Wallet });
+    if (listing.neighborhood || listing.city) glance.push({ label: "Area", value: listing.neighborhood || listing.city, icon: MapPin });
+  } else {
     if (listing.maxGuests) glance.push({ label: "Guests", value: `Up to ${listing.maxGuests}`, icon: Users });
     glance.push({ label: "Cancellation", value: listing.cancellationPolicy === "non_refundable" ? "Non-refundable" : "Flexible", icon: ShieldCheck });
     // Check-in shows the TIME (a "when"); the self-check-in method is a separate
