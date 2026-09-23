@@ -18,31 +18,54 @@ function googleUrl(l: LiveListing): string | null {
   return l.googlePlaceId ? `https://www.google.com/maps/place/?q=place_id:${l.googlePlaceId}` : null;
 }
 
+const PRICE_WORD: Record<string, string> = { $: "Budget", $$: "Mid-range", $$$: "High-end" };
+
 export function EatGuidePanel({ listing }: { listing: LiveListing }) {
   const { isSaved, toggleSaved } = useSavedPlaces();
   const saved = isSaved(listing.id);
   const gmaps = googleUrl(listing);
   return (
     <div className="brand-notch sticky top-[104px] border border-basalt/12 bg-chalk p-6 shadow-[0_20px_55px_rgba(35,35,33,0.1)]">
-      <div className="flex items-center justify-between gap-3">
-        {listing.priceBand ? (
-          <p className="font-display text-4xl font-normal">{listing.priceBand}</p>
-        ) : (
-          <p className="font-display text-2xl font-normal text-basalt/70">Recommended</p>
-        )}
-        {typeof listing.googleRating === "number" && (
-          <span className="inline-flex items-center gap-1.5 text-sm">
-            <Star className="h-4 w-4 fill-apricot text-apricot" />
-            <span className="font-semibold">{listing.googleRating.toFixed(1)}</span>
-            {listing.googleRatingCount ? <span className="text-basalt/45">({listing.googleRatingCount.toLocaleString()})</span> : null}
-            <span className="text-basalt/40">· Google</span>
-          </span>
-        )}
-      </div>
-
-      {(listing.cuisine || listing.neighborhood) && (
-        <p className="mt-2 text-sm text-basalt/60">{[listing.cuisine, listing.neighborhood || listing.city].filter(Boolean).join(" · ")}</p>
+      {/* Lead with what a diner cares about: the rating. */}
+      {typeof listing.googleRating === "number" ? (
+        <div>
+          <div className="flex items-baseline gap-2">
+            <span className="font-display text-4xl font-normal leading-none">{listing.googleRating.toFixed(1)}</span>
+            <Star className="h-5 w-5 fill-apricot text-apricot" />
+          </div>
+          <p className="mt-1.5 text-xs text-basalt/55">{listing.googleRatingCount ? `${listing.googleRatingCount.toLocaleString()} Google reviews` : "Google rating"}</p>
+        </div>
+      ) : (
+        <p className="font-display text-2xl font-normal text-basalt/70">Recommended</p>
       )}
+
+      {/* Clearly-labelled facts. */}
+      <dl className="mt-4 grid gap-2 border-t border-basalt/10 pt-4 text-sm">
+        {listing.priceBand && (
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-basalt/50">Price</dt>
+            <dd className="font-semibold text-basalt"><span className="tracking-wide">{listing.priceBand}</span> <span className="font-normal text-basalt/55">· {PRICE_WORD[listing.priceBand]}</span></dd>
+          </div>
+        )}
+        {listing.venueType && (
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-basalt/50">Type</dt>
+            <dd className="font-semibold text-basalt">{listing.venueType}</dd>
+          </div>
+        )}
+        {listing.cuisine && (
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-basalt/50">Cuisine</dt>
+            <dd className="font-semibold text-basalt">{listing.cuisine}</dd>
+          </div>
+        )}
+        {(listing.neighborhood || listing.city) && (
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-basalt/50">Area</dt>
+            <dd className="font-semibold text-basalt">{listing.neighborhood || listing.city}</dd>
+          </div>
+        )}
+      </dl>
 
       <div className="mt-5 grid gap-2">
         <a

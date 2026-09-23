@@ -8,6 +8,26 @@
  * Curated for Yerevan/Armenia: a mix of cuisines and venue kinds so a traveler
  * can scan by what they're actually in the mood for.
  */
+/** Standard venue types (what kind of place it is) — the primary category the
+ *  guide groups by. Distinct from cuisine below. */
+export const VENUE_TYPES: string[] = [
+  "Restaurant",
+  "Café / coffee shop",
+  "Bakery",
+  "Dessert & ice cream",
+  "Bar",
+  "Wine bar",
+  "Pub & brewery",
+  "Nightclub",
+  "Fine dining",
+  "Fast food",
+  "Street food",
+  "Brunch & breakfast",
+  "Tea house",
+  "Food hall & market",
+];
+
+/** Cuisines (what kind of food) — a secondary descriptor. */
 export const EAT_CATEGORIES: string[] = [
   "Armenian",
   "Georgian",

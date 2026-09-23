@@ -239,13 +239,9 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   const checkOutTime = factVal("Checkout");
   const selfCheckIn = houseRules.includes("Self check-in");
   const glance: { label: string; value: string; icon: typeof ShieldCheck }[] = [];
-  if (isEat) {
-    // Restaurants are recommendations, not bookings — surface guide facts.
-    if (listing.cuisine) glance.push({ label: "Cuisine", value: listing.cuisine, icon: Utensils });
-    if (listing.priceBand) glance.push({ label: "Price", value: listing.priceBand, icon: Wallet });
-    if (listing.neighborhood) glance.push({ label: "Neighborhood", value: listing.neighborhood, icon: MapPin });
-    if (typeof listing.googleRating === "number") glance.push({ label: "Google rating", value: `${listing.googleRating.toFixed(1)}${listing.googleRatingCount ? ` (${listing.googleRatingCount})` : ""}`, icon: Star });
-  } else {
+  // Eat: the facts (price/cuisine/area/rating) live in the guide panel, so keep
+  // the inline "at a glance" strip empty to avoid showing everything twice.
+  if (!isEat) {
     if (listing.maxGuests) glance.push({ label: "Guests", value: `Up to ${listing.maxGuests}`, icon: Users });
     glance.push({ label: "Cancellation", value: listing.cancellationPolicy === "non_refundable" ? "Non-refundable" : "Flexible", icon: ShieldCheck });
     // Check-in shows the TIME (a "when"); the self-check-in method is a separate

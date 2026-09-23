@@ -53,6 +53,7 @@ export interface GooglePlaceDetails {
   website: string | null;
   googleMapsUri: string | null;
   priceBand: "$" | "$$" | "$$$" | null;
+  venueType: string | null;
   lat: number | null;
   lng: number | null;
   summary: string | null;
@@ -80,7 +81,7 @@ export async function fetchPlaceDetails(placeId: string): Promise<GooglePlaceDet
   const res = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`, {
     headers: {
       "X-Goog-Api-Key": key,
-      "X-Goog-FieldMask": "id,displayName,rating,userRatingCount,formattedAddress,websiteUri,googleMapsUri,priceLevel,location,editorialSummary",
+      "X-Goog-FieldMask": "id,displayName,rating,userRatingCount,formattedAddress,websiteUri,googleMapsUri,priceLevel,location,editorialSummary,primaryTypeDisplayName",
     },
   });
   const json = (await res.json().catch(() => ({}))) as {
@@ -94,6 +95,7 @@ export async function fetchPlaceDetails(placeId: string): Promise<GooglePlaceDet
     priceLevel?: string;
     location?: { latitude?: number; longitude?: number };
     editorialSummary?: { text?: string };
+    primaryTypeDisplayName?: { text?: string };
     error?: { message?: string; status?: string };
   };
   if (!res.ok || !json.id) {
@@ -111,6 +113,7 @@ export async function fetchPlaceDetails(placeId: string): Promise<GooglePlaceDet
     website: json.websiteUri ?? null,
     googleMapsUri: json.googleMapsUri ?? null,
     priceBand: priceBand(json.priceLevel),
+    venueType: json.primaryTypeDisplayName?.text ?? null,
     lat: typeof json.location?.latitude === "number" ? json.location.latitude : null,
     lng: typeof json.location?.longitude === "number" ? json.location.longitude : null,
     summary: json.editorialSummary?.text ?? null,

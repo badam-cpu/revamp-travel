@@ -129,6 +129,7 @@ interface ListingRow {
   discount_start: string | null;
   discount_end: string | null;
   rooms: { name: string; beds: { type: string; count: number }[] }[] | null;
+  venue_type: string | null;
   cuisine: string | null;
   price_band: "$" | "$$" | "$$$" | null;
   website: string | null;
@@ -194,6 +195,7 @@ function mapListingRow(row: ListingRow): LiveListing {
     discountStart: row.discount_start ?? undefined,
     discountEnd: row.discount_end ?? undefined,
     rooms: Array.isArray(row.rooms) ? row.rooms : [],
+    venueType: row.venue_type ?? undefined,
     cuisine: row.cuisine ?? undefined,
     priceBand: row.price_band ?? undefined,
     website: row.website ?? undefined,
@@ -246,6 +248,7 @@ function toRow(input: ListingInput) {
     discount_end: input.discountEnd || null,
     rooms: input.rooms ?? [],
     seasonal_rates: input.seasonalRates ?? [],
+    venue_type: input.venueType?.trim() || null,
     cuisine: input.cuisine?.trim() || null,
     price_band: input.priceBand ?? null,
     website: input.website?.trim() || null,

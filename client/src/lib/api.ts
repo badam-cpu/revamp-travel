@@ -113,6 +113,7 @@ export interface GooglePlaceDetails {
   website: string | null;
   googleMapsUri: string | null;
   priceBand: "$" | "$$" | "$$$" | null;
+  venueType: string | null;
   lat: number | null;
   lng: number | null;
   summary: string | null;

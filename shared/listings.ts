@@ -115,7 +115,9 @@ export interface Listing {
   /** Per-period nightly rate overrides (seasonal / date-range pricing). */
   seasonalRates?: SeasonalRate[];
   // --- type: "eat" only (free, admin-curated recommendations) ---
-  /** Cuisine / venue kind, e.g. "Armenian", "Café", "Wine bar". */
+  /** Standard venue type, e.g. "Restaurant", "Café / coffee shop", "Bar". */
+  venueType?: string;
+  /** Cuisine, e.g. "Armenian", "Italian", "Georgian". */
   cuisine?: string;
   /** Price band shown instead of a bookable price: "$" | "$$" | "$$$". */
   priceBand?: "$" | "$$" | "$$$";
@@ -577,6 +579,7 @@ export interface ListingInput {
   /** Per-period nightly rate overrides (seasonal / date-range pricing). */
   seasonalRates?: SeasonalRate[];
   // --- type: "eat" only (free, admin-curated recommendations) ---
+  venueType?: string;
   cuisine?: string;
   priceBand?: "$" | "$$" | "$$$";
   website?: string;

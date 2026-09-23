@@ -27,26 +27,26 @@ export default function EatGuide() {
 
   const eateries = useMemo(() => listings.filter((l) => l.type === "eat"), [listings]);
 
-  // Cuisine facets present in the data (for the filter chips), most common first.
-  const cuisines = useMemo(() => {
+  // Venue-type facets present in the data (for the filter chips), most common first.
+  const types = useMemo(() => {
     const counts = new Map<string, number>();
     eateries.forEach((l) => {
-      const c = l.cuisine?.trim();
+      const c = l.venueType?.trim();
       if (c) counts.set(c, (counts.get(c) ?? 0) + 1);
     });
     return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).map(([c]) => c);
   }, [eateries]);
 
   const shown = useMemo(
-    () => (cuisine === "all" ? eateries : eateries.filter((l) => (l.cuisine?.trim() || OTHER) === cuisine)),
+    () => (cuisine === "all" ? eateries : eateries.filter((l) => (l.venueType?.trim() || OTHER) === cuisine)),
     [eateries, cuisine],
   );
 
-  // Group the shown set by cuisine for the section headings.
+  // Group the shown set by venue type for the section headings.
   const groups = useMemo(() => {
     const map = new Map<string, LiveListing[]>();
     shown.forEach((l) => {
-      const key = l.cuisine?.trim() || OTHER;
+      const key = l.venueType?.trim() || OTHER;
       const arr = map.get(key) ?? [];
       arr.push(l);
       map.set(key, arr);
@@ -66,11 +66,11 @@ export default function EatGuide() {
           </p>
         </section>
 
-        {cuisines.length > 0 && (
+        {types.length > 0 && (
           <section className="container mt-8">
             <div className="flex flex-wrap gap-x-2 gap-y-3 border-b border-basalt/10 pb-6">
-              <button onClick={() => setCuisine("all")} className={cn("filter-chip", cuisine === "all" && "active")}>All cuisines</button>
-              {cuisines.map((c) => (
+              <button onClick={() => setCuisine("all")} className={cn("filter-chip", cuisine === "all" && "active")}>All types</button>
+              {types.map((c) => (
                 <button key={c} onClick={() => setCuisine(c)} className={cn("filter-chip", cuisine === c && "active")}>{c}</button>
               ))}
             </div>

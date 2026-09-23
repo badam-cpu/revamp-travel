@@ -78,7 +78,7 @@ export function ListingCard({ listing, large = false, active = false, onHover }:
         <div className="mt-auto flex items-center justify-between gap-3 border-t border-basalt/10 pt-4 text-xs text-basalt/50">
           {isEat ? (
             <>
-              <span className="min-w-0 truncate">{[listing.cuisine, listing.neighborhood || listing.city].filter(Boolean).join(" · ")}</span>
+              <span className="min-w-0 truncate">{[listing.venueType || listing.cuisine, listing.neighborhood || listing.city].filter(Boolean).join(" · ")}</span>
               {listing.priceBand && <span className="shrink-0 font-bold tracking-wide text-basalt/70">{listing.priceBand}</span>}
             </>
           ) : (

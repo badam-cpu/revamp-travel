@@ -10,7 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { adminPlaceDetails, ApiError } from "@/lib/api";
 import { slugify } from "@/lib/slug";
-import { EAT_CATEGORIES } from "@/lib/eatCategories";
+import { EAT_CATEGORIES, VENUE_TYPES } from "@/lib/eatCategories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,6 +24,7 @@ interface EatRow {
   id: string;
   title: string;
   slug: string;
+  venue_type: string | null;
   cuisine: string | null;
   price_band: string | null;
   city: string | null;
@@ -34,9 +35,9 @@ interface EatRow {
 }
 
 const BLANK = {
-  placeId: "", title: "", cuisine: "", priceBand: "" as "" | "$" | "$$" | "$$$",
+  placeId: "", title: "", venueType: "", cuisine: "", priceBand: "" as "" | "$" | "$$" | "$$$",
   city: "", region: "Yerevan", neighborhood: "", image: "", website: "",
-  shortDescription: "", address: "", googleRating: null as number | null, googleRatingCount: null as number | null,
+  shortDescription: "", longDescription: "", address: "", googleRating: null as number | null, googleRatingCount: null as number | null,
   lat: null as number | null, lng: null as number | null,
 };
 
@@ -49,17 +50,17 @@ export function AdminEateries() {
   const photosRef = useRef<PhotoUploaderHandle>(null);
   const [uploaderKey, setUploaderKey] = useState(0); // bump to reset/reseed the uploader
   const [galleryDefault, setGalleryDefault] = useState<string[]>([]);
-  const [customCat, setCustomCat] = useState(false); // "Other" — type a new category
+  const [formKey, setFormKey] = useState(0); // remounts the category selects on edit/reset
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Category options = the curated list ∪ any category already used, so a custom
-  // one an admin added earlier keeps showing up (no separate table needed).
-  const categoryOptions = Array.from(new Set([...EAT_CATEGORIES, ...(rows ?? []).map((r) => r.cuisine).filter((c): c is string => !!c)])).sort();
+  // Options = curated lists ∪ values already used, so admin-added ones persist.
+  const venueOptions = Array.from(new Set([...VENUE_TYPES, ...(rows ?? []).map((r) => r.venue_type).filter((c): c is string => !!c)]));
+  const cuisineOptions = Array.from(new Set([...EAT_CATEGORIES, ...(rows ?? []).map((r) => r.cuisine).filter((c): c is string => !!c)])).sort();
 
   const load = useCallback(async () => {
     const { data } = await supabase
       .from("listings")
-      .select("id, title, slug, cuisine, price_band, city, neighborhood, google_rating, google_rating_count, status")
+      .select("id, title, slug, venue_type, cuisine, price_band, city, neighborhood, google_rating, google_rating_count, status")
       .eq("type", "eat")
       .order("title");
     setRows((data ?? []) as EatRow[]);
@@ -81,13 +82,15 @@ export function AdminEateries() {
         address: d.address ?? "",
         website: d.website ?? "",
         priceBand: d.priceBand ?? "",
+        venueType: d.venueType ?? "",
         googleRating: d.rating,
         googleRatingCount: d.ratingCount,
         lat: d.lat,
         lng: d.lng,
         shortDescription: d.summary ?? "",
       });
-      toast(`Pulled "${d.name}" from Google — set cuisine and neighborhood, then save.`);
+      setFormKey((k) => k + 1); // reseed the type/cuisine selects with the pulled values
+      toast(`Pulled "${d.name}" from Google — set the type, cuisine and neighborhood, then save.`);
     } catch (e) {
       toast(e instanceof ApiError ? e.message : "Couldn't fetch that place. Fill the details in manually and save.");
     } finally {
@@ -98,9 +101,9 @@ export function AdminEateries() {
   const resetForm = () => {
     setEditingId(null);
     setF({ ...BLANK });
-    setCustomCat(false);
     setGalleryDefault([]);
     setUploaderKey((k) => k + 1);
+    setFormKey((k) => k + 1);
   };
 
   const startEdit = async (id: string) => {
@@ -113,6 +116,7 @@ export function AdminEateries() {
     setF({
       placeId: data.google_place_id ?? "",
       title: data.title ?? "",
+      venueType: data.venue_type ?? "",
       cuisine: data.cuisine ?? "",
       priceBand: (data.price_band ?? "") as "" | "$" | "$$" | "$$$",
       city: data.city ?? "",
@@ -121,15 +125,16 @@ export function AdminEateries() {
       image: data.image ?? "",
       website: data.website ?? "",
       shortDescription: data.short_description ?? "",
+      longDescription: data.long_description ?? "",
       address: data.address ?? "",
       googleRating: data.google_rating ?? null,
       googleRatingCount: data.google_rating_count ?? null,
       lat: data.lat ?? null,
       lng: data.lng ?? null,
     });
-    setCustomCat(!!data.cuisine && !EAT_CATEGORIES.includes(data.cuisine));
     setGalleryDefault(Array.isArray(data.gallery) && data.gallery.length ? data.gallery : data.image ? [data.image] : []);
     setUploaderKey((k) => k + 1); // remount uploader seeded with the existing photos
+    setFormKey((k) => k + 1); // reseed the type/cuisine selects
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -146,7 +151,7 @@ export function AdminEateries() {
       // Fields common to create + edit.
       const payload = {
         title: f.title.trim(),
-        eyebrow: f.cuisine.trim() || "Restaurant",
+        eyebrow: f.venueType.trim() || f.cuisine.trim() || "Restaurant",
         city: f.city.trim(),
         region: f.region.trim() || "Yerevan",
         address: f.address.trim() || null,
@@ -155,8 +160,9 @@ export function AdminEateries() {
         image: cover,
         gallery: photos,
         short_description: f.shortDescription.trim() || `A Revamp-recommended spot in ${f.city.trim()}.`,
-        long_description: "", // the description shows once as the lead; no duplicate body
-        tags: [f.cuisine.trim()].filter(Boolean),
+        long_description: f.longDescription.trim(),
+        tags: [f.venueType.trim(), f.cuisine.trim()].filter(Boolean),
+        venue_type: f.venueType.trim() || null,
         cuisine: f.cuisine.trim() || null,
         price_band: f.priceBand || null,
         website: f.website.trim() || null,
@@ -223,24 +229,8 @@ export function AdminEateries() {
 
         <div className="grid gap-3 border-t border-basalt/10 pt-4 sm:grid-cols-2">
           <Field label="Name"><Input value={f.title} onChange={(e) => set({ title: e.target.value })} className="h-10 rounded-none" /></Field>
-          <Field label="Category">
-            {customCat ? (
-              <div className="flex gap-2">
-                <Input value={f.cuisine} onChange={(e) => set({ cuisine: e.target.value })} placeholder="New category name" className="h-10 rounded-none" autoFocus />
-                <button type="button" onClick={() => { setCustomCat(false); set({ cuisine: "" }); }} className="shrink-0 text-xs font-semibold text-basalt/50 hover:text-apricot">Pick from list</button>
-              </div>
-            ) : (
-              <select
-                value={f.cuisine}
-                onChange={(e) => { if (e.target.value === "__other__") { setCustomCat(true); set({ cuisine: "" }); } else { set({ cuisine: e.target.value }); } }}
-                className="h-10 w-full rounded-none border border-basalt/20 bg-paper px-2 text-sm"
-              >
-                <option value="">Choose a category…</option>
-                {categoryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-                <option value="__other__">+ Add new category…</option>
-              </select>
-            )}
-          </Field>
+          <Field label="Type"><CategorySelect key={`ven-${formKey}`} value={f.venueType} options={venueOptions} placeholder="Choose a type…" newLabel="+ Add new type…" onChange={(v) => set({ venueType: v })} /></Field>
+          <Field label="Cuisine"><CategorySelect key={`cui-${formKey}`} value={f.cuisine} options={cuisineOptions} placeholder="Choose a cuisine…" newLabel="+ Add new cuisine…" onChange={(v) => set({ cuisine: v })} /></Field>
           <Field label="City"><Input value={f.city} onChange={(e) => set({ city: e.target.value })} className="h-10 rounded-none" /></Field>
           <Field label="Region"><Input value={f.region} onChange={(e) => set({ region: e.target.value })} className="h-10 rounded-none" /></Field>
           <Field label="Neighborhood"><Input value={f.neighborhood} onChange={(e) => set({ neighborhood: e.target.value })} placeholder="e.g. City Center" className="h-10 rounded-none" /></Field>
@@ -253,7 +243,8 @@ export function AdminEateries() {
             </select>
           </Field>
           <Field label="Website"><Input value={f.website} onChange={(e) => set({ website: e.target.value })} placeholder="https://…" className="h-10 rounded-none" /></Field>
-          <div className="sm:col-span-2"><Field label="Short description"><Textarea rows={2} value={f.shortDescription} onChange={(e) => set({ shortDescription: e.target.value })} className="rounded-none text-base" /></Field></div>
+          <div className="sm:col-span-2"><Field label="Short description"><Textarea rows={2} value={f.shortDescription} onChange={(e) => set({ shortDescription: e.target.value })} placeholder="One-line teaser shown on the card and as the lead." className="rounded-none text-base" /></Field></div>
+          <div className="sm:col-span-2"><Field label="Long description"><Textarea rows={4} value={f.longDescription} onChange={(e) => set({ longDescription: e.target.value })} placeholder="Fuller write-up shown on the restaurant page (optional)." className="rounded-none text-base" /></Field></div>
           <div className="sm:col-span-2"><PhotoUploader key={uploaderKey} ref={photosRef} defaultValue={galleryDefault} /></div>
         </div>
 
@@ -276,6 +267,7 @@ export function AdminEateries() {
               <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border border-basalt/12 bg-paper px-4 py-3">
                 <Utensils className="h-4 w-4 shrink-0 text-basalt/40" />
                 <span className="min-w-0 flex-1 truncate font-semibold text-basalt">{r.title}</span>
+                {r.venue_type && <span className="text-xs font-semibold text-basalt/60">{r.venue_type}</span>}
                 {r.cuisine && <span className="text-xs text-basalt/50">{r.cuisine}</span>}
                 {r.price_band && <span className="text-xs font-bold text-basalt/60">{r.price_band}</span>}
                 {typeof r.google_rating === "number" && <span className="inline-flex items-center gap-0.5 text-xs text-basalt/50"><Star className="h-3 w-3 fill-apricot text-apricot" />{r.google_rating.toFixed(1)}</span>}
@@ -297,5 +289,30 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <Label className="text-xs font-semibold text-basalt/60">{label}</Label>
       {children}
     </div>
+  );
+}
+
+/** A picker from a curated list with an inline "add new" free-text fallback.
+ *  Remount (via key) to reseed from a new `value`. */
+function CategorySelect({ value, options, placeholder, newLabel, onChange }: { value: string; options: string[]; placeholder: string; newLabel: string; onChange: (v: string) => void }) {
+  const [custom, setCustom] = useState(!!value && !options.includes(value));
+  if (custom) {
+    return (
+      <div className="flex gap-2">
+        <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder="Type a new one" className="h-10 rounded-none" autoFocus />
+        <button type="button" onClick={() => { setCustom(false); onChange(""); }} className="shrink-0 text-xs font-semibold text-basalt/50 hover:text-apricot">List</button>
+      </div>
+    );
+  }
+  return (
+    <select
+      value={value}
+      onChange={(e) => { if (e.target.value === "__other__") { setCustom(true); onChange(""); } else onChange(e.target.value); }}
+      className="h-10 w-full rounded-none border border-basalt/20 bg-paper px-2 text-sm"
+    >
+      <option value="">{placeholder}</option>
+      {options.map((c) => <option key={c} value={c}>{c}</option>)}
+      <option value="__other__">{newLabel}</option>
+    </select>
   );
 }
