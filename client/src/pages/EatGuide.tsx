@@ -82,10 +82,10 @@ export default function EatGuide() {
           </p>
         </section>
 
-        {(types.length > 0 || locations.length > 1) && (
+        {(types.length > 0 || locations.length > 0) && (
           <section className="container mt-8">
             <div className="flex flex-col gap-4 border-b border-basalt/10 pb-6">
-              {locations.length > 1 && (
+              {locations.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-bold uppercase tracking-[0.12em] text-basalt/45">Location</span>
                   <select
