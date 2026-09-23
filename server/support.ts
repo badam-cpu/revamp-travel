@@ -115,10 +115,12 @@ export async function generateSupportReply(history: SupportTurn[], listings: Cat
   };
   if (!anthropic) return fallback;
 
-  // Support runs on Haiku by default — support Q&A is simpler than trip planning,
-  // and Haiku is ~3× cheaper. Override with SUPPORT_MODEL if needed. (Separate
-  // from ANTHROPIC_MODEL so the trip planner can stay on a stronger model.)
-  const model = process.env.SUPPORT_MODEL || "claude-haiku-4-5";
+  // The assistant is the brand's front line, so it runs on Sonnet 5 (the most
+  // capable model) by default for sharper voice, categorization, and JSON
+  // reliability. The stable system+catalog prefix is prompt-cached, so most of
+  // each call is billed at the cache rate. Override with SUPPORT_MODEL (e.g.
+  // claude-haiku-4-5) to trade quality for cost.
+  const model = process.env.SUPPORT_MODEL || "claude-sonnet-5";
   // Map our roles to the Anthropic conversation: traveler → user, ai/support → assistant.
   const messages = history
     .filter((m) => m.body.trim())
