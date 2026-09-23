@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { ExternalLink, Star, Trash2 } from "lucide-react";
-import { listHostReviews, addHostReview, deleteHostReview, type HostReview, type HostReviewSource } from "@/lib/externalReviews";
+import { listHostReviews, addHostReview, deleteHostReview, ratingScaleFor, type HostReview, type HostReviewSource } from "@/lib/externalReviews";
 import { GooglePlaceFinder } from "@/components/GooglePlaceFinder";
 
 const SOURCE_LABELS: Record<HostReviewSource, string> = { airbnb: "Airbnb", getyourguide: "GetYourGuide", booking: "Booking.com" };
@@ -147,14 +147,16 @@ export function ExternalReviewsManager() {
         <div className="grid gap-2 border border-basalt/10 bg-chalk/40 p-4">
           <div className="grid gap-1">
             <Label className="text-xs font-semibold text-basalt/60">Source</Label>
-            <select value={source} onChange={(e) => { setSource(e.target.value as HostReviewSource); setListingId(""); }} className="h-10 max-w-xs rounded-none border border-basalt/20 bg-paper px-2 text-sm">
+            <select value={source} onChange={(e) => { const s = e.target.value as HostReviewSource; setSource(s); setListingId(""); setRating(ratingScaleFor(s)); }} className="h-10 max-w-xs rounded-none border border-basalt/20 bg-paper px-2 text-sm">
               {sourceOptions.map((s) => <option key={s} value={s}>{SOURCE_LABELS[s]}</option>)}
             </select>
           </div>
           <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Reviewer first name" className="h-10 rounded-none" />
             <select value={rating} onChange={(e) => setRating(Number(e.target.value))} className="h-10 rounded-none border border-basalt/20 bg-paper px-2 text-sm">
-              {[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{n} ★</option>)}
+              {Array.from({ length: ratingScaleFor(source) }, (_, i) => ratingScaleFor(source) - i).map((n) => (
+                <option key={n} value={n}>{n} {ratingScaleFor(source) === 10 ? `/ 10` : "★"}</option>
+              ))}
             </select>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-10 rounded-none" />
           </div>
@@ -166,7 +168,7 @@ export function ExternalReviewsManager() {
               {listingOptions.map((l) => <option key={l.id} value={(l as { id: string }).id}>{l.title}</option>)}
             </select>
           </div>
-          <div><Button onClick={add} disabled={adding} variant="outline" className="rounded-none border-basalt/20">{adding ? "Adding…" : `+ Add ${SOURCE_LABELS[source]} review`}</Button></div>
+          <div><Button onClick={add} disabled={adding} className="rounded-none bg-apricot font-semibold text-white shadow-sm hover:bg-apricot/90">{adding ? "Saving…" : `+ Add ${SOURCE_LABELS[source]} review`}</Button></div>
         </div>
 
         {reviews.length > 0 && (
@@ -176,7 +178,9 @@ export function ExternalReviewsManager() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 text-xs">
                     <span className="font-semibold text-basalt">{r.reviewerName}</span>
-                    <span className="inline-flex text-apricot">{Array.from({ length: r.rating ?? 0 }).map((_, i) => <Star key={i} className="h-3 w-3 fill-apricot" />)}</span>
+                    {typeof r.rating === "number" && (
+                      <span className="inline-flex items-center gap-0.5 font-semibold text-apricot"><Star className="h-3 w-3 fill-apricot" /> {r.rating}<span className="font-normal text-basalt/40">/{ratingScaleFor(r.source)}</span></span>
+                    )}
                     <span className="text-basalt/40">{SOURCE_LABELS[r.source]}{r.reviewDate ? ` · ${r.reviewDate}` : ""}</span>
                     <span className="rounded-full bg-basalt/5 px-2 py-0.5 text-[10px] font-semibold text-basalt/50">{listingTitle(r.listingId)}</span>
                   </div>

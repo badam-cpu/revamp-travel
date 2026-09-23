@@ -9,6 +9,11 @@ import { supabase } from "@/lib/supabase";
 
 export type HostReviewSource = "airbnb" | "booking" | "getyourguide";
 
+/** Rating scale a platform uses (Booking.com is out of 10, the rest out of 5). */
+export const ratingScaleFor = (source: HostReviewSource): 5 | 10 => (source === "booking" ? 10 : 5);
+/** Normalize any source's rating to a 5-star scale, for aggregation / drawing stars. */
+export const toFiveStar = (rating: number, source: HostReviewSource): number => rating * (5 / ratingScaleFor(source));
+
 export interface HostReview {
   id: string;
   source: HostReviewSource;

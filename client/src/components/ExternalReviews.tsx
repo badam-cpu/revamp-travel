@@ -7,7 +7,7 @@
  */
 import { useEffect, useState } from "react";
 import { Languages, Star } from "lucide-react";
-import { fetchGoogleReviews, listHostReviews, translateReviews, type GoogleReviewsResult, type HostReview, type HostReviewSource } from "@/lib/externalReviews";
+import { fetchGoogleReviews, listHostReviews, translateReviews, ratingScaleFor, toFiveStar, type GoogleReviewsResult, type HostReview, type HostReviewSource } from "@/lib/externalReviews";
 import { computeMentions } from "@/lib/reviewMentions";
 
 function Stars({ n }: { n: number }) {
@@ -29,8 +29,10 @@ const HOST_SOURCES: { key: HostReviewSource; label: string }[] = [
 ];
 
 /** One platform's self-imported reviews (own show-more state). */
-function HostReviewBlock({ label, reviews, show }: { label: string; reviews: HostReview[]; show: (t: string) => string }) {
+function HostReviewBlock({ label, source, reviews, show }: { label: string; source: HostReviewSource; reviews: HostReview[]; show: (t: string) => string }) {
   const [showAll, setShowAll] = useState(false);
+  const scale = ratingScaleFor(source);
+  const suffix = scale === 10 ? "/10" : "";
   const rated = reviews.filter((r) => typeof r.rating === "number") as (HostReview & { rating: number })[];
   const avg = rated.length ? rated.reduce((s, r) => s + r.rating, 0) / rated.length : null;
   return (
@@ -39,7 +41,7 @@ function HostReviewBlock({ label, reviews, show }: { label: string; reviews: Hos
         <p className="text-sm font-semibold">{label} <span className="font-normal text-basalt/45">— imported by the host</span></p>
         {avg !== null && (
           <span className="inline-flex items-center gap-1.5">
-            <Stars n={avg} /> <span className="font-semibold">{avg.toFixed(1)}</span>
+            <Stars n={toFiveStar(avg, source)} /> <span className="font-semibold">{avg.toFixed(1)}{suffix}</span>
             <span className="text-basalt/50">({reviews.length} review{reviews.length === 1 ? "" : "s"})</span>
           </span>
         )}
@@ -47,7 +49,12 @@ function HostReviewBlock({ label, reviews, show }: { label: string; reviews: Hos
       <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {(showAll ? reviews : reviews.slice(0, HOST_PREVIEW)).map((r) => (
           <div key={r.id} className="rounded-none border border-basalt/12 bg-paper p-4">
-            {typeof r.rating === "number" && <Stars n={r.rating} />}
+            {typeof r.rating === "number" && (
+              <span className="inline-flex items-center gap-1.5">
+                <Stars n={toFiveStar(r.rating, source)} />
+                {scale === 10 && <span className="text-xs font-semibold text-basalt/50">{r.rating}/10</span>}
+              </span>
+            )}
             <p className="mt-2 line-clamp-5 text-sm leading-6 text-basalt/75">{show(r.body)}</p>
             <p className="mt-3 text-xs text-basalt/50">{r.reviewerName}{r.reviewDate ? ` · ${r.reviewDate}` : ""}</p>
           </div>
@@ -170,7 +177,7 @@ export function ExternalReviews({ operatorId, listingId, className = "" }: { ope
 
       {HOST_SOURCES.map(({ key, label }) => {
         const rows = host.filter((r) => r.source === key);
-        return rows.length > 0 ? <HostReviewBlock key={key} label={label} reviews={rows} show={show} /> : null;
+        return rows.length > 0 ? <HostReviewBlock key={key} label={label} source={key} reviews={rows} show={show} /> : null;
       })}
     </section>
   );

@@ -11,6 +11,7 @@
  */
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { toFiveStar, type HostReviewSource } from "@/lib/externalReviews";
 
 interface Agg {
   sum: number;
@@ -22,16 +23,18 @@ let cachePromise: Promise<Index> | null = null;
 
 async function load(): Promise<Index> {
   const idx: Index = new Map();
-  const { data } = await supabase.from("external_reviews").select("operator_id, listing_id, rating").limit(5000);
+  const { data } = await supabase.from("external_reviews").select("operator_id, listing_id, rating, source").limit(5000);
   const add = (key: string, rating: number) => {
     const a = idx.get(key) ?? { sum: 0, count: 0 };
     a.sum += rating;
     a.count += 1;
     idx.set(key, a);
   };
-  for (const r of (data ?? []) as { operator_id: string; listing_id: string | null; rating: number | null }[]) {
+  for (const r of (data ?? []) as { operator_id: string; listing_id: string | null; rating: number | null; source: HostReviewSource }[]) {
     if (typeof r.rating !== "number") continue;
-    add(r.listing_id ? `${r.operator_id}|${r.listing_id}` : `${r.operator_id}|*`, r.rating);
+    // Normalize to 5 stars so Booking's /10 ratings don't inflate the average.
+    const stars = toFiveStar(r.rating, r.source);
+    add(r.listing_id ? `${r.operator_id}|${r.listing_id}` : `${r.operator_id}|*`, stars);
   }
   return idx;
 }
