@@ -1277,18 +1277,17 @@ export function registerApiRoutes(app: Express) {
 
     const placeId = String(req.query.placeId || "");
     if (!placeId) return res.status(400).json({ error: "Missing placeId." });
+    if (!placesServerKeySet()) {
+      return res.status(502).json({ error: "Set GOOGLE_PLACES_API_KEY in Netlify (a Places API New server key, no HTTP-referrer restriction), then redeploy. Fill the details in manually for now." });
+    }
     try {
       const details = await fetchPlaceDetails(placeId);
-      if (!details) {
-        const hint = placesServerKeySet()
-          ? "Couldn't fetch that place — check the key has Places API (New) enabled with billing. Fill the details in manually and save."
-          : "Google enrichment needs a server key (GOOGLE_PLACES_API_KEY in Netlify — a Places API New key with no HTTP-referrer restriction). Fill the details in manually and save for now.";
-        return res.status(502).json({ error: hint });
-      }
       res.json(details);
     } catch (err) {
-      console.error("[admin-place-details]", err);
-      res.status(500).json({ error: "Couldn't fetch that place from Google." });
+      // The route is admin-only, so it's safe to surface Google's own reason.
+      const msg = err instanceof Error ? err.message : "Couldn't fetch that place from Google.";
+      console.error("[admin-place-details]", msg);
+      res.status(502).json({ error: `Google: ${msg}` });
     }
   });
 

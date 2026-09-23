@@ -76,47 +76,45 @@ function priceBand(level?: string): "$" | "$$" | "$$$" | null {
 /** One-shot Place Details for admin curation (name, rating, address, website…). */
 export async function fetchPlaceDetails(placeId: string): Promise<GooglePlaceDetails | null> {
   const key = apiKey();
-  if (!key || !placeId) return null;
-  try {
-    const res = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`, {
-      headers: {
-        "X-Goog-Api-Key": key,
-        "X-Goog-FieldMask": "id,displayName,rating,userRatingCount,formattedAddress,websiteUri,googleMapsUri,priceLevel,location,editorialSummary",
-      },
-    });
-    const json = (await res.json()) as {
-      id?: string;
-      displayName?: { text?: string };
-      rating?: number;
-      userRatingCount?: number;
-      formattedAddress?: string;
-      websiteUri?: string;
-      googleMapsUri?: string;
-      priceLevel?: string;
-      location?: { latitude?: number; longitude?: number };
-      editorialSummary?: { text?: string };
-    };
-    if (!res.ok || !json.id) {
-      console.error("[google-places] details non-ok", res.status, JSON.stringify(json).slice(0, 300));
-      return null;
-    }
-    return {
-      placeId: json.id,
-      name: json.displayName?.text ?? "",
-      rating: typeof json.rating === "number" ? json.rating : null,
-      ratingCount: json.userRatingCount ?? 0,
-      address: json.formattedAddress ?? null,
-      website: json.websiteUri ?? null,
-      googleMapsUri: json.googleMapsUri ?? null,
-      priceBand: priceBand(json.priceLevel),
-      lat: typeof json.location?.latitude === "number" ? json.location.latitude : null,
-      lng: typeof json.location?.longitude === "number" ? json.location.longitude : null,
-      summary: json.editorialSummary?.text ?? null,
-    };
-  } catch (err) {
-    console.error("[google-places] details fetch failed", err);
-    return null;
+  if (!key || !placeId) throw new Error("No Google Places server key is configured.");
+  const res = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`, {
+    headers: {
+      "X-Goog-Api-Key": key,
+      "X-Goog-FieldMask": "id,displayName,rating,userRatingCount,formattedAddress,websiteUri,googleMapsUri,priceLevel,location,editorialSummary",
+    },
+  });
+  const json = (await res.json().catch(() => ({}))) as {
+    id?: string;
+    displayName?: { text?: string };
+    rating?: number;
+    userRatingCount?: number;
+    formattedAddress?: string;
+    websiteUri?: string;
+    googleMapsUri?: string;
+    priceLevel?: string;
+    location?: { latitude?: number; longitude?: number };
+    editorialSummary?: { text?: string };
+    error?: { message?: string; status?: string };
+  };
+  if (!res.ok || !json.id) {
+    // Surface Google's own reason so the admin sees exactly what's wrong.
+    const msg = json.error?.message || `Google returned HTTP ${res.status}.`;
+    console.error("[google-places] details non-ok", res.status, JSON.stringify(json).slice(0, 400));
+    throw new Error(msg);
   }
+  return {
+    placeId: json.id,
+    name: json.displayName?.text ?? "",
+    rating: typeof json.rating === "number" ? json.rating : null,
+    ratingCount: json.userRatingCount ?? 0,
+    address: json.formattedAddress ?? null,
+    website: json.websiteUri ?? null,
+    googleMapsUri: json.googleMapsUri ?? null,
+    priceBand: priceBand(json.priceLevel),
+    lat: typeof json.location?.latitude === "number" ? json.location.latitude : null,
+    lng: typeof json.location?.longitude === "number" ? json.location.longitude : null,
+    summary: json.editorialSummary?.text ?? null,
+  };
 }
 
 export async function fetchPlaceReviews(placeId: string): Promise<GooglePlaceReviews | null> {
