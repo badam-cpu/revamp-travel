@@ -13,6 +13,7 @@ import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { listPublishedForPlanner, verifyUser, userClient, getListingBusyRanges, getOperatorGooglePlaceId } from "./supabase.js";
 import { fetchPlaceReviews, fetchPlaceDetails, placesServerKeySet } from "./googlePlaces.js";
+import { matchTripadvisor, tripadvisorConfigured } from "./tripadvisor.js";
 import { translateTexts } from "./translate.js";
 import { pricelabsListings, syncOperatorPrices } from "./pricelabs.js";
 import { supabaseAdmin, adminConfigured } from "./supabaseAdmin.js";
@@ -1288,6 +1289,37 @@ export function registerApiRoutes(app: Express) {
       const msg = err instanceof Error ? err.message : "Couldn't fetch that place from Google.";
       console.error("[admin-place-details]", msg);
       res.status(502).json({ error: `Google: ${msg}` });
+    }
+  });
+
+  // GET /api/admin-tripadvisor?name=…&lat=&lng= — admin-only: find a restaurant
+  // on Tripadvisor by name (near coords) and return its rating + attribution.
+  app.get("/api/admin-tripadvisor", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+
+    if (!tripadvisorConfigured()) {
+      return res.status(502).json({ error: "Set TRIPADVISOR_API_KEY in Netlify (a Tripadvisor Content API key), then redeploy." });
+    }
+    const name = String(req.query.name || "").trim();
+    if (!name) return res.status(400).json({ error: "Missing name." });
+    const lat = req.query.lat ? Number(req.query.lat) : null;
+    const lng = req.query.lng ? Number(req.query.lng) : null;
+    const latLng = lat && lng ? `${lat},${lng}` : undefined;
+    try {
+      const match = await matchTripadvisor(name, latLng);
+      if (!match) return res.status(404).json({ error: "No Tripadvisor match found for that name." });
+      res.json(match);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Couldn't reach Tripadvisor.";
+      console.error("[admin-tripadvisor]", msg);
+      res.status(502).json({ error: `Tripadvisor: ${msg}` });
     }
   });
 

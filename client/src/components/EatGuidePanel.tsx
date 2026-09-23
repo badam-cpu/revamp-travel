@@ -33,8 +33,23 @@ export function EatGuidePanel({ listing }: { listing: LiveListing }) {
           </div>
           <p className="mt-1.5 text-xs text-basalt/55">{listing.googleRatingCount ? `${listing.googleRatingCount.toLocaleString()} Google reviews` : "Google rating"}</p>
         </div>
-      ) : (
+      ) : typeof listing.tripadvisorRating !== "number" ? (
         <p className="font-display text-2xl font-normal text-basalt/70">Recommended</p>
+      ) : null}
+
+      {/* Tripadvisor rating — attribution per their terms: bubble image + link. */}
+      {typeof listing.tripadvisorRating === "number" && (
+        <div className={typeof listing.googleRating === "number" ? "mt-4 border-t border-basalt/10 pt-4" : ""}>
+          <div className="flex items-center gap-2">
+            {listing.tripadvisorRatingImage ? (
+              <img src={listing.tripadvisorRatingImage} alt={`Tripadvisor rating ${listing.tripadvisorRating.toFixed(1)} of 5`} className="h-4" />
+            ) : (
+              <span className="font-semibold">{listing.tripadvisorRating.toFixed(1)}</span>
+            )}
+            <span className="text-xs text-basalt/55">{listing.tripadvisorRatingCount ? `${listing.tripadvisorRatingCount.toLocaleString()} reviews` : ""}</span>
+          </div>
+          <a href={listing.tripadvisorUrl || "https://www.tripadvisor.com"} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs font-semibold text-apricot hover:underline">on Tripadvisor</a>
+        </div>
       )}
 
       <div className="mt-5 grid gap-2 border-t border-basalt/10 pt-5">

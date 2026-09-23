@@ -128,6 +128,12 @@ export interface Listing {
   /** Cached Google rating + count (so cards don't call Google live). */
   googleRating?: number;
   googleRatingCount?: number;
+  /** Cached Tripadvisor rating + count + attribution (image + link, required). */
+  tripadvisorLocationId?: string;
+  tripadvisorRating?: number;
+  tripadvisorRatingCount?: number;
+  tripadvisorUrl?: string;
+  tripadvisorRatingImage?: string;
   /** Dormant Phase-2 fields: an owner-claimed / paid-partner restaurant. */
   isPartner?: boolean;
   claimedBy?: string | null;
@@ -586,6 +592,11 @@ export interface ListingInput {
   googlePlaceId?: string;
   googleRating?: number;
   googleRatingCount?: number;
+  tripadvisorLocationId?: string;
+  tripadvisorRating?: number;
+  tripadvisorRatingCount?: number;
+  tripadvisorUrl?: string;
+  tripadvisorRatingImage?: string;
   isPartner?: boolean;
   claimedBy?: string | null;
 }

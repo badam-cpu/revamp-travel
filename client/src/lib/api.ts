@@ -129,6 +129,29 @@ export async function adminPlaceDetails(placeId: string): Promise<GooglePlaceDet
   });
 }
 
+export interface TripadvisorMatch {
+  locationId: string;
+  name: string;
+  rating: number | null;
+  ratingCount: number;
+  url: string | null;
+  ratingImage: string | null;
+  address: string | null;
+}
+
+/** Admin-only: match a restaurant on Tripadvisor by name (near coords). */
+export async function adminTripadvisorMatch(name: string, lat?: number | null, lng?: number | null): Promise<TripadvisorMatch> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  const q = new URLSearchParams({ name });
+  if (lat) q.set("lat", String(lat));
+  if (lng) q.set("lng", String(lng));
+  return request<TripadvisorMatch>(`/api/admin-tripadvisor?${q.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export interface StartCheckoutParams {
   listingId: string;
   startDate: string;

@@ -136,6 +136,11 @@ interface ListingRow {
   google_place_id: string | null;
   google_rating: number | null;
   google_rating_count: number | null;
+  tripadvisor_location_id: string | null;
+  tripadvisor_rating: number | null;
+  tripadvisor_rating_count: number | null;
+  tripadvisor_url: string | null;
+  tripadvisor_rating_image: string | null;
   is_partner: boolean | null;
   claimed_by: string | null;
 }
@@ -202,6 +207,11 @@ function mapListingRow(row: ListingRow): LiveListing {
     googlePlaceId: row.google_place_id ?? undefined,
     googleRating: row.google_rating ?? undefined,
     googleRatingCount: row.google_rating_count ?? undefined,
+    tripadvisorLocationId: row.tripadvisor_location_id ?? undefined,
+    tripadvisorRating: row.tripadvisor_rating ?? undefined,
+    tripadvisorRatingCount: row.tripadvisor_rating_count ?? undefined,
+    tripadvisorUrl: row.tripadvisor_url ?? undefined,
+    tripadvisorRatingImage: row.tripadvisor_rating_image ?? undefined,
     isPartner: row.is_partner ?? false,
     claimedBy: row.claimed_by ?? null,
   };
@@ -255,6 +265,11 @@ function toRow(input: ListingInput) {
     google_place_id: input.googlePlaceId?.trim() || null,
     google_rating: input.googleRating ?? null,
     google_rating_count: input.googleRatingCount ?? null,
+    tripadvisor_location_id: input.tripadvisorLocationId?.trim() || null,
+    tripadvisor_rating: input.tripadvisorRating ?? null,
+    tripadvisor_rating_count: input.tripadvisorRatingCount ?? null,
+    tripadvisor_url: input.tripadvisorUrl?.trim() || null,
+    tripadvisor_rating_image: input.tripadvisorRatingImage?.trim() || null,
     is_partner: input.isPartner ?? false,
     claimed_by: input.claimedBy ?? null,
   };
