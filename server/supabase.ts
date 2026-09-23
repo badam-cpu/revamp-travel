@@ -172,6 +172,7 @@ export async function getPublishedPostBySlug(slug: string): Promise<PublicPost |
 }
 
 interface ListingRow {
+  slug: string;
   type: Listing["type"];
   title: string;
   city: string;
@@ -179,6 +180,9 @@ interface ListingRow {
   price_cents: number;
   price_unit: string;
   short_description: string;
+  venue_type: string | null;
+  cuisine: string | null;
+  price_band: string | null;
 }
 
 /** A lightweight projection of the published catalog — just what planner.ts's catalogDigest() needs, not the full Listing shape. */
@@ -186,10 +190,11 @@ export async function listPublishedForPlanner(): Promise<CatalogEntry[]> {
   if (!client) return [];
   const { data, error } = await client
     .from("listings")
-    .select("type, title, city, region, price_cents, price_unit, short_description")
+    .select("slug, type, title, city, region, price_cents, price_unit, short_description, venue_type, cuisine, price_band")
     .eq("status", "published");
   if (error || !data) return [];
   return (data as ListingRow[]).map((row) => ({
+    slug: row.slug,
     type: row.type,
     title: row.title,
     city: row.city,
@@ -197,6 +202,9 @@ export async function listPublishedForPlanner(): Promise<CatalogEntry[]> {
     priceLabel: `֏${Math.round(row.price_cents / 100).toLocaleString()}`,
     priceUnit: row.price_unit,
     shortDescription: row.short_description,
+    venueType: row.venue_type ?? undefined,
+    cuisine: row.cuisine ?? undefined,
+    priceBand: (row.price_band as "$" | "$$" | "$$$" | null) ?? undefined,
   }));
 }
 

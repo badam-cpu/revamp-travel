@@ -34,14 +34,21 @@ export function supportAiConfigured(): boolean {
 }
 
 function catalogDigest(listings: CatalogEntry[]): string {
+  const line = (l: CatalogEntry) => {
+    // Eat = free recommendation: describe by venue type + cuisine + price band,
+    // never a bookable price. Everything else shows its price. Include the slug
+    // so the model can link the listing.
+    const meta =
+      l.type === "eat"
+        ? [l.venueType, l.cuisine, l.priceBand].filter(Boolean).join(" · ") || "restaurant"
+        : `${l.priceLabel}/${l.priceUnit}`;
+    return `- ${l.title} — ${meta} (${l.city}, ${l.region}) [slug: ${l.slug}]`;
+  };
   const byType = (type: CatalogEntry["type"]) =>
-    listings
-      .filter((l) => l.type === type)
-      .map((l) => `- ${l.title} (${l.city}, ${l.region}) — ${l.priceLabel}/${l.priceUnit}`)
-      .join("\n") || "(none listed)";
+    listings.filter((l) => l.type === type).map(line).join("\n") || "(none listed)";
   return [
     "STAYS:", byType("stay"),
-    "RESTAURANTS:", byType("eat"),
+    "RESTAURANTS & CAFÉS (each line shows its venue type — do not miscategorize; a bar/restrobar is not a coffee shop):", byType("eat"),
     "TOURS:", byType("tour"),
     "EXPERIENCES:", byType("experience"),
   ].join("\n");
@@ -58,10 +65,12 @@ How Revamp works (answer only from this — do not invent details):
 
 Rules:
 - Never invent prices, availability, policies, refund amounts, ratings, or reviews. If you don't know a specific listing's detail, say so and offer to connect them to the team.
+- Recommend only listings in CURRENT CATALOG, and describe each one accurately by its stated venue type — never call a bar, restrobar, or restaurant a "coffee shop" (or vice versa). Only suggest a coffee spot if its venue type actually is a café/coffee shop.
+- When you name a listing, LINK it as a Markdown link to its page using its slug: [Listing Name](/listing/SLUG). Use the exact slug from the catalog. Only link listings that are in the catalog.
+- Keep replies short (2-4 sentences unless steps are needed). You may use short Markdown (links, **bold**, "- " bullets) — no headings or tables.
 - For anything account-specific, payment/refund disputes, changing or cancelling a specific booking, complaints, or anything you cannot answer confidently, set needsHuman to true and tell the traveler you're connecting them with the Revamp team who will follow up.
-- Keep replies short (2-4 sentences unless steps are needed).
 
-Reply with ONLY a JSON object: {"reply": "your message to the traveler", "needsHuman": true|false}`;
+Reply with ONLY a JSON object: {"reply": "your message to the traveler (Markdown allowed)", "needsHuman": true|false}`;
 
 function extractJson(text: string): { reply?: unknown; needsHuman?: unknown } | null {
   const tryParse = (s: string) => {

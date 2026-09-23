@@ -8,7 +8,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { Listing } from "../shared/listings.js";
 
 /** Only what catalogDigest() actually reads — lets the caller pass a lightweight Supabase projection instead of a full Listing. */
-export type CatalogEntry = Pick<Listing, "type" | "title" | "city" | "region" | "priceLabel" | "priceUnit" | "shortDescription">;
+export type CatalogEntry = Pick<Listing, "type" | "title" | "city" | "region" | "priceLabel" | "priceUnit" | "shortDescription" | "slug" | "venueType" | "cuisine" | "priceBand">;
 
 export class PlannerError extends Error {
   status: number;

@@ -10,9 +10,11 @@
  * thread), so a bare select returns only their conversation.
  */
 import { useEffect, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import { MessageCircle, Send, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { renderMarkdown } from "@shared/markdown";
 import { sendSupportMessage, submitSupportContact, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -34,6 +36,20 @@ export function SupportWidget() {
   const [contactSaved, setContactSaved] = useState(false);
   const [savingContact, setSavingContact] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [, navigate] = useLocation();
+
+  // Assistant replies are short Markdown; links to Revamp pages (/listing/…,
+  // /explore/…) should open in-app, not a new tab.
+  const onReplyClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const anchor = (e.target as HTMLElement).closest("a");
+    if (!anchor) return;
+    const href = anchor.getAttribute("href") || "";
+    if (href.startsWith("/")) {
+      e.preventDefault();
+      navigate(href);
+      setOpen(false);
+    }
+  };
 
   // A guest (anonymous session) has no email; a signed-in traveler already does.
   const isGuest = !!user && !user.email;
@@ -110,7 +126,7 @@ export function SupportWidget() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          aria-label="Chat with Revamp support"
+          aria-label="Chat with the Revamp AI assistant"
           className="fixed bottom-20 right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-apricot text-white shadow-[0_10px_30px_rgba(241,88,34,0.4)] transition-transform hover:scale-105 lg:bottom-4"
         >
           <MessageCircle className="h-6 w-6" />
@@ -122,7 +138,7 @@ export function SupportWidget() {
         <div className="fixed bottom-4 right-4 z-50 flex h-[min(560px,80vh)] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-basalt/10 bg-paper shadow-[0_24px_70px_rgba(35,35,33,0.28)]">
           <div className="flex items-center justify-between bg-basalt px-4 py-3 text-white">
             <div>
-              <p className="text-sm font-bold">Revamp support</p>
+              <p className="text-sm font-bold">Revamp AI assistant</p>
               <p className="text-[11px] text-white/60">Usually replies in a moment</p>
             </div>
             <button type="button" onClick={() => setOpen(false)} aria-label="Close chat" className="grid h-8 w-8 place-items-center rounded-full hover:bg-white/10">
@@ -140,16 +156,24 @@ export function SupportWidget() {
                   <div key={m.id} className={cn("flex", m.sender === "traveler" ? "justify-end" : "justify-start")}>
                     <div
                       className={cn(
-                        "max-w-[82%] whitespace-pre-wrap px-3.5 py-2.5 text-sm",
+                        "max-w-[82%] px-3.5 py-2.5 text-sm [overflow-wrap:anywhere]",
                         m.sender === "traveler"
-                          ? "rounded-2xl rounded-br-sm bg-apricot text-white"
+                          ? "whitespace-pre-wrap rounded-2xl rounded-br-sm bg-apricot text-white"
                           : m.sender === "support"
                             ? "rounded-2xl rounded-tl-sm border border-sevan/30 bg-sevan/10 text-basalt"
                             : "rounded-2xl rounded-tl-sm bg-chalk text-basalt/85",
                       )}
                     >
                       {m.sender === "support" && <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-[0.1em] text-sevan">Revamp team</span>}
-                      {m.body}
+                      {m.sender === "traveler" ? (
+                        m.body
+                      ) : (
+                        <div
+                          onClick={onReplyClick}
+                          className="[&_a]:font-semibold [&_a]:text-apricot [&_a]:underline [&_li]:my-0.5 [&_p]:my-1 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4"
+                          dangerouslySetInnerHTML={{ __html: renderMarkdown(m.body) }}
+                        />
+                      )}
                     </div>
                   </div>
                 ))}
