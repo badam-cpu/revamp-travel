@@ -13,8 +13,15 @@ import { useExternalRatings } from "@/hooks/useExternalRatings";
 export function ListingCard({ listing, large = false, active = false, onHover }: { listing: Listing; large?: boolean; active?: boolean; onHover?: (id?: string) => void }) {
   const { isSaved, toggleSaved } = useSavedPlaces();
   const { format } = useCurrency();
+  const isEat = listing.type === "eat";
   const ratingFor = useExternalRatings();
-  const rating = ratingFor((listing as { operatorId?: string }).operatorId, listing.id);
+  const external = ratingFor((listing as { operatorId?: string }).operatorId, listing.id);
+  // Eat = free recommendation: show its cached Google rating, not imported reviews.
+  const rating = isEat
+    ? listing.googleRating
+      ? { avg: listing.googleRating, count: listing.googleRatingCount ?? 0 }
+      : null
+    : external;
   const saved = isSaved(listing.id);
   // Headline shows the day-weighted average nightly rate when the stay uses
   // seasonal/daily rates; otherwise it's just the base price.
@@ -69,8 +76,17 @@ export function ListingCard({ listing, large = false, active = false, onHover }:
           <MoveUpRight className="mt-1 h-5 w-5 shrink-0 text-basalt/35 transition-all group-hover:-translate-y-1 group-hover:translate-x-1 group-hover:text-apricot" />
         </div>
         <div className="mt-auto flex items-center justify-between gap-3 border-t border-basalt/10 pt-4 text-xs text-basalt/50">
-          <span className="min-w-0 truncate">{listing.tags.slice(0, 2).join(" · ")}</span>
-          <span className="shrink-0 whitespace-nowrap"><strong className="text-sm text-basalt">{priceLabel}</strong>{listing.price > 0 ? ` / ${listing.priceUnit}` : ""}</span>
+          {isEat ? (
+            <>
+              <span className="min-w-0 truncate">{[listing.cuisine, listing.neighborhood || listing.city].filter(Boolean).join(" · ")}</span>
+              {listing.priceBand && <span className="shrink-0 font-bold tracking-wide text-basalt/70">{listing.priceBand}</span>}
+            </>
+          ) : (
+            <>
+              <span className="min-w-0 truncate">{listing.tags.slice(0, 2).join(" · ")}</span>
+              <span className="shrink-0 whitespace-nowrap"><strong className="text-sm text-basalt">{priceLabel}</strong>{listing.price > 0 ? ` / ${listing.priceUnit}` : ""}</span>
+            </>
+          )}
         </div>
       </Link>
     </article>

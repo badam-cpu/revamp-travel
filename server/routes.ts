@@ -12,7 +12,7 @@
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { listPublishedForPlanner, verifyUser, userClient, getListingBusyRanges, getOperatorGooglePlaceId } from "./supabase.js";
-import { fetchPlaceReviews } from "./googlePlaces.js";
+import { fetchPlaceReviews, fetchPlaceDetails } from "./googlePlaces.js";
 import { translateTexts } from "./translate.js";
 import { pricelabsListings, syncOperatorPrices } from "./pricelabs.js";
 import { supabaseAdmin, adminConfigured } from "./supabaseAdmin.js";
@@ -1259,6 +1259,31 @@ export function registerApiRoutes(app: Express) {
     } catch (err) {
       console.error("[admin-set-role]", err);
       res.status(500).json({ error: "Couldn't change that account's role. Please try again." });
+    }
+  });
+
+  // GET /api/admin-place-details?placeId=… — admin-only Google Place Details used
+  // to pre-fill a curated "eat" recommendation (name, rating, address, website,
+  // price band). Server-side so the Places key stays private.
+  app.get("/api/admin-place-details", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+
+    const placeId = String(req.query.placeId || "");
+    if (!placeId) return res.status(400).json({ error: "Missing placeId." });
+    try {
+      const details = await fetchPlaceDetails(placeId);
+      if (!details) return res.status(404).json({ error: "Couldn't fetch that place from Google." });
+      res.json(details);
+    } catch (err) {
+      console.error("[admin-place-details]", err);
+      res.status(500).json({ error: "Couldn't fetch that place from Google." });
     }
   });
 

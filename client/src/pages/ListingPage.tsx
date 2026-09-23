@@ -8,6 +8,7 @@ import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { ListingCard } from "@/components/ListingCard";
 import { TourDetail } from "@/components/TourDetail";
 import { BookingPanel } from "@/components/BookingPanel";
+import { EatGuidePanel } from "@/components/EatGuidePanel";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { groupAmenitiesForDisplay } from "@/components/AmenityPicker";
@@ -197,6 +198,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   }
 
   const live = listings.find((l) => l.id === listing.id);
+  const isEat = listing.type === "eat";
 
   // Tours and experiences get a dedicated GetYourGuide-style detail layout;
   // stays and restaurants keep the original shared template below.
@@ -400,18 +402,22 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
               </div>
             )}
 
-            <div className="border-t border-basalt/10 py-10">
-              <p className="eyebrow">Cancellation policy</p>
-              <p className="mt-4 flex items-start gap-3 text-base leading-7 text-basalt/70">
-                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-apricot" strokeWidth={1.75} />
-                <span>{cancellationText}.{listing.cancellationPolicy === "non_refundable" ? " This rate is non-refundable." : " Cancel before the cutoff for a full refund; after it, the booking is non-refundable."}</span>
-              </p>
-            </div>
+            {!isEat && (
+              <div className="border-t border-basalt/10 py-10">
+                <p className="eyebrow">Cancellation policy</p>
+                <p className="mt-4 flex items-start gap-3 text-base leading-7 text-basalt/70">
+                  <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-apricot" strokeWidth={1.75} />
+                  <span>{cancellationText}.{listing.cancellationPolicy === "non_refundable" ? " This rate is non-refundable." : " Cancel before the cutoff for a full refund; after it, the booking is non-refundable."}</span>
+                </p>
+              </div>
+            )}
 
           </div>
 
           <aside>
-            {live ? (
+            {live && isEat ? (
+              <EatGuidePanel listing={live} />
+            ) : live ? (
               <BookingPanel listing={live} />
             ) : (
               <div className="brand-notch sticky top-[104px] border border-basalt/12 bg-chalk p-6 shadow-[0_20px_55px_rgba(35,35,33,0.1)]">

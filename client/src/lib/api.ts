@@ -104,6 +104,30 @@ export async function importListingPrefill(url: string): Promise<ListingPrefill>
   });
 }
 
+export interface GooglePlaceDetails {
+  placeId: string;
+  name: string;
+  rating: number | null;
+  ratingCount: number;
+  address: string | null;
+  website: string | null;
+  googleMapsUri: string | null;
+  priceBand: "$" | "$$" | "$$$" | null;
+  lat: number | null;
+  lng: number | null;
+  summary: string | null;
+}
+
+/** Admin-only: fetch Google Place Details to pre-fill a curated restaurant. */
+export async function adminPlaceDetails(placeId: string): Promise<GooglePlaceDetails> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<GooglePlaceDetails>(`/api/admin-place-details?placeId=${encodeURIComponent(placeId)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export interface StartCheckoutParams {
   listingId: string;
   startDate: string;

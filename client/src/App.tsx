@@ -18,6 +18,7 @@ import { OperatorAssistant } from "./components/OperatorAssistant";
 import Home from "./pages/Home";
 import Explore from "./pages/Explore";
 import Tours from "./pages/Tours";
+import EatGuide from "./pages/EatGuide";
 import MapPage from "./pages/MapPage";
 import ListingPage from "./pages/ListingPage";
 import Dashboard from "./pages/Dashboard";
@@ -69,6 +70,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/explore/tour" component={Tours} />
+      <Route path="/explore/eat" component={EatGuide} />
       <Route path="/explore/:category">{(params) => <Explore initialType={params.category} />}</Route>
       <Route path="/explore">{() => <Explore />}</Route>
       <Route path="/map" component={MapPage} />

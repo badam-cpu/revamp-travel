@@ -114,6 +114,21 @@ export interface Listing {
   rooms?: ListingRoom[];
   /** Per-period nightly rate overrides (seasonal / date-range pricing). */
   seasonalRates?: SeasonalRate[];
+  // --- type: "eat" only (free, admin-curated recommendations) ---
+  /** Cuisine / venue kind, e.g. "Armenian", "Café", "Wine bar". */
+  cuisine?: string;
+  /** Price band shown instead of a bookable price: "$" | "$$" | "$$$". */
+  priceBand?: "$" | "$$" | "$$$";
+  /** The restaurant's own website. */
+  website?: string;
+  /** Google Place ID, captured at curation time. */
+  googlePlaceId?: string;
+  /** Cached Google rating + count (so cards don't call Google live). */
+  googleRating?: number;
+  googleRatingCount?: number;
+  /** Dormant Phase-2 fields: an owner-claimed / paid-partner restaurant. */
+  isPartner?: boolean;
+  claimedBy?: string | null;
 }
 
 // Deployment note: this fork replaces the Manus-managed `/manus-storage/...`
@@ -561,4 +576,13 @@ export interface ListingInput {
   rooms?: ListingRoom[];
   /** Per-period nightly rate overrides (seasonal / date-range pricing). */
   seasonalRates?: SeasonalRate[];
+  // --- type: "eat" only (free, admin-curated recommendations) ---
+  cuisine?: string;
+  priceBand?: "$" | "$$" | "$$$";
+  website?: string;
+  googlePlaceId?: string;
+  googleRating?: number;
+  googleRatingCount?: number;
+  isPartner?: boolean;
+  claimedBy?: string | null;
 }

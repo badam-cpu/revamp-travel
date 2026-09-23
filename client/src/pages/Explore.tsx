@@ -55,7 +55,9 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return listings.filter((listing) => {
-      const matchesType = type === "all" || listing.type === type;
+      // Eat listings live in their own free guide (/explore/eat), not the
+      // bookable marketplace grid — keep them out of "All places".
+      const matchesType = type === "all" ? listing.type !== "eat" : listing.type === type;
       const matchesRegion = region === "all" || normalizeRegion(listing.region).toLowerCase() === region.toLowerCase();
       const haystack = [listing.title, listing.city, listing.region, listing.type, listing.shortDescription, ...listing.tags].join(" ").toLowerCase();
       return matchesType && matchesRegion && (!needle || haystack.includes(needle));
@@ -107,7 +109,7 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
               {["all", "stay", "eat", "tour", "experience"].map((value) => (
                 <button
                   key={value}
-                  onClick={() => (value === "tour" ? navigate(`/explore/tour${query.trim() ? `?query=${encodeURIComponent(query.trim())}` : ""}`) : setType(value))}
+                  onClick={() => (value === "tour" || value === "eat" ? navigate(`/explore/${value}${value === "tour" && query.trim() ? `?query=${encodeURIComponent(query.trim())}` : ""}`) : setType(value))}
                   className={cn("filter-chip", type === value && "active")}
                 >
                   {value === "all" ? "All places" : typeLabels[value as ListingType]}

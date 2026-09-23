@@ -129,6 +129,14 @@ interface ListingRow {
   discount_start: string | null;
   discount_end: string | null;
   rooms: { name: string; beds: { type: string; count: number }[] }[] | null;
+  cuisine: string | null;
+  price_band: "$" | "$$" | "$$$" | null;
+  website: string | null;
+  google_place_id: string | null;
+  google_rating: number | null;
+  google_rating_count: number | null;
+  is_partner: boolean | null;
+  claimed_by: string | null;
 }
 
 function mapListingRow(row: ListingRow): LiveListing {
@@ -186,6 +194,14 @@ function mapListingRow(row: ListingRow): LiveListing {
     discountStart: row.discount_start ?? undefined,
     discountEnd: row.discount_end ?? undefined,
     rooms: Array.isArray(row.rooms) ? row.rooms : [],
+    cuisine: row.cuisine ?? undefined,
+    priceBand: row.price_band ?? undefined,
+    website: row.website ?? undefined,
+    googlePlaceId: row.google_place_id ?? undefined,
+    googleRating: row.google_rating ?? undefined,
+    googleRatingCount: row.google_rating_count ?? undefined,
+    isPartner: row.is_partner ?? false,
+    claimedBy: row.claimed_by ?? null,
   };
 }
 
@@ -230,6 +246,14 @@ function toRow(input: ListingInput) {
     discount_end: input.discountEnd || null,
     rooms: input.rooms ?? [],
     seasonal_rates: input.seasonalRates ?? [],
+    cuisine: input.cuisine?.trim() || null,
+    price_band: input.priceBand ?? null,
+    website: input.website?.trim() || null,
+    google_place_id: input.googlePlaceId?.trim() || null,
+    google_rating: input.googleRating ?? null,
+    google_rating_count: input.googleRatingCount ?? null,
+    is_partner: input.isPartner ?? false,
+    claimed_by: input.claimedBy ?? null,
   };
 }
 

@@ -16,7 +16,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, BookOpen, Check, ExternalLink, Gift, Home, LayoutDashboard, ListChecks, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, Users, Wallet, X } from "lucide-react";
+import { AlertTriangle, BookOpen, Check, ExternalLink, Gift, Home, LayoutDashboard, ListChecks, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, Users, Utensils, Wallet, X } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { AdminSiteContent } from "@/components/AdminSiteContent";
@@ -26,6 +26,7 @@ import { AdminBlog } from "@/components/AdminBlog";
 import { AdminHub } from "@/components/AdminHub";
 import { Inbox } from "@/components/Inbox";
 import { AdminListings } from "@/components/AdminListings";
+import { AdminEateries } from "@/components/AdminEateries";
 import { AdminAccounts } from "@/components/AdminAccounts";
 import { AdminGiftCards } from "@/components/AdminGiftCards";
 import { useAuth } from "@/contexts/AuthContext";
@@ -229,11 +230,12 @@ function StatTile({ n, label, onClick }: { n: number | string; label: string; on
   );
 }
 
-type AdminSection = "overview" | "reviews" | "listings" | "accounts" | "giftcards" | "support" | "messages" | "payouts" | "blog" | "hub" | "site";
+type AdminSection = "overview" | "reviews" | "listings" | "eateries" | "accounts" | "giftcards" | "support" | "messages" | "payouts" | "blog" | "hub" | "site";
 const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: typeof Home }[] = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
   { key: "reviews", label: "Reviews", icon: ListChecks },
   { key: "listings", label: "Listings", icon: Package },
+  { key: "eateries", label: "Eat guide", icon: Utensils },
   { key: "accounts", label: "Accounts", icon: Users },
   { key: "giftcards", label: "Gift cards", icon: Gift },
   { key: "support", label: "Support", icon: MessageSquare },
@@ -328,6 +330,7 @@ function AdminConsole() {
             {section === "overview" && <OverviewPanel go={go} />}
             {section === "reviews" && <ReviewsPanel />}
             {section === "listings" && <AdminListings />}
+            {section === "eateries" && <AdminEateries />}
             {section === "accounts" && <AdminAccounts />}
             {section === "giftcards" && <AdminGiftCards />}
             {section === "support" && <AdminSupportInbox />}

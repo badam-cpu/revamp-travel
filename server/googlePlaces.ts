@@ -37,6 +37,79 @@ export function googlePlacesConfigured(): boolean {
   return !!apiKey();
 }
 
+/** Details used to pre-fill a curated "eat" listing from a Google Place. */
+export interface GooglePlaceDetails {
+  placeId: string;
+  name: string;
+  rating: number | null;
+  ratingCount: number;
+  address: string | null;
+  website: string | null;
+  googleMapsUri: string | null;
+  priceBand: "$" | "$$" | "$$$" | null;
+  lat: number | null;
+  lng: number | null;
+  summary: string | null;
+}
+
+// Google PRICE_LEVEL_* → our $/$$/$$$ band (VERY_EXPENSIVE folds into $$$).
+function priceBand(level?: string): "$" | "$$" | "$$$" | null {
+  switch (level) {
+    case "PRICE_LEVEL_INEXPENSIVE":
+      return "$";
+    case "PRICE_LEVEL_MODERATE":
+      return "$$";
+    case "PRICE_LEVEL_EXPENSIVE":
+    case "PRICE_LEVEL_VERY_EXPENSIVE":
+      return "$$$";
+    default:
+      return null;
+  }
+}
+
+/** One-shot Place Details for admin curation (name, rating, address, website…). */
+export async function fetchPlaceDetails(placeId: string): Promise<GooglePlaceDetails | null> {
+  const key = apiKey();
+  if (!key || !placeId) return null;
+  try {
+    const res = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`, {
+      headers: {
+        "X-Goog-Api-Key": key,
+        "X-Goog-FieldMask": "id,displayName,rating,userRatingCount,formattedAddress,websiteUri,googleMapsUri,priceLevel,location,editorialSummary",
+      },
+    });
+    const json = (await res.json()) as {
+      id?: string;
+      displayName?: { text?: string };
+      rating?: number;
+      userRatingCount?: number;
+      formattedAddress?: string;
+      websiteUri?: string;
+      googleMapsUri?: string;
+      priceLevel?: string;
+      location?: { latitude?: number; longitude?: number };
+      editorialSummary?: { text?: string };
+    };
+    if (!res.ok || !json.id) return null;
+    return {
+      placeId: json.id,
+      name: json.displayName?.text ?? "",
+      rating: typeof json.rating === "number" ? json.rating : null,
+      ratingCount: json.userRatingCount ?? 0,
+      address: json.formattedAddress ?? null,
+      website: json.websiteUri ?? null,
+      googleMapsUri: json.googleMapsUri ?? null,
+      priceBand: priceBand(json.priceLevel),
+      lat: typeof json.location?.latitude === "number" ? json.location.latitude : null,
+      lng: typeof json.location?.longitude === "number" ? json.location.longitude : null,
+      summary: json.editorialSummary?.text ?? null,
+    };
+  } catch (err) {
+    console.error("[google-places] details fetch failed", err);
+    return null;
+  }
+}
+
 export async function fetchPlaceReviews(placeId: string): Promise<GooglePlaceReviews | null> {
   const key = apiKey();
   if (!key || !placeId) return null;
