@@ -70,7 +70,7 @@ function HostReviewBlock({ label, source, reviews, show }: { label: string; sour
   );
 }
 
-export function ExternalReviews({ operatorId, listingId, className = "" }: { operatorId: string; listingId?: string; className?: string }) {
+export function ExternalReviews({ operatorId, listingId, kind = "stay", className = "" }: { operatorId: string; listingId?: string; kind?: "stay" | "tour" | "experience" | "eat"; className?: string }) {
   const [google, setGoogle] = useState<GoogleReviewsResult | null>(null);
   const [host, setHost] = useState<HostReview[]>([]);
   const [translated, setTranslated] = useState<Map<string, string> | null>(null);
@@ -115,7 +115,7 @@ export function ExternalReviews({ operatorId, listingId, className = "" }: { ope
   };
 
   // "Guest reviews mention" — themes across all the external review text we have.
-  const mentions = computeMentions([...host.map((r) => r.body), ...((google?.reviews ?? []).map((r) => r.text))]).slice(0, 6);
+  const mentions = computeMentions([...host.map((r) => r.body), ...((google?.reviews ?? []).map((r) => r.text))], kind).slice(0, 6);
 
   return (
     <section className={`border-t border-basalt/10 pt-8 ${className}`}>

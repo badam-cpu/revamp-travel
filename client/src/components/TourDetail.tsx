@@ -309,7 +309,7 @@ export function TourDetail({ listing }: { listing: Listing }) {
 
       {operatorId && (
         <div className="container">
-          <ExternalReviews operatorId={operatorId} listingId={(listing as { id?: string }).id} className="pt-12 lg:pt-16" />
+          <ExternalReviews operatorId={operatorId} listingId={(listing as { id?: string }).id} kind={listing.type} className="pt-12 lg:pt-16" />
         </div>
       )}
 

@@ -458,7 +458,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
         </section>
 
         <div className="container">
-          <ExternalReviews operatorId={(listing as { operatorId?: string }).operatorId ?? ""} listingId={(listing as { id?: string }).id} className="pt-12 lg:pt-16" />
+          <ExternalReviews operatorId={(listing as { operatorId?: string }).operatorId ?? ""} listingId={(listing as { id?: string }).id} kind={listing.type} className="pt-12 lg:pt-16" />
         </div>
 
         <section className="container py-16 lg:py-24">
