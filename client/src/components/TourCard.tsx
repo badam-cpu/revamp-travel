@@ -58,6 +58,12 @@ export function TourCard({ listing }: { listing: Listing }) {
             </span>
           )}
           <DiscountBadge listing={listing} className="absolute bottom-3 left-3" />
+          {rating && (
+            <div className="absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-full bg-white/95 px-2 py-1 text-xs font-semibold text-basalt shadow-sm backdrop-blur-sm">
+              <Star className="h-3.5 w-3.5 fill-apricot text-apricot" /> {rating.avg.toFixed(1)}
+              <span className="font-normal text-basalt/50">({rating.count})</span>
+            </div>
+          )}
 
           <button
             type="button"
@@ -113,12 +119,6 @@ export function TourCard({ listing }: { listing: Listing }) {
           <p className="line-clamp-2 text-sm leading-6 text-basalt/58">{listing.shortDescription}</p>
 
           <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-basalt/10 pt-3 text-xs text-basalt/60">
-            {rating && (
-              <span className="inline-flex items-center gap-1 font-semibold text-basalt">
-                <Star className="h-3.5 w-3.5 fill-apricot text-apricot" /> {rating.avg.toFixed(1)}
-                <span className="font-normal text-basalt/45">({rating.count})</span>
-              </span>
-            )}
             {duration && (
               <span className="inline-flex items-center gap-1.5">
                 <Clock className="h-3.5 w-3.5 text-apricot" /> {duration}
