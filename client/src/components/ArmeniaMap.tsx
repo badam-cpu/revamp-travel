@@ -80,6 +80,10 @@ function clusterIcon(count: number): google.maps.Icon {
 export function ArmeniaMap({ listings, selectedId, onSelect, className, single = false }: ArmeniaMapProps) {
   const { format } = useCurrency();
   const active = useMemo(() => listings.find((listing) => listing.id === selectedId) || listings[0], [listings, selectedId]);
+  // Marker pill: eateries are free recommendations — show their price band (or a
+  // dot), never a bookable price / "Rate on request".
+  const markerLabel = (l: (typeof listings)[number]) =>
+    l.type === "eat" ? l.priceBand || "•" : l.price > 0 ? format(Math.round(l.price * 100)) : l.priceLabel;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -154,7 +158,7 @@ export function ArmeniaMap({ listings, selectedId, onSelect, className, single =
     const markers = listings.map((listing) => {
       const marker = new google.maps.Marker({
         position: { lat: listing.coordinates.lat, lng: listing.coordinates.lng },
-        icon: pillIcon(listing.price > 0 ? format(Math.round(listing.price * 100)) : listing.priceLabel, false),
+        icon: pillIcon(markerLabel(listing), false),
         title: listing.title,
         zIndex: 1,
       });
@@ -192,7 +196,7 @@ export function ArmeniaMap({ listings, selectedId, onSelect, className, single =
       const marker = markersRef.current.get(listing.id);
       if (!marker) return;
       const isSelected = selectedId === listing.id || (single && listing.id === active?.id);
-      marker.setIcon(pillIcon(listing.price > 0 ? format(Math.round(listing.price * 100)) : listing.priceLabel, isSelected));
+      marker.setIcon(pillIcon(markerLabel(listing), isSelected));
       marker.setZIndex(isSelected ? 9_000 : 1);
     });
   }, [ready, selectedId, single, active, listings, format]);
