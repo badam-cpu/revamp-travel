@@ -139,14 +139,13 @@ export interface TripadvisorMatch {
   address: string | null;
 }
 
-/** Admin-only: match a restaurant on Tripadvisor by name (near coords). */
-export async function adminTripadvisorMatch(name: string, lat?: number | null, lng?: number | null): Promise<TripadvisorMatch> {
+/** Admin-only: match a restaurant on Tripadvisor by name (biased to a geo/city). */
+export async function adminTripadvisorMatch(name: string, geo?: string): Promise<TripadvisorMatch> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new ApiError("Sign in.");
   const q = new URLSearchParams({ name });
-  if (lat) q.set("lat", String(lat));
-  if (lng) q.set("lng", String(lng));
+  if (geo) q.set("geo", geo);
   return request<TripadvisorMatch>(`/api/admin-tripadvisor?${q.toString()}`, {
     headers: { Authorization: `Bearer ${token}` },
   });

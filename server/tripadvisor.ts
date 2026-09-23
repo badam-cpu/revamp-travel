@@ -1,14 +1,15 @@
 /**
- * Tripadvisor Content API (api.content.tripadvisor.com/api/v1) — server-side so
- * the key stays private. Used at curation time to pull a restaurant's rating +
- * review count, plus the attribution the terms require: Tripadvisor's own
- * bubble-rating image and the web_url link back. We cache the location_id and
- * rating on the listing; the display always shows the Tripadvisor branding.
+ * Tripadvisor **Terra** API (terra.tripadvisor.com/api) — the current platform
+ * (the legacy Content API is being sunset). Server-side so the key stays
+ * private. Used at curation time to pull a restaurant's rating + review count,
+ * plus the attribution the terms require: Tripadvisor's own rating icon and the
+ * link back. We cache those on the listing.
  *
- * Key: TRIPADVISOR_API_KEY. Some keys are referrer-restricted — set
- * TRIPADVISOR_REFERER to a matching allowed referrer and we send it as a header.
+ * Auth: X-API-Key header, key = TRIPADVISOR_API_KEY (a Terra Discover key).
+ *   POST /recommendations/search?version=1  → find a Location by name near a geo
+ *   GET  /locations/{id}?version=1          → rating, count, icon_url, urls, name
  */
-const BASE = "https://api.content.tripadvisor.com/api/v1";
+const BASE = "https://terra.tripadvisor.com/api";
 
 function key(): string | undefined {
   return process.env.TRIPADVISOR_API_KEY;
@@ -17,29 +18,16 @@ export function tripadvisorConfigured(): boolean {
   return !!key();
 }
 
-function headers(): Record<string, string> {
-  const h: Record<string, string> = { accept: "application/json" };
-  if (process.env.TRIPADVISOR_REFERER) h.Referer = process.env.TRIPADVISOR_REFERER;
-  return h;
+function authHeaders(): Record<string, string> {
+  const k = key();
+  if (!k) throw new Error("No Tripadvisor (Terra) API key is configured.");
+  return { "X-API-Key": k, accept: "application/json", "content-type": "application/json" };
 }
 
-/** GET + parse, surfacing Tripadvisor's own error text on a non-ok response. */
-async function taGet(url: string): Promise<Record<string, unknown>> {
-  const res = await fetch(url, { headers: headers() });
-  const raw = await res.text().catch(() => "");
-  let json: Record<string, unknown> = {};
-  try {
-    json = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
-  } catch {
-    /* non-JSON body */
-  }
-  if (!res.ok) {
-    const err = json.error as { message?: string } | undefined;
-    const msg = err?.message || (json.message as string) || (json.Message as string) || raw.slice(0, 200) || `HTTP ${res.status}`;
-    console.error("[tripadvisor] non-ok", res.status, raw.slice(0, 300));
-    throw new Error(`${res.status} — ${msg}`);
-  }
-  return json;
+/** Read the primary translated name from a Terra `names` array. */
+function primaryName(names?: { value?: string; primary?: boolean }[]): string {
+  if (!names?.length) return "";
+  return (names.find((n) => n.primary) ?? names[0]).value ?? "";
 }
 
 export interface TripadvisorMatch {
@@ -52,53 +40,70 @@ export interface TripadvisorMatch {
   address: string | null;
 }
 
-interface SearchRow {
-  location_id?: string;
-  name?: string;
-  address_obj?: { address_string?: string };
+interface TerraLocation {
+  id?: number;
+  names?: { value?: string; primary?: boolean }[];
+  traveler_ratings?: { overall?: { rating?: number; count?: number; icon_url?: string } };
+  urls?: { tripadvisor?: { main?: string } };
+  addresses?: { formatted?: string }[];
 }
 
-/** Find the best-matching Tripadvisor location for a name near lat/lng. */
-async function searchLocation(query: string, latLng?: string): Promise<string | null> {
-  const k = key();
-  if (!k) throw new Error("No Tripadvisor API key is configured.");
-  const params = new URLSearchParams({ key: k, searchQuery: query, category: "restaurants", language: "en" });
-  if (latLng) params.set("latLong", latLng);
-  const json = (await taGet(`${BASE}/location/search?${params.toString()}`)) as { data?: SearchRow[] };
-  const first = (json.data ?? []).find((d) => d.location_id);
-  return first?.location_id ?? null;
+/** Surface Terra's own error text on a non-ok response. */
+async function parseOrThrow(res: Response): Promise<Record<string, unknown>> {
+  const raw = await res.text().catch(() => "");
+  let json: Record<string, unknown> = {};
+  try {
+    json = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+  } catch {
+    /* non-JSON */
+  }
+  if (!res.ok) {
+    const err = (json.error as { message?: string } | undefined)?.message;
+    const msg = err || (json.message as string) || (json.Message as string) || raw.slice(0, 200) || `HTTP ${res.status}`;
+    console.error("[tripadvisor/terra] non-ok", res.status, raw.slice(0, 300));
+    throw new Error(`${res.status} — ${msg}`);
+  }
+  return json;
 }
 
-/** Full details (rating, count, url, bubble image) for a location_id. */
-async function locationDetails(locationId: string): Promise<TripadvisorMatch | null> {
-  const k = key();
-  if (!k) throw new Error("No Tripadvisor API key is configured.");
-  const json = (await taGet(`${BASE}/location/${encodeURIComponent(locationId)}/details?key=${encodeURIComponent(k)}&language=en`)) as {
-    location_id?: string;
-    name?: string;
-    rating?: string | number;
-    num_reviews?: string | number;
-    web_url?: string;
-    rating_image_url?: string;
-    address_obj?: { address_string?: string };
+/** Find the best-matching Terra Location for a name near a place (geo name). */
+async function searchLocation(query: string, geoName?: string): Promise<TerraLocation | null> {
+  const body: Record<string, unknown> = {
+    query,
+    geo: geoName ? { name: geoName } : {},
+    top_level_categories: ["Eat & Drink"],
+    limit: 5,
+    response_preference: "quality",
   };
-  if (!json.location_id) throw new Error("Tripadvisor returned no details for that location.");
-  const rating = json.rating != null ? Number(json.rating) : null;
-  const count = json.num_reviews != null ? Number(json.num_reviews) : 0;
+  const res = await fetch(`${BASE}/recommendations/search?version=1`, { method: "POST", headers: authHeaders(), body: JSON.stringify(body) });
+  const json = (await parseOrThrow(res)) as { search_results?: { type?: string; location?: TerraLocation }[] };
+  const locs = (json.search_results ?? []).filter((r) => r.type === "location" && r.location?.id).map((r) => r.location as TerraLocation);
+  if (!locs.length) return null;
+  // Prefer an exact-ish name match, else the top (quality-ranked) result.
+  const want = query.trim().toLowerCase();
+  return locs.find((l) => primaryName(l.names).toLowerCase().includes(want)) ?? locs[0];
+}
+
+/** Full details for a location id (rating, count, icon, url, name, address). */
+async function locationDetails(id: number): Promise<TripadvisorMatch> {
+  const res = await fetch(`${BASE}/locations/${id}?version=1`, { headers: authHeaders() });
+  const loc = (await parseOrThrow(res)) as TerraLocation;
+  const overall = loc.traveler_ratings?.overall;
+  const rating = typeof overall?.rating === "number" ? overall.rating : null;
   return {
-    locationId: json.location_id,
-    name: json.name ?? "",
-    rating: Number.isFinite(rating as number) ? (rating as number) : null,
-    ratingCount: Number.isFinite(count) ? count : 0,
-    url: json.web_url ?? null,
-    ratingImage: json.rating_image_url ?? null,
-    address: json.address_obj?.address_string ?? null,
+    locationId: String(loc.id ?? id),
+    name: primaryName(loc.names),
+    rating,
+    ratingCount: typeof overall?.count === "number" ? overall.count : 0,
+    url: loc.urls?.tripadvisor?.main ?? null,
+    ratingImage: overall?.icon_url ?? null,
+    address: loc.addresses?.[0]?.formatted ?? null,
   };
 }
 
-/** Search by name (+ optional coords) and return the best match's details. */
-export async function matchTripadvisor(query: string, latLng?: string): Promise<TripadvisorMatch | null> {
-  const id = await searchLocation(query, latLng);
-  if (!id) return null;
-  return locationDetails(id);
+/** Search by name (+ optional geo/city) and return the best match's details. */
+export async function matchTripadvisor(query: string, geoName?: string): Promise<TripadvisorMatch | null> {
+  const hit = await searchLocation(query, geoName);
+  if (!hit?.id) return null;
+  return locationDetails(hit.id);
 }

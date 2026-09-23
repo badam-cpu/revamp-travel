@@ -1305,15 +1305,13 @@ export function registerApiRoutes(app: Express) {
     if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
 
     if (!tripadvisorConfigured()) {
-      return res.status(502).json({ error: "Set TRIPADVISOR_API_KEY in Netlify (a Tripadvisor Content API key), then redeploy." });
+      return res.status(502).json({ error: "Set TRIPADVISOR_API_KEY in Netlify (a Tripadvisor Terra API key), then redeploy." });
     }
     const name = String(req.query.name || "").trim();
     if (!name) return res.status(400).json({ error: "Missing name." });
-    const lat = req.query.lat ? Number(req.query.lat) : null;
-    const lng = req.query.lng ? Number(req.query.lng) : null;
-    const latLng = lat && lng ? `${lat},${lng}` : undefined;
+    const geo = String(req.query.geo || "").trim() || undefined;
     try {
-      const match = await matchTripadvisor(name, latLng);
+      const match = await matchTripadvisor(name, geo);
       if (!match) return res.status(404).json({ error: "No Tripadvisor match found for that name." });
       res.json(match);
     } catch (err) {

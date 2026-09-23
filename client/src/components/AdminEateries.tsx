@@ -108,7 +108,7 @@ export function AdminEateries() {
     }
     setTaMatching(true);
     try {
-      const m = await adminTripadvisorMatch(f.title.trim(), f.lat, f.lng);
+      const m = await adminTripadvisorMatch(f.title.trim(), f.city.trim() || f.region.trim());
       set({
         tripadvisorLocationId: m.locationId,
         tripadvisorRating: m.rating,
