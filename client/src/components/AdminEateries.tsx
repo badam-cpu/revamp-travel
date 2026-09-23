@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { adminPlaceDetails, ApiError } from "@/lib/api";
 import { slugify } from "@/lib/slug";
+import { EAT_CATEGORIES } from "@/lib/eatCategories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,7 +47,14 @@ export function AdminEateries() {
   const [enriching, setEnriching] = useState(false);
   const [saving, setSaving] = useState(false);
   const photosRef = useRef<PhotoUploaderHandle>(null);
-  const [uploaderKey, setUploaderKey] = useState(0); // bump to reset the uploader after save
+  const [uploaderKey, setUploaderKey] = useState(0); // bump to reset/reseed the uploader
+  const [galleryDefault, setGalleryDefault] = useState<string[]>([]);
+  const [customCat, setCustomCat] = useState(false); // "Other" — type a new category
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Category options = the curated list ∪ any category already used, so a custom
+  // one an admin added earlier keeps showing up (no separate table needed).
+  const categoryOptions = Array.from(new Set([...EAT_CATEGORIES, ...(rows ?? []).map((r) => r.cuisine).filter((c): c is string => !!c)])).sort();
 
   const load = useCallback(async () => {
     const { data } = await supabase
@@ -87,6 +95,44 @@ export function AdminEateries() {
     }
   };
 
+  const resetForm = () => {
+    setEditingId(null);
+    setF({ ...BLANK });
+    setCustomCat(false);
+    setGalleryDefault([]);
+    setUploaderKey((k) => k + 1);
+  };
+
+  const startEdit = async (id: string) => {
+    const { data, error } = await supabase.from("listings").select("*").eq("id", id).maybeSingle();
+    if (error || !data) {
+      toast("Couldn't load that restaurant.");
+      return;
+    }
+    setEditingId(id);
+    setF({
+      placeId: data.google_place_id ?? "",
+      title: data.title ?? "",
+      cuisine: data.cuisine ?? "",
+      priceBand: (data.price_band ?? "") as "" | "$" | "$$" | "$$$",
+      city: data.city ?? "",
+      region: data.region ?? "Yerevan",
+      neighborhood: data.neighborhood ?? "",
+      image: data.image ?? "",
+      website: data.website ?? "",
+      shortDescription: data.short_description ?? "",
+      address: data.address ?? "",
+      googleRating: data.google_rating ?? null,
+      googleRatingCount: data.google_rating_count ?? null,
+      lat: data.lat ?? null,
+      lng: data.lng ?? null,
+    });
+    setCustomCat(!!data.cuisine && !EAT_CATEGORIES.includes(data.cuisine));
+    setGalleryDefault(Array.isArray(data.gallery) && data.gallery.length ? data.gallery : data.image ? [data.image] : []);
+    setUploaderKey((k) => k + 1); // remount uploader seeded with the existing photos
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const save = async () => {
     if (!user) return;
     const photos = photosRef.current?.getValue() ?? [];
@@ -97,12 +143,8 @@ export function AdminEateries() {
     const cover = photos[0];
     setSaving(true);
     try {
-      const slug = `${slugify(f.title)}-${Math.random().toString(36).slice(2, 6)}`;
-      const { error } = await supabase.from("listings").insert({
-        operator_id: user.id,
-        type: "eat",
-        status: "published",
-        slug,
+      // Fields common to create + edit.
+      const payload = {
         title: f.title.trim(),
         eyebrow: f.cuisine.trim() || "Restaurant",
         city: f.city.trim(),
@@ -113,13 +155,8 @@ export function AdminEateries() {
         image: cover,
         gallery: photos,
         short_description: f.shortDescription.trim() || `A Revamp-recommended spot in ${f.city.trim()}.`,
-        long_description: f.shortDescription.trim(),
-        price_cents: 0,
-        price_unit: "",
+        long_description: "", // the description shows once as the lead; no duplicate body
         tags: [f.cuisine.trim()].filter(Boolean),
-        amenities: [],
-        facts: [],
-        accent: "apricot",
         cuisine: f.cuisine.trim() || null,
         price_band: f.priceBand || null,
         website: f.website.trim() || null,
@@ -127,11 +164,29 @@ export function AdminEateries() {
         google_rating: f.googleRating,
         google_rating_count: f.googleRatingCount,
         neighborhood: f.neighborhood.trim() || null,
-      });
-      if (error) throw new Error(error.message);
-      toast("Restaurant added to the guide.");
-      setF({ ...BLANK });
-      setUploaderKey((k) => k + 1); // clear the uploaded photos for the next entry
+      };
+      if (editingId) {
+        const { error } = await supabase.from("listings").update(payload).eq("id", editingId);
+        if (error) throw new Error(error.message);
+        toast("Restaurant updated.");
+      } else {
+        const slug = `${slugify(f.title)}-${Math.random().toString(36).slice(2, 6)}`;
+        const { error } = await supabase.from("listings").insert({
+          ...payload,
+          operator_id: user.id,
+          type: "eat",
+          status: "published",
+          slug,
+          price_cents: 0,
+          price_unit: "",
+          amenities: [],
+          facts: [],
+          accent: "apricot",
+        });
+        if (error) throw new Error(error.message);
+        toast("Restaurant added to the guide.");
+      }
+      resetForm();
       load();
     } catch (e) {
       toast(e instanceof Error ? e.message : "Couldn't save.");
@@ -155,8 +210,8 @@ export function AdminEateries() {
     <div>
       <div className="mb-6">
         <p className="eyebrow">Eat guide</p>
-        <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">Restaurant recommendations.</h2>
-        <p className="mt-2 max-w-xl text-sm text-basalt/55">Free, curated picks — no bookings, no operator accounts. Search a place on Google to pull its rating, address and price band, then add a cuisine and neighborhood.</p>
+        <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">{editingId ? "Edit restaurant." : "Restaurant recommendations."}</h2>
+        <p className="mt-2 max-w-xl text-sm text-basalt/55">Free, curated picks — no bookings, no operator accounts. Search a place on Google to pull its rating, address and price band, then add a category and neighborhood.</p>
       </div>
 
       <div className="grid gap-3 border border-basalt/12 bg-paper p-5">
@@ -168,7 +223,24 @@ export function AdminEateries() {
 
         <div className="grid gap-3 border-t border-basalt/10 pt-4 sm:grid-cols-2">
           <Field label="Name"><Input value={f.title} onChange={(e) => set({ title: e.target.value })} className="h-10 rounded-none" /></Field>
-          <Field label="Cuisine / kind"><Input value={f.cuisine} onChange={(e) => set({ cuisine: e.target.value })} placeholder="Armenian, Café, Wine bar…" className="h-10 rounded-none" /></Field>
+          <Field label="Category">
+            {customCat ? (
+              <div className="flex gap-2">
+                <Input value={f.cuisine} onChange={(e) => set({ cuisine: e.target.value })} placeholder="New category name" className="h-10 rounded-none" autoFocus />
+                <button type="button" onClick={() => { setCustomCat(false); set({ cuisine: "" }); }} className="shrink-0 text-xs font-semibold text-basalt/50 hover:text-apricot">Pick from list</button>
+              </div>
+            ) : (
+              <select
+                value={f.cuisine}
+                onChange={(e) => { if (e.target.value === "__other__") { setCustomCat(true); set({ cuisine: "" }); } else { set({ cuisine: e.target.value }); } }}
+                className="h-10 w-full rounded-none border border-basalt/20 bg-paper px-2 text-sm"
+              >
+                <option value="">Choose a category…</option>
+                {categoryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+                <option value="__other__">+ Add new category…</option>
+              </select>
+            )}
+          </Field>
           <Field label="City"><Input value={f.city} onChange={(e) => set({ city: e.target.value })} className="h-10 rounded-none" /></Field>
           <Field label="Region"><Input value={f.region} onChange={(e) => set({ region: e.target.value })} className="h-10 rounded-none" /></Field>
           <Field label="Neighborhood"><Input value={f.neighborhood} onChange={(e) => set({ neighborhood: e.target.value })} placeholder="e.g. City Center" className="h-10 rounded-none" /></Field>
@@ -182,11 +254,12 @@ export function AdminEateries() {
           </Field>
           <Field label="Website"><Input value={f.website} onChange={(e) => set({ website: e.target.value })} placeholder="https://…" className="h-10 rounded-none" /></Field>
           <div className="sm:col-span-2"><Field label="Short description"><Textarea rows={2} value={f.shortDescription} onChange={(e) => set({ shortDescription: e.target.value })} className="rounded-none text-base" /></Field></div>
-          <div className="sm:col-span-2"><PhotoUploader key={uploaderKey} ref={photosRef} /></div>
+          <div className="sm:col-span-2"><PhotoUploader key={uploaderKey} ref={photosRef} defaultValue={galleryDefault} /></div>
         </div>
 
         <div className="flex items-center gap-3 border-t border-basalt/10 pt-4">
-          <Button onClick={save} disabled={saving} className="rounded-none bg-apricot font-semibold text-white hover:bg-apricot/90">{saving ? "Saving…" : "Add to guide"}</Button>
+          <Button onClick={save} disabled={saving} className="rounded-none bg-apricot font-semibold text-white hover:bg-apricot/90">{saving ? "Saving…" : editingId ? "Save changes" : "Add to guide"}</Button>
+          {editingId && <button type="button" onClick={resetForm} className="text-sm font-semibold text-basalt/50 hover:text-apricot">Cancel</button>}
           {typeof f.googleRating === "number" && <span className="inline-flex items-center gap-1 text-xs text-basalt/55"><Star className="h-3.5 w-3.5 fill-apricot text-apricot" />{f.googleRating.toFixed(1)} ({f.googleRatingCount}) from Google</span>}
         </div>
       </div>
@@ -207,6 +280,7 @@ export function AdminEateries() {
                 {r.price_band && <span className="text-xs font-bold text-basalt/60">{r.price_band}</span>}
                 {typeof r.google_rating === "number" && <span className="inline-flex items-center gap-0.5 text-xs text-basalt/50"><Star className="h-3 w-3 fill-apricot text-apricot" />{r.google_rating.toFixed(1)}</span>}
                 <span className="text-[10px] font-bold uppercase tracking-wide text-basalt/35">{r.neighborhood || r.city}</span>
+                <button type="button" onClick={() => startEdit(r.id)} className="shrink-0 text-xs font-semibold text-basalt/60 hover:text-apricot">Edit</button>
                 <button type="button" onClick={() => remove(r.id, r.title)} className="shrink-0 text-basalt/40 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
               </li>
             ))}

@@ -1,6 +1,6 @@
 /** Revamp brandbook: detail pages combine rounded imagery, bold sans hierarchy, concise facts, white space, and orange actions. */
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowLeft, BedDouble, Bookmark, CalendarRange, Check, ChevronLeft, ChevronRight, Clock, Coffee, Home, KeyRound, LayoutGrid, LogOut, MapPin, Navigation, Share2, ShieldCheck, Sparkles, SprayCan, Users, Wifi, X } from "lucide-react";
+import { ArrowLeft, BedDouble, Bookmark, CalendarRange, Check, ChevronLeft, ChevronRight, Clock, Coffee, Home, KeyRound, LayoutGrid, LogOut, MapPin, Navigation, Share2, ShieldCheck, Sparkles, SprayCan, Star, Users, Utensils, Wallet, Wifi, X } from "lucide-react";
 import { Link } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -239,19 +239,27 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   const checkOutTime = factVal("Checkout");
   const selfCheckIn = houseRules.includes("Self check-in");
   const glance: { label: string; value: string; icon: typeof ShieldCheck }[] = [];
-  if (listing.maxGuests) glance.push({ label: "Guests", value: `Up to ${listing.maxGuests}`, icon: Users });
-  glance.push({ label: "Cancellation", value: listing.cancellationPolicy === "non_refundable" ? "Non-refundable" : "Flexible", icon: ShieldCheck });
-  // Check-in shows the TIME (a "when"); the self-check-in method is a separate
-  // concept shown in the House rules chips below — don't conflate the two here.
-  if (checkInTime) glance.push({ label: "Check-in", value: checkInTime, icon: Clock });
-  else if (selfCheckIn) glance.push({ label: "Check-in", value: "Self check-in", icon: KeyRound });
-  if (checkOutTime) glance.push({ label: "Checkout", value: checkOutTime, icon: LogOut });
-  const minStay = factVal("Minimum stay");
-  if (minStay) glance.push({ label: "Minimum stay", value: minStay, icon: CalendarRange });
-  // For stays, show the specific property type (Apartment, Guesthouse, …) the
-  // operator set, in place of the generic "Stay".
-  const propertyType = factVal("Property type");
-  glance.push({ label: "Type", value: propertyType || typeLabels[listing.type], icon: Home });
+  if (isEat) {
+    // Restaurants are recommendations, not bookings — surface guide facts.
+    if (listing.cuisine) glance.push({ label: "Cuisine", value: listing.cuisine, icon: Utensils });
+    if (listing.priceBand) glance.push({ label: "Price", value: listing.priceBand, icon: Wallet });
+    if (listing.neighborhood) glance.push({ label: "Neighborhood", value: listing.neighborhood, icon: MapPin });
+    if (typeof listing.googleRating === "number") glance.push({ label: "Google rating", value: `${listing.googleRating.toFixed(1)}${listing.googleRatingCount ? ` (${listing.googleRatingCount})` : ""}`, icon: Star });
+  } else {
+    if (listing.maxGuests) glance.push({ label: "Guests", value: `Up to ${listing.maxGuests}`, icon: Users });
+    glance.push({ label: "Cancellation", value: listing.cancellationPolicy === "non_refundable" ? "Non-refundable" : "Flexible", icon: ShieldCheck });
+    // Check-in shows the TIME (a "when"); the self-check-in method is a separate
+    // concept shown in the House rules chips below — don't conflate the two here.
+    if (checkInTime) glance.push({ label: "Check-in", value: checkInTime, icon: Clock });
+    else if (selfCheckIn) glance.push({ label: "Check-in", value: "Self check-in", icon: KeyRound });
+    if (checkOutTime) glance.push({ label: "Checkout", value: checkOutTime, icon: LogOut });
+    const minStay = factVal("Minimum stay");
+    if (minStay) glance.push({ label: "Minimum stay", value: minStay, icon: CalendarRange });
+    // For stays, show the specific property type (Apartment, Guesthouse, …) the
+    // operator set, in place of the generic "Stay".
+    const propertyType = factVal("Property type");
+    glance.push({ label: "Type", value: propertyType || typeLabels[listing.type], icon: Home });
+  }
 
   return (
     <div className="min-h-screen bg-paper text-basalt">
@@ -290,7 +298,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
               <p className="eyebrow">{listing.eyebrow}</p>
               <p className="mt-3 flex items-center gap-2 text-sm font-semibold"><MapPin className="h-4 w-4 text-apricot" /> {listing.city}, {listing.region}</p>
 
-              <OperatorBrand operatorId={(listing as { operatorId?: string }).operatorId ?? ""} className="mt-5" />
+              {!isEat && <OperatorBrand operatorId={(listing as { operatorId?: string }).operatorId ?? ""} className="mt-5" />}
 
               {/* At a glance — a horizontal strip, not a narrow sidebar. */}
               {glance.length > 0 && (
@@ -310,7 +318,9 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
               {/* Description — full width, readable body (not title-sized, not pale). */}
               <div className="mt-8 max-w-3xl">
                 <p className="text-lg font-medium leading-relaxed text-basalt sm:text-xl">{listing.shortDescription}</p>
-                <p className="mt-4 whitespace-pre-line text-[15px] leading-8 text-basalt/90">{listing.longDescription}</p>
+                {listing.longDescription && listing.longDescription.trim() !== listing.shortDescription.trim() && (
+                  <p className="mt-4 whitespace-pre-line text-[15px] leading-8 text-basalt/90">{listing.longDescription}</p>
+                )}
               </div>
 
               {/* Facts already surfaced in the "at a glance" strip (property type
