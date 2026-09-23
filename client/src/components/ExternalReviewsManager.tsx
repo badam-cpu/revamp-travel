@@ -14,8 +14,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { ExternalLink, Star, Trash2 } from "lucide-react";
-import { listHostReviews, addHostReview, deleteHostReview, type HostReview } from "@/lib/externalReviews";
+import { listHostReviews, addHostReview, deleteHostReview, type HostReview, type HostReviewSource } from "@/lib/externalReviews";
 import { GooglePlaceFinder } from "@/components/GooglePlaceFinder";
+
+const SOURCE_LABELS: Record<HostReviewSource, string> = { airbnb: "Airbnb", getyourguide: "GetYourGuide", booking: "Booking.com" };
 
 export function ExternalReviewsManager() {
   const { user, profile, updateProfile } = useAuth();
@@ -26,6 +28,7 @@ export function ExternalReviewsManager() {
   const [savingPlace, setSavingPlace] = useState(false);
 
   const [reviews, setReviews] = useState<HostReview[]>([]);
+  const [source, setSource] = useState<HostReviewSource>("airbnb");
   const [name, setName] = useState("");
   const [rating, setRating] = useState(5);
   const [date, setDate] = useState("");
@@ -64,7 +67,7 @@ export function ExternalReviewsManager() {
     }
     setAdding(true);
     try {
-      await addHostReview(user.id, { source: "airbnb", reviewerName: name.trim(), rating, body: body.trim(), reviewDate: date || null, listingId: listingId || null });
+      await addHostReview(user.id, { source, reviewerName: name.trim(), rating, body: body.trim(), reviewDate: date || null, listingId: listingId || null });
       setName("");
       setBody("");
       setDate("");
@@ -115,11 +118,17 @@ export function ExternalReviewsManager() {
         </details>
       </div>
 
-      {/* Airbnb self-import */}
+      {/* Self-imported platform reviews (Airbnb / GetYourGuide / Booking.com) */}
       <div className="grid gap-3 border-t border-basalt/10 pt-5">
-        <p className="text-sm font-bold uppercase tracking-[0.1em] text-basalt/50">Airbnb reviews</p>
-        <p className="text-xs text-basalt/55">Airbnb has no import API, so add your own reviews here. They'll show as "imported from Airbnb — added by the host". Only add real reviews you received.</p>
+        <p className="text-sm font-bold uppercase tracking-[0.1em] text-basalt/50">Airbnb &amp; GetYourGuide reviews</p>
+        <p className="text-xs text-basalt/55">These platforms have no import API, so add your own reviews here (Airbnb for stays, GetYourGuide for tours). They'll show as "imported from {SOURCE_LABELS[source]} — added by the host". Only add real reviews you received.</p>
         <div className="grid gap-2 border border-basalt/10 bg-chalk/40 p-4">
+          <div className="grid gap-1">
+            <Label className="text-xs font-semibold text-basalt/60">Source</Label>
+            <select value={source} onChange={(e) => setSource(e.target.value as HostReviewSource)} className="h-10 max-w-xs rounded-none border border-basalt/20 bg-paper px-2 text-sm">
+              {(Object.keys(SOURCE_LABELS) as HostReviewSource[]).map((s) => <option key={s} value={s}>{SOURCE_LABELS[s]}</option>)}
+            </select>
+          </div>
           <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Reviewer first name" className="h-10 rounded-none" />
             <select value={rating} onChange={(e) => setRating(Number(e.target.value))} className="h-10 rounded-none border border-basalt/20 bg-paper px-2 text-sm">
@@ -135,7 +144,7 @@ export function ExternalReviewsManager() {
               {myListings.map((l) => <option key={l.id} value={(l as { id: string }).id}>{l.title}</option>)}
             </select>
           </div>
-          <div><Button onClick={add} disabled={adding} variant="outline" className="rounded-none border-basalt/20">{adding ? "Adding…" : "+ Add Airbnb review"}</Button></div>
+          <div><Button onClick={add} disabled={adding} variant="outline" className="rounded-none border-basalt/20">{adding ? "Adding…" : `+ Add ${SOURCE_LABELS[source]} review`}</Button></div>
         </div>
 
         {reviews.length > 0 && (
@@ -146,7 +155,7 @@ export function ExternalReviewsManager() {
                   <div className="flex items-center gap-2 text-xs">
                     <span className="font-semibold text-basalt">{r.reviewerName}</span>
                     <span className="inline-flex text-apricot">{Array.from({ length: r.rating ?? 0 }).map((_, i) => <Star key={i} className="h-3 w-3 fill-apricot" />)}</span>
-                    <span className="text-basalt/40">Airbnb{r.reviewDate ? ` · ${r.reviewDate}` : ""}</span>
+                    <span className="text-basalt/40">{SOURCE_LABELS[r.source]}{r.reviewDate ? ` · ${r.reviewDate}` : ""}</span>
                     <span className="rounded-full bg-basalt/5 px-2 py-0.5 text-[10px] font-semibold text-basalt/50">{listingTitle(r.listingId)}</span>
                   </div>
                   <p className="mt-0.5 line-clamp-2 text-sm text-basalt/70">{r.body}</p>

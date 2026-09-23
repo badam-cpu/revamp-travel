@@ -7,9 +7,11 @@
  */
 import { supabase } from "@/lib/supabase";
 
+export type HostReviewSource = "airbnb" | "booking" | "getyourguide";
+
 export interface HostReview {
   id: string;
-  source: "airbnb" | "booking";
+  source: HostReviewSource;
   reviewerName: string;
   rating: number | null;
   body: string;
@@ -19,7 +21,7 @@ export interface HostReview {
 }
 
 export interface HostReviewInput {
-  source: "airbnb" | "booking";
+  source: HostReviewSource;
   reviewerName: string;
   rating: number | null;
   body: string;

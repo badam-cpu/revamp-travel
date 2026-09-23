@@ -7,7 +7,7 @@
  */
 import { useEffect, useState } from "react";
 import { Languages, Star } from "lucide-react";
-import { fetchGoogleReviews, listHostReviews, translateReviews, type GoogleReviewsResult, type HostReview } from "@/lib/externalReviews";
+import { fetchGoogleReviews, listHostReviews, translateReviews, type GoogleReviewsResult, type HostReview, type HostReviewSource } from "@/lib/externalReviews";
 import { computeMentions } from "@/lib/reviewMentions";
 
 function Stars({ n }: { n: number }) {
@@ -20,12 +20,52 @@ function Stars({ n }: { n: number }) {
   );
 }
 
-const AIRBNB_PREVIEW = 6;
+const HOST_PREVIEW = 6;
+// Display order + labels for self-imported platforms.
+const HOST_SOURCES: { key: HostReviewSource; label: string }[] = [
+  { key: "airbnb", label: "Airbnb" },
+  { key: "getyourguide", label: "GetYourGuide" },
+  { key: "booking", label: "Booking.com" },
+];
+
+/** One platform's self-imported reviews (own show-more state). */
+function HostReviewBlock({ label, reviews, show }: { label: string; reviews: HostReview[]; show: (t: string) => string }) {
+  const [showAll, setShowAll] = useState(false);
+  const rated = reviews.filter((r) => typeof r.rating === "number") as (HostReview & { rating: number })[];
+  const avg = rated.length ? rated.reduce((s, r) => s + r.rating, 0) / rated.length : null;
+  return (
+    <div className="mt-8">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <p className="text-sm font-semibold">{label} <span className="font-normal text-basalt/45">— imported by the host</span></p>
+        {avg !== null && (
+          <span className="inline-flex items-center gap-1.5">
+            <Stars n={avg} /> <span className="font-semibold">{avg.toFixed(1)}</span>
+            <span className="text-basalt/50">({reviews.length} review{reviews.length === 1 ? "" : "s"})</span>
+          </span>
+        )}
+      </div>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {(showAll ? reviews : reviews.slice(0, HOST_PREVIEW)).map((r) => (
+          <div key={r.id} className="rounded-none border border-basalt/12 bg-paper p-4">
+            {typeof r.rating === "number" && <Stars n={r.rating} />}
+            <p className="mt-2 line-clamp-5 text-sm leading-6 text-basalt/75">{show(r.body)}</p>
+            <p className="mt-3 text-xs text-basalt/50">{r.reviewerName}{r.reviewDate ? ` · ${r.reviewDate}` : ""}</p>
+          </div>
+        ))}
+      </div>
+      {reviews.length > HOST_PREVIEW && (
+        <button type="button" onClick={() => setShowAll((s) => !s)} className="mt-4 rounded-[0.875rem] border border-basalt/20 px-4 py-2 text-sm font-semibold text-basalt transition-colors hover:border-apricot hover:text-apricot">
+          {showAll ? "Show fewer" : `Show all ${reviews.length} reviews`}
+        </button>
+      )}
+      <p className="mt-3 text-[11px] text-basalt/40">Imported from {label} by the host.</p>
+    </div>
+  );
+}
 
 export function ExternalReviews({ operatorId, listingId, className = "" }: { operatorId: string; listingId?: string; className?: string }) {
   const [google, setGoogle] = useState<GoogleReviewsResult | null>(null);
-  const [airbnb, setAirbnb] = useState<HostReview[]>([]);
-  const [showAllAirbnb, setShowAllAirbnb] = useState(false);
+  const [host, setHost] = useState<HostReview[]>([]);
   const [translated, setTranslated] = useState<Map<string, string> | null>(null);
   const [translating, setTranslating] = useState(false);
 
@@ -35,7 +75,7 @@ export function ExternalReviews({ operatorId, listingId, className = "" }: { ope
     fetchGoogleReviews(operatorId).then((g) => active && setGoogle(g));
     // Show a host review if it's operator-wide (no listing) or assigned to THIS listing.
     listHostReviews(operatorId).then(
-      (r) => active && setAirbnb(r.filter((x) => x.source === "airbnb" && (!x.listingId || x.listingId === listingId))),
+      (r) => active && setHost(r.filter((x) => !x.listingId || x.listingId === listingId)),
     );
     return () => {
       active = false;
@@ -43,7 +83,7 @@ export function ExternalReviews({ operatorId, listingId, className = "" }: { ope
   }, [operatorId, listingId]);
 
   const hasGoogle = google?.configured && (google.reviews?.length || google.rating);
-  if (!hasGoogle && airbnb.length === 0) return null;
+  if (!hasGoogle && host.length === 0) return null;
 
   const show = (t: string) => (translated?.get(t) ?? t);
   const toggleTranslate = async () => {
@@ -54,7 +94,7 @@ export function ExternalReviews({ operatorId, listingId, className = "" }: { ope
     setTranslating(true);
     try {
       const target = (typeof navigator !== "undefined" ? navigator.language : "en").slice(0, 2) || "en";
-      const texts = Array.from(new Set([...airbnb.map((r) => r.body), ...((google?.reviews ?? []).map((r) => r.text))].filter(Boolean)));
+      const texts = Array.from(new Set([...host.map((r) => r.body), ...((google?.reviews ?? []).map((r) => r.text))].filter(Boolean)));
       const results = await translateReviews(texts, target);
       const map = new Map<string, string>();
       texts.forEach((t, i) => {
@@ -68,7 +108,7 @@ export function ExternalReviews({ operatorId, listingId, className = "" }: { ope
   };
 
   // "Guest reviews mention" — themes across all the external review text we have.
-  const mentions = computeMentions([...airbnb.map((r) => r.body), ...((google?.reviews ?? []).map((r) => r.text))]).slice(0, 6);
+  const mentions = computeMentions([...host.map((r) => r.body), ...((google?.reviews ?? []).map((r) => r.text))]).slice(0, 6);
 
   return (
     <section className={`border-t border-basalt/10 pt-8 ${className}`}>
@@ -128,38 +168,10 @@ export function ExternalReviews({ operatorId, listingId, className = "" }: { ope
         </div>
       )}
 
-      {airbnb.length > 0 && (() => {
-        const rated = airbnb.filter((r) => typeof r.rating === "number") as (HostReview & { rating: number })[];
-        const avg = rated.length ? rated.reduce((s, r) => s + r.rating, 0) / rated.length : null;
-        return (
-        <div className="mt-8">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <p className="text-sm font-semibold">Airbnb <span className="font-normal text-basalt/45">— imported by the host</span></p>
-            {avg !== null && (
-              <span className="inline-flex items-center gap-1.5">
-                <Stars n={avg} /> <span className="font-semibold">{avg.toFixed(1)}</span>
-                <span className="text-basalt/50">({airbnb.length} review{airbnb.length === 1 ? "" : "s"})</span>
-              </span>
-            )}
-          </div>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {(showAllAirbnb ? airbnb : airbnb.slice(0, AIRBNB_PREVIEW)).map((r) => (
-              <div key={r.id} className="rounded-none border border-basalt/12 bg-paper p-4">
-                {typeof r.rating === "number" && <Stars n={r.rating} />}
-                <p className="mt-2 line-clamp-5 text-sm leading-6 text-basalt/75">{show(r.body)}</p>
-                <p className="mt-3 text-xs text-basalt/50">{r.reviewerName}{r.reviewDate ? ` · ${r.reviewDate}` : ""}</p>
-              </div>
-            ))}
-          </div>
-          {airbnb.length > AIRBNB_PREVIEW && (
-            <button type="button" onClick={() => setShowAllAirbnb((s) => !s)} className="mt-4 rounded-[0.875rem] border border-basalt/20 px-4 py-2 text-sm font-semibold text-basalt transition-colors hover:border-apricot hover:text-apricot">
-              {showAllAirbnb ? "Show fewer" : `Show all ${airbnb.length} reviews`}
-            </button>
-          )}
-          <p className="mt-3 text-[11px] text-basalt/40">Imported from Airbnb by the host.</p>
-        </div>
-        );
-      })()}
+      {HOST_SOURCES.map(({ key, label }) => {
+        const rows = host.filter((r) => r.source === key);
+        return rows.length > 0 ? <HostReviewBlock key={key} label={label} reviews={rows} show={show} /> : null;
+      })}
     </section>
   );
 }
