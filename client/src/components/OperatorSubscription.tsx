@@ -211,7 +211,7 @@ export function OperatorSubscription() {
             <div className="flex flex-col rounded-none border border-basalt/12 bg-chalk/40 p-6">
               <div className="flex items-center gap-2">
                 <h3 className="font-display text-xl">Pay as you go</h3>
-                <span className="rounded-full bg-basalt/12 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-basalt/60">Current</span>
+                <span className="rounded-full bg-[#1f7a4d]/12 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-[#1f7a4d]">Current</span>
               </div>
               <p className="mt-3 font-display text-4xl leading-none tabular-nums">
                 {defaultCommission != null ? `${defaultCommission}%` : "—"}
