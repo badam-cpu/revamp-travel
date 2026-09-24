@@ -9,13 +9,16 @@ import { ApiError } from "@/lib/api";
 
 export type SubscriptionStatus = "pending" | "active" | "past_due" | "cancelled" | "expired";
 
+export type PricingMode = "flat" | "per_listing";
+
 export interface SubscriptionPlan {
   id: string;
   name: string;
   description: string;
-  amountCents: number;
+  amountCents: number; // flat: fixed price; per_listing: unit price per listing
   monthsQuantity: number;
   currency: string;
+  pricingMode: PricingMode;
   isActive: boolean;
   sort: number;
   paylinkSubscriptionId: number | null;
@@ -27,6 +30,8 @@ export interface OperatorSubscription {
   planId: string;
   status: SubscriptionStatus;
   phone: string | null;
+  quantity: number | null;
+  amountCents: number | null;
   nextChargeDate: string | null;
   lastPaymentAt: string | null;
   startedAt: string | null;
@@ -42,6 +47,7 @@ function mapPlan(r: any): SubscriptionPlan {
     amountCents: r.amount_cents ?? 0,
     monthsQuantity: r.months_quantity ?? 12,
     currency: r.currency ?? "AMD",
+    pricingMode: (r.pricing_mode as PricingMode) ?? "flat",
     isActive: !!r.is_active,
     sort: r.sort ?? 0,
     paylinkSubscriptionId: r.paylink_subscription_id ?? null,
@@ -54,6 +60,8 @@ function mapSub(r: any): OperatorSubscription {
     planId: r.plan_id,
     status: r.status,
     phone: r.phone ?? null,
+    quantity: r.quantity ?? null,
+    amountCents: r.amount_cents ?? null,
     nextChargeDate: r.next_charge_date ?? null,
     lastPaymentAt: r.last_payment_at ?? null,
     startedAt: r.started_at ?? null,
@@ -62,8 +70,8 @@ function mapSub(r: any): OperatorSubscription {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-const PLAN_COLS = "id, name, description, amount_cents, months_quantity, currency, is_active, sort, paylink_subscription_id";
-const SUB_COLS = "id, operator_id, plan_id, status, phone, next_charge_date, last_payment_at, started_at, cancelled_at";
+const PLAN_COLS = "id, name, description, amount_cents, months_quantity, currency, pricing_mode, is_active, sort, paylink_subscription_id";
+const SUB_COLS = "id, operator_id, plan_id, status, phone, quantity, amount_cents, next_charge_date, last_payment_at, started_at, cancelled_at";
 
 /** Active plans (operator-facing). RLS returns only active ones to non-admins. */
 export async function listActivePlans(): Promise<SubscriptionPlan[]> {
@@ -127,6 +135,7 @@ export function saveSubscriptionPlan(input: {
   description?: string;
   amountCents: number;
   monthsQuantity?: number;
+  pricingMode?: PricingMode;
   isActive?: boolean;
   sort?: number;
 }): Promise<{ ok: boolean; id: string; paylinkSynced: boolean; paylinkError?: string | null }> {

@@ -17,7 +17,7 @@
 import { supabaseAdmin, adminConfigured } from "../../server/supabaseAdmin.js";
 import { reconcileAllPendingBookings, requestReviewsForCompleted } from "../../server/bookings.js";
 import { reconcileAllPendingGiftCards, expireOverdueGiftCards } from "../../server/giftcards.js";
-import { reconcileAllSubscriptions } from "../../server/subscriptions.js";
+import { reconcileAllSubscriptions, reconcilePerListingAmounts } from "../../server/subscriptions.js";
 
 export const handler = async () => {
   if (!adminConfigured()) {
@@ -35,8 +35,10 @@ export const handler = async () => {
     const giftExpiry = await expireOverdueGiftCards(admin, { limit: 200 });
     // Activate operator subscriptions that were paid but never confirmed on return.
     const subs = await reconcileAllSubscriptions(admin, { limit: 200 });
-    console.log("[reconcile-bookings]", { ...result, reviewEmails: reviews.sent, gifts, giftExpiry, subs });
-    return { statusCode: 200, body: JSON.stringify({ ...result, reviewEmails: reviews.sent, gifts, giftExpiry, subs }) };
+    // Apply per-listing amount changes (next-cycle) for operators whose count changed.
+    const subAmounts = await reconcilePerListingAmounts(admin, { limit: 500 });
+    console.log("[reconcile-bookings]", { ...result, reviewEmails: reviews.sent, gifts, giftExpiry, subs, subAmounts });
+    return { statusCode: 200, body: JSON.stringify({ ...result, reviewEmails: reviews.sent, gifts, giftExpiry, subs, subAmounts }) };
   } catch (err) {
     console.error("[reconcile-bookings] failed", err);
     return { statusCode: 500, body: JSON.stringify({ error: String(err).slice(0, 200) }) };

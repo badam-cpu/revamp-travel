@@ -40,6 +40,7 @@ const ROUTES = IS_INTEGRATION
       hasRedirectField: true, // RegisterRequest.paymentWebRedirectUrl exists here
       // Subscription (recurring) endpoints — see server/subscriptions.ts.
       subRegister: "/api/subscription/register",
+      subUpdate: "/api/subscription",
       subSearch: "/api/subscription/search",
       personCreate: "/api/person",
       personSearch: "/api/person/search-person",
@@ -53,6 +54,7 @@ const ROUTES = IS_INTEGRATION
       byRequest: (rid: string) => "/Payment/" + encodeURIComponent(rid),
       hasRedirectField: false,
       subRegister: "/Subscription/Register",
+      subUpdate: "/Subscription",
       subSearch: "/Subscription/Search",
       personCreate: "/Person",
       personSearch: "/Person/SearchPerson",
@@ -364,6 +366,43 @@ export async function getPersonSubscription({
     paymentLink: match?.paymentLink ?? null,
     raw: arr,
   };
+}
+
+/**
+ * Update a subscription's amount (PayLink SubscriptionPatch / PUT). Used to apply
+ * a per-listing plan's recomputed monthly amount so the NEXT scheduled charge
+ * bills the new total. Passes the full patch shape PayLink expects.
+ */
+export async function updateSubscriptionAmount({
+  subscriptionId,
+  name,
+  info,
+  amount,
+  currency,
+  monthsQuantity,
+  firstPaymentDay,
+}: {
+  subscriptionId: number;
+  name: string;
+  info?: string;
+  amount: number;
+  currency: string;
+  monthsQuantity: number;
+  firstPaymentDay: string;
+}): Promise<boolean> {
+  const body: Record<string, unknown> = {
+    id: subscriptionId,
+    subscriptionName: name,
+    subscriptionInfo: info ?? "",
+    amount,
+    currency,
+    language: LANGUAGE,
+    monthsQuantity,
+    firstPaymentDay,
+    isActive: true,
+  };
+  const res = await api(ROUTES.subUpdate, { method: "PUT", body });
+  return res.ok;
 }
 
 /** Terminate a person's enrollment in a subscription (cancel their recurring charge). */

@@ -20,6 +20,7 @@ import {
   cancelSubscription,
   type SubscriptionPlan,
   type AdminSubscriptionRow,
+  type PricingMode,
 } from "@/lib/subscriptions";
 
 interface Draft {
@@ -28,10 +29,11 @@ interface Draft {
   description: string;
   amountAmd: string; // whole AMD in the input; converted to cents on save
   monthsQuantity: string;
+  pricingMode: PricingMode;
   isActive: boolean;
   sort: string;
 }
-const BLANK: Draft = { name: "", description: "", amountAmd: "", monthsQuantity: "12", isActive: true, sort: "0" };
+const BLANK: Draft = { name: "", description: "", amountAmd: "", monthsQuantity: "12", pricingMode: "flat", isActive: true, sort: "0" };
 
 export function AdminSubscriptions() {
   const { format } = useCurrency();
@@ -64,6 +66,7 @@ export function AdminSubscriptions() {
       description: p.description,
       amountAmd: String(Math.round(p.amountCents / 100)),
       monthsQuantity: String(p.monthsQuantity),
+      pricingMode: p.pricingMode,
       isActive: p.isActive,
       sort: String(p.sort),
     });
@@ -83,6 +86,7 @@ export function AdminSubscriptions() {
         description: draft.description.trim(),
         amountCents: amd * 100,
         monthsQuantity: Math.max(1, Math.min(120, Number(draft.monthsQuantity) || 12)),
+        pricingMode: draft.pricingMode,
         isActive: draft.isActive,
         sort: Number(draft.sort) || 0,
       });
@@ -144,9 +148,33 @@ export function AdminSubscriptions() {
               <Label htmlFor="plan-desc" className="text-sm font-semibold">Description</Label>
               <Textarea id="plan-desc" value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="What the operator gets for this monthly fee." rows={3} className="mt-1.5" />
             </div>
+            <div className="sm:col-span-2">
+              <Label className="text-sm font-semibold">Pricing</Label>
+              <div className="mt-1.5 flex border border-basalt/15">
+                {([
+                  { key: "flat", label: "Flat monthly", blurb: "One fixed price per operator." },
+                  { key: "per_listing", label: "Per listing", blurb: "Unit price × their live listings." },
+                ] as const).map((m) => (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => setDraft({ ...draft, pricingMode: m.key })}
+                    className={`flex-1 px-4 py-2.5 text-left text-xs transition-colors ${draft.pricingMode === m.key ? "bg-basalt text-paper" : "text-basalt/60 hover:bg-chalk"}`}
+                  >
+                    <span className="block font-bold uppercase tracking-[0.08em]">{m.label}</span>
+                    <span className={`mt-0.5 block ${draft.pricingMode === m.key ? "text-paper/70" : "text-basalt/45"}`}>{m.blurb}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
             <div>
-              <Label htmlFor="plan-amount" className="text-sm font-semibold">Monthly price (AMD)</Label>
-              <Input id="plan-amount" type="number" min={1} value={draft.amountAmd} onChange={(e) => setDraft({ ...draft, amountAmd: e.target.value })} placeholder="e.g. 5000" className="mt-1.5" />
+              <Label htmlFor="plan-amount" className="text-sm font-semibold">
+                {draft.pricingMode === "per_listing" ? "Price per listing / month (AMD)" : "Monthly price (AMD)"}
+              </Label>
+              <Input id="plan-amount" type="number" min={1} value={draft.amountAmd} onChange={(e) => setDraft({ ...draft, amountAmd: e.target.value })} placeholder="e.g. 1500" className="mt-1.5" />
+              {draft.pricingMode === "per_listing" && (
+                <p className="mt-1 text-xs text-basalt/45">Charged for each of the operator's published stay/tour/experience listings. Updates next cycle when their count changes.</p>
+              )}
             </div>
             <div>
               <Label htmlFor="plan-months" className="text-sm font-semibold">Billing cycles (months)</Label>
@@ -188,9 +216,13 @@ export function AdminSubscriptions() {
                 <div className="flex items-center gap-2">
                   <span className="font-semibold">{p.name}</span>
                   {!p.isActive && <span className="rounded-full bg-basalt/10 px-2 py-0.5 text-xs text-basalt/55">Archived</span>}
-                  {p.paylinkSubscriptionId == null && <span className="rounded-full bg-apricot/10 px-2 py-0.5 text-xs text-apricot">Not synced</span>}
+                  {p.pricingMode === "per_listing" && <span className="rounded-full bg-basalt/8 px-2 py-0.5 text-xs text-basalt/60">Per listing</span>}
+                  {/* Per-listing plans register per operator, so a null plan-level id is expected. */}
+                  {p.pricingMode === "flat" && p.paylinkSubscriptionId == null && <span className="rounded-full bg-apricot/10 px-2 py-0.5 text-xs text-apricot">Not synced</span>}
                 </div>
-                <p className="text-sm text-basalt/60">{format(p.amountCents)} / month · {p.monthsQuantity} cycles</p>
+                <p className="text-sm text-basalt/60">
+                  {format(p.amountCents)} / {p.pricingMode === "per_listing" ? "listing / month" : "month"} · {p.monthsQuantity} cycles
+                </p>
               </div>
               <Button variant="outline" size="sm" onClick={() => startEdit(p)}>
                 <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit

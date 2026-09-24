@@ -14,21 +14,26 @@
  * PayLink is charged whole drams).
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { registerSubscription, ensurePerson, getPersonSubscription, terminatePersonSubscription } from "./paylink.js";
+import { registerSubscription, ensurePerson, getPersonSubscription, terminatePersonSubscription, updateSubscriptionAmount } from "./paylink.js";
 import { DEFAULT_CURRENCY } from "../shared/bookings.js";
 
 export interface PlanRow {
   id: string;
   name: string;
   description: string;
-  amount_cents: number;
+  amount_cents: number; // flat: fixed price; per_listing: unit price per listing
   months_quantity: number;
   currency: string;
+  pricing_mode: "flat" | "per_listing";
   paylink_subscription_id: number | null;
   paylink_request_id: string | null;
   request_url: string | null;
   is_active: boolean;
 }
+
+/** Listing types that count toward a per-listing subscription fee (eat = the
+ *  free curated guide, never billed). */
+const BILLABLE_TYPES = ["stay", "tour", "experience"];
 
 export interface OperatorSubscriptionRow {
   id: string;
@@ -40,11 +45,28 @@ export interface OperatorSubscriptionRow {
   phone: string | null;
 }
 
-const PLAN_COLS = "id, name, description, amount_cents, months_quantity, currency, paylink_subscription_id, paylink_request_id, request_url, is_active";
+const PLAN_COLS = "id, name, description, amount_cents, months_quantity, currency, pricing_mode, paylink_subscription_id, paylink_request_id, request_url, is_active";
 
 /** PayLink's `amount` is major currency units; AMD has no minor unit. */
 function toMajorUnits(cents: number, currency: string): number {
   return currency === "AMD" ? Math.round(cents / 100) : cents / 100;
+}
+
+/** PayLink rejects a first-payment day in the past; use tomorrow (UTC midday). */
+function firstPaymentDayIso(): string {
+  return `${new Date(Date.now() + 24 * 3_600_000).toISOString().slice(0, 10)}T12:00:00.000Z`;
+}
+
+/** Count an operator's billable (stay/tour/experience) PUBLISHED listings —
+ *  what a per-listing plan charges for. */
+export async function countBillableListings(admin: SupabaseClient, operatorId: string): Promise<number> {
+  const { count } = await admin
+    .from("listings")
+    .select("id", { count: "exact", head: true })
+    .eq("operator_id", operatorId)
+    .eq("status", "published")
+    .in("type", BILLABLE_TYPES);
+  return count ?? 0;
 }
 
 /**
@@ -52,18 +74,18 @@ function toMajorUnits(cents: number, currency: string): number {
  * on first use and persists the returned id + hosted subscribe URL. Idempotent.
  */
 export async function ensurePlanRegistered(admin: SupabaseClient, plan: PlanRow): Promise<PlanRow> {
+  // per_listing plans are NOT registered globally — each operator gets their own
+  // PayLink Subscription at their computed amount (see startOperatorSubscription).
+  if (plan.pricing_mode === "per_listing") return plan;
   if (plan.paylink_subscription_id) return plan;
   const site = (process.env.URL || "").replace(/\/+$/, "");
-  // PayLink rejects a first-payment day in the past; use tomorrow (UTC midday).
-  const tomorrow = new Date(Date.now() + 24 * 3_600_000);
-  const firstPaymentDay = `${tomorrow.toISOString().slice(0, 10)}T12:00:00.000Z`;
   const reg = await registerSubscription({
     name: plan.name,
     info: plan.description,
     amount: toMajorUnits(plan.amount_cents, plan.currency),
     currency: plan.currency,
     monthsQuantity: plan.months_quantity,
-    firstPaymentDay,
+    firstPaymentDay: firstPaymentDayIso(),
     returnUrl: site ? `${site}/dashboard?section=billing&subscription=return` : undefined,
   });
   if (!reg.subscriptionId) throw new Error("PayLink didn't return a subscription id.");
@@ -93,11 +115,44 @@ export async function startOperatorSubscription(
 ): Promise<StartResult> {
   const { data: planRow } = await admin.from("subscription_plans").select(PLAN_COLS).eq("id", planId).eq("is_active", true).maybeSingle();
   if (!planRow) throw new Error("Plan not found.");
-  const plan = await ensurePlanRegistered(admin, planRow as PlanRow);
-  const subId = plan.paylink_subscription_id!;
+  const plan = planRow as PlanRow;
 
   const personId = await ensurePerson({ email, mobile: phone, firstName, lastName });
   if (personId == null) throw new Error("Couldn't set up billing for your account. Check the phone number and try again.");
+
+  // Resolve the PayLink subscription id + the operator's monthly amount for this
+  // plan. Flat: one shared subscription at the plan price. Per-listing: a
+  // dedicated subscription for this operator at unit × their listing count.
+  let subId: number;
+  let quantity: number | null = null;
+  let amountCents = plan.amount_cents;
+  let requestUrlFallback: string | null = null;
+
+  if (plan.pricing_mode === "per_listing") {
+    const count = await countBillableListings(admin, operatorId);
+    if (count < 1) throw new Error("Publish at least one listing before subscribing — this plan bills per listing.");
+    quantity = count;
+    amountCents = plan.amount_cents * count;
+    const site = (process.env.URL || "").replace(/\/+$/, "");
+    const label = (firstName || email).slice(0, 40);
+    const reg = await registerSubscription({
+      name: `${plan.name} · ${label}`,
+      info: `${count} listing${count === 1 ? "" : "s"} · ${plan.description}`.slice(0, 250),
+      amount: toMajorUnits(amountCents, plan.currency),
+      currency: plan.currency,
+      monthsQuantity: plan.months_quantity,
+      firstPaymentDay: firstPaymentDayIso(),
+      returnUrl: site ? `${site}/dashboard?section=billing&subscription=return` : undefined,
+    });
+    if (!reg.subscriptionId) throw new Error("PayLink didn't return a subscription id.");
+    subId = reg.subscriptionId;
+    requestUrlFallback = reg.requestUrl;
+  } else {
+    const registered = await ensurePlanRegistered(admin, plan);
+    if (!registered.paylink_subscription_id) throw new Error("This plan isn't set up with PayLink yet.");
+    subId = registered.paylink_subscription_id;
+    requestUrlFallback = registered.request_url;
+  }
 
   const state = await getPersonSubscription({ personId, subscriptionId: subId });
 
@@ -109,6 +164,8 @@ export async function startOperatorSubscription(
       status: state.isSubscribed ? "active" : "pending",
       paylink_person_id: personId,
       paylink_subscription_id: subId,
+      quantity,
+      amount_cents: amountCents,
       phone,
       ...(state.isSubscribed ? { started_at: new Date().toISOString() } : {}),
     },
@@ -116,8 +173,8 @@ export async function startOperatorSubscription(
   );
 
   if (state.isSubscribed) return { alreadyActive: true };
-  // Prefer the person-specific payment link; fall back to the plan's hosted URL.
-  const redirectUrl = state.paymentLink || plan.request_url || undefined;
+  // Prefer the person-specific payment link; fall back to the hosted URL.
+  const redirectUrl = state.paymentLink || requestUrlFallback || undefined;
   if (!redirectUrl) throw new Error("Couldn't get a payment link from PayLink.");
   return { redirectUrl };
 }
@@ -175,6 +232,57 @@ export async function reconcileAllSubscriptions(admin: SupabaseClient, { limit =
     }
   }
   return { polled: rows.length, activated };
+}
+
+/**
+ * Recompute per-listing subscription amounts. For each ACTIVE per_listing
+ * enrollment whose operator's billable listing count has changed, patch the
+ * PayLink subscription's amount (applies to the NEXT scheduled charge) and store
+ * the new quantity + amount. Runs on the reconcile cron. Cheap: only drifted
+ * rows call PayLink.
+ */
+export async function reconcilePerListingAmounts(admin: SupabaseClient, { limit = 500 }: { limit?: number } = {}): Promise<{ checked: number; updated: number }> {
+  const { data } = await admin
+    .from("operator_subscriptions")
+    .select("id, operator_id, quantity, amount_cents, paylink_subscription_id, subscription_plans!inner(name, description, amount_cents, months_quantity, currency, pricing_mode)")
+    .eq("status", "active")
+    .limit(limit);
+  const rows = (data ?? []) as unknown as {
+    id: string;
+    operator_id: string;
+    quantity: number | null;
+    amount_cents: number | null;
+    paylink_subscription_id: number | null;
+    subscription_plans: { name: string; description: string; amount_cents: number; months_quantity: number; currency: string; pricing_mode: string } | null;
+  }[];
+  let updated = 0;
+  let checked = 0;
+  for (const row of rows) {
+    const plan = row.subscription_plans;
+    if (!plan || plan.pricing_mode !== "per_listing" || row.paylink_subscription_id == null) continue;
+    checked++;
+    try {
+      const count = await countBillableListings(admin, row.operator_id);
+      if (count < 1 || count === row.quantity) continue; // no change (or 0 → keep last, admin handles)
+      const amountCents = plan.amount_cents * count;
+      const ok = await updateSubscriptionAmount({
+        subscriptionId: row.paylink_subscription_id,
+        name: plan.name,
+        info: `${count} listing${count === 1 ? "" : "s"} · ${plan.description}`.slice(0, 250),
+        amount: toMajorUnits(amountCents, plan.currency),
+        currency: plan.currency,
+        monthsQuantity: plan.months_quantity,
+        firstPaymentDay: firstPaymentDayIso(),
+      });
+      if (ok) {
+        await admin.from("operator_subscriptions").update({ quantity: count, amount_cents: amountCents }).eq("id", row.id);
+        updated++;
+      }
+    } catch (err) {
+      console.error("[subscriptions] per-listing recompute failed", row.id, err);
+    }
+  }
+  return { checked, updated };
 }
 
 /** Cancel an operator's subscription: terminate at PayLink, then mark cancelled. */

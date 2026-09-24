@@ -5,13 +5,15 @@
  * page; confirmation is server-verified by polling (same as the booking loop),
  * so we call confirm on load — including on the ?subscription=return redirect.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Check, CreditCard, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { useListings } from "@/contexts/ListingsContext";
 import {
   listActivePlans,
   listMySubscriptions,
@@ -38,8 +40,21 @@ const STATUS_TONE: Record<SubscriptionStatus, string> = {
   expired: "bg-basalt/10 text-basalt/60",
 };
 
+const BILLABLE_TYPES = ["stay", "tour", "experience"];
+
 export function OperatorSubscription() {
   const { format } = useCurrency();
+  const { user } = useAuth();
+  const { listings } = useListings();
+  // The operator's live billable listing count — must match the server's rule
+  // (published stay/tour/experience) so the previewed total matches the charge.
+  const listingCount = useMemo(
+    () =>
+      listings.filter(
+        (l) => (l as { operatorId?: string }).operatorId === user?.id && (l as { status?: string }).status === "published" && BILLABLE_TYPES.includes(l.type),
+      ).length,
+    [listings, user?.id],
+  );
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [subs, setSubs] = useState<OperatorSubscription[]>([]);
   const [loading, setLoading] = useState(true);
@@ -141,8 +156,14 @@ export function OperatorSubscription() {
               </div>
               {activePlan && (
                 <p className="mt-1.5 text-sm text-basalt/60">
-                  {format(activePlan.amountCents)} / month
+                  {format(liveSub.amountCents ?? activePlan.amountCents)} / month
+                  {activePlan.pricingMode === "per_listing" && liveSub.quantity != null && ` · ${format(activePlan.amountCents)} × ${liveSub.quantity} listing${liveSub.quantity === 1 ? "" : "s"}`}
                   {liveSub.status === "pending" && " · complete payment on PayLink to activate"}
+                </p>
+              )}
+              {activePlan?.pricingMode === "per_listing" && liveSub.quantity != null && listingCount !== liveSub.quantity && (
+                <p className="mt-1 text-xs text-apricot">
+                  You now have {listingCount} listing{listingCount === 1 ? "" : "s"} — your charge updates to {format(activePlan.amountCents * listingCount)} / month at the next cycle.
                 </p>
               )}
               {liveSub.lastPaymentAt && (
@@ -189,17 +210,33 @@ export function OperatorSubscription() {
               <div className="grid gap-5 sm:grid-cols-2">
                 {plans.map((plan) => {
                   const selected = pickPlan === plan.id;
+                  const perListing = plan.pricingMode === "per_listing";
+                  const total = perListing ? plan.amountCents * listingCount : plan.amountCents;
+                  const noListings = perListing && listingCount < 1;
                   return (
                     <div key={plan.id} className={`flex flex-col border p-6 transition-colors ${selected ? "border-apricot" : "border-basalt/12"}`}>
                       <h3 className="font-display text-2xl">{plan.name}</h3>
-                      <p className="mt-1 font-display text-3xl tabular-nums">
-                        {format(plan.amountCents)}
-                        <span className="text-base font-normal text-basalt/50"> / month</span>
-                      </p>
+                      {perListing ? (
+                        <>
+                          <p className="mt-1 font-display text-3xl tabular-nums">
+                            {format(plan.amountCents)}
+                            <span className="text-base font-normal text-basalt/50"> / listing / month</span>
+                          </p>
+                          <p className="mt-1 text-sm text-basalt/60">
+                            You have {listingCount} listing{listingCount === 1 ? "" : "s"} →{" "}
+                            <span className="font-semibold text-basalt">{format(total)} / month</span>
+                          </p>
+                        </>
+                      ) : (
+                        <p className="mt-1 font-display text-3xl tabular-nums">
+                          {format(plan.amountCents)}
+                          <span className="text-base font-normal text-basalt/50"> / month</span>
+                        </p>
+                      )}
                       {plan.description && <p className="mt-3 flex-1 text-sm leading-6 text-basalt/65 whitespace-pre-line">{plan.description}</p>}
                       <Button
                         className="mt-5"
-                        disabled={busyPlan === plan.id}
+                        disabled={busyPlan === plan.id || noListings}
                         onClick={() => {
                           setPickPlan(plan.id);
                           subscribe(plan.id);
@@ -215,6 +252,7 @@ export function OperatorSubscription() {
                           </>
                         )}
                       </Button>
+                      {noListings && <p className="mt-2 text-xs text-basalt/50">Publish a listing first — this plan bills per listing.</p>}
                     </div>
                   );
                 })}
