@@ -196,15 +196,36 @@ export function OperatorSubscription() {
         </div>
       )}
 
+      {/* Pay-as-you-go — the current state when not subscribed. Makes the choice
+          (commission-only vs. subscribe) explicit. */}
+      {!liveSub && (
+        <div className="border border-basalt/12 bg-chalk/50 p-6">
+          <div className="flex items-center gap-2">
+            <h3 className="font-display text-2xl">Pay as you go</h3>
+            <span className="rounded-full bg-basalt/10 px-2.5 py-0.5 text-xs font-bold uppercase tracking-[0.08em] text-basalt/60">Current</span>
+          </div>
+          <p className="mt-1.5 text-sm text-basalt/65">
+            No monthly fee.{" "}
+            {defaultCommission != null
+              ? <>You pay <span className="font-semibold text-basalt">{defaultCommission}% commission</span> on each booking through Revamp.</>
+              : "You pay the standard commission on each booking through Revamp."}
+          </p>
+          {plans.some((p) => p.commissionPercent != null && defaultCommission != null && p.commissionPercent < defaultCommission) && (
+            <p className="mt-2 text-sm text-basalt/55">Subscribe below to lower your per-booking commission.</p>
+          )}
+        </div>
+      )}
+
       {/* Plan picker — only when there's no live subscription */}
       {!liveSub && (
         <div>
           {plans.length === 0 ? (
             <p className="border border-dashed border-basalt/20 bg-chalk px-6 py-10 text-center text-sm text-basalt/55">
-              No plans are available right now. Check back soon.
+              No subscription plans right now — you're on pay-as-you-go.
             </p>
           ) : (
             <>
+              <p className="mb-4 text-sm font-bold uppercase tracking-[0.1em] text-basalt/45">Or subscribe</p>
               <div className="mb-5 max-w-md">
                 <Label htmlFor="billing-phone" className="text-sm font-semibold">
                   Billing phone
