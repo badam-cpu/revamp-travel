@@ -5,6 +5,8 @@
  * each card links to the guide-style detail page.
  */
 import { useMemo, useState } from "react";
+import { Link, useSearch } from "wouter";
+import { X } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { ListingCard } from "@/components/ListingCard";
@@ -14,9 +16,12 @@ import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { cn } from "@/lib/utils";
 
 const OTHER = "More spots";
+const normalizeRegion = (r: string) => r.trim().replace(/\s+(province|marz)$/i, "").trim();
 
 export default function EatGuide() {
   const { listings, loading } = useListings();
+  const search = useSearch();
+  const regionParam = new URLSearchParams(search).get("region");
   const [cuisine, setCuisine] = useState("all");
   const [loc, setLoc] = useState("all");
   const [minRating, setMinRating] = useState(0);
@@ -27,7 +32,14 @@ export default function EatGuide() {
     canonicalPath: "/explore/eat",
   });
 
-  const eateries = useMemo(() => listings.filter((l) => l.type === "eat"), [listings]);
+  // Base set — narrowed to a region when arriving from Explore with ?region=,
+  // so every downstream facet (types, locations, groups) reflects that region.
+  const eateries = useMemo(() => {
+    const all = listings.filter((l) => l.type === "eat");
+    if (!regionParam) return all;
+    const want = normalizeRegion(regionParam).toLowerCase();
+    return all.filter((l) => normalizeRegion(l.region || "").toLowerCase() === want);
+  }, [listings, regionParam]);
 
   // Venue-type facets present in the data (for the filter chips), most common first.
   const types = useMemo(() => {
@@ -86,6 +98,11 @@ export default function EatGuide() {
           <p className="mt-4 max-w-2xl text-base leading-7 text-basalt/60">
             An independent guide to the restaurants, cafés and wine bars we love — hand-picked by the Revamp team. These are free recommendations: we don't take bookings or earn a commission on them.
           </p>
+          {regionParam && (
+            <Link href="/explore/eat" className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-apricot/40 bg-apricot/5 px-3 py-1.5 text-sm font-semibold text-basalt hover:border-apricot">
+              {normalizeRegion(regionParam)} <X className="h-3.5 w-3.5 text-basalt/50" />
+            </Link>
+          )}
         </section>
 
         {(types.length > 0 || locations.length > 0) && (
@@ -139,7 +156,7 @@ export default function EatGuide() {
               {Array.from({ length: 6 }).map((_, i) => <ListingCardSkeleton key={i} />)}
             </div>
           ) : eateries.length === 0 ? (
-            <p className="border border-dashed border-basalt/20 bg-chalk px-6 py-16 text-center text-sm text-basalt/55">No restaurant recommendations yet — check back soon.</p>
+            <p className="border border-dashed border-basalt/20 bg-chalk px-6 py-16 text-center text-sm text-basalt/55">{regionParam ? `No restaurant picks in ${normalizeRegion(regionParam)} yet — check back soon.` : "No restaurant recommendations yet — check back soon."}</p>
           ) : shown.length === 0 ? (
             <div className="border border-dashed border-basalt/20 bg-chalk px-6 py-16 text-center">
               <p className="text-sm text-basalt/55">No spots match these filters.</p>

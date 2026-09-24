@@ -109,7 +109,11 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
               {["all", "stay", "eat", "tour", "experience"].map((value) => (
                 <button
                   key={value}
-                  onClick={() => (value === "tour" || value === "eat" ? navigate(`/explore/${value}${value === "tour" && query.trim() ? `?query=${encodeURIComponent(query.trim())}` : ""}`) : setType(value))}
+                  onClick={() => {
+                    if (value === "tour") navigate(`/explore/tour${query.trim() ? `?query=${encodeURIComponent(query.trim())}` : ""}`);
+                    else if (value === "eat") navigate(`/explore/eat${region !== "all" ? `?region=${encodeURIComponent(region)}` : ""}`);
+                    else setType(value);
+                  }}
                   className={cn("filter-chip", type === value && "active")}
                 >
                   {value === "all" ? "All places" : typeLabels[value as ListingType]}
