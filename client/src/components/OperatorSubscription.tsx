@@ -196,112 +196,123 @@ export function OperatorSubscription() {
         </div>
       )}
 
-      {/* Pay-as-you-go — the current state when not subscribed. Makes the choice
-          (commission-only vs. subscribe) explicit. */}
-      {!liveSub && (
-        <div className="border border-basalt/12 bg-chalk/50 p-6">
-          <div className="flex items-center gap-2">
-            <h3 className="font-display text-2xl">Pay as you go</h3>
-            <span className="rounded-full bg-basalt/10 px-2.5 py-0.5 text-xs font-bold uppercase tracking-[0.08em] text-basalt/60">Current</span>
-          </div>
-          <p className="mt-1.5 text-sm text-basalt/65">
-            No monthly fee.{" "}
-            {defaultCommission != null
-              ? <>You pay <span className="font-semibold text-basalt">{defaultCommission}% commission</span> on each booking through Revamp.</>
-              : "You pay the standard commission on each booking through Revamp."}
-          </p>
-          {plans.some((p) => p.commissionPercent != null && defaultCommission != null && p.commissionPercent < defaultCommission) && (
-            <p className="mt-2 text-sm text-basalt/55">Subscribe below to lower your per-booking commission.</p>
-          )}
-        </div>
-      )}
-
-      {/* Plan picker — only when there's no live subscription */}
+      {/* Plan comparison — pay-as-you-go vs. subscription, as connected tiers. */}
       {!liveSub && (
         <div>
-          {plans.length === 0 ? (
-            <p className="border border-dashed border-basalt/20 bg-chalk px-6 py-10 text-center text-sm text-basalt/55">
-              No subscription plans right now — you're on pay-as-you-go.
+          <div className="mb-6 max-w-2xl">
+            <h2 className="font-display text-2xl tracking-[-0.02em]">Choose how you sell on Revamp</h2>
+            <p className="mt-1.5 text-sm leading-6 text-basalt/60">
+              Keep it simple with pay-as-you-go, or subscribe to lock in a lower per-booking commission. Switch whenever you like.
             </p>
-          ) : (
-            <>
-              <p className="mb-4 text-sm font-bold uppercase tracking-[0.1em] text-basalt/45">Or subscribe</p>
-              <div className="mb-5 max-w-md">
-                <Label htmlFor="billing-phone" className="text-sm font-semibold">
-                  Billing phone
-                </Label>
-                <Input
-                  id="billing-phone"
-                  type="tel"
-                  placeholder="e.g. +374 XX XXX XXX"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="mt-1.5"
-                />
-                <p className="mt-1 text-xs text-basalt/45">Required by our payment provider to set up recurring billing.</p>
+          </div>
+
+          <div className={`grid items-stretch gap-5 ${plans.length >= 2 ? "lg:grid-cols-3 sm:grid-cols-2" : "sm:grid-cols-2"}`}>
+            {/* Pay-as-you-go tier (the current default) */}
+            <div className="flex flex-col rounded-none border border-basalt/12 bg-chalk/40 p-6">
+              <div className="flex items-center gap-2">
+                <h3 className="font-display text-xl">Pay as you go</h3>
+                <span className="rounded-full bg-basalt/12 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-basalt/60">Current</span>
               </div>
-              <div className="grid gap-5 sm:grid-cols-2">
-                {plans.map((plan) => {
-                  const selected = pickPlan === plan.id;
-                  const perListing = plan.pricingMode === "per_listing";
-                  const total = perListing ? plan.amountCents * listingCount : plan.amountCents;
-                  const noListings = perListing && listingCount < 1;
-                  return (
-                    <div key={plan.id} className={`flex flex-col border p-6 transition-colors ${selected ? "border-apricot" : "border-basalt/12"}`}>
-                      <h3 className="font-display text-2xl">{plan.name}</h3>
-                      {perListing ? (
-                        <>
-                          <p className="mt-1 font-display text-3xl tabular-nums">
-                            {format(plan.amountCents)}
-                            <span className="text-base font-normal text-basalt/50"> / listing / month</span>
-                          </p>
-                          <p className="mt-1 text-sm text-basalt/60">
-                            You have {listingCount} listing{listingCount === 1 ? "" : "s"} →{" "}
-                            <span className="font-semibold text-basalt">{format(total)} / month</span>
-                          </p>
-                        </>
-                      ) : (
-                        <p className="mt-1 font-display text-3xl tabular-nums">
-                          {format(plan.amountCents)}
-                          <span className="text-base font-normal text-basalt/50"> / month</span>
-                        </p>
-                      )}
-                      {plan.description && <p className="mt-3 text-sm leading-6 text-basalt/65 whitespace-pre-line">{plan.description}</p>}
-                      {plan.commissionPercent != null && (
-                        <p className="mt-3 flex items-center gap-1.5 text-sm font-medium text-[#1f7a4d]">
-                          <Check className="h-4 w-4 shrink-0" />
-                          {plan.commissionPercent === 0 ? "0% booking commission" : `${plan.commissionPercent}% booking commission`}
-                          {defaultCommission != null && plan.commissionPercent < defaultCommission && (
-                            <span className="font-normal text-basalt/45">vs {defaultCommission}% standard</span>
-                          )}
-                        </p>
-                      )}
-                      <div className="flex-1" />
-                      <Button
-                        className="mt-5"
-                        disabled={busyPlan === plan.id || noListings}
-                        onClick={() => {
-                          setPickPlan(plan.id);
-                          subscribe(plan.id);
-                        }}
-                      >
+              <p className="mt-3 font-display text-4xl leading-none tabular-nums">
+                {defaultCommission != null ? `${defaultCommission}%` : "—"}
+                <span className="ml-1 align-middle text-base font-normal text-basalt/50">per booking</span>
+              </p>
+              <ul className="mt-5 space-y-2.5 text-sm text-basalt/70">
+                <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-basalt/40" /> No monthly fee — pay only when you earn</li>
+                <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-basalt/40" /> Commission on Revamp bookings only</li>
+                <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-basalt/40" /> No commitment</li>
+              </ul>
+              <div className="flex-1" />
+              <p className="mt-6 rounded-none border border-basalt/12 bg-paper/60 py-2.5 text-center text-xs font-semibold uppercase tracking-[0.1em] text-basalt/50">
+                Your current plan
+              </p>
+            </div>
+
+            {/* Subscription tiers */}
+            {plans.map((plan) => {
+              const perListing = plan.pricingMode === "per_listing";
+              const total = perListing ? plan.amountCents * listingCount : plan.amountCents;
+              const noListings = perListing && listingCount < 1;
+              const saves = plan.commissionPercent != null && defaultCommission != null && plan.commissionPercent < defaultCommission;
+              const picking = pickPlan === plan.id;
+              const descLines = plan.description.split("\n").map((s) => s.trim()).filter(Boolean);
+              return (
+                <div
+                  key={plan.id}
+                  className={`relative flex flex-col rounded-none border p-6 ${saves ? "border-apricot bg-apricot/[0.04] shadow-[0_1px_0_0_rgba(241,88,34,0.15)]" : "border-basalt/12 bg-paper"}`}
+                >
+                  {saves && (
+                    <span className="absolute -top-3 left-6 rounded-full bg-apricot px-3 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-paper">
+                      Best value
+                    </span>
+                  )}
+                  <h3 className="font-display text-xl">{plan.name}</h3>
+
+                  {perListing ? (
+                    <>
+                      <p className="mt-3 font-display text-4xl leading-none tabular-nums">
+                        {format(total)}
+                        <span className="ml-1 align-middle text-base font-normal text-basalt/50">/ month</span>
+                      </p>
+                      <p className="mt-1.5 text-xs text-basalt/55">
+                        {format(plan.amountCents)} / listing × {listingCount} listing{listingCount === 1 ? "" : "s"}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="mt-3 font-display text-4xl leading-none tabular-nums">
+                      {format(plan.amountCents)}
+                      <span className="ml-1 align-middle text-base font-normal text-basalt/50">/ month</span>
+                    </p>
+                  )}
+
+                  <ul className="mt-5 space-y-2.5 text-sm text-basalt/75">
+                    {plan.commissionPercent != null && (
+                      <li className="flex gap-2 font-semibold text-[#1f7a4d]">
+                        <Check className="mt-0.5 h-4 w-4 shrink-0" />
+                        {plan.commissionPercent === 0 ? "0% booking commission" : `${plan.commissionPercent}% booking commission`}
+                        {saves && <span className="font-normal text-basalt/45">— save vs {defaultCommission}%</span>}
+                      </li>
+                    )}
+                    {descLines.map((line, i) => (
+                      <li key={i} className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-apricot" /> {line}</li>
+                    ))}
+                    <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-apricot" /> Billed monthly · cancel anytime</li>
+                  </ul>
+
+                  <div className="flex-1" />
+
+                  {picking ? (
+                    <div className="mt-6 space-y-2">
+                      <Label htmlFor={`phone-${plan.id}`} className="text-xs font-semibold">Billing phone</Label>
+                      <Input
+                        id={`phone-${plan.id}`}
+                        type="tel"
+                        autoFocus
+                        placeholder="e.g. +374 XX XXX XXX"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                      />
+                      <p className="text-[11px] text-basalt/45">Required by PayLink to set up recurring billing.</p>
+                      <Button className="w-full" disabled={busyPlan === plan.id || phone.trim().length < 6} onClick={() => subscribe(plan.id)}>
                         {busyPlan === plan.id ? (
-                          <>
-                            <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Starting…
-                          </>
+                          <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Starting…</>
                         ) : (
-                          <>
-                            <CreditCard className="mr-1.5 h-4 w-4" /> Subscribe
-                          </>
+                          <><CreditCard className="mr-1.5 h-4 w-4" /> Continue to payment</>
                         )}
                       </Button>
-                      {noListings && <p className="mt-2 text-xs text-basalt/50">Publish a listing first — this plan bills per listing.</p>}
                     </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
+                  ) : (
+                    <>
+                      <Button className="mt-6 w-full" variant={saves ? "default" : "outline"} disabled={noListings} onClick={() => setPickPlan(plan.id)}>
+                        Subscribe
+                      </Button>
+                      {noListings && <p className="mt-2 text-center text-xs text-basalt/50">Publish a listing first — this plan bills per listing.</p>}
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
