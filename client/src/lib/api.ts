@@ -137,6 +137,7 @@ export interface TripadvisorMatch {
   url: string | null;
   ratingImage: string | null;
   address: string | null;
+  menuUrl: string | null;
 }
 
 /** Admin-only: match a restaurant on Tripadvisor by name (biased to a geo/city). */

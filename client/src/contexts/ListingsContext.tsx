@@ -141,6 +141,7 @@ interface ListingRow {
   tripadvisor_rating_count: number | null;
   tripadvisor_url: string | null;
   tripadvisor_rating_image: string | null;
+  tripadvisor_menu_url: string | null;
   is_partner: boolean | null;
   claimed_by: string | null;
 }
@@ -212,6 +213,7 @@ function mapListingRow(row: ListingRow): LiveListing {
     tripadvisorRatingCount: row.tripadvisor_rating_count ?? undefined,
     tripadvisorUrl: row.tripadvisor_url ?? undefined,
     tripadvisorRatingImage: row.tripadvisor_rating_image ?? undefined,
+    tripadvisorMenuUrl: row.tripadvisor_menu_url ?? undefined,
     isPartner: row.is_partner ?? false,
     claimedBy: row.claimed_by ?? null,
   };
@@ -270,6 +272,7 @@ function toRow(input: ListingInput) {
     tripadvisor_rating_count: input.tripadvisorRatingCount ?? null,
     tripadvisor_url: input.tripadvisorUrl?.trim() || null,
     tripadvisor_rating_image: input.tripadvisorRatingImage?.trim() || null,
+    tripadvisor_menu_url: input.tripadvisorMenuUrl?.trim() || null,
     is_partner: input.isPartner ?? false,
     claimed_by: input.claimedBy ?? null,
   };

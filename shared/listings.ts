@@ -134,6 +134,7 @@ export interface Listing {
   tripadvisorRatingCount?: number;
   tripadvisorUrl?: string;
   tripadvisorRatingImage?: string;
+  tripadvisorMenuUrl?: string;
   /** Dormant Phase-2 fields: an owner-claimed / paid-partner restaurant. */
   isPartner?: boolean;
   claimedBy?: string | null;
@@ -597,6 +598,7 @@ export interface ListingInput {
   tripadvisorRatingCount?: number;
   tripadvisorUrl?: string;
   tripadvisorRatingImage?: string;
+  tripadvisorMenuUrl?: string;
   isPartner?: boolean;
   claimedBy?: string | null;
 }

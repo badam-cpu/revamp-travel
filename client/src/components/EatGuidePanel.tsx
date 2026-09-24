@@ -4,7 +4,7 @@
  * the price band, the cached Google rating, honest "we don't earn from this"
  * attribution, and outward CTAs (directions, website, Google).
  */
-import { Star, MapPin, Globe, ExternalLink, Bookmark } from "lucide-react";
+import { Star, MapPin, Globe, ExternalLink, Bookmark, UtensilsCrossed } from "lucide-react";
 import type { LiveListing } from "@/contexts/ListingsContext";
 import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { cn } from "@/lib/utils";
@@ -68,6 +68,16 @@ export function EatGuidePanel({ listing }: { listing: LiveListing }) {
             className="inline-flex items-center justify-center gap-2 border border-basalt/20 bg-paper px-4 py-3 text-sm font-semibold text-basalt transition-colors hover:border-apricot hover:text-apricot"
           >
             <Globe className="h-4 w-4" /> Website
+          </a>
+        )}
+        {listing.tripadvisorMenuUrl && (
+          <a
+            href={listing.tripadvisorMenuUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 border border-basalt/20 bg-paper px-4 py-3 text-sm font-semibold text-basalt transition-colors hover:border-apricot hover:text-apricot"
+          >
+            <UtensilsCrossed className="h-4 w-4" /> View menu
           </a>
         )}
         {gmaps && (

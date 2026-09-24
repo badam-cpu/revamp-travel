@@ -38,13 +38,14 @@ export interface TripadvisorMatch {
   url: string | null;
   ratingImage: string | null;
   address: string | null;
+  menuUrl: string | null;
 }
 
 interface TerraLocation {
   id?: number;
   names?: { value?: string; primary?: boolean }[];
   traveler_ratings?: { overall?: { rating?: number; count?: number; icon_url?: string } };
-  urls?: { tripadvisor?: { main?: string } };
+  urls?: { tripadvisor?: { main?: string }; menu?: string; official?: string };
   addresses?: { formatted?: string }[];
 }
 
@@ -93,6 +94,7 @@ async function locationDetails(id: number): Promise<TripadvisorMatch> {
     url: loc.urls?.tripadvisor?.main ?? null,
     ratingImage: overall?.icon_url ?? null,
     address: loc.addresses?.[0]?.formatted ?? null,
+    menuUrl: loc.urls?.menu ?? null,
   };
 }
 

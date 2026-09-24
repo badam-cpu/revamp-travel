@@ -40,7 +40,7 @@ const BLANK = {
   shortDescription: "", longDescription: "", address: "", googleRating: null as number | null, googleRatingCount: null as number | null,
   lat: null as number | null, lng: null as number | null,
   tripadvisorLocationId: "", tripadvisorRating: null as number | null, tripadvisorRatingCount: null as number | null,
-  tripadvisorUrl: "", tripadvisorRatingImage: "",
+  tripadvisorUrl: "", tripadvisorRatingImage: "", tripadvisorMenuUrl: "",
 };
 
 export function AdminEateries() {
@@ -115,6 +115,7 @@ export function AdminEateries() {
         tripadvisorRatingCount: m.ratingCount,
         tripadvisorUrl: m.url ?? "",
         tripadvisorRatingImage: m.ratingImage ?? "",
+        tripadvisorMenuUrl: m.menuUrl ?? "",
       });
       toast(m.rating != null ? `Matched "${m.name}" on Tripadvisor — ${m.rating} (${m.ratingCount}).` : `Matched "${m.name}" on Tripadvisor.`);
     } catch (e) {
@@ -162,6 +163,7 @@ export function AdminEateries() {
       tripadvisorRatingCount: data.tripadvisor_rating_count ?? null,
       tripadvisorUrl: data.tripadvisor_url ?? "",
       tripadvisorRatingImage: data.tripadvisor_rating_image ?? "",
+      tripadvisorMenuUrl: data.tripadvisor_menu_url ?? "",
     });
     setGalleryDefault(Array.isArray(data.gallery) && data.gallery.length ? data.gallery : data.image ? [data.image] : []);
     setUploaderKey((k) => k + 1); // remount uploader seeded with the existing photos
@@ -205,6 +207,7 @@ export function AdminEateries() {
         tripadvisor_rating_count: f.tripadvisorRatingCount,
         tripadvisor_url: f.tripadvisorUrl || null,
         tripadvisor_rating_image: f.tripadvisorRatingImage || null,
+        tripadvisor_menu_url: f.tripadvisorMenuUrl || null,
         neighborhood: f.neighborhood.trim() || null,
       };
       if (editingId) {
