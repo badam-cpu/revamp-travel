@@ -30,6 +30,10 @@ export function SiteHeader({ minimal = false, flush = false, wide = false }: { m
   const [location] = useLocation();
   const { user, profile, signOut } = useAuth();
   const unread = useUnreadMessages();
+  // The support chat signs a shopper in ANONYMOUSLY (a "Guest") so they can ask
+  // without an account — that's not a real login, so the header should still
+  // show Sign in / Sign up, not the account menu.
+  const signedIn = !!user && !((user as { is_anonymous?: boolean }).is_anonymous === true || !user.email);
 
   const links = useMemo(() => {
     if (minimal) return [];
@@ -69,7 +73,7 @@ export function SiteHeader({ minimal = false, flush = false, wide = false }: { m
         </nav>
         <div className="hidden shrink-0 items-center gap-1.5 xl:flex">
           <CurrencyToggle />
-          {user && (
+          {signedIn && (
             <Button
               asChild
               variant="ghost"
@@ -82,7 +86,7 @@ export function SiteHeader({ minimal = false, flush = false, wide = false }: { m
               </Link>
             </Button>
           )}
-          {user ? (
+          {signedIn ? (
             <>
               <Link
                 href="/account?tab=profile"
@@ -145,7 +149,7 @@ export function SiteHeader({ minimal = false, flush = false, wide = false }: { m
                 ))}
               </nav>
               <div className="mt-auto border-t border-white/15 pt-6">
-                {user ? (
+                {signedIn ? (
                   <div className="flex items-center justify-between text-sm text-paper/70">
                     <SheetClose asChild>
                       <Link href="/account?tab=profile" className="inline-flex items-center gap-1.5 font-semibold hover:text-white"><User className="h-3.5 w-3.5" /> {profile?.displayName || "Account"}{unread > 0 && <span className="ml-1 grid h-5 min-w-5 place-items-center rounded-full bg-apricot px-1.5 text-[10px] font-bold text-white">{unread}</span>}</Link>
