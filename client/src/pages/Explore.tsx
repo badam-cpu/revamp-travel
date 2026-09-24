@@ -1,6 +1,7 @@
 /** Revamp brandbook: marketplace utility uses bold sans hierarchy, white surfaces, orange filters, rounded cards, and a synchronized atlas. */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
+import { supabase } from "@/lib/supabase";
 import { Filter, Map as MapIcon, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -33,6 +34,40 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
   const [type, setType] = useState(validTypes.has(urlType) ? urlType : "all");
   const [region, setRegion] = useState("all");
   const [selectedId, setSelectedId] = useState<string | undefined>();
+  // Stay-availability filter: when a date range is searched, hide stays whose
+  // dates are blocked (iCal/manual) or already confirmed-booked for that window.
+  const checkin = params.get("checkin") || "";
+  const checkout = params.get("checkout") || "";
+  const hasRange = !!checkin && !!checkout && checkout > checkin;
+  const [bookedByListing, setBookedByListing] = useState<Map<string, { start: string; end: string }[]>>(new Map());
+  useEffect(() => {
+    if (!hasRange) return;
+    supabase
+      .from("listing_booked_ranges")
+      .select("listing_id, start_date, end_date")
+      .then(({ data }) => {
+        const m = new Map<string, { start: string; end: string }[]>();
+        (data ?? []).forEach((r: { listing_id: string; start_date: string; end_date: string }) => {
+          const arr = m.get(r.listing_id) ?? [];
+          arr.push({ start: r.start_date, end: r.end_date });
+          m.set(r.listing_id, arr);
+        });
+        setBookedByListing(m);
+      });
+  }, [hasRange]);
+
+  const addDayIso = (iso: string) => new Date(Date.parse(`${iso}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+  // Two half-open [start,end) ranges overlap when each starts before the other ends.
+  const overlaps = (aStart: string, aEnd: string, bStart: string, bEnd: string) => aStart < bEnd && aEnd > bStart;
+  const isAvailableForRange = (listing: (typeof listings)[number]) => {
+    if (!hasRange || listing.type !== "stay") return true; // range check applies to stays only
+    const blocks: [string, string][] = [
+      ...(listing.blockedRanges ?? []).map((b) => [b.start, addDayIso(b.end)] as [string, string]), // iCal end is inclusive
+      ...(listing.manualBlockedRanges ?? []).map((b) => [b.start, b.end] as [string, string]), // manual end exclusive
+      ...(bookedByListing.get(listing.id) ?? []).map((b) => [b.start, b.end] as [string, string]),
+    ];
+    return !blocks.some(([s, e]) => overlaps(checkin, checkout, s, e));
+  };
   // Region options = the regions the site actually showcases: the admin's home
   // region cards, plus any region that has a live listing. (Not every Armenian
   // marze — an empty region would only create a dead-end "0 places" filter.)
@@ -60,9 +95,10 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
       const matchesType = type === "all" ? listing.type !== "eat" : listing.type === type;
       const matchesRegion = region === "all" || normalizeRegion(listing.region).toLowerCase() === region.toLowerCase();
       const haystack = [listing.title, listing.city, listing.region, listing.type, listing.shortDescription, ...listing.tags].join(" ").toLowerCase();
-      return matchesType && matchesRegion && (!needle || haystack.includes(needle));
+      return matchesType && matchesRegion && (!needle || haystack.includes(needle)) && isAvailableForRange(listing);
     });
-  }, [query, type, region, listings]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, type, region, listings, hasRange, checkin, checkout, bookedByListing]);
 
   const reset = () => {
     setQuery("");
