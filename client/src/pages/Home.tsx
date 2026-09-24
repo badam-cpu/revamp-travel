@@ -169,7 +169,7 @@ export default function Home() {
         </section>
 
         {(hc.mediaMentions ?? []).length > 0 && (
-          <section className="border-y border-basalt/10 bg-paper">
+          <section className="border-y border-apricot/15 bg-apricot/[0.05]">
             <div className="container py-16 lg:py-20">
               <p className="text-center text-[11px] font-bold uppercase tracking-[0.2em] text-apricot">Armenia in the world's press</p>
               <h2 className="mx-auto mt-3 max-w-2xl text-center font-display text-3xl leading-tight tracking-[-0.02em]">A destination the world keeps writing about.</h2>
@@ -180,7 +180,7 @@ export default function Home() {
                   ) : (
                     <span className="text-center font-display text-xl text-basalt/70">{m.name}</span>
                   );
-                  const cls = "flex h-32 items-center justify-center rounded-[0.875rem] bg-chalk px-6 py-5 transition-shadow";
+                  const cls = "flex h-32 items-center justify-center rounded-[0.875rem] border border-basalt/5 bg-paper px-6 py-5 transition-shadow";
                   return m.url ? (
                     <a key={i} href={m.url} target="_blank" rel="noopener noreferrer" title={`${m.name} — read the article`} className={`${cls} hover:shadow-[0_10px_30px_rgba(35,35,33,0.10)]`}>
                       {inner}
