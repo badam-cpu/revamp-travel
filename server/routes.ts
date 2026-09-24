@@ -930,11 +930,17 @@ export function registerApiRoutes(app: Express) {
             const { data: u } = await admin.auth.admin.getUserById(a.id);
             if (u?.user?.email) emails.add(u.user.email);
           }
+          // Last-resort recipient: the verified sender mailbox, so an alert still
+          // lands even if no admin email resolved.
+          if (emails.size === 0 && process.env.EMAIL_FROM) emails.add(process.env.EMAIL_FROM);
           const { data: prof } = await admin.from("profiles").select("display_name").eq("id", userId).maybeSingle();
           if (emails.size === 0) {
-            console.warn("[support-chat] escalation had NO admin recipients — set ADMIN_EMAIL, or ensure an admin profile has a resolvable email.");
+            console.warn("[support-chat] escalation had NO recipients — set ADMIN_EMAIL (and RESEND_API_KEY/EMAIL_FROM), or ensure an admin profile has a resolvable email.");
           }
-          for (const email of Array.from(emails)) await sendSupportAlert(email, { travelerName: prof?.display_name ?? "A traveler", message: parsed.data.message });
+          const results = await Promise.all(Array.from(emails).map((email) => sendSupportAlert(email, { travelerName: prof?.display_name ?? "A traveler", message: parsed.data.message })));
+          if (results.length && !results.some((r) => r?.sent)) {
+            console.warn("[support-chat] escalation alert not delivered:", results.map((r) => r?.reason).join(","));
+          }
         } catch (alertErr) {
           console.error("[support-chat] admin alert failed", alertErr);
         }
