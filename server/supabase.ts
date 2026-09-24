@@ -283,11 +283,13 @@ export async function getPartnerOperators(): Promise<{ name: string; total: numb
   try {
     const { data } = await client
       .from("listings")
-      .select("operator_id, profiles!operator_id(business_name, display_name)")
-      .eq("status", "published");
+      .select("operator_id, type, profiles!operator_id(business_name, display_name, role)")
+      .eq("status", "published")
+      .neq("type", "eat"); // "Eat" is Revamp's curated guide, not operator inventory
     const map = new Map<string, { name: string; total: number }>();
-    for (const r of (data ?? []) as { operator_id: string; profiles: { business_name?: string | null; display_name?: string | null } | null }[]) {
+    for (const r of (data ?? []) as { operator_id: string; type: string; profiles: { business_name?: string | null; display_name?: string | null; role?: string | null } | null }[]) {
       if (!r.operator_id) continue;
+      if (r.profiles?.role === "admin") continue; // never surface an admin account publicly
       const existing = map.get(r.operator_id);
       if (existing) existing.total += 1;
       else map.set(r.operator_id, { name: r.profiles?.business_name || r.profiles?.display_name || "Host", total: 1 });

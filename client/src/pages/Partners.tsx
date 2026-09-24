@@ -33,7 +33,7 @@ interface OperatorCard {
 export default function Partners() {
   const { listings } = useListings();
   const { settings } = useSiteSettings();
-  const [profiles, setProfiles] = useState<Record<string, { name: string; logo: string | null }>>({});
+  const [profiles, setProfiles] = useState<Record<string, { name: string; logo: string | null; role: string | null }>>({});
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   useDocumentMeta({
@@ -55,6 +55,10 @@ export default function Partners() {
     for (const l of listings) {
       const id = (l as { operatorId?: string }).operatorId;
       if (!id || id === "seed") continue;
+      // "Eat" listings are Revamp's free, admin-curated restaurant guide — not
+      // operator-run inventory — so they don't count toward "Hosts & operators"
+      // (and keep the admin/curator account out of this public list).
+      if (l.type === "eat") continue;
       const entry = map.get(id) ?? { id, name: "", logo: null, counts: {}, listings: [] };
       entry.counts[l.type] = (entry.counts[l.type] ?? 0) + 1;
       if (entry.listings.length < 4) entry.listings.push({ slug: l.slug, title: l.title });
@@ -75,10 +79,10 @@ export default function Partners() {
       .in("id", ids)
       .then(({ data }) => {
         if (!active || !data) return;
-        const next: Record<string, { name: string; logo: string | null }> = {};
+        const next: Record<string, { name: string; logo: string | null; role: string | null }> = {};
         for (const p of data) {
-          const row = p as { id: string; business_name?: string | null; display_name?: string | null; logo_url?: string | null };
-          next[row.id] = { name: row.business_name || row.display_name || "Host", logo: row.logo_url ?? null };
+          const row = p as { id: string; business_name?: string | null; display_name?: string | null; logo_url?: string | null; role?: string | null };
+          next[row.id] = { name: row.business_name || row.display_name || "Host", logo: row.logo_url ?? null, role: row.role ?? null };
         }
         setProfiles(next);
       });
@@ -89,7 +93,10 @@ export default function Partners() {
 
   const featuredIds = settings.homeContent.featuredOperatorIds ?? [];
   const ordered = useMemo(() => {
-    const withNames = operators.map((o) => ({ ...o, name: profiles[o.id]?.name ?? o.name, logo: profiles[o.id]?.logo ?? null }));
+    const withNames = operators
+      // Never surface an admin account publicly, even if it owns a stay/tour.
+      .filter((o) => profiles[o.id]?.role !== "admin")
+      .map((o) => ({ ...o, name: profiles[o.id]?.name ?? o.name, logo: profiles[o.id]?.logo ?? null }));
     const rank = (id: string) => {
       const i = featuredIds.indexOf(id);
       return i === -1 ? Number.MAX_SAFE_INTEGER : i;
@@ -129,7 +136,7 @@ export default function Partners() {
           <div className="flex items-end justify-between gap-4">
             <div>
               <p className="eyebrow">Hosts & operators</p>
-              <h2 className="mt-3 font-display text-4xl tracking-[-0.03em]">{ordered.length > 0 ? `${ordered.length} operators and counting.` : "Our operators."}</h2>
+              <h2 className="mt-3 font-display text-4xl tracking-[-0.03em]">{ordered.length > 0 ? `${ordered.length} ${ordered.length === 1 ? "operator" : "operators"} and counting.` : "Our operators."}</h2>
             </div>
             <Link href="/signup" className="hidden shrink-0 text-xs font-bold uppercase tracking-[0.15em] text-apricot hover:underline sm:block">
               Become an operator
