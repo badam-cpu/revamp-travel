@@ -168,6 +168,33 @@ export default function Home() {
           </div>
         </section>
 
+        {(hc.mediaMentions ?? []).length > 0 && (
+          <section className="border-y border-basalt/10 bg-paper">
+            <div className="container py-16 lg:py-20">
+              <p className="text-center text-[11px] font-bold uppercase tracking-[0.2em] text-basalt/45">Armenia in the world's press</p>
+              <h2 className="mx-auto mt-3 max-w-2xl text-center font-display text-3xl leading-tight tracking-[-0.02em]">A destination the world keeps writing about.</h2>
+              <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                {(hc.mediaMentions ?? []).map((m, i) => {
+                  const inner = m.logo ? (
+                    <img src={m.logo} alt={m.name} loading="lazy" className="max-h-12 max-w-[75%] object-contain" />
+                  ) : (
+                    <span className="text-center font-display text-lg text-basalt/70">{m.name}</span>
+                  );
+                  const cls = "flex h-28 items-center justify-center rounded-[0.875rem] bg-chalk px-6 transition-shadow";
+                  return m.url ? (
+                    <a key={i} href={m.url} target="_blank" rel="noopener noreferrer" title={`${m.name} — read the article`} className={`${cls} hover:shadow-[0_10px_30px_rgba(35,35,33,0.10)]`}>
+                      {inner}
+                    </a>
+                  ) : (
+                    <div key={i} className={cls}>{inner}</div>
+                  );
+                })}
+              </div>
+              <p className="mt-6 text-center text-xs text-basalt/40">Independent editorial coverage of Armenia. Logos belong to their publishers; each links to the original article.</p>
+            </div>
+          </section>
+        )}
+
         <section className="border-y border-basalt/10 bg-chalk">
           <div className="container py-20 lg:py-28">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">

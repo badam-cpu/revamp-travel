@@ -80,12 +80,14 @@ export function AdminSiteContent() {
   const [regionCards, setRegionCards] = useState<RegionCard[]>([]);
   const [faq, setFaq] = useState<{ id: string; q: string; a: string }[]>([]);
   const [partners, setPartners] = useState<{ id: string; name: string; blurb: string; url: string; logo: string }[]>([]);
+  const [mediaMentions, setMediaMentions] = useState<{ id: string; name: string; url: string; logo: string }[]>([]);
   const [featuredOps, setFeaturedOps] = useState<string[]>([]);
   const [operatorOptions, setOperatorOptions] = useState<{ id: string; name: string; count: number }[]>([]);
   const regionPhotoRefs = useRef<Map<string, PhotoUploaderHandle | null>>(new Map());
   const catPhotoRefs = useRef<Map<string, PhotoUploaderHandle | null>>(new Map());
   const addonPhotoRefs = useRef<Map<string, PhotoUploaderHandle | null>>(new Map());
   const partnerPhotoRefs = useRef<Map<string, PhotoUploaderHandle | null>>(new Map());
+  const mediaPhotoRefs = useRef<Map<string, PhotoUploaderHandle | null>>(new Map());
   const [addons, setAddons] = useState<Addon[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -125,6 +127,7 @@ export function AdminSiteContent() {
     setRegionCards(seedRegions.map((r) => ({ id: crypto.randomUUID(), name: r.name ?? "", label: r.label ?? "", image: (r as { image?: string }).image ?? "" })));
     setFaq((h.faq ?? []).map((f) => ({ id: crypto.randomUUID(), q: f.q ?? "", a: f.a ?? "" })));
     setPartners((h.partners ?? DEFAULT_SERVICE_PARTNERS).map((p) => ({ id: crypto.randomUUID(), name: p.name ?? "", blurb: p.blurb ?? "", url: p.url ?? "", logo: p.logo ?? "" })));
+    setMediaMentions((h.mediaMentions ?? []).map((m) => ({ id: crypto.randomUUID(), name: m.name ?? "", url: m.url ?? "", logo: m.logo ?? "" })));
     setFeaturedOps(h.featuredOperatorIds ?? []);
     setAddons(settings.addons ?? []);
     setHydrated(true);
@@ -172,6 +175,9 @@ export function AdminSiteContent() {
     setPartners((prev) => prev.filter((p) => p.id !== id));
   };
   const addPartner = () => setPartners((prev) => [...prev, { id: crypto.randomUUID(), name: "", blurb: "", url: "", logo: "" }]);
+  const updateMedia = (id: string, key: "name" | "url", val: string) => setMediaMentions((prev) => prev.map((m) => (m.id === id ? { ...m, [key]: val } : m)));
+  const removeMedia = (id: string) => { mediaPhotoRefs.current.delete(id); setMediaMentions((prev) => prev.filter((m) => m.id !== id)); };
+  const addMedia = () => setMediaMentions((prev) => [...prev, { id: crypto.randomUUID(), name: "", url: "", logo: "" }]);
 
   const toggleFeatured = (slug: string) =>
     setFeaturedSlugs((prev) => (prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]));
@@ -279,6 +285,13 @@ export function AdminSiteContent() {
                 logo: partnerPhotoRefs.current.get(p.id)?.getValue()[0] ?? p.logo ?? "",
               }))
               .filter((p) => p.name && p.blurb),
+            mediaMentions: mediaMentions
+              .map((m) => ({
+                name: m.name.trim(),
+                url: m.url.trim() || undefined,
+                logo: mediaPhotoRefs.current.get(m.id)?.getValue()[0] ?? m.logo ?? "",
+              }))
+              .filter((m) => m.name),
           },
         })
         .eq("id", 1);
@@ -624,6 +637,27 @@ export function AdminSiteContent() {
             <Label className="text-sm font-semibold">Intro paragraph</Label>
             <Textarea rows={2} value={home.mapIntro} onChange={(e) => setHome((p) => ({ ...p, mapIntro: e.target.value }))} placeholder="Hover a place to follow it across Armenia…" className="rounded-none text-base" />
           </div>
+          {sectionSave()}
+        </div>
+
+        {/* "Armenia in the world's press" media strip (home) */}
+        <div hidden={tab !== "home"} className="grid gap-4 border border-basalt/10 bg-paper p-5">
+          <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Armenia in the world's press <span className="font-normal normal-case tracking-normal text-basalt/45">(home logo strip)</span></p>
+          <p className="text-xs text-basalt/50">Outlets that have covered <strong>Armenia</strong> — each links to the real article. This is editorial coverage of the destination, not a claim that Revamp was featured. Only upload logos you have permission to use. Leave empty to hide the whole section.</p>
+          {mediaMentions.map((m) => (
+            <div key={m.id} className="grid gap-2 border border-basalt/10 bg-chalk/40 p-3">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid gap-1"><Label className="text-xs font-semibold text-basalt/60">Publication name</Label><Input value={m.name} onChange={(e) => updateMedia(m.id, "name", e.target.value)} placeholder="The New York Times" className="h-10 rounded-none" /></div>
+                <div className="grid gap-1"><Label className="text-xs font-semibold text-basalt/60">Article URL</Label><Input value={m.url} onChange={(e) => updateMedia(m.id, "url", e.target.value)} placeholder="https://…" className="h-10 rounded-none" /></div>
+              </div>
+              <div className="grid gap-1">
+                <Label className="text-xs font-semibold text-basalt/60">Logo <span className="font-normal text-basalt/45">(only upload logos you have permission to use)</span></Label>
+                <PhotoUploader ref={(el) => { mediaPhotoRefs.current.set(m.id, el); }} defaultValue={m.logo ? [m.logo] : []} />
+              </div>
+              <div><button type="button" onClick={() => removeMedia(m.id)} className="text-xs font-semibold text-basalt/45 hover:text-destructive">Remove</button></div>
+            </div>
+          ))}
+          <div><Button type="button" variant="outline" size="sm" onClick={addMedia} className="rounded-none border-basalt/20">+ Add publication</Button></div>
           {sectionSave()}
         </div>
 

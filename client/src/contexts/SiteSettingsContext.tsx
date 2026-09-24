@@ -57,6 +57,19 @@ export interface HomeContent {
   featuredOperatorIds?: string[];
   /** "Services we use" partners on /partners (falls back to DEFAULT_SERVICE_PARTNERS). */
   partners?: ServicePartner[];
+  /** "Armenia in the world's press" — outlets that have covered Armenia, each
+   *  linking to the real article. Editorial coverage of the destination, NOT a
+   *  claim that Revamp was featured. Admin supplies logos (permission is theirs). */
+  mediaMentions?: MediaMention[];
+}
+
+export interface MediaMention {
+  /** Publication name, e.g. "The New York Times". */
+  name: string;
+  /** Logo image URL (admin-uploaded; admin is responsible for permission). */
+  logo?: string;
+  /** Link to the actual article about Armenia. */
+  url?: string;
 }
 
 export interface ServicePartner {
