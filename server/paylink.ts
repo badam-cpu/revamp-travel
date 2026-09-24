@@ -160,7 +160,10 @@ export async function registerPayment({
     currency,
     language: LANGUAGE,
     isActive: true,
-    isFlexible: false,
+    isFlexible: false, // payer can't change the amount (spec)
+    maxCount: 1, // single-use link, one payment only — also suppresses PayLink's
+                 // hosted-page quantity/count stepper (spec: "maximum number of
+                 // payments allowed"). Each booking gets its own link.
     allowAnonymous,
     backUrl: returnUrl,
     requestInfo: info,
