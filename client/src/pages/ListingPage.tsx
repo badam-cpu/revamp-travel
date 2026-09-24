@@ -51,7 +51,7 @@ const AMENITIES_INLINE_LIMIT = 10;
  * respects reduced motion), with arrows, windowed dots, and a "Show all photos"
  * button. Clicking a photo opens the full-screen lightbox at that index.
  */
-function HeroCarousel({ photos, title, onOpen, badge }: { photos: string[]; title: string; onOpen: (i: number) => void; badge?: ReactNode }) {
+function HeroCarousel({ photos, title, onOpen, badge, coverFocus }: { photos: string[]; title: string; onOpen: (i: number) => void; badge?: ReactNode; coverFocus?: string }) {
   const [i, setI] = useState(0);
   const [paused, setPaused] = useState(false);
   const total = photos.length;
@@ -84,7 +84,7 @@ function HeroCarousel({ photos, title, onOpen, badge }: { photos: string[]; titl
             onClick={() => onOpen(i)}
             className="h-full w-full shrink-0"
           >
-            <img {...imgAttrs(src, "(min-width:1024px) 1100px, 100vw")} alt={idx === 0 ? title : ""} loading={idx === 0 ? undefined : "lazy"} className="h-full w-full object-cover" />
+            <img {...imgAttrs(src, "(min-width:1024px) 1100px, 100vw")} alt={idx === 0 ? title : ""} loading={idx === 0 ? undefined : "lazy"} style={idx === 0 ? { objectPosition: coverFocus || undefined } : undefined} className="h-full w-full object-cover" />
           </button>
         ))}
       </div>
@@ -284,6 +284,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
             photos={Array.from(new Set([listing.image, ...(listing.gallery ?? [])].filter(Boolean))) as string[]}
             title={listing.title}
             onOpen={setLightbox}
+            coverFocus={listing.coverFocus}
             badge={<DiscountBadge listing={listing} className="absolute left-4 top-4 z-10" />}
           />
         </section>

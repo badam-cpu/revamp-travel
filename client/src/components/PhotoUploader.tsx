@@ -28,14 +28,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
-export type PhotoUploaderHandle = { getValue: () => string[] };
+export type PhotoUploaderHandle = { getValue: () => string[]; getCoverFocus: () => string };
 
 const MAX_PHOTOS = 24;
 
 type Photo = { id: string; url: string };
 type Pending = { id: string; name: string; error?: string };
 
-export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: string[] }>(function PhotoUploader({ defaultValue = [] }, ref) {
+function parseFocus(s?: string): { x: number; y: number } {
+  const m = (s || "").match(/(-?\d+(?:\.\d+)?)%?\s+(-?\d+(?:\.\d+)?)%?/);
+  if (!m) return { x: 50, y: 50 };
+  return { x: Math.min(100, Math.max(0, Number(m[1]))), y: Math.min(100, Math.max(0, Number(m[2]))) };
+}
+
+export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: string[]; defaultFocus?: string }>(function PhotoUploader({ defaultValue = [], defaultFocus }, ref) {
   const { user } = useAuth();
   const [photos, setPhotos] = useState<Photo[]>(() => defaultValue.filter(Boolean).map((url) => ({ id: crypto.randomUUID(), url })));
   const [pending, setPending] = useState<Pending[]>([]);
@@ -43,9 +49,22 @@ export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: st
   const [urlDraft, setUrlDraft] = useState("");
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
+  const [focus, setFocus] = useState(() => parseFocus(defaultFocus));
+  const [posing, setPosing] = useState(false); // dragging the focal point
   const inputRef = useRef<HTMLInputElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
 
-  useImperativeHandle(ref, () => ({ getValue: () => photos.map((p) => p.url) }), [photos]);
+  useImperativeHandle(ref, () => ({ getValue: () => photos.map((p) => p.url), getCoverFocus: () => `${Math.round(focus.x)}% ${Math.round(focus.y)}%` }), [photos, focus]);
+
+  const setFocusFromEvent = (clientX: number, clientY: number) => {
+    const el = frameRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setFocus({
+      x: Math.min(100, Math.max(0, ((clientX - r.left) / r.width) * 100)),
+      y: Math.min(100, Math.max(0, ((clientY - r.top) / r.height) * 100)),
+    });
+  };
 
   const canUpload = isSupabaseConfigured && Boolean(user?.id);
   const atCapacity = photos.length + pending.length >= MAX_PHOTOS;
@@ -247,6 +266,29 @@ export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: st
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Cover framing — drag the point to set what stays in view when the cover
+          is cropped on cards and the hero. */}
+      {photos.length > 0 && (
+        <div className="grid gap-1.5">
+          <Label className="text-sm font-semibold">Cover framing <span className="font-normal text-basalt/45">(drag to reposition)</span></Label>
+          <div
+            ref={frameRef}
+            onPointerDown={(e) => {
+              (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+              setPosing(true);
+              setFocusFromEvent(e.clientX, e.clientY);
+            }}
+            onPointerMove={(e) => posing && setFocusFromEvent(e.clientX, e.clientY)}
+            onPointerUp={() => setPosing(false)}
+            className="relative aspect-[16/10] max-w-md cursor-crosshair select-none overflow-hidden rounded-[0.875rem] border border-basalt/15 bg-basalt/5 touch-none"
+          >
+            <img src={photos[0].url} alt="Cover preview" draggable={false} className="h-full w-full object-cover" style={{ objectPosition: `${focus.x}% ${focus.y}%` }} />
+            <span className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-apricot/70 shadow" style={{ left: `${focus.x}%`, top: `${focus.y}%` }} />
+          </div>
+          <p className="text-xs text-basalt/45">This is roughly how the cover crops on a card. Click or drag to choose the focal point.</p>
         </div>
       )}
 

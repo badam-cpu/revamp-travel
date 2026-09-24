@@ -53,6 +53,7 @@ export function AdminEateries() {
   const photosRef = useRef<PhotoUploaderHandle>(null);
   const [uploaderKey, setUploaderKey] = useState(0); // bump to reset/reseed the uploader
   const [galleryDefault, setGalleryDefault] = useState<string[]>([]);
+  const [focusDefault, setFocusDefault] = useState("50% 50%");
   const [formKey, setFormKey] = useState(0); // remounts the category selects on edit/reset
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -129,6 +130,7 @@ export function AdminEateries() {
     setEditingId(null);
     setF({ ...BLANK });
     setGalleryDefault([]);
+    setFocusDefault("50% 50%");
     setUploaderKey((k) => k + 1);
     setFormKey((k) => k + 1);
   };
@@ -166,6 +168,7 @@ export function AdminEateries() {
       tripadvisorMenuUrl: data.tripadvisor_menu_url ?? "",
     });
     setGalleryDefault(Array.isArray(data.gallery) && data.gallery.length ? data.gallery : data.image ? [data.image] : []);
+    setFocusDefault(data.cover_focus ?? "50% 50%");
     setUploaderKey((k) => k + 1); // remount uploader seeded with the existing photos
     setFormKey((k) => k + 1); // reseed the type/cuisine selects
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -192,6 +195,7 @@ export function AdminEateries() {
         lng: f.lng ?? 0,
         image: cover,
         gallery: photos,
+        cover_focus: photosRef.current?.getCoverFocus() ?? "50% 50%",
         short_description: f.shortDescription.trim() || `A Revamp-recommended spot in ${f.city.trim()}.`,
         long_description: f.longDescription.trim(),
         tags: [f.venueType.trim(), f.cuisine.trim()].filter(Boolean),
@@ -284,7 +288,7 @@ export function AdminEateries() {
           <Field label="Website"><Input value={f.website} onChange={(e) => set({ website: e.target.value })} placeholder="https://…" className="h-10 rounded-none" /></Field>
           <div className="sm:col-span-2"><Field label="Short description"><Textarea rows={2} value={f.shortDescription} onChange={(e) => set({ shortDescription: e.target.value })} placeholder="One-line teaser shown on the card and as the lead." className="rounded-none text-base" /></Field></div>
           <div className="sm:col-span-2"><Field label="Long description"><Textarea rows={4} value={f.longDescription} onChange={(e) => set({ longDescription: e.target.value })} placeholder="Fuller write-up shown on the restaurant page (optional)." className="rounded-none text-base" /></Field></div>
-          <div className="sm:col-span-2"><PhotoUploader key={uploaderKey} ref={photosRef} defaultValue={galleryDefault} /></div>
+          <div className="sm:col-span-2"><PhotoUploader key={uploaderKey} ref={photosRef} defaultValue={galleryDefault} defaultFocus={focusDefault} /></div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 border-t border-basalt/10 pt-4">

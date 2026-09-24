@@ -99,6 +99,7 @@ interface RefLists {
   houseRules: string[];
   rooms: import("@shared/listings").ListingRoom[];
   seasonalRates: import("@shared/listings").SeasonalRate[];
+  coverFocus: string;
 }
 
 function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLists): ListingInput {
@@ -143,6 +144,7 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
     // No photos → leave undefined so toRow() falls back to a brand illustration.
     image: photos[0] || undefined,
     gallery: photos.length ? photos : undefined,
+    coverFocus: lists.coverFocus || undefined,
     shortDescription: get("shortDescription").trim(),
     longDescription: get("longDescription").trim(),
     price,
@@ -384,6 +386,7 @@ function ListingFormDialog({
         houseRules: houseRulesRef.current?.getValue() ?? [],
         rooms: roomsRef.current?.getValue() ?? [],
         seasonalRates: ratesRef.current?.getValue() ?? [],
+        coverFocus: photosRef.current?.getCoverFocus() ?? "50% 50%",
       });
 
       // Keep the map pin (and the nearby-sights it drives) in sync with the
@@ -784,7 +787,7 @@ function ListingFormDialog({
                   </div>
                 </details>
 
-                <PhotoUploader ref={photosRef} defaultValue={realPhotos(draft)} />
+                <PhotoUploader ref={photosRef} defaultValue={realPhotos(draft)} defaultFocus={draft.coverFocus} />
 
                 <label className="flex items-center gap-3 border border-basalt/12 bg-chalk px-4 py-3 text-sm">
                   <input type="checkbox" name="featured" defaultChecked={draft.featured} className="h-4 w-4 accent-[#F15822]" />

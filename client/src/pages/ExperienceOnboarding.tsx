@@ -100,6 +100,7 @@ interface WizardData {
   notSuitableFor: string[];
   importantInfo: string;
   photos: string[];
+  coverFocus: string;
   prefillImageUrl?: string;
   price: number;
   priceUnit: string;
@@ -138,6 +139,7 @@ function emptyWizardData(): WizardData {
     notSuitableFor: [],
     importantInfo: "",
     photos: [],
+    coverFocus: "50% 50%",
     price: 0,
     priceUnit: "person",
     cancellationPolicy: "flexible",
@@ -207,6 +209,7 @@ function listingToWizardData(listing: LiveListing): WizardData {
     notSuitableFor: listing.notSuitableFor ?? [],
     importantInfo: listing.importantInfo ?? "",
     photos: realPhotos(listing),
+    coverFocus: listing.coverFocus ?? "50% 50%",
     price: listing.price,
     priceUnit: listing.priceUnit,
     cancellationPolicy: listing.cancellationPolicy ?? "flexible",
@@ -245,6 +248,7 @@ function toListingInput(data: WizardData): ListingInput {
     coordinates: data.coordinates,
     image: data.photos[0] || undefined,
     gallery: data.photos.length ? data.photos : undefined,
+    coverFocus: data.coverFocus || undefined,
     shortDescription: data.shortDescription.trim(),
     longDescription: data.longDescription.trim(),
     price,
@@ -365,7 +369,7 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
     const value = amenitiesRef.current?.getValue();
     if (value) setData((d) => ({ ...d, amenities: value }));
     const photos = photosRef.current?.getValue();
-    if (photos) setData((d) => ({ ...d, photos }));
+    if (photos) setData((d) => ({ ...d, photos, coverFocus: photosRef.current?.getCoverFocus() ?? d.coverFocus }));
   }, [currentStep]);
 
   useDocumentMeta({
@@ -638,7 +642,7 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                     )}
                     <StepField label="Photos" help="Drag &amp; drop or click to upload — the first photo is the cover. Leave empty to use a brand illustration.">
                       {/* keyed on `hydrated` so an edit reseeds the uploader once the listing's photos load */}
-                      <PhotoUploader key={hydrated ? "ready" : "loading"} ref={photosRef} defaultValue={data.photos} />
+                      <PhotoUploader key={hydrated ? "ready" : "loading"} ref={photosRef} defaultValue={data.photos} defaultFocus={data.coverFocus} />
                     </StepField>
                   </div>
 

@@ -77,6 +77,8 @@ export interface Listing {
   amenities: string[];
   featured?: boolean;
   accent: "apricot" | "sevan" | "tuff";
+  /** Cover-photo focal point as a CSS object-position ("50% 30%"); frames crops. */
+  coverFocus?: string;
   // `type: "experience"` only (see supabase/migrations/0003_experience_listing_type.sql)
   // — optional on every other type so nothing else has to change shape.
   // Duration/group size/meeting point/languages are deliberately NOT
@@ -552,6 +554,8 @@ export interface ListingInput {
   amenities: string[];
   featured?: boolean;
   accent: "apricot" | "sevan" | "tuff";
+  /** Cover-photo focal point as a CSS object-position ("50% 30%"); frames crops. */
+  coverFocus?: string;
   highlights?: string[];
   notIncluded?: string[];
   whatToBring?: string[];

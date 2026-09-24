@@ -100,7 +100,7 @@ export function TourDetail({ listing }: { listing: Listing }) {
 
       <section className="container">
         <div className="brand-notch relative aspect-[16/9] overflow-hidden bg-basalt/5 sm:aspect-[2/1]">
-          <img {...imgAttrs(images[activeImage], "(min-width:1024px) 1100px, 100vw")} alt={`${listing.title} — photo ${activeImage + 1} of ${images.length}`} className="h-full w-full object-cover" />
+          <img {...imgAttrs(images[activeImage], "(min-width:1024px) 1100px, 100vw")} alt={`${listing.title} — photo ${activeImage + 1} of ${images.length}`} style={activeImage === 0 ? { objectPosition: listing.coverFocus || undefined } : undefined} className="h-full w-full object-cover" />
           {images.length > 1 && (
             <span className="absolute bottom-4 right-4 bg-basalt/70 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white backdrop-blur-sm">
               {activeImage + 1} / {images.length}

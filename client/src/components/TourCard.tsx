@@ -48,6 +48,7 @@ export function TourCard({ listing }: { listing: Listing }) {
               {...imgAttrs(src, "(min-width:1024px) 33vw, (min-width:640px) 50vw, 100vw")}
               alt={`${listing.title} — photo ${i + 1} of ${images.length}`}
               loading="lazy"
+              style={i === 0 ? { objectPosition: listing.coverFocus || undefined } : undefined}
               className={cn("absolute inset-0 h-full w-full object-cover transition-opacity duration-300", i === index ? "opacity-100" : "opacity-0")}
             />
           ))}
