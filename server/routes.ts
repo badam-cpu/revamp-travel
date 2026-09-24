@@ -1628,18 +1628,22 @@ export function registerApiRoutes(app: Express) {
       // link exists before any operator tries to enroll. Best-effort: if PayLink
       // is down the plan still saves and registers lazily on first subscribe.
       let paylinkSynced = false;
-      if (paylinkConfigured() && isActive) {
+      let paylinkError: string | null = null;
+      if (!paylinkConfigured()) {
+        paylinkError = "PayLink credentials aren't set on the server.";
+      } else if (isActive) {
         const { data: planRow } = await admin.from("subscription_plans").select("id, name, description, amount_cents, months_quantity, currency, paylink_subscription_id, paylink_request_id, request_url, is_active").eq("id", planId!).maybeSingle();
         if (planRow) {
           try {
             await ensurePlanRegistered(admin, planRow as PlanRow);
             paylinkSynced = true;
           } catch (e) {
-            console.error("[admin-subscription-plan] PayLink register failed", e);
+            paylinkError = e instanceof Error ? e.message : String(e);
+            console.error("[admin-subscription-plan] PayLink register failed", paylinkError);
           }
         }
       }
-      res.json({ ok: true, id: planId, paylinkSynced });
+      res.json({ ok: true, id: planId, paylinkSynced, paylinkError });
     } catch (err) {
       console.error("[admin-subscription-plan]", err);
       res.status(500).json({ error: "Couldn't save that plan." });

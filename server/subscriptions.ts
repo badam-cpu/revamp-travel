@@ -54,13 +54,16 @@ function toMajorUnits(cents: number, currency: string): number {
 export async function ensurePlanRegistered(admin: SupabaseClient, plan: PlanRow): Promise<PlanRow> {
   if (plan.paylink_subscription_id) return plan;
   const site = (process.env.URL || "").replace(/\/+$/, "");
+  // PayLink rejects a first-payment day in the past; use tomorrow (UTC midday).
+  const tomorrow = new Date(Date.now() + 24 * 3_600_000);
+  const firstPaymentDay = `${tomorrow.toISOString().slice(0, 10)}T12:00:00.000Z`;
   const reg = await registerSubscription({
     name: plan.name,
     info: plan.description,
     amount: toMajorUnits(plan.amount_cents, plan.currency),
     currency: plan.currency,
     monthsQuantity: plan.months_quantity,
-    firstPaymentDay: new Date().toISOString(),
+    firstPaymentDay,
     returnUrl: site ? `${site}/dashboard?section=billing&subscription=return` : undefined,
   });
   if (!reg.subscriptionId) throw new Error("PayLink didn't return a subscription id.");

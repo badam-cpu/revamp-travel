@@ -129,7 +129,7 @@ export function saveSubscriptionPlan(input: {
   monthsQuantity?: number;
   isActive?: boolean;
   sort?: number;
-}): Promise<{ ok: boolean; id: string; paylinkSynced: boolean }> {
+}): Promise<{ ok: boolean; id: string; paylinkSynced: boolean; paylinkError?: string | null }> {
   return post("/api/admin-subscription-plan", input);
 }
 

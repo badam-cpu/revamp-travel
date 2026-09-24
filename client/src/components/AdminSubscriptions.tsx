@@ -86,7 +86,12 @@ export function AdminSubscriptions() {
         isActive: draft.isActive,
         sort: Number(draft.sort) || 0,
       });
-      toast.success(r.paylinkSynced ? "Plan saved and synced to PayLink." : "Plan saved (PayLink sync will retry).");
+      if (r.paylinkSynced) {
+        toast.success("Plan saved and synced to PayLink.");
+      } else {
+        // Surface the real reason so a mis-configured plan / API issue is visible.
+        toast.error(`Plan saved, but PayLink sync failed: ${r.paylinkError || "unknown error"}`, { duration: 12000 });
+      }
       setDraft(null);
       load();
     } catch (e) {
