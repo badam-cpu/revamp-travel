@@ -180,7 +180,7 @@ export default function Home() {
                   ) : (
                     <span className="text-center font-display text-xl text-basalt/70">{m.name}</span>
                   );
-                  const cls = "flex h-32 items-center justify-center rounded-[0.875rem] border border-basalt/5 bg-paper px-6 py-5 transition-shadow";
+                  const cls = "flex h-32 items-center justify-center rounded-[0.875rem] border border-basalt/5 bg-paper/60 px-6 py-5 transition-shadow";
                   return m.url ? (
                     <a key={i} href={m.url} target="_blank" rel="noopener noreferrer" title={`${m.name} — read the article`} className={`${cls} hover:shadow-[0_10px_30px_rgba(35,35,33,0.10)]`}>
                       {inner}
