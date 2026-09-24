@@ -38,6 +38,12 @@ const ROUTES = IS_INTEGRATION
       byOrder: (id: string) => "/api/payment/get-by-order-id?id=" + encodeURIComponent(id),
       byRequest: (rid: string) => "/api/payment/" + encodeURIComponent(rid),
       hasRedirectField: true, // RegisterRequest.paymentWebRedirectUrl exists here
+      // Subscription (recurring) endpoints — see server/subscriptions.ts.
+      subRegister: "/api/subscription/register",
+      subSearch: "/api/subscription/search",
+      personCreate: "/api/person",
+      personSearch: "/api/person/search-person",
+      subTerminate: "/api/subscriptionschedule/terminatesubscription",
     }
   : {
       authorize: "/Partner/Authorize",
@@ -46,6 +52,11 @@ const ROUTES = IS_INTEGRATION
       byOrder: (id: string) => "/Payment/GetPaymentByOrderId?orderId=" + encodeURIComponent(id),
       byRequest: (rid: string) => "/Payment/" + encodeURIComponent(rid),
       hasRedirectField: false,
+      subRegister: "/Subscription/Register",
+      subSearch: "/Subscription/Search",
+      personCreate: "/Person",
+      personSearch: "/Person/SearchPerson",
+      subTerminate: "/SubscriptionSchedule/TerminateSubscription",
     };
 
 export function paylinkConfigured(): boolean {
@@ -224,4 +235,148 @@ export async function checkPayment({ requestId, orderId }: { requestId: string |
   if (!list.length) return { ok: true, approved: false, status: "pending", orderId: null };
   const approved = list.find((p) => p.paymentApproved === true);
   return readPayment(approved || list[list.length - 1], null);
+}
+
+/* ------------------------------------------------------------------ *
+ * Subscriptions (recurring billing) — used to collect operators' monthly
+ * platform fees. Same auth/token machinery as above. A PayLink *Subscription*
+ * is the plan (amount + interval); a *Person* is a subscriber who enrolls via
+ * a hosted payment link and is then charged automatically. No webhook, so we
+ * poll Subscription/Search to confirm — see server/subscriptions.ts.
+ * ------------------------------------------------------------------ */
+
+export interface SubscriptionRegisterResult {
+  subscriptionId: number | null;
+  requestId: string | null;
+  requestUrl: string | null;
+  raw: unknown;
+}
+
+/**
+ * Register a subscription *plan* with PayLink. `amount` is in major currency
+ * units (whole drams for AMD). `monthsQuantity` is how many monthly charges the
+ * subscription runs for; `firstPaymentDay` is an ISO date-time. Returns the
+ * PayLink subscription id + a hosted subscribe URL.
+ */
+export async function registerSubscription({
+  name,
+  info,
+  amount,
+  currency,
+  monthsQuantity,
+  firstPaymentDay,
+  returnUrl,
+}: {
+  name: string;
+  info?: string;
+  amount: number;
+  currency: string;
+  monthsQuantity: number;
+  firstPaymentDay: string; // ISO date-time
+  returnUrl?: string;
+}): Promise<SubscriptionRegisterResult> {
+  const body: Record<string, unknown> = {
+    subscriptionName: name,
+    subscriptionInfo: info ?? "",
+    amount,
+    currency,
+    language: LANGUAGE,
+    monthsQuantity,
+    firstPaymentDay,
+    isActive: true,
+    ...(returnUrl ? { additionalInfo: { url: returnUrl } } : {}),
+  };
+  const res = await api(ROUTES.subRegister, { method: "POST", body });
+  if (!res.ok) throw new Error("paylink subscription register " + res.status + " " + (await res.text()).slice(0, 200));
+  const j = (await res.json()) as { id?: number; requestId?: string; requestUrl?: string };
+  return {
+    subscriptionId: typeof j.id === "number" ? j.id : null,
+    requestId: j.requestId ?? null,
+    requestUrl: j.requestUrl ?? null,
+    raw: j,
+  };
+}
+
+interface PersonRecord {
+  id?: number;
+  email?: string;
+  mobile?: string;
+}
+
+/**
+ * Find a PayLink Person by email, creating one if none exists. PayLink requires
+ * a mobile on create. Returns the person id (or null if we couldn't resolve it).
+ * Idempotent — safe to call on every subscribe attempt.
+ */
+export async function ensurePerson({
+  email,
+  mobile,
+  firstName,
+  lastName,
+}: {
+  email: string;
+  mobile: string;
+  firstName?: string;
+  lastName?: string;
+}): Promise<number | null> {
+  const find = async (): Promise<number | null> => {
+    const res = await api(ROUTES.personSearch, { method: "POST", body: { email } });
+    if (!res.ok) return null;
+    const arr = (await res.json()) as PersonRecord[];
+    const match = Array.isArray(arr) ? arr.find((p) => (p.email || "").toLowerCase() === email.toLowerCase()) || arr[0] : null;
+    return match && typeof match.id === "number" ? match.id : null;
+  };
+  const existing = await find();
+  if (existing != null) return existing;
+  // Create, then look it up again (create returns 201 with no body).
+  const res = await api(ROUTES.personCreate, { method: "POST", body: { email, mobile, firstName: firstName ?? "", lastName: lastName ?? "" } });
+  if (!res.ok && res.status !== 409) {
+    throw new Error("paylink person create " + res.status + " " + (await res.text()).slice(0, 200));
+  }
+  return find();
+}
+
+export interface PersonSubscriptionState {
+  isSubscribed: boolean;
+  paymentLink: string | null;
+  raw: unknown;
+}
+
+/**
+ * Look up a person's state for a specific subscription: whether they're already
+ * subscribed, and the hosted payment link to enroll them if not. Searches the
+ * person's subscriptions and matches on the PayLink subscription id.
+ */
+export async function getPersonSubscription({
+  personId,
+  subscriptionId,
+}: {
+  personId: number;
+  subscriptionId: number;
+}): Promise<PersonSubscriptionState> {
+  const res = await api(ROUTES.subSearch, { method: "POST", body: { personId } });
+  if (!res.ok) throw new Error("paylink subscription search " + res.status + " " + (await res.text()).slice(0, 200));
+  const arr = (await res.json()) as { subscription?: { id?: number }; paymentLink?: string; isSubscribed?: boolean }[];
+  const list = Array.isArray(arr) ? arr : [];
+  const match = list.find((s) => s.subscription?.id === subscriptionId) ?? null;
+  return {
+    isSubscribed: match?.isSubscribed === true,
+    paymentLink: match?.paymentLink ?? null,
+    raw: arr,
+  };
+}
+
+/** Terminate a person's enrollment in a subscription (cancel their recurring charge). */
+export async function terminatePersonSubscription({
+  personId,
+  subscriptionId,
+}: {
+  personId: number;
+  subscriptionId: number;
+}): Promise<boolean> {
+  const res = await api(ROUTES.subTerminate, {
+    method: "POST",
+    body: { personId, subscriptionId, terminationDate: new Date().toISOString() },
+  });
+  return res.ok;
 }

@@ -23,7 +23,7 @@
  */
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, ArrowLeft, ArrowRight, BookOpen, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, Pencil, Plug, Plus, Settings, Sparkles, Trash2, Wallet, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, BookOpen, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, CreditCard, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, Pencil, Plug, Plus, Settings, Sparkles, Trash2, Wallet, X } from "lucide-react";
 import { Inbox } from "@/components/Inbox";
 import { PartnerHub } from "@/components/PartnerHub";
 import { PriceLabsConnect } from "@/components/PriceLabsConnect";
@@ -59,6 +59,7 @@ import { OperatorBookings } from "@/components/OperatorBookings";
 import { PricingCalendar } from "@/components/PricingCalendar";
 import { OperatorBookingsTimeline } from "@/components/OperatorBookingsTimeline";
 import { OperatorPayouts } from "@/components/OperatorPayouts";
+import { OperatorSubscription } from "@/components/OperatorSubscription";
 import { OperatorAnalytics } from "@/components/OperatorAnalytics";
 import { ProfileTab, SecurityTab } from "@/pages/Account";
 import { EXPERIENCE_PREFILL_STORAGE_KEY } from "@/pages/ExperienceOnboarding";
@@ -1198,7 +1199,7 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
   );
 }
 
-type OperatorSection = "overview" | "listings" | "bookings" | "messages" | "hub" | "integrations" | "payouts" | "settings";
+type OperatorSection = "overview" | "listings" | "bookings" | "messages" | "hub" | "integrations" | "payouts" | "billing" | "settings";
 const OPERATOR_SECTIONS: { key: OperatorSection; label: string; icon: typeof Home }[] = [
   { key: "overview", label: "Dashboard", icon: LayoutDashboard },
   { key: "listings", label: "Listings", icon: List },
@@ -1207,6 +1208,7 @@ const OPERATOR_SECTIONS: { key: OperatorSection; label: string; icon: typeof Hom
   { key: "hub", label: "Partner Hub", icon: BookOpen },
   { key: "integrations", label: "Integrations", icon: Plug },
   { key: "payouts", label: "Payouts", icon: Wallet },
+  { key: "billing", label: "Billing", icon: CreditCard },
   { key: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -1432,6 +1434,13 @@ function DashboardContent() {
               <div>
                 <SectionHead title="Payouts" sub="What you're owed and what's already been paid out." />
                 <OperatorPayouts />
+              </div>
+            )}
+
+            {section === "billing" && (
+              <div>
+                <SectionHead title="Billing" sub="Your Revamp subscription — billed monthly, cancel anytime." />
+                <OperatorSubscription />
               </div>
             )}
 

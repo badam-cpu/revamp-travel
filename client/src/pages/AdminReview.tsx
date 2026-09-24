@@ -16,7 +16,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, BookOpen, Check, ExternalLink, Gift, Home, LayoutDashboard, ListChecks, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, Users, Utensils, Wallet, X } from "lucide-react";
+import { AlertTriangle, BookOpen, Check, CreditCard, ExternalLink, Gift, Home, LayoutDashboard, ListChecks, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, Users, Utensils, Wallet, X } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { AdminSiteContent } from "@/components/AdminSiteContent";
@@ -29,6 +29,7 @@ import { AdminListings } from "@/components/AdminListings";
 import { AdminEateries } from "@/components/AdminEateries";
 import { AdminAccounts } from "@/components/AdminAccounts";
 import { AdminGiftCards } from "@/components/AdminGiftCards";
+import { AdminSubscriptions } from "@/components/AdminSubscriptions";
 import { useAuth } from "@/contexts/AuthContext";
 import { RequireRole } from "@/components/RequireRole";
 import { Button } from "@/components/ui/button";
@@ -230,7 +231,7 @@ function StatTile({ n, label, onClick }: { n: number | string; label: string; on
   );
 }
 
-type AdminSection = "overview" | "reviews" | "listings" | "eateries" | "accounts" | "giftcards" | "support" | "messages" | "payouts" | "blog" | "hub" | "site";
+type AdminSection = "overview" | "reviews" | "listings" | "eateries" | "accounts" | "giftcards" | "subscriptions" | "support" | "messages" | "payouts" | "blog" | "hub" | "site";
 const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: typeof Home }[] = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
   { key: "reviews", label: "Reviews", icon: ListChecks },
@@ -238,6 +239,7 @@ const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: typeof Home }[] 
   { key: "eateries", label: "Eat guide", icon: Utensils },
   { key: "accounts", label: "Accounts", icon: Users },
   { key: "giftcards", label: "Gift cards", icon: Gift },
+  { key: "subscriptions", label: "Subscriptions", icon: CreditCard },
   { key: "support", label: "Support", icon: MessageSquare },
   { key: "messages", label: "All messages", icon: MessagesSquare },
   { key: "payouts", label: "Payouts", icon: Wallet },
@@ -333,6 +335,7 @@ function AdminConsole() {
             {section === "eateries" && <AdminEateries />}
             {section === "accounts" && <AdminAccounts />}
             {section === "giftcards" && <AdminGiftCards />}
+            {section === "subscriptions" && <AdminSubscriptions />}
             {section === "support" && <AdminSupportInbox />}
             {section === "messages" && (
               <div>

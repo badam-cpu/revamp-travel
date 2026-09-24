@@ -19,6 +19,7 @@ import { pricelabsListings, syncOperatorPrices } from "./pricelabs.js";
 import { supabaseAdmin, adminConfigured } from "./supabaseAdmin.js";
 import { paylinkConfigured, registerPayment } from "./paylink.js";
 import { reconcileUserBookings, logBookingEvent, finalizeConfirmedBooking } from "./bookings.js";
+import { startOperatorSubscription, reconcileOperatorSubscriptions, cancelOperatorSubscription, ensurePlanRegistered, type PlanRow } from "./subscriptions.js";
 import { generateSupportReply, type SupportTurn } from "./support.js";
 import { generateOperatorReply, type OperatorTurn } from "./operatorAssistant.js";
 import { scanMessage } from "./messaging.js";
@@ -159,6 +160,24 @@ const operatorAssistantSchema = z.object({
     .array(z.object({ role: z.enum(["user", "assistant"]), body: z.string().max(2000) }))
     .min(1)
     .max(20),
+});
+
+// --- Operator subscriptions (recurring platform billing via PayLink) ---
+const adminSubscriptionPlanSchema = z.object({
+  id: z.string().uuid().optional(), // present → update; absent → create
+  name: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(1000).optional().default(""),
+  amountCents: z.number().int().positive().max(1_000_000_000), // AMD hundredths
+  monthsQuantity: z.number().int().min(1).max(120).optional().default(12),
+  isActive: z.boolean().optional().default(true),
+  sort: z.number().int().min(0).max(9999).optional().default(0),
+});
+const subscriptionStartSchema = z.object({
+  planId: z.string().uuid(),
+  phone: z.string().trim().min(6).max(40), // PayLink Person requires a mobile
+});
+const subscriptionCancelSchema = z.object({
+  rowId: z.string().uuid(),
 });
 
 function issuesToMessage(err: z.ZodError): string {
@@ -1563,6 +1582,150 @@ export function registerApiRoutes(app: Express) {
     const look = await lookupRedeemableGift(admin, parsed.data.code, currency);
     if ("error" in look) return res.status(404).json({ error: look.error });
     res.json({ balanceCents: look.balanceCents, currency: look.currency });
+  });
+
+  // POST /api/admin-subscription-plan — admin-only: create or update a recurring
+  // billing plan. Creating a plan also registers it with PayLink (so it has a
+  // subscription id + hosted subscribe URL). Server-side because it holds the
+  // PayLink credentials and writes a service-role-only table.
+  app.post("/api/admin-subscription-plan", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const parsed = adminSubscriptionPlanSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+
+    const currency = process.env.PAYLINK_CURRENCY || DEFAULT_CURRENCY;
+    const { id, name, description, amountCents, monthsQuantity, isActive, sort } = parsed.data;
+    try {
+      // Upsert the plan row first. On an amount/duration change we drop the old
+      // PayLink subscription id so it re-registers with the new terms.
+      let planId = id;
+      if (id) {
+        const { data: prev } = await admin.from("subscription_plans").select("amount_cents, months_quantity, paylink_subscription_id").eq("id", id).maybeSingle();
+        const termsChanged = prev && (prev.amount_cents !== amountCents || prev.months_quantity !== monthsQuantity);
+        const { error } = await admin
+          .from("subscription_plans")
+          .update({ name, description, amount_cents: amountCents, months_quantity: monthsQuantity, is_active: isActive, sort, ...(termsChanged ? { paylink_subscription_id: null, request_url: null, paylink_request_id: null } : {}) })
+          .eq("id", id);
+        if (error) throw new Error(error.message);
+      } else {
+        const { data: created, error } = await admin
+          .from("subscription_plans")
+          .insert({ name, description, amount_cents: amountCents, months_quantity: monthsQuantity, currency, is_active: isActive, sort })
+          .select("id")
+          .single();
+        if (error) throw new Error(error.message);
+        planId = created.id;
+      }
+
+      // Register (or re-register) the plan with PayLink now, so the subscribe
+      // link exists before any operator tries to enroll. Best-effort: if PayLink
+      // is down the plan still saves and registers lazily on first subscribe.
+      let paylinkSynced = false;
+      if (paylinkConfigured() && isActive) {
+        const { data: planRow } = await admin.from("subscription_plans").select("id, name, description, amount_cents, months_quantity, currency, paylink_subscription_id, paylink_request_id, request_url, is_active").eq("id", planId!).maybeSingle();
+        if (planRow) {
+          try {
+            await ensurePlanRegistered(admin, planRow as PlanRow);
+            paylinkSynced = true;
+          } catch (e) {
+            console.error("[admin-subscription-plan] PayLink register failed", e);
+          }
+        }
+      }
+      res.json({ ok: true, id: planId, paylinkSynced });
+    } catch (err) {
+      console.error("[admin-subscription-plan]", err);
+      res.status(500).json({ error: "Couldn't save that plan." });
+    }
+  });
+
+  // POST /api/subscription/start — operator begins (or resumes) enrollment in a
+  // plan. Returns a PayLink hosted-payment redirect URL (or alreadyActive).
+  app.post("/api/subscription/start", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    if (!paylinkConfigured()) return res.status(503).json({ error: "Billing isn't available yet." });
+    const parsed = subscriptionStartSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Billing isn't available yet." });
+
+    const { data: me } = await admin.from("profiles").select("role, display_name, business_name").eq("id", userId).maybeSingle();
+    if (me?.role !== "operator" && me?.role !== "admin") return res.status(403).json({ error: "Only operators can subscribe." });
+    const { data: authUser } = await admin.auth.admin.getUserById(userId);
+    const email = authUser?.user?.email || "";
+    if (!email) return res.status(400).json({ error: "Your account has no email on file." });
+    const displayName = (me?.display_name || me?.business_name || "").trim();
+    const [firstName, ...rest] = displayName.split(/\s+/);
+
+    try {
+      const result = await startOperatorSubscription(admin, {
+        operatorId: userId,
+        planId: parsed.data.planId,
+        email,
+        phone: parsed.data.phone,
+        firstName: firstName || undefined,
+        lastName: rest.join(" ") || undefined,
+      });
+      res.json(result);
+    } catch (err) {
+      console.error("[subscription/start]", err);
+      res.status(502).json({ error: err instanceof Error ? err.message : "Couldn't start your subscription." });
+    }
+  });
+
+  // POST /api/subscription/confirm — poll PayLink for the operator's pending
+  // enrollments and activate any now-subscribed. Idempotent; safe on every load.
+  app.post("/api/subscription/confirm", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Billing isn't available yet." });
+    try {
+      const r = await reconcileOperatorSubscriptions(admin, userId);
+      res.json(r);
+    } catch (err) {
+      console.error("[subscription/confirm]", err);
+      res.status(500).json({ error: "Couldn't confirm your subscription." });
+    }
+  });
+
+  // POST /api/subscription/cancel — operator (or admin) cancels their enrollment.
+  app.post("/api/subscription/cancel", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const parsed = subscriptionCancelSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Billing isn't available yet." });
+    // Admins can cancel any row; operators only their own.
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    let ownerId = userId;
+    if (me?.role === "admin") {
+      const { data: row } = await admin.from("operator_subscriptions").select("operator_id").eq("id", parsed.data.rowId).maybeSingle();
+      if (row?.operator_id) ownerId = row.operator_id;
+    }
+    try {
+      const ok = await cancelOperatorSubscription(admin, { operatorId: ownerId, rowId: parsed.data.rowId });
+      if (!ok) return res.status(404).json({ error: "Subscription not found." });
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[subscription/cancel]", err);
+      res.status(500).json({ error: "Couldn't cancel your subscription." });
+    }
   });
 
   // POST /api/admin-gift-void — admin-only: void a gift card so it can no longer
