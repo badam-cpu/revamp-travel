@@ -39,11 +39,18 @@ export interface BookingCharge {
   operatorNetCents: number; // what the operator is paid (base − commission)
 }
 
-/** Full money breakdown for a base booking amount (accommodation + cleaning). */
-export function computeBookingCharge(baseCents: number): BookingCharge {
+/**
+ * Full money breakdown for a base booking amount (accommodation + cleaning).
+ * `commissionPercent` defaults to the standard rate; pass an operator's resolved
+ * rate (from their subscription plan) to vary the payout split — see
+ * server/subscriptions.ts `resolveOperatorCommissionPercent`. Only the payout
+ * split (commission/net) depends on it; the guest charge (base + tax) does not.
+ */
+export function computeBookingCharge(baseCents: number, commissionPercent: number = PLATFORM_COMMISSION_PERCENT): BookingCharge {
   const base = Math.max(0, Math.round(baseCents));
+  const pct = Number.isFinite(commissionPercent) ? Math.min(100, Math.max(0, commissionPercent)) : PLATFORM_COMMISSION_PERCENT;
   const taxCents = Math.round((base * TAX_PERCENT) / 100);
-  const commissionCents = Math.round((base * PLATFORM_COMMISSION_PERCENT) / 100);
+  const commissionCents = Math.round((base * pct) / 100);
   return {
     baseCents: base,
     taxCents,

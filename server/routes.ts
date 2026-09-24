@@ -170,6 +170,7 @@ const adminSubscriptionPlanSchema = z.object({
   amountCents: z.number().int().positive().max(1_000_000_000), // flat: price; per_listing: unit price. AMD hundredths
   monthsQuantity: z.number().int().min(1).max(120).optional().default(12),
   pricingMode: z.enum(["flat", "per_listing"]).optional().default("flat"),
+  commissionPercent: z.number().min(0).max(100).nullable().optional(), // rate subscribers pay; null = default
   isActive: z.boolean().optional().default(true),
   sort: z.number().int().min(0).max(9999).optional().default(0),
 });
@@ -1602,7 +1603,8 @@ export function registerApiRoutes(app: Express) {
     if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
 
     const currency = process.env.PAYLINK_CURRENCY || DEFAULT_CURRENCY;
-    const { id, name, description, amountCents, monthsQuantity, pricingMode, isActive, sort } = parsed.data;
+    const { id, name, description, amountCents, monthsQuantity, pricingMode, commissionPercent, isActive, sort } = parsed.data;
+    const commission = commissionPercent ?? null;
     try {
       // Upsert the plan row first. On an amount/duration change we drop the old
       // PayLink subscription id so it re-registers with the new terms.
@@ -1612,13 +1614,13 @@ export function registerApiRoutes(app: Express) {
         const termsChanged = prev && (prev.amount_cents !== amountCents || prev.months_quantity !== monthsQuantity);
         const { error } = await admin
           .from("subscription_plans")
-          .update({ name, description, amount_cents: amountCents, months_quantity: monthsQuantity, pricing_mode: pricingMode, is_active: isActive, sort, ...(termsChanged ? { paylink_subscription_id: null, request_url: null, paylink_request_id: null } : {}) })
+          .update({ name, description, amount_cents: amountCents, months_quantity: monthsQuantity, pricing_mode: pricingMode, commission_percent: commission, is_active: isActive, sort, ...(termsChanged ? { paylink_subscription_id: null, request_url: null, paylink_request_id: null } : {}) })
           .eq("id", id);
         if (error) throw new Error(error.message);
       } else {
         const { data: created, error } = await admin
           .from("subscription_plans")
-          .insert({ name, description, amount_cents: amountCents, months_quantity: monthsQuantity, pricing_mode: pricingMode, currency, is_active: isActive, sort })
+          .insert({ name, description, amount_cents: amountCents, months_quantity: monthsQuantity, pricing_mode: pricingMode, commission_percent: commission, currency, is_active: isActive, sort })
           .select("id")
           .single();
         if (error) throw new Error(error.message);

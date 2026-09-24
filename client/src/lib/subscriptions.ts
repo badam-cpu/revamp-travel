@@ -19,6 +19,7 @@ export interface SubscriptionPlan {
   monthsQuantity: number;
   currency: string;
   pricingMode: PricingMode;
+  commissionPercent: number | null; // rate subscribers pay; null = site default
   isActive: boolean;
   sort: number;
   paylinkSubscriptionId: number | null;
@@ -48,6 +49,7 @@ function mapPlan(r: any): SubscriptionPlan {
     monthsQuantity: r.months_quantity ?? 12,
     currency: r.currency ?? "AMD",
     pricingMode: (r.pricing_mode as PricingMode) ?? "flat",
+    commissionPercent: r.commission_percent == null ? null : Number(r.commission_percent),
     isActive: !!r.is_active,
     sort: r.sort ?? 0,
     paylinkSubscriptionId: r.paylink_subscription_id ?? null,
@@ -70,7 +72,7 @@ function mapSub(r: any): OperatorSubscription {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-const PLAN_COLS = "id, name, description, amount_cents, months_quantity, currency, pricing_mode, is_active, sort, paylink_subscription_id";
+const PLAN_COLS = "id, name, description, amount_cents, months_quantity, currency, pricing_mode, commission_percent, is_active, sort, paylink_subscription_id";
 const SUB_COLS = "id, operator_id, plan_id, status, phone, quantity, amount_cents, next_charge_date, last_payment_at, started_at, cancelled_at";
 
 /** Active plans (operator-facing). RLS returns only active ones to non-admins. */
@@ -136,10 +138,25 @@ export function saveSubscriptionPlan(input: {
   amountCents: number;
   monthsQuantity?: number;
   pricingMode?: PricingMode;
+  commissionPercent?: number | null;
   isActive?: boolean;
   sort?: number;
 }): Promise<{ ok: boolean; id: string; paylinkSynced: boolean; paylinkError?: string | null }> {
   return post("/api/admin-subscription-plan", input);
+}
+
+/** The site-wide default commission (%) for operators WITHOUT an active
+ *  subscription. Public-read (site_settings); admin-write via RLS. */
+export async function getDefaultCommissionPercent(): Promise<number> {
+  const { data } = await supabase.from("site_settings").select("default_commission_percent").eq("id", 1).maybeSingle();
+  const v = (data as { default_commission_percent?: number | string | null } | null)?.default_commission_percent;
+  return v == null ? 12.5 : Number(v);
+}
+
+/** Admin-only (RLS): set the default non-subscriber commission (%). */
+export async function setDefaultCommissionPercent(percent: number): Promise<void> {
+  const { error } = await supabase.from("site_settings").update({ default_commission_percent: percent }).eq("id", 1);
+  if (error) throw new ApiError(error.message);
 }
 
 /** Operator: begin/resume enrollment. Returns a hosted redirect URL or alreadyActive. */

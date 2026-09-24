@@ -18,6 +18,8 @@ import {
   listAllSubscriptions,
   saveSubscriptionPlan,
   cancelSubscription,
+  getDefaultCommissionPercent,
+  setDefaultCommissionPercent,
   type SubscriptionPlan,
   type AdminSubscriptionRow,
   type PricingMode,
@@ -30,10 +32,11 @@ interface Draft {
   amountAmd: string; // whole AMD in the input; converted to cents on save
   monthsQuantity: string;
   pricingMode: PricingMode;
+  commissionPct: string; // empty = use the site default
   isActive: boolean;
   sort: string;
 }
-const BLANK: Draft = { name: "", description: "", amountAmd: "", monthsQuantity: "12", pricingMode: "flat", isActive: true, sort: "0" };
+const BLANK: Draft = { name: "", description: "", amountAmd: "", monthsQuantity: "12", pricingMode: "flat", commissionPct: "", isActive: true, sort: "0" };
 
 export function AdminSubscriptions() {
   const { format } = useCurrency();
@@ -42,19 +45,39 @@ export function AdminSubscriptions() {
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
+  const [defaultCommission, setDefaultCommission] = useState("");
+  const [savingDefault, setSavingDefault] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [p, s] = await Promise.all([listAllPlans(), listAllSubscriptions()]);
+      const [p, s, dc] = await Promise.all([listAllPlans(), listAllSubscriptions(), getDefaultCommissionPercent()]);
       setPlans(p);
       setSubs(s);
+      setDefaultCommission(String(dc));
     } catch (e) {
       toast(e instanceof Error ? e.message : "Couldn't load subscriptions.");
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const saveDefaultCommission = async () => {
+    const pct = Number(defaultCommission);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+      toast("Enter a commission between 0 and 100.");
+      return;
+    }
+    setSavingDefault(true);
+    try {
+      await setDefaultCommissionPercent(pct);
+      toast.success("Default commission saved.");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't save the default commission.");
+    } finally {
+      setSavingDefault(false);
+    }
+  };
   useEffect(() => {
     load();
   }, [load]);
@@ -67,6 +90,7 @@ export function AdminSubscriptions() {
       amountAmd: String(Math.round(p.amountCents / 100)),
       monthsQuantity: String(p.monthsQuantity),
       pricingMode: p.pricingMode,
+      commissionPct: p.commissionPercent == null ? "" : String(p.commissionPercent),
       isActive: p.isActive,
       sort: String(p.sort),
     });
@@ -87,6 +111,7 @@ export function AdminSubscriptions() {
         amountCents: amd * 100,
         monthsQuantity: Math.max(1, Math.min(120, Number(draft.monthsQuantity) || 12)),
         pricingMode: draft.pricingMode,
+        commissionPercent: draft.commissionPct.trim() === "" ? null : Math.max(0, Math.min(100, Number(draft.commissionPct))),
         isActive: draft.isActive,
         sort: Number(draft.sort) || 0,
       });
@@ -128,6 +153,21 @@ export function AdminSubscriptions() {
             <Plus className="mr-1.5 h-4 w-4" /> New plan
           </Button>
         )}
+      </div>
+
+      {/* Default (non-subscriber) commission */}
+      <div className="mb-8 flex flex-wrap items-end gap-3 border border-basalt/12 bg-chalk/60 px-5 py-4">
+        <div>
+          <Label htmlFor="default-commission" className="text-sm font-semibold">Default booking commission (non-subscribers)</Label>
+          <p className="mt-0.5 text-xs text-basalt/50">What operators without an active subscription pay per booking.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Input id="default-commission" type="number" min={0} max={100} step="0.5" value={defaultCommission} onChange={(e) => setDefaultCommission(e.target.value)} className="w-24" />
+          <span className="text-sm text-basalt/60">%</span>
+          <Button variant="outline" size="sm" onClick={saveDefaultCommission} disabled={savingDefault}>
+            {savingDefault ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+          </Button>
+        </div>
       </div>
 
       {/* Plan editor */}
@@ -182,6 +222,11 @@ export function AdminSubscriptions() {
               <p className="mt-1 text-xs text-basalt/45">How many monthly charges the subscription runs for.</p>
             </div>
             <div>
+              <Label htmlFor="plan-commission" className="text-sm font-semibold">Booking commission for subscribers (%)</Label>
+              <Input id="plan-commission" type="number" min={0} max={100} step="0.5" value={draft.commissionPct} onChange={(e) => setDraft({ ...draft, commissionPct: e.target.value })} placeholder="e.g. 0 — blank = default" className="mt-1.5" />
+              <p className="mt-1 text-xs text-basalt/45">The per-booking commission operators on this plan pay. Blank = the default rate. Applies to new bookings.</p>
+            </div>
+            <div>
               <Label htmlFor="plan-sort" className="text-sm font-semibold">Sort order</Label>
               <Input id="plan-sort" type="number" min={0} value={draft.sort} onChange={(e) => setDraft({ ...draft, sort: e.target.value })} className="mt-1.5" />
             </div>
@@ -222,6 +267,7 @@ export function AdminSubscriptions() {
                 </div>
                 <p className="text-sm text-basalt/60">
                   {format(p.amountCents)} / {p.pricingMode === "per_listing" ? "listing / month" : "month"} · {p.monthsQuantity} cycles
+                  {p.commissionPercent != null && ` · ${p.commissionPercent}% booking commission`}
                 </p>
               </div>
               <Button variant="outline" size="sm" onClick={() => startEdit(p)}>

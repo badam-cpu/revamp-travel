@@ -15,7 +15,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { registerSubscription, ensurePerson, getPersonSubscription, terminatePersonSubscription, updateSubscriptionAmount } from "./paylink.js";
-import { DEFAULT_CURRENCY } from "../shared/bookings.js";
+import { DEFAULT_CURRENCY, PLATFORM_COMMISSION_PERCENT } from "../shared/bookings.js";
 
 export interface PlanRow {
   id: string;
@@ -283,6 +283,38 @@ export async function reconcilePerListingAmounts(admin: SupabaseClient, { limit 
     }
   }
   return { checked, updated };
+}
+
+/**
+ * Resolve the per-booking commission rate (%) that applies to an operator's
+ * payout, for the "operator's choice" model: if they have an ACTIVE subscription
+ * whose plan sets a commission_percent, that rate wins; otherwise the site-wide
+ * default for non-subscribers (site_settings.default_commission_percent), and
+ * finally the hard-coded standard rate. Called at booking confirm — affects the
+ * operator payout split only, never the guest charge.
+ */
+export async function resolveOperatorCommissionPercent(admin: SupabaseClient, operatorId: string): Promise<number> {
+  try {
+    const { data: sub } = await admin
+      .from("operator_subscriptions")
+      .select("status, subscription_plans!inner(commission_percent)")
+      .eq("operator_id", operatorId)
+      .eq("status", "active")
+      .limit(1)
+      .maybeSingle();
+    const planPct = (sub as { subscription_plans?: { commission_percent?: number | string | null } } | null)?.subscription_plans?.commission_percent;
+    if (planPct != null && Number.isFinite(Number(planPct))) return Number(planPct);
+  } catch {
+    /* fall through to the default */
+  }
+  try {
+    const { data: settings } = await admin.from("site_settings").select("default_commission_percent").eq("id", 1).maybeSingle();
+    const def = (settings as { default_commission_percent?: number | string | null } | null)?.default_commission_percent;
+    if (def != null && Number.isFinite(Number(def))) return Number(def);
+  } catch {
+    /* fall through to the constant */
+  }
+  return PLATFORM_COMMISSION_PERCENT;
 }
 
 /** Cancel an operator's subscription: terminate at PayLink, then mark cancelled. */

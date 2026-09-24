@@ -18,6 +18,7 @@ import { payoutDueDate } from "../shared/payouts.js";
 import { computeBookingCharge, DEFAULT_CURRENCY } from "../shared/bookings.js";
 import type { ListingType } from "../shared/listings.js";
 import { refundGiftForBooking } from "./giftcards.js";
+import { resolveOperatorCommissionPercent } from "./subscriptions.js";
 
 export interface BookingRow {
   id: string;
@@ -61,8 +62,11 @@ async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promi
   // Create the operator payout (idempotent — one per booking). Revamp is
   // merchant of record; the payout is on the pre-tax BASE (tax is a pass-through
   // Revamp remits, never the operator's money), net of the platform commission.
+  // Commission rate is per-operator ("operator's choice"): subscribers on a plan
+  // with a commission_percent get that rate, else the site default.
   const base = row.base_cents ?? row.amount_cents;
-  const { commissionCents, operatorNetCents } = computeBookingCharge(base);
+  const commissionPct = await resolveOperatorCommissionPercent(admin, listing.operator_id);
+  const { commissionCents, operatorNetCents } = computeBookingCharge(base, commissionPct);
   await admin.from("payouts").upsert(
     {
       booking_id: row.id,

@@ -20,6 +20,7 @@ import {
   startSubscription,
   confirmSubscriptions,
   cancelSubscription,
+  getDefaultCommissionPercent,
   type SubscriptionPlan,
   type OperatorSubscription,
   type SubscriptionStatus,
@@ -57,6 +58,7 @@ export function OperatorSubscription() {
   );
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [subs, setSubs] = useState<OperatorSubscription[]>([]);
+  const [defaultCommission, setDefaultCommission] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyPlan, setBusyPlan] = useState<string | null>(null);
   const [phone, setPhone] = useState("");
@@ -64,9 +66,10 @@ export function OperatorSubscription() {
 
   const load = useCallback(async () => {
     try {
-      const [p, s] = await Promise.all([listActivePlans(), listMySubscriptions()]);
+      const [p, s, dc] = await Promise.all([listActivePlans(), listMySubscriptions(), getDefaultCommissionPercent()]);
       setPlans(p);
       setSubs(s);
+      setDefaultCommission(dc);
     } catch {
       /* RLS/offline — leave empty */
     } finally {
@@ -166,6 +169,15 @@ export function OperatorSubscription() {
                   You now have {listingCount} listing{listingCount === 1 ? "" : "s"} — your charge updates to {format(activePlan.amountCents * listingCount)} / month at the next cycle.
                 </p>
               )}
+              {activePlan?.commissionPercent != null && (
+                <p className="mt-1 flex items-center gap-1.5 text-sm font-medium text-[#1f7a4d]">
+                  <Check className="h-3.5 w-3.5" />
+                  {activePlan.commissionPercent === 0 ? "0% booking commission" : `${activePlan.commissionPercent}% booking commission`}
+                  {defaultCommission != null && activePlan.commissionPercent < defaultCommission && (
+                    <span className="font-normal text-basalt/45">(standard is {defaultCommission}%)</span>
+                  )}
+                </p>
+              )}
               {liveSub.lastPaymentAt && (
                 <p className="mt-1 text-xs text-basalt/45">Last charge {new Date(liveSub.lastPaymentAt).toLocaleDateString()}</p>
               )}
@@ -233,7 +245,17 @@ export function OperatorSubscription() {
                           <span className="text-base font-normal text-basalt/50"> / month</span>
                         </p>
                       )}
-                      {plan.description && <p className="mt-3 flex-1 text-sm leading-6 text-basalt/65 whitespace-pre-line">{plan.description}</p>}
+                      {plan.description && <p className="mt-3 text-sm leading-6 text-basalt/65 whitespace-pre-line">{plan.description}</p>}
+                      {plan.commissionPercent != null && (
+                        <p className="mt-3 flex items-center gap-1.5 text-sm font-medium text-[#1f7a4d]">
+                          <Check className="h-4 w-4 shrink-0" />
+                          {plan.commissionPercent === 0 ? "0% booking commission" : `${plan.commissionPercent}% booking commission`}
+                          {defaultCommission != null && plan.commissionPercent < defaultCommission && (
+                            <span className="font-normal text-basalt/45">vs {defaultCommission}% standard</span>
+                          )}
+                        </p>
+                      )}
+                      <div className="flex-1" />
                       <Button
                         className="mt-5"
                         disabled={busyPlan === plan.id || noListings}
