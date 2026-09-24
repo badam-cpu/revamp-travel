@@ -176,11 +176,11 @@ export default function Home() {
               <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
                 {(hc.mediaMentions ?? []).map((m, i) => {
                   const inner = m.logo ? (
-                    <img src={m.logo} alt={m.name} loading="lazy" className="max-h-12 max-w-[75%] object-contain" />
+                    <img src={m.logo} alt={m.name} loading="lazy" className="max-h-20 max-w-[88%] object-contain" />
                   ) : (
-                    <span className="text-center font-display text-lg text-basalt/70">{m.name}</span>
+                    <span className="text-center font-display text-xl text-basalt/70">{m.name}</span>
                   );
-                  const cls = "flex h-28 items-center justify-center rounded-[0.875rem] bg-chalk px-6 transition-shadow";
+                  const cls = "flex h-32 items-center justify-center rounded-[0.875rem] bg-chalk px-6 py-5 transition-shadow";
                   return m.url ? (
                     <a key={i} href={m.url} target="_blank" rel="noopener noreferrer" title={`${m.name} — read the article`} className={`${cls} hover:shadow-[0_10px_30px_rgba(35,35,33,0.10)]`}>
                       {inner}
