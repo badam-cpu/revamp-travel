@@ -20,6 +20,24 @@ const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_
 
 const client = url && anonKey ? createClient(url, anonKey) : null;
 
+/**
+ * Cheap liveness check for GET /api/health: confirms the anon Supabase client is
+ * configured and the database answers a trivial read. Head+count on the public
+ * single-row site_settings table — no data returned, RLS-safe. `{ configured }`
+ * is false when the env vars aren't set (so health can distinguish
+ * mis-configuration from a real DB outage).
+ */
+export async function pingDb(): Promise<{ configured: boolean; ok: boolean; error?: string }> {
+  if (!client) return { configured: false, ok: false, error: "supabase env not set" };
+  try {
+    const { error } = await client.from("site_settings").select("id", { count: "exact", head: true }).limit(1);
+    if (error) return { configured: true, ok: false, error: error.message };
+    return { configured: true, ok: true };
+  } catch (err) {
+    return { configured: true, ok: false, error: err instanceof Error ? err.message : "db unreachable" };
+  }
+}
+
 /** Full published-catalog projection, used by the bot prerenderer and the sitemap — see getPublishedCatalog() below. */
 export type PublicListing = Listing & { updatedAt: string };
 

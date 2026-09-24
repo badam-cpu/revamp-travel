@@ -11,7 +11,7 @@
  */
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
-import { listPublishedForPlanner, verifyUser, userClient, getListingBusyRanges, getOperatorGooglePlaceId } from "./supabase.js";
+import { listPublishedForPlanner, verifyUser, userClient, getListingBusyRanges, getOperatorGooglePlaceId, pingDb } from "./supabase.js";
 import { fetchPlaceReviews, fetchPlaceDetails, placesServerKeySet } from "./googlePlaces.js";
 import { matchTripadvisor, tripadvisorConfigured } from "./tripadvisor.js";
 import { translateTexts } from "./translate.js";
@@ -269,6 +269,20 @@ function buildOperatorSummary(
 }
 
 export function registerApiRoutes(app: Express) {
+  // GET /api/health — liveness probe for external uptime monitors (UptimeRobot,
+  // etc.). Verifies the API function is running AND the database answers, so a DB
+  // outage shows as down even when the CDN still serves the SPA. Returns 200 when
+  // healthy, 503 otherwise. No auth, no secrets, read-only.
+  app.get("/api/health", async (_req: Request, res: Response) => {
+    const db = await pingDb();
+    const healthy = db.ok;
+    res.status(healthy ? 200 : 503).json({
+      status: healthy ? "ok" : "degraded",
+      db: db.ok ? "up" : db.configured ? "down" : "unconfigured",
+      time: new Date().toISOString(),
+    });
+  });
+
   // Dynamic robots.txt / sitemap.xml. Registered at both the public path (for
   // the long-running server in server/index.ts, and local `pnpm start`) and
   // an /api-prefixed alias — on Netlify the CDN serves the SPA, so these are
