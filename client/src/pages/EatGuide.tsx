@@ -232,7 +232,7 @@ function EatGroup({ name, items }: { name: string; items: LiveListing[] }) {
           onClick={() => setExpanded((v) => !v)}
           className="mt-6 rounded-none border border-basalt/20 px-5 py-2.5 text-sm font-semibold text-basalt transition-colors hover:border-apricot hover:text-apricot"
         >
-          {expanded ? "Show fewer" : `Show all ${items.length} ${name.toLowerCase()}`}
+          {expanded ? "Show fewer" : "Show all"}
         </button>
       )}
     </div>
