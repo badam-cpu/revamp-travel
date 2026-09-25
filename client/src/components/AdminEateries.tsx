@@ -75,6 +75,32 @@ export function AdminEateries() {
 
   const set = (patch: Partial<typeof BLANK>) => setF((prev) => ({ ...prev, ...patch }));
 
+  // Branch helpers (functional updates so they're safe across async Google calls).
+  type BranchRow = { label: string; address: string; coords: string };
+  const setBranch = (i: number, patch: Partial<BranchRow>) =>
+    setF((prev) => ({ ...prev, branches: prev.branches.map((x, j) => (j === i ? { ...x, ...patch } : x)) }));
+  const addBranch = () => setF((prev) => ({ ...prev, branches: [...prev.branches, { label: "", address: "", coords: "" }] }));
+  const removeBranch = (i: number) => setF((prev) => ({ ...prev, branches: prev.branches.filter((_, j) => j !== i) }));
+  const [branchBusy, setBranchBusy] = useState<number | null>(null);
+  /** Pull a branch's address + coordinates from the Google place the admin picked. */
+  const pullBranch = async (i: number, r: { id: string; name: string }) => {
+    setBranch(i, { label: r.name }); // instant name; details fill in next
+    setBranchBusy(i);
+    try {
+      const d = await adminPlaceDetails(r.id);
+      setBranch(i, {
+        label: r.name || d.name || "",
+        address: d.address ?? "",
+        coords: d.lat != null && d.lng != null ? `${d.lat}, ${d.lng}` : "",
+      });
+      toast(`Pulled "${d.name}" from Google.`);
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : "Couldn't fetch that branch — enter its coordinates manually.");
+    } finally {
+      setBranchBusy(null);
+    }
+  };
+
   const onFound = async (r: { id: string; name: string }) => {
     // Fill the name straight away so curation still works even if the
     // server-side Google enrichment call fails (e.g. key not configured).
@@ -316,18 +342,25 @@ export function AdminEateries() {
           <div className="sm:col-span-2"><Field label="Long description"><Textarea rows={4} value={f.longDescription} onChange={(e) => set({ longDescription: e.target.value })} placeholder="Fuller write-up shown on the restaurant page (optional)." className="rounded-none text-base" /></Field></div>
           <div className="sm:col-span-2">
             <Field label="Other locations (branches)">
-              <div className="grid gap-2">
+              <div className="grid gap-3">
                 {f.branches.map((b, i) => (
-                  <div key={i} className="grid items-center gap-2 sm:grid-cols-[1fr_1.6fr_1fr_auto]">
-                    <Input placeholder="Label (e.g. Northern Ave)" value={b.label} onChange={(e) => set({ branches: f.branches.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)) })} className="h-9 rounded-none" />
-                    <Input placeholder="Address" value={b.address} onChange={(e) => set({ branches: f.branches.map((x, j) => (j === i ? { ...x, address: e.target.value } : x)) })} className="h-9 rounded-none" />
-                    <Input placeholder="lat, lng" value={b.coords} onChange={(e) => set({ branches: f.branches.map((x, j) => (j === i ? { ...x, coords: e.target.value } : x)) })} className="h-9 rounded-none" />
-                    <button type="button" onClick={() => set({ branches: f.branches.filter((_, j) => j !== i) })} className="px-2 text-xs font-semibold text-basalt/45 hover:text-destructive">Remove</button>
+                  <div key={i} className="grid gap-2 border border-basalt/12 bg-chalk/40 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase tracking-[0.1em] text-basalt/45">{b.label ? b.label : `Branch ${i + 1}`}{branchBusy === i ? " · pulling…" : ""}</span>
+                      <button type="button" onClick={() => removeBranch(i)} className="text-xs font-semibold text-basalt/45 hover:text-destructive">Remove</button>
+                    </div>
+                    <GooglePlaceFinder onFound={(r) => pullBranch(i, r)} />
+                    {(b.address || b.coords) && <p className="text-xs text-basalt/55">{b.address}{b.coords ? ` · ${b.coords}` : ""}</p>}
+                    {/* Manual fallback if a branch isn't on Google / the pull fails. */}
+                    <div className="grid gap-2 sm:grid-cols-[1fr_1fr]">
+                      <Input placeholder="Label (e.g. Northern Ave)" value={b.label} onChange={(e) => setBranch(i, { label: e.target.value })} className="h-9 rounded-none" />
+                      <Input placeholder="lat, lng" value={b.coords} onChange={(e) => setBranch(i, { coords: e.target.value })} className="h-9 rounded-none" />
+                    </div>
                   </div>
                 ))}
-                <button type="button" onClick={() => set({ branches: [...f.branches, { label: "", address: "", coords: "" }] })} className="justify-self-start text-sm font-semibold text-apricot hover:underline">+ Add a branch</button>
+                <button type="button" onClick={addBranch} className="justify-self-start text-sm font-semibold text-apricot hover:underline">+ Add a branch</button>
               </div>
-              <p className="mt-1 text-xs text-basalt/45">For chains. Coordinates: on Google Maps, right-click the spot and click the “lat, lng” at the top to copy it. One card in the guide; every branch shows on the listing page and its map.</p>
+              <p className="mt-1 text-xs text-basalt/45">For chains. Search each location on Google to pull its address + coordinates automatically; edit the label if you like. One card in the guide; every branch shows on the listing page and its map.</p>
             </Field>
           </div>
           <div className="sm:col-span-2"><PhotoUploader key={uploaderKey} ref={photosRef} defaultValue={galleryDefault} defaultFocus={focusDefault} /></div>
