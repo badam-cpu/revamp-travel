@@ -22,7 +22,7 @@ import { useListings, type LiveListing } from "@/contexts/ListingsContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { buildCollectionPageJsonLd, buildBreadcrumbJsonLd } from "@shared/seo";
 import { ARMENIA_REGIONS } from "@shared/listings";
-import { compareEatListings } from "@shared/eat";
+import { compareEatListings, bestEatRating } from "@shared/eat";
 import { EAT_CATEGORIES } from "@/lib/eatCategories";
 import { slugify } from "@/lib/slug";
 
@@ -133,11 +133,45 @@ export default function EatLanding({ mode, value }: { mode: "region" | "cuisine"
           <span className="font-semibold text-basalt">{label}</span>
         </nav>
 
-        {/* Hero */}
-        <header className="mt-5 max-w-3xl">
-          <p className="eyebrow">{mode === "region" ? "Eat guide · by area" : "Eat guide · by cuisine"}</p>
-          <h1 className="mt-3 font-display text-[3rem] leading-[0.95] tracking-[-0.04em] sm:text-6xl">{title}</h1>
-          {intro && <p className="mt-6 text-lg leading-8 text-basalt/85">{intro}</p>}
+        {/* Hero — intro on the left; a compact "at a glance" panel fills the
+            right on wide screens so it isn't a big empty void. */}
+        <header className="mt-5 grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
+          <div className="max-w-2xl">
+            <p className="eyebrow">{mode === "region" ? "Eat guide · by area" : "Eat guide · by cuisine"}</p>
+            <h1 className="mt-3 font-display text-[3rem] leading-[0.95] tracking-[-0.04em] sm:text-6xl">{title}</h1>
+            {intro && <p className="mt-6 text-lg leading-8 text-basalt/85">{intro}</p>}
+          </div>
+          {eats.length > 0 && (
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-5 border-y border-basalt/10 py-6 lg:mt-1 lg:grid-cols-1 lg:gap-y-4 lg:border lg:bg-chalk/40 lg:p-6">
+              <div>
+                <dt className="text-[10px] font-bold uppercase tracking-[0.14em] text-basalt/40">Places</dt>
+                <dd className="mt-1 font-display text-2xl tabular-nums">{eats.length}</dd>
+              </div>
+              {(() => {
+                const rated = eats.map(bestEatRating).filter((r) => r > 0);
+                if (!rated.length) return null;
+                const avg = rated.reduce((s, r) => s + r, 0) / rated.length;
+                return (
+                  <div>
+                    <dt className="text-[10px] font-bold uppercase tracking-[0.14em] text-basalt/40">Avg rating</dt>
+                    <dd className="mt-1 font-display text-2xl tabular-nums">{avg.toFixed(1)}★</dd>
+                  </div>
+                );
+              })()}
+              {(() => {
+                const facet = mode === "region"
+                  ? Array.from(new Set(eats.map((l) => l.cuisine).filter(Boolean) as string[]))
+                  : Array.from(new Set(eats.map((l) => normalizeRegion(l.region || "")).filter(Boolean)));
+                if (!facet.length) return null;
+                return (
+                  <div className="col-span-2 lg:col-span-1">
+                    <dt className="text-[10px] font-bold uppercase tracking-[0.14em] text-basalt/40">{mode === "region" ? "Cuisines" : "Areas"}</dt>
+                    <dd className="mt-1 text-sm font-semibold leading-6">{facet.slice(0, 6).join(" · ")}</dd>
+                  </div>
+                );
+              })()}
+            </dl>
+          )}
         </header>
 
         {/* The spots */}
