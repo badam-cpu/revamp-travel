@@ -22,6 +22,7 @@ import { useListings, type LiveListing } from "@/contexts/ListingsContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { buildCollectionPageJsonLd, buildBreadcrumbJsonLd } from "@shared/seo";
 import { ARMENIA_REGIONS } from "@shared/listings";
+import { compareEatListings } from "@shared/eat";
 import { EAT_CATEGORIES } from "@/lib/eatCategories";
 import { slugify } from "@/lib/slug";
 
@@ -33,6 +34,13 @@ function resolveRegion(slug: string): string | null {
 }
 function resolveCuisine(slug: string): string | null {
   return EAT_CATEGORIES.find((c) => slugify(c) === slug) ?? null;
+}
+
+/** Naive English pluralizer for venue-type nouns in the intro prose. */
+function pluralize(w: string): string {
+  if (/(s|x|z|ch|sh)$/.test(w)) return `${w}es`;
+  if (/[^aeiou]y$/.test(w)) return `${w.slice(0, -1)}ies`;
+  return `${w}s`;
 }
 
 /** Join a list into readable prose ("a, b and c"). */
@@ -54,10 +62,13 @@ export default function EatLanding({ mode, value }: { mode: "region" | "cuisine"
   const path = mode === "region" ? `/eat/${value}` : `/eat/cuisine/${value}`;
 
   const allEats = listings.filter((l) => l.type === "eat");
-  const eats: LiveListing[] =
+  const eats: LiveListing[] = (
     mode === "region"
       ? allEats.filter((l) => normalizeRegion(l.region || "").toLowerCase() === normalizeRegion(label || "").toLowerCase())
-      : allEats.filter((l) => (l.cuisine || "").trim().toLowerCase() === (label || "").toLowerCase());
+      : allEats.filter((l) => (l.cuisine || "").trim().toLowerCase() === (label || "").toLowerCase())
+  )
+    .slice()
+    .sort(compareEatListings); // featured + editor rank first (admin curation)
 
   // For a region, pull nearby bookable inventory to cross-link into.
   const nearbyStays = mode === "region" ? listings.filter((l) => l.type === "stay" && normalizeRegion(l.region || "").toLowerCase() === normalizeRegion(label || "").toLowerCase()).slice(0, 3) : [];
@@ -71,7 +82,7 @@ export default function EatLanding({ mode, value }: { mode: "region" | "cuisine"
   const intro =
     eats.length > 0
       ? mode === "region"
-        ? `${label}'s dining runs from ${proseList(venueTypes.slice(0, 3).map((t) => t.toLowerCase())) || "cafés to full restaurants"}. We've hand-picked ${eats.length} place${eats.length === 1 ? "" : "s"} worth your time${examples.length ? ` — including ${proseList(examples)}` : ""}. Every spot is an independent Revamp pick, never a paid placement.`
+        ? `${label}'s dining runs from ${proseList(venueTypes.slice(0, 3).map((t) => pluralize(t.toLowerCase()))) || "cafés to full restaurants"}. We've hand-picked ${eats.length} place${eats.length === 1 ? "" : "s"} worth your time${examples.length ? ` — including ${proseList(examples)}` : ""}. Every spot is an independent Revamp pick, never a paid placement.`
         : `Looking for ${label?.toLowerCase()} in Armenia? These ${eats.length} spot${eats.length === 1 ? "" : "s"}${examples.length ? `, like ${proseList(examples)},` : ""} are hand-picked by Revamp — honest recommendations, no paid placements.`
       : "";
 

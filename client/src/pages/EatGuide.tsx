@@ -15,6 +15,7 @@ import { useListings, type LiveListing } from "@/contexts/ListingsContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { cn } from "@/lib/utils";
 import { ARMENIA_REGIONS } from "@shared/listings";
+import { compareEatListings } from "@shared/eat";
 import { EAT_CATEGORIES } from "@/lib/eatCategories";
 import { slugify } from "@/lib/slug";
 
@@ -216,7 +217,8 @@ export default function EatGuide() {
 const GROUP_CAP = 6;
 function EatGroup({ name, items }: { name: string; items: LiveListing[] }) {
   const [expanded, setExpanded] = useState(false);
-  const shown = expanded ? items : items.slice(0, GROUP_CAP);
+  const sorted = items.slice().sort(compareEatListings); // featured + editor rank first
+  const shown = expanded ? sorted : sorted.slice(0, GROUP_CAP);
   return (
     <div>
       <div className="mb-6 flex items-baseline justify-between gap-3">

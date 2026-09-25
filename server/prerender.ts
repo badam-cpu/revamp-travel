@@ -21,6 +21,7 @@ import type { PublicListing } from "./supabase.js";
 import { getPublishedCatalog, getPublishedPosts, getPublishedPostBySlug, getSiteFaq, getPartnerOperators, getSitePartners, type PublicPost } from "./supabase.js";
 import { regions, typeLabels, ARMENIA_REGIONS } from "../shared/listings.js";
 import { slugify } from "../shared/slug.js";
+import { compareEatListings } from "../shared/eat.js";
 import type { ListingType } from "../shared/listings.js";
 import { buildArticleJsonLd, buildBlogListJsonLd, buildBreadcrumbJsonLd, buildCollectionPageJsonLd, buildFaqJsonLd, buildListingJsonLd, buildOrganizationJsonLd, buildWebsiteJsonLd } from "../shared/seo.js";
 import { renderMarkdown, markdownToPlain } from "../shared/markdown.js";
@@ -495,6 +496,7 @@ function renderEatLanding(catalog: PublicListing[], origin: string, mode: "regio
     label = matched[0]?.cuisine?.trim() || "";
   }
   if (!label || matched.length === 0) return null;
+  matched.sort(compareEatListings); // featured + editor rank first (admin curation)
 
   const path = mode === "region" ? `/eat/${slug}` : `/eat/cuisine/${slug}`;
   const title = mode === "region" ? `Where to eat in ${label}` : `The best ${label} food in Armenia`;

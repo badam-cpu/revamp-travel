@@ -41,6 +41,7 @@ const BLANK = {
   lat: null as number | null, lng: null as number | null,
   tripadvisorLocationId: "", tripadvisorRating: null as number | null, tripadvisorRatingCount: null as number | null,
   tripadvisorUrl: "", tripadvisorRatingImage: "", tripadvisorMenuUrl: "",
+  featured: false, editorRank: "" as string,
 };
 
 export function AdminEateries() {
@@ -166,6 +167,8 @@ export function AdminEateries() {
       tripadvisorUrl: data.tripadvisor_url ?? "",
       tripadvisorRatingImage: data.tripadvisor_rating_image ?? "",
       tripadvisorMenuUrl: data.tripadvisor_menu_url ?? "",
+      featured: !!data.featured,
+      editorRank: data.editor_rank == null ? "" : String(data.editor_rank),
     });
     setGalleryDefault(Array.isArray(data.gallery) && data.gallery.length ? data.gallery : data.image ? [data.image] : []);
     setFocusDefault(data.cover_focus ?? "50% 50%");
@@ -213,6 +216,8 @@ export function AdminEateries() {
         tripadvisor_rating_image: f.tripadvisorRatingImage || null,
         tripadvisor_menu_url: f.tripadvisorMenuUrl || null,
         neighborhood: f.neighborhood.trim() || null,
+        featured: f.featured,
+        editor_rank: f.editorRank.trim() === "" ? null : Math.max(0, Math.round(Number(f.editorRank) || 0)),
       };
       if (editingId) {
         const { error } = await supabase.from("listings").update(payload).eq("id", editingId);
@@ -286,6 +291,15 @@ export function AdminEateries() {
             </select>
           </Field>
           <Field label="Website"><Input value={f.website} onChange={(e) => set({ website: e.target.value })} placeholder="https://…" className="h-10 rounded-none" /></Field>
+          <Field label="Curation rank">
+            <Input type="number" min={0} value={f.editorRank} onChange={(e) => set({ editorRank: e.target.value })} placeholder="e.g. 1 (lower = higher up)" className="h-10 rounded-none" />
+          </Field>
+          <Field label="Featured">
+            <label className="flex h-10 items-center gap-2 text-sm text-basalt/70">
+              <input type="checkbox" checked={f.featured} onChange={(e) => set({ featured: e.target.checked })} className="h-4 w-4 accent-apricot" />
+              Pin to the top of the guide &amp; area/cuisine pages
+            </label>
+          </Field>
           <div className="sm:col-span-2"><Field label="Short description"><Textarea rows={2} value={f.shortDescription} onChange={(e) => set({ shortDescription: e.target.value })} placeholder="One-line teaser shown on the card and as the lead." className="rounded-none text-base" /></Field></div>
           <div className="sm:col-span-2"><Field label="Long description"><Textarea rows={4} value={f.longDescription} onChange={(e) => set({ longDescription: e.target.value })} placeholder="Fuller write-up shown on the restaurant page (optional)." className="rounded-none text-base" /></Field></div>
           <div className="sm:col-span-2"><PhotoUploader key={uploaderKey} ref={photosRef} defaultValue={galleryDefault} defaultFocus={focusDefault} /></div>

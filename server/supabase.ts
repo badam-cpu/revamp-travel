@@ -69,6 +69,10 @@ interface CatalogRow {
   max_guests: number | null;
   venue_type: string | null;
   cuisine: string | null;
+  featured: boolean | null;
+  editor_rank: number | null;
+  google_rating: number | null;
+  tripadvisor_rating: number | null;
 }
 
 function mapCatalogRow(row: CatalogRow): PublicListing {
@@ -104,6 +108,10 @@ function mapCatalogRow(row: CatalogRow): PublicListing {
     maxGuests: row.max_guests ?? undefined,
     venueType: row.venue_type ?? undefined,
     cuisine: row.cuisine ?? undefined,
+    featured: row.featured ?? undefined,
+    editorRank: row.editor_rank ?? null,
+    googleRating: row.google_rating ?? undefined,
+    tripadvisorRating: row.tripadvisor_rating ?? undefined,
   };
 }
 
@@ -125,7 +133,7 @@ export async function getPublishedCatalog(): Promise<PublicListing[]> {
   const { data, error } = await client
     .from("listings")
     .select(
-      "slug, type, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, facts, amenities, accent, updated_at, highlights, not_included, what_to_bring, important_info, not_suitable_for, max_guests, venue_type, cuisine",
+      "slug, type, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, facts, amenities, accent, updated_at, highlights, not_included, what_to_bring, important_info, not_suitable_for, max_guests, venue_type, cuisine, featured, editor_rank, google_rating, tripadvisor_rating",
     )
     .eq("status", "published");
   const rows = error || !data ? [] : (data as CatalogRow[]).map(mapCatalogRow);
