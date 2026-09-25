@@ -576,6 +576,12 @@ function renderListingDetail(listing: PublicListing, catalog: PublicListing[], o
   const whatToBringHtml = listing.whatToBring?.length ? `<h2>What to bring</h2><ul>${listing.whatToBring.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
   const notSuitableForHtml = listing.notSuitableFor?.length ? `<h2>Not suitable for</h2><ul>${listing.notSuitableFor.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
   const importantInfoHtml = listing.importantInfo ? `<h2>Good to know</h2><p>${escapeHtml(listing.importantInfo)}</p>` : "";
+  // Chains: list every branch (locations) for crawlers/AI.
+  const branchesHtml = listing.branches?.length
+    ? `<h2>Locations</h2><ul>${listing.branches
+        .map((b) => `<li>${escapeHtml(b.label || listing.title)}${b.address ? ` — ${escapeHtml(b.address)}` : ""} <a href="https://www.google.com/maps?q=${b.lat},${b.lng}">Directions</a></li>`)
+        .join("")}</ul>`
+    : "";
 
   const bodyHtml = `
 <nav aria-label="Breadcrumb">
@@ -598,6 +604,7 @@ ${notIncludedHtml}
 ${whatToBringHtml}
 ${notSuitableForHtml}
 ${importantInfoHtml}
+${branchesHtml}
 ${tagsHtml}
 <a href="${origin}/explore">Back to Explore</a>
 ${

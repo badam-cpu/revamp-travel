@@ -54,6 +54,14 @@ export interface SeasonalRate {
   label?: string;
 }
 
+/** An additional location for a multi-branch eat listing (chain). */
+export interface Branch {
+  label?: string; // e.g. "Northern Ave" / "Dalma Garden Mall"
+  address: string;
+  lat: number;
+  lng: number;
+}
+
 export interface Listing {
   id: string;
   slug: string;
@@ -78,6 +86,7 @@ export interface Listing {
   featured?: boolean;
   /** Eat guide curation: admin display rank (lower = earlier; unset = end). */
   editorRank?: number | null;
+  branches?: Branch[];
   accent: "apricot" | "sevan" | "tuff";
   /** Cover-photo focal point as a CSS object-position ("50% 30%"); frames crops. */
   coverFocus?: string;
@@ -557,6 +566,7 @@ export interface ListingInput {
   featured?: boolean;
   /** Eat guide curation: admin display rank (lower = earlier; unset = end). */
   editorRank?: number | null;
+  branches?: Branch[];
   accent: "apricot" | "sevan" | "tuff";
   /** Cover-photo focal point as a CSS object-position ("50% 30%"); frames crops. */
   coverFocus?: string;

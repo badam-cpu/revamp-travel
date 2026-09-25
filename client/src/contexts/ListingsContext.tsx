@@ -106,6 +106,7 @@ interface ListingRow {
   facts: { label: string; value: string }[];
   featured: boolean;
   editor_rank: number | null;
+  branches: import("@shared/listings").Branch[] | null;
   accent: "apricot" | "sevan" | "tuff";
   status: "draft" | "pending" | "published";
   review_note: string | null;
@@ -181,6 +182,7 @@ function mapListingRow(row: ListingRow): LiveListing {
     amenities: row.amenities,
     featured: row.featured,
     editorRank: row.editor_rank ?? null,
+    branches: Array.isArray(row.branches) ? row.branches : [],
     accent: row.accent,
     operatorId: row.operator_id,
     status: row.status,
@@ -254,6 +256,7 @@ function toRow(input: ListingInput) {
     facts: input.facts,
     featured: input.featured ?? false,
     editor_rank: input.editorRank ?? null,
+    branches: input.branches ?? [],
     accent: input.accent,
     max_guests: input.maxGuests ?? null,
     highlights: input.highlights ?? [],

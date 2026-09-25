@@ -228,6 +228,11 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   // Major central-Yerevan sights closest to this listing (curated list, English
   // names, distances computed here) — empty for listings outside that radius.
   const nearby = nearbySights(listing.coordinates.lat, listing.coordinates.lng);
+  // Multi-branch eat listings: extra locations shown as a list + map pins.
+  const branches = isEat && Array.isArray(listing.branches) ? listing.branches : [];
+  const mapListings = branches.length
+    ? [listing, ...branches.map((b, i) => ({ ...listing, id: `${listing.id}-b${i}`, title: b.label || listing.title, coordinates: { lat: b.lat, lng: b.lng } }))]
+    : [listing];
   const cancellationText = describeCancellationPolicy(listing.cancellationPolicy, {
     freeCancelDays: listing.freeCancelDays,
     discountPercent: listing.nonrefundableDiscountPercent,
@@ -248,6 +253,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
     if (listing.cuisine) glance.push({ label: "Cuisine", value: listing.cuisine, icon: Coffee });
     if (listing.priceBand) glance.push({ label: "Price", value: `${listing.priceBand} · ${priceWord[listing.priceBand]}`, icon: Wallet });
     if (listing.neighborhood || listing.city) glance.push({ label: "Area", value: listing.neighborhood || listing.city, icon: MapPin });
+    if (branches.length) glance.push({ label: "Locations", value: `${branches.length + 1} branches`, icon: MapPin });
   } else {
     if (listing.maxGuests) glance.push({ label: "Guests", value: `Up to ${listing.maxGuests}`, icon: Users });
     glance.push({ label: "Cancellation", value: listing.cancellationPolicy === "non_refundable" ? "Non-refundable" : "Flexible", icon: ShieldCheck });
@@ -465,7 +471,27 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
               <p className="mt-5 max-w-sm whitespace-pre-line text-sm leading-6 text-basalt/55">
                 {listing.neighborhood?.trim() || "Use the map as a starting point. Exact arrival notes are shared once a date is confirmed."}
               </p>
-              {nearby.length > 0 && (
+              {branches.length > 0 && (
+                <div className="mt-7">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/40">Locations ({branches.length + 1})</p>
+                  <ul className="mt-3 grid gap-3">
+                    {[
+                      { label: listing.neighborhood?.trim() || listing.city, address: (listing as { address?: string }).address || "", lat: listing.coordinates.lat, lng: listing.coordinates.lng },
+                      ...branches.map((b) => ({ label: b.label || "Branch", address: b.address, lat: b.lat, lng: b.lng })),
+                    ].map((loc, i) => (
+                      <li key={i} className="flex items-start gap-3 text-sm">
+                        <MapPin className="mt-[3px] h-3.5 w-3.5 shrink-0 text-apricot" strokeWidth={2} />
+                        <span className="min-w-0 flex-1 leading-5">
+                          <span className="font-medium text-basalt">{loc.label}</span>
+                          {loc.address && <span className="block text-basalt/50">{loc.address}</span>}
+                        </span>
+                        <a href={`https://www.google.com/maps?q=${loc.lat},${loc.lng}`} target="_blank" rel="noreferrer" className="mt-[1px] shrink-0 text-xs font-semibold text-apricot hover:underline">Directions</a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {branches.length === 0 && nearby.length > 0 && (
                 <div className="mt-7">
                   <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/40">Sights nearby</p>
                   <ul className="mt-3 grid gap-2">
@@ -487,7 +513,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
                 </div>
               )}
             </div>
-            <ArmeniaMap listings={[listing]} single className="h-[430px]" />
+            <ArmeniaMap listings={mapListings} single={mapListings.length === 1} className="h-[430px]" />
           </div>
         </section>
 

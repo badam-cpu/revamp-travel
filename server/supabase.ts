@@ -73,6 +73,7 @@ interface CatalogRow {
   editor_rank: number | null;
   google_rating: number | null;
   tripadvisor_rating: number | null;
+  branches: { label?: string; address?: string; lat?: number; lng?: number }[] | null;
 }
 
 function mapCatalogRow(row: CatalogRow): PublicListing {
@@ -112,6 +113,7 @@ function mapCatalogRow(row: CatalogRow): PublicListing {
     editorRank: row.editor_rank ?? null,
     googleRating: row.google_rating ?? undefined,
     tripadvisorRating: row.tripadvisor_rating ?? undefined,
+    branches: Array.isArray(row.branches) ? (row.branches as { label?: string; address: string; lat: number; lng: number }[]) : undefined,
   };
 }
 
@@ -133,7 +135,7 @@ export async function getPublishedCatalog(): Promise<PublicListing[]> {
   const { data, error } = await client
     .from("listings")
     .select(
-      "slug, type, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, facts, amenities, accent, updated_at, highlights, not_included, what_to_bring, important_info, not_suitable_for, max_guests, venue_type, cuisine, featured, editor_rank, google_rating, tripadvisor_rating",
+      "slug, type, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, facts, amenities, accent, updated_at, highlights, not_included, what_to_bring, important_info, not_suitable_for, max_guests, venue_type, cuisine, featured, editor_rank, google_rating, tripadvisor_rating, branches",
     )
     .eq("status", "published");
   const rows = error || !data ? [] : (data as CatalogRow[]).map(mapCatalogRow);
