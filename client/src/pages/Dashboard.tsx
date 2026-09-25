@@ -60,6 +60,7 @@ import { PricingCalendar } from "@/components/PricingCalendar";
 import { OperatorBookingsTimeline } from "@/components/OperatorBookingsTimeline";
 import { OperatorPayouts } from "@/components/OperatorPayouts";
 import { OperatorSubscription } from "@/components/OperatorSubscription";
+import { SessionScheduleEditor } from "@/components/SessionScheduleEditor";
 import { OperatorAnalytics } from "@/components/OperatorAnalytics";
 import { ProfileTab, SecurityTab } from "@/pages/Account";
 import { EXPERIENCE_PREFILL_STORAGE_KEY } from "@/pages/ExperienceOnboarding";
@@ -856,10 +857,15 @@ function StatusBadge({ status, reviewNote }: { status: LiveListing["status"]; re
 // Per-type calendar-source hint. The importer (server/ical.ts) accepts ANY
 // iCalendar .ics feed, so this only tailors the copy/placeholder to the
 // platform each type is most likely syncing from.
-const ICAL_SOURCE: Record<ListingType, { name: string; placeholder: string }> = {
+const ICAL_SOURCE: Record<ListingType, { name: string; placeholder: string; helpUrl?: string; helpLabel?: string }> = {
   stay: { name: "Airbnb", placeholder: "https://www.airbnb.com/calendar/ical/….ics" },
   tour: { name: "GetYourGuide", placeholder: "https://…/calendar/….ics (GetYourGuide, Viator, etc.)" },
-  experience: { name: "your booking platform", placeholder: "https://…/….ics (any booking calendar)" },
+  experience: {
+    name: "Fresha",
+    placeholder: "https://…/….ics  —  Fresha ▸ Calendar ▸ Sync your calendar",
+    helpUrl: "https://www.fresha.com/help-center/knowledge-base/calendar/208-sync-your-fresha-calendar",
+    helpLabel: "How to get your Fresha calendar link",
+  },
   eat: { name: "your booking platform", placeholder: "https://…/….ics" },
 };
 
@@ -1189,6 +1195,7 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
                 </div>
               </div>
               <AvailabilityRow listing={listing} />
+              {(listing.type === "tour" || listing.type === "experience") && <SessionScheduleEditor listing={listing} />}
             </div>
           ))}
         </div>

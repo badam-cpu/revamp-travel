@@ -166,12 +166,12 @@ export interface StartCheckoutParams {
  * happens server-side after the traveler returns — see confirmCheckout.
  */
 export async function startCheckout(
-  params: StartCheckoutParams & { guestName?: string; guestEmail?: string; guestPhone?: string; addons?: { id: string; qty: number }[]; giftCode?: string },
-): Promise<{ redirectUrl?: string; confirmed?: boolean; fullyCovered?: boolean; bookingId?: string }> {
+  params: StartCheckoutParams & { sessionId?: string; guestName?: string; guestEmail?: string; guestPhone?: string; addons?: { id: string; qty: number }[]; giftCode?: string },
+): Promise<{ redirectUrl?: string; confirmed?: boolean; fullyCovered?: boolean; requested?: boolean; bookingId?: string }> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new ApiError("Sign in to book.");
-  return request<{ redirectUrl?: string; confirmed?: boolean; fullyCovered?: boolean; bookingId?: string }>("/api/start-checkout", {
+  return request<{ redirectUrl?: string; confirmed?: boolean; fullyCovered?: boolean; requested?: boolean; bookingId?: string }>("/api/start-checkout", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify(params),
@@ -244,6 +244,39 @@ export async function cancelBooking(bookingId: string): Promise<{ cancelled: boo
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({ bookingId }),
+  });
+}
+
+/** Operator/admin approves a request-to-book slot → guest gets a pay link. */
+export async function approveBooking(bookingId: string): Promise<{ ok: boolean }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<{ ok: boolean }>("/api/booking-approve", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ bookingId }) });
+}
+
+/** Operator/admin declines a request-to-book slot → seats freed, guest emailed. */
+export async function declineBooking(bookingId: string): Promise<{ ok: boolean }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<{ ok: boolean }>("/api/booking-decline", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ bookingId }) });
+}
+
+/** Save a tour/experience's recurring time-slot schedule + booking mode, and
+ *  (re)generate its sessions. Pass schedule=null to clear it (back to day-level). */
+export async function saveSessionSchedule(
+  listingId: string,
+  schedule: import("@shared/sessions").SessionSchedule | null,
+  bookingMode: "instant" | "request",
+): Promise<{ ok: boolean; created: number }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<{ ok: boolean; created: number }>("/api/sessions/save-schedule", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ listingId, schedule, bookingMode }),
   });
 }
 

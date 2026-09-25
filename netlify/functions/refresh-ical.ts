@@ -15,6 +15,7 @@
 import { supabaseAdmin, adminConfigured } from "../../server/supabaseAdmin.js";
 import { fetchMergedBlockedRanges } from "../../server/ical.js";
 import { syncAllPricelabs } from "../../server/pricelabs.js";
+import { syncListingSessions, applyIcalToSessions } from "../../server/sessions.js";
 
 /** Legacy single `ical_url` → one Airbnb feed; otherwise use `ical_feeds`. */
 function feedsFor(row: { ical_url?: string | null; ical_feeds?: unknown }) {
@@ -46,8 +47,24 @@ export const handler = async () => {
 
   let refreshed = 0;
   let failed = 0;
-  for (const listing of data as { id: string; ical_url: string | null; ical_feeds: unknown }[]) {
+  let sessionsClosed = 0;
+  for (const listing of data as { id: string; type?: string; ical_url: string | null; ical_feeds: unknown; session_schedule?: unknown }[]) {
+    // Slot listings (tour/experience with a schedule): keep the rolling window of
+    // sessions fresh, then block/reopen sessions against the external calendar's
+    // busy TIMES (not just dates), so a Fresha appointment only closes its slot.
+    const isSlot = (listing.type === "tour" || listing.type === "experience") && !!listing.session_schedule;
     const feeds = feedsFor(listing);
+    if (isSlot) {
+      try {
+        await syncListingSessions(admin, listing.id);
+        if (feeds.length) {
+          const r = await applyIcalToSessions(admin, listing.id, feeds);
+          sessionsClosed += r.closed;
+        }
+      } catch (err) {
+        console.error("[refresh-ical] session sync failed", listing.id, err);
+      }
+    }
     if (feeds.length === 0) continue;
     const syncedAt = new Date().toISOString();
     try {
@@ -72,7 +89,7 @@ export const handler = async () => {
     console.error("[refresh-ical] pricelabs sync failed", err);
   }
 
-  const result = { total: data.length, refreshed, failed, pricelabs };
+  const result = { total: data.length, refreshed, failed, sessionsClosed, pricelabs };
   console.log("[refresh-ical]", result);
   return { statusCode: 200, body: JSON.stringify(result) };
 };

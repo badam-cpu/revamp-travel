@@ -67,6 +67,8 @@ export function computeBookingCharge(baseCents: number, commissionPercent: numbe
  * supabase/migrations/0010_bookings.sql.
  */
 export type BookingStatus =
+  | "requested" // slot request-to-book, awaiting operator approval (seats held, no charge)
+  | "awaiting_payment" // operator approved a request; guest must now pay
   | "pending_payment" // created, awaiting PayLink approval (soft hold)
   | "confirmed" // PayLink approved server-side — blocks the dates
   | "payment_failed" // PayLink reported a terminal failure

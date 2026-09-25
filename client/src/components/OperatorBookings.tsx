@@ -13,8 +13,9 @@ import { useEffect, useState } from "react";
 import { CalendarCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
-import { cancelBooking } from "@/lib/api";
+import { cancelBooking, approveBooking, declineBooking } from "@/lib/api";
 import type { BookingStatus } from "@shared/bookings";
+import { formatSlotTime } from "@shared/sessions";
 import { BookingDetailDialog } from "@/components/BookingDetailDialog";
 import { toast } from "sonner";
 
@@ -22,6 +23,7 @@ interface IncomingBooking {
   id: string;
   start_date: string;
   end_date: string;
+  starts_at: string | null;
   guests: number;
   amount_cents: number;
   currency: string;
@@ -38,6 +40,8 @@ const TYPE_TABS: { type: string; label: string }[] = [
 ];
 
 const STATUS_STYLE: Partial<Record<BookingStatus, { label: string; className: string }>> = {
+  requested: { label: "Requested", className: "bg-apricot/15 text-apricot" },
+  awaiting_payment: { label: "Approved · awaiting payment", className: "bg-tuff/15 text-tuff" },
   pending_payment: { label: "Awaiting payment", className: "bg-tuff/15 text-tuff" },
   confirmed: { label: "Confirmed", className: "bg-sevan/15 text-sevan" },
   completed: { label: "Completed", className: "bg-basalt/10 text-basalt/60" },
@@ -67,8 +71,28 @@ export function OperatorBookings() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
 
+  const [deciding, setDeciding] = useState<string | null>(null);
   const todayIso = new Date().toISOString().slice(0, 10);
   const canCancel = (b: IncomingBooking) => (b.status === "pending_payment" || b.status === "confirmed") && b.start_date >= todayIso;
+
+  const decide = async (b: IncomingBooking, approve: boolean) => {
+    setDeciding(b.id);
+    try {
+      if (approve) {
+        await approveBooking(b.id);
+        setRows((prev) => (prev ? prev.map((x) => (x.id === b.id ? { ...x, status: "awaiting_payment" } : x)) : prev));
+        toast.success("Approved — the guest has been emailed a link to pay.");
+      } else {
+        await declineBooking(b.id);
+        setRows((prev) => (prev ? prev.map((x) => (x.id === b.id ? { ...x, status: "cancelled" } : x)) : prev));
+        toast("Request declined — the seats are freed and the guest notified.");
+      }
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Couldn't update that request.");
+    } finally {
+      setDeciding(null);
+    }
+  };
 
   const cancel = async (b: IncomingBooking) => {
     if (!window.confirm(`Cancel this booking for ${b.listings?.title ?? "your listing"}? The traveler is notified and the dates reopen.`)) return;
@@ -90,10 +114,10 @@ export function OperatorBookings() {
     supabase
       .from("bookings")
       .select(
-        "id, start_date, end_date, guests, amount_cents, currency, status, created_at, listings!inner(title, slug, type, operator_id), profiles!traveler_id(display_name)",
+        "id, start_date, end_date, starts_at, guests, amount_cents, currency, status, created_at, listings!inner(title, slug, type, operator_id), profiles!traveler_id(display_name)",
       )
       .eq("listings.operator_id", user.id)
-      .in("status", ["pending_payment", "confirmed", "completed", "cancelled", "refunded"])
+      .in("status", ["requested", "awaiting_payment", "pending_payment", "confirmed", "completed", "cancelled", "refunded"])
       .order("start_date", { ascending: false })
       .limit(50)
       .then(({ data, error }) => {
@@ -166,20 +190,41 @@ export function OperatorBookings() {
                 <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${s.className}`}>{s.label}</span>
                 <h3 className="mt-1.5 font-semibold">{b.listings?.title ?? "Listing"}</h3>
                 <p className="mt-0.5 text-sm text-basalt/55">
-                  {b.profiles?.display_name ?? "A traveler"} · {fmtDate(b.start_date)} → {fmtDate(b.end_date)} · {b.guests} {b.guests === 1 ? "guest" : "guests"}
+                  {b.profiles?.display_name ?? "A traveler"} · {fmtDate(b.start_date)}{b.starts_at ? ` · ${formatSlotTime(b.starts_at)}` : ` → ${fmtDate(b.end_date)}`} · {b.guests} {b.guests === 1 ? "guest" : "guests"}
                 </p>
               </div>
               <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end">
                 <p className="font-display text-lg font-normal">{fmtMoney(b.amount_cents, b.currency)}</p>
-                {canCancel(b) && (
-                  <button
-                    type="button"
-                    disabled={cancelling === b.id}
-                    onClick={(e) => { e.stopPropagation(); cancel(b); }}
-                    className="text-xs font-semibold text-basalt/45 underline-offset-2 transition-colors hover:text-destructive hover:underline disabled:opacity-50"
-                  >
-                    {cancelling === b.id ? "Cancelling…" : "Cancel"}
-                  </button>
+                {b.status === "requested" ? (
+                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      disabled={deciding === b.id}
+                      onClick={() => decide(b, false)}
+                      className="text-xs font-semibold text-basalt/45 underline-offset-2 transition-colors hover:text-destructive hover:underline disabled:opacity-50"
+                    >
+                      Decline
+                    </button>
+                    <button
+                      type="button"
+                      disabled={deciding === b.id}
+                      onClick={() => decide(b, true)}
+                      className="rounded-none bg-apricot px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-apricot/90 disabled:opacity-50"
+                    >
+                      {deciding === b.id ? "…" : "Approve"}
+                    </button>
+                  </div>
+                ) : (
+                  canCancel(b) && (
+                    <button
+                      type="button"
+                      disabled={cancelling === b.id}
+                      onClick={(e) => { e.stopPropagation(); cancel(b); }}
+                      className="text-xs font-semibold text-basalt/45 underline-offset-2 transition-colors hover:text-destructive hover:underline disabled:opacity-50"
+                    >
+                      {cancelling === b.id ? "Cancelling…" : "Cancel"}
+                    </button>
+                  )
                 )}
               </div>
             </div>

@@ -56,9 +56,68 @@ export async function fetchIcalBlockedRanges(url: string): Promise<BlockedRange[
   return parseIcalBlockedRanges(text);
 }
 
+/* ── Timed busy intervals (for time-slot tours/experiences) ────────────────
+ * Day-level ranges above are enough for stays; slot listings need the actual
+ * hours a provider is busy (e.g. a Fresha appointment) so only overlapping
+ * sessions get blocked. */
+export interface BusyInterval {
+  startMs: number;
+  endMs: number;
+}
+
+/** Parse an iCal date/date-time value to epoch ms. Handles `20260925` (all-day),
+ *  `20260925T100000Z` (UTC), and `20260925T100000` (naive → treated as Armenia
+ *  local, UTC+4, since our providers are here). Returns null if unparseable. */
+function icsValueToMs(val: string): number | null {
+  const m = val.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2}))?(Z)?$/);
+  if (!m) return null;
+  const [, y, mo, d, hh, mm, ss, z] = m;
+  const utc = Date.UTC(+y, +mo - 1, +d, hh ? +hh : 0, mm ? +mm : 0, ss ? +ss : 0);
+  if (hh && !z) return utc - 4 * 3_600_000; // naive timed value → Armenia local
+  return utc; // all-day (date) or explicit UTC
+}
+
+/** Parse an .ics string into busy time intervals (epoch ms). */
+export function parseIcalBusyIntervals(ics: string): BusyInterval[] {
+  const unfolded = ics.replace(/\r?\n[ \t]/g, "");
+  const out: BusyInterval[] = [];
+  for (const chunk of unfolded.split(/BEGIN:VEVENT/i).slice(1)) {
+    const block = chunk.split(/END:VEVENT/i)[0];
+    const sM = block.match(/DTSTART[^:\n]*:([0-9TZ]+)/i);
+    if (!sM) continue;
+    const startMs = icsValueToMs(sM[1]);
+    if (startMs == null) continue;
+    const eM = block.match(/DTEND[^:\n]*:([0-9TZ]+)/i);
+    let endMs = eM ? icsValueToMs(eM[1]) : null;
+    if (endMs == null) endMs = /T/.test(sM[1]) ? startMs + 3_600_000 : startMs + 86_400_000; // timed→+1h, all-day→+1d
+    if (endMs > startMs) {
+      out.push({ startMs, endMs });
+      if (out.length >= MAX_RANGES) break;
+    }
+  }
+  return out;
+}
+
 export interface IcalFeed {
   url: string;
   label: string;
+}
+
+/** Fetch several feeds and merge their busy intervals (per-feed errors collected). */
+export async function fetchMergedBusyIntervals(feeds: IcalFeed[]): Promise<{ intervals: BusyInterval[]; errors: string[] }> {
+  const intervals: BusyInterval[] = [];
+  const errors: string[] = [];
+  for (const feed of feeds) {
+    if (!feed.url) continue;
+    try {
+      const text = await safeFetchText(feed.url, { accept: "text/calendar, text/plain, */*" });
+      if (!/BEGIN:VCALENDAR/i.test(text)) throw new Error("That URL didn't return a calendar (.ics) feed.");
+      intervals.push(...parseIcalBusyIntervals(text));
+    } catch (err) {
+      errors.push(`${feed.label || "Calendar"}: ${err instanceof Error ? err.message : "couldn't be read"}`);
+    }
+  }
+  return { intervals, errors };
 }
 
 /** Fetch several calendar feeds, merge + dedupe their blocked ranges, and

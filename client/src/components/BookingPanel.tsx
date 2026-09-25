@@ -20,6 +20,8 @@ import { Minus, Plus, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { LiveListing, BlockedRange } from "@/contexts/ListingsContext";
 import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
+import { getListingSessions, groupSessionsByDate, formatSlotTime, type ListingSession } from "@/lib/sessions";
+import { scheduleHasSlots, slotLocalDate } from "@shared/sessions";
 import { Button } from "@/components/ui/button";
 import { computeBookingAmountCents, computeBookingCharge, describeBookingBasis, describeCancellationPolicy, isBookableType, promoDiscount, averageNightlyCents, nightsBetween } from "@shared/bookings";
 import { TAX_PERCENT } from "@shared/bookings";
@@ -39,6 +41,10 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
   const [, navigate] = useLocation();
   const bookable = isBookableType(listing.type);
   const isStay = listing.type === "stay";
+  // Slot mode: a tour/experience that has a recurring time-slot schedule. Guests
+  // pick a date then a time; capacity is per session. Legacy (no schedule)
+  // tours/experiences keep the day-level single-date flow.
+  const slotMode = !isStay && scheduleHasSlots(listing.sessionSchedule);
   const maxGuests = listing.maxGuests ?? 8;
   // Headline shows the day-weighted average nightly rate when the stay uses
   // seasonal/daily rates; otherwise the base price.
@@ -47,6 +53,23 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
   const [guests, setGuests] = useState(1);
   const [range, setRange] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
   const [booked, setBooked] = useState<BlockedRange[]>([]);
+
+  // Slot mode: load bookable sessions and track the chosen date + session.
+  const [sessions, setSessions] = useState<ListingSession[]>([]);
+  const [slotDate, setSlotDate] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!slotMode) return;
+    let active = true;
+    getListingSessions(listing.id).then((s) => {
+      if (active) setSessions(s);
+    });
+    return () => {
+      active = false;
+    };
+  }, [slotMode, listing.id]);
+  const sessionsByDate = useMemo(() => groupSessionsByDate(sessions), [sessions]);
+  const selectedSession = useMemo(() => sessions.find((s) => s.id === sessionId) ?? null, [sessions, sessionId]);
 
   // Confirmed bookings for this listing (identity-free public view).
   useEffect(() => {
@@ -67,10 +90,21 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
   // Resolve the chosen [start, end) for either mode. Stays pick a range;
   // activities pick a single date (end = next day).
   const selected = useMemo(() => {
+    if (slotMode) {
+      if (!selectedSession) return null;
+      const d = slotLocalDate(selectedSession.startsAt);
+      return { startDate: d, endDate: addDays(d, 1) };
+    }
     if (isStay) return range.start && range.end ? { startDate: range.start, endDate: range.end } : null;
     if (range.start) return { startDate: range.start, endDate: addDays(range.start, 1) };
     return null;
-  }, [isStay, range]);
+  }, [slotMode, selectedSession, isStay, range]);
+
+  // In slot mode, guests can't exceed the chosen session's remaining seats.
+  const effectiveMaxGuests = slotMode && selectedSession ? Math.min(maxGuests, selectedSession.seatsLeft) : maxGuests;
+  useEffect(() => {
+    if (guests > effectiveMaxGuests) setGuests(Math.max(1, effectiveMaxGuests));
+  }, [effectiveMaxGuests, guests]);
 
   // Minimum stay (stays only): read from facts, enforce on the selection.
   const minStay = useMemo(() => {
@@ -135,6 +169,10 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
     }
     trackEvent("book_click", { item_id: listing.id, item_name: listing.title, item_category: listing.type, value: Math.round(amountCents / 100), currency: "AMD" });
     const q = new URLSearchParams({ start: selected.startDate, end: selected.endDate, guests: String(guests) });
+    if (slotMode && selectedSession) {
+      q.set("session", selectedSession.id);
+      q.set("slot", selectedSession.startsAt);
+    }
     navigate(`/checkout/${listing.slug}?${q.toString()}`);
   };
 
@@ -150,17 +188,63 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
         )}
       </div>
 
-      {/* Dates — stays pick a range, activities pick a single date; same calendar. */}
+      {/* Dates. Slot mode → pick a date then a time; otherwise the calendar. */}
       <div className="mt-5">
         <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">
-          {isStay ? "Choose your dates" : "Choose a date"}
+          {slotMode ? "Choose a date & time" : isStay ? "Choose your dates" : "Choose a date"}
         </span>
-        <AvailabilityCalendar
-          mode={isStay ? "range" : "single"}
-          blockedRanges={[...(listing.blockedRanges ?? []), ...(listing.manualBlockedRanges ?? [])]}
-          bookedRanges={booked}
-          onChange={setRange}
-        />
+        {slotMode ? (
+          sessions.length === 0 ? (
+            <p className="border border-dashed border-basalt/20 bg-paper px-4 py-6 text-center text-xs text-basalt/50">No upcoming sessions right now — check back soon.</p>
+          ) : (
+            <div>
+              {/* Date chips */}
+              <div className="flex flex-wrap gap-1.5">
+                {sessionsByDate.map(({ date }) => {
+                  const on = slotDate === date;
+                  const d = new Date(date + "T00:00:00Z");
+                  return (
+                    <button
+                      key={date}
+                      type="button"
+                      onClick={() => { setSlotDate(date); setSessionId(null); }}
+                      className={cn("rounded-none border px-2.5 py-1.5 text-center text-xs leading-tight", on ? "border-apricot bg-apricot text-white" : "border-basalt/15 text-basalt/70 hover:border-basalt/30")}
+                    >
+                      <span className="block font-semibold">{d.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })}</span>
+                      <span className={cn("block text-[10px]", on ? "text-white/80" : "text-basalt/45")}>{d.toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" })}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Time chips for the chosen date */}
+              {slotDate && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {(sessionsByDate.find((g) => g.date === slotDate)?.sessions ?? []).map((s) => {
+                    const on = sessionId === s.id;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => setSessionId(s.id)}
+                        className={cn("rounded-none border px-3 py-1.5 text-xs font-semibold", on ? "border-apricot bg-apricot text-white" : "border-basalt/15 text-basalt/70 hover:border-basalt/30")}
+                      >
+                        {formatSlotTime(s.startsAt)}
+                        <span className={cn("ml-1.5 text-[10px] font-normal", on ? "text-white/80" : "text-basalt/40")}>{s.seatsLeft} left</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        ) : (
+          <AvailabilityCalendar
+            mode={isStay ? "range" : "single"}
+            blockedRanges={[...(listing.blockedRanges ?? []), ...(listing.manualBlockedRanges ?? [])]}
+            bookedRanges={booked}
+            onChange={setRange}
+          />
+        )}
       </div>
 
       {/* Guests */}
@@ -182,14 +266,16 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
           <button
             type="button"
             aria-label="More guests"
-            disabled={guests >= maxGuests}
-            onClick={() => setGuests((g) => Math.min(maxGuests, g + 1))}
+            disabled={guests >= effectiveMaxGuests}
+            onClick={() => setGuests((g) => Math.min(effectiveMaxGuests, g + 1))}
             className="grid h-7 w-7 place-items-center border border-basalt/15 text-basalt transition-colors hover:border-apricot hover:text-apricot disabled:opacity-30 disabled:hover:border-basalt/15 disabled:hover:text-basalt"
           >
             <Plus className="h-3.5 w-3.5" />
           </button>
         </div>
-        <p className="mt-1.5 text-xs text-basalt/45">Up to {maxGuests} {maxGuests === 1 ? "guest" : "guests"}.</p>
+        <p className="mt-1.5 text-xs text-basalt/45">
+          {slotMode && selectedSession ? `${selectedSession.seatsLeft} seat${selectedSession.seatsLeft === 1 ? "" : "s"} left at this time.` : `Up to ${maxGuests} ${maxGuests === 1 ? "guest" : "guests"}.`}
+        </p>
       </div>
 
       {/* Price breakdown — base + turnover tax added on top (add-ons at checkout) */}
@@ -249,7 +335,15 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
           disabled={!selected || belowMin}
           className={cn("mt-5 h-12 w-full rounded-none bg-apricot text-white hover:bg-apricot/90", (!selected || belowMin) && "opacity-60")}
         >
-          {!selected ? "Select dates to book" : belowMin ? `${minStay}-night minimum` : `Book · ${format(amountCents)}`}
+          {!selected
+            ? slotMode
+              ? "Select a time"
+              : "Select dates to book"
+            : belowMin
+              ? `${minStay}-night minimum`
+              : slotMode && listing.bookingMode === "request"
+                ? `Request to book · ${format(amountCents)}`
+                : `Book · ${format(amountCents)}`}
         </Button>
       )}
       {belowMin && (

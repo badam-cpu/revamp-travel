@@ -92,6 +92,8 @@ export interface BookingEmailInfo {
   addons?: { name: string; amountCents: number; qty: number; onRequest?: boolean }[];
   // Tour/experience extras.
   type?: string;
+  /** Slot time label (e.g. "10:00"), Armenia local — shown for time-slot bookings. */
+  time?: string;
   lat?: number;
   lng?: number;
   meetingPoint?: string;
@@ -115,7 +117,7 @@ function detailRows(b: BookingEmailInfo): string {
   // Tours/experiences are a single day → show one date, and reveal the meeting
   // point (hyperlinked to Google Maps from the listing's coordinates).
   const dateRow = isActivity
-    ? row("Date", esc(prettyDate(b.startDate)))
+    ? row("Date", `${esc(prettyDate(b.startDate))}${b.time ? ` · ${esc(b.time)}` : ""}`)
     : row("Dates", `${esc(prettyDate(b.startDate))} → ${esc(prettyDate(b.endDate))}`);
 
   const mapUrl = typeof b.lat === "number" && typeof b.lng === "number" ? `https://www.google.com/maps?q=${b.lat},${b.lng}` : undefined;
@@ -182,6 +184,57 @@ export function sendOperatorNewBooking(to: string, b: BookingEmailInfo, traveler
     site,
   );
   return send(to, `New booking: ${b.listingTitle}`, html);
+}
+
+/** To the operator: a guest requested a slot and is awaiting your approval. */
+export function sendOperatorBookingRequest(to: string, b: BookingEmailInfo, travelerName: string) {
+  const site = SITE();
+  const html = shell(
+    `New booking request for ${esc(b.listingTitle)}`,
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 6px;"><strong>${esc(travelerName || "A traveler")}</strong> wants to book a slot. No charge has been made — approve to send them a secure payment link, or decline to release the seats.</p>
+     ${detailRows(b)}
+     <p style="margin:0 0 8px;"><a href="${esc(site)}/dashboard?section=bookings" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Review the request</a></p>`,
+    site,
+  );
+  return send(to, `Booking request: ${b.listingTitle}`, html);
+}
+
+/** To the guest: we received your request; the host will confirm. */
+export function sendGuestRequestReceived(to: string, b: BookingEmailInfo) {
+  const site = SITE();
+  const html = shell(
+    `Request received for ${esc(b.listingTitle)}`,
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 6px;">Thanks! We've sent your request to the host. You won't be charged until they confirm — we'll email you a secure payment link as soon as they do.</p>
+     ${detailRows(b)}`,
+    site,
+  );
+  return send(to, `Request received: ${b.listingTitle}`, html);
+}
+
+/** To the guest: the host approved — pay now to confirm. */
+export function sendGuestBookingApproved(to: string, b: BookingEmailInfo, payUrl: string) {
+  const site = SITE();
+  const html = shell(
+    `Your booking is approved — pay to confirm`,
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 6px;">Good news — the host confirmed availability for ${esc(b.listingTitle)}. Complete your payment to lock it in (your seats are held for now).</p>
+     ${detailRows(b)}
+     <p style="margin:0 0 8px;"><a href="${esc(payUrl)}" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Pay securely via PayLink</a></p>`,
+    site,
+  );
+  return send(to, `Approved — pay to confirm: ${b.listingTitle}`, html);
+}
+
+/** To the guest: the host couldn't accommodate the request. */
+export function sendGuestBookingDeclined(to: string, b: BookingEmailInfo) {
+  const site = SITE();
+  const html = shell(
+    `Update on your request for ${esc(b.listingTitle)}`,
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 6px;">Unfortunately the host couldn't accommodate this request, so it's been released — you have not been charged. You're welcome to pick another time or a different experience.</p>
+     ${detailRows(b)}
+     <p style="margin:0 0 8px;"><a href="${esc(site)}/explore/experience" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Browse experiences</a></p>`,
+    site,
+  );
+  return send(to, `Update on your request: ${b.listingTitle}`, html);
 }
 
 /** Cancellation notice to a party. `refundCents` (0 = none) drives the refund note. */

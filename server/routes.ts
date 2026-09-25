@@ -20,13 +20,16 @@ import { supabaseAdmin, adminConfigured } from "./supabaseAdmin.js";
 import { paylinkConfigured, registerPayment } from "./paylink.js";
 import { reconcileUserBookings, logBookingEvent, finalizeConfirmedBooking } from "./bookings.js";
 import { startOperatorSubscription, reconcileOperatorSubscriptions, cancelOperatorSubscription, ensurePlanRegistered, type PlanRow } from "./subscriptions.js";
+import { syncListingSessions, reserveSeats, releaseSeats } from "./sessions.js";
 import { generateSupportReply, type SupportTurn } from "./support.js";
 import { generateOperatorReply, type OperatorTurn } from "./operatorAssistant.js";
 import { scanMessage } from "./messaging.js";
 import { reserveGift, releaseGift, refundGiftForBooking, lookupRedeemableGift, reconcilePurchaserGiftCards, logGiftEvent, voidGiftCard } from "./giftcards.js";
 import { isAllowedGiftAmount } from "../shared/giftcards.js";
 import { payoutState } from "../shared/payouts.js";
-import { sendCancellation, sendSupportAlert, sendNewMessage, type BookingEmailInfo } from "./email.js";
+import { sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, type BookingEmailInfo } from "./email.js";
+import { formatSlotTime, slotLocalDate } from "../shared/sessions.js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, promoDiscount, addonUnitCost, nightsBetween, type Addon, DEFAULT_CURRENCY } from "../shared/bookings.js";
 import { planTrip, PlannerError } from "./planner.js";
 import { fetchPrefill, PrefillError } from "./urlPrefill.js";
@@ -76,6 +79,8 @@ const startCheckoutSchema = z.object({
   startDate: isoDate,
   endDate: isoDate,
   guests: z.number().int().min(1).max(50),
+  // Slot booking (tour/experience with a time-slot schedule): the chosen session.
+  sessionId: z.string().uuid().optional(),
   // Guest checkout: a signed-out traveler books anonymously and gives contact
   // details here (optional — signed-in travelers omit them).
   guestName: z.string().trim().max(120).optional(),
@@ -182,9 +187,76 @@ const subscriptionCancelSchema = z.object({
   rowId: z.string().uuid(),
 });
 
+// --- Time-slot sessions (tours & experiences) ---
+const sessionRuleSchema = z.object({
+  days: z.array(z.number().int().min(0).max(6)).max(7),
+  times: z.array(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)).max(24),
+});
+const sessionScheduleSchema = z
+  .object({
+    durationMin: z.number().int().min(15).max(1440),
+    capacity: z.number().int().min(1).max(1000),
+    rules: z.array(sessionRuleSchema).max(14),
+    leadTimeHours: z.number().int().min(0).max(720).optional(),
+    horizonDays: z.number().int().min(1).max(365).optional(),
+  })
+  .nullable();
+const saveScheduleSchema = z.object({
+  listingId: z.string().uuid(),
+  schedule: sessionScheduleSchema,
+  bookingMode: z.enum(["instant", "request"]),
+});
+const bookingDecisionSchema = z.object({ bookingId: z.string().uuid() });
+
 function issuesToMessage(err: z.ZodError): string {
   return err.issues.map((issue) => `${issue.path.join(".") || "value"}: ${issue.message}`).join("; ");
 }
+
+/** Build the shared email payload for a slot booking from its listing + row. */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function slotBookingEmailInfo(listing: any, bk: any): BookingEmailInfo {
+  const facts = Array.isArray(listing.facts) ? (listing.facts as { label?: string; value?: string }[]) : [];
+  const fact = (...labels: string[]) => facts.find((f) => f.label && labels.includes(f.label.toLowerCase()))?.value || undefined;
+  return {
+    listingTitle: listing.title,
+    startDate: slotLocalDate(bk.starts_at),
+    endDate: slotLocalDate(bk.starts_at),
+    time: formatSlotTime(bk.starts_at),
+    guests: bk.guests,
+    amountCents: bk.amount_cents,
+    currency: bk.currency,
+    city: listing.city,
+    region: listing.region,
+    slug: listing.slug,
+    type: listing.type,
+    lat: typeof listing.lat === "number" ? listing.lat : undefined,
+    lng: typeof listing.lng === "number" ? listing.lng : undefined,
+    meetingPoint: fact("starting point", "meeting point", "start"),
+    duration: fact("duration"),
+    languages: fact("languages", "language"),
+  };
+}
+
+/** Email the operator (and confirm to the guest) that a slot was requested. */
+async function notifyOperatorOfRequest(admin: SupabaseClient, listing: any, bookingId: string): Promise<void> {
+  const { data: bk } = await admin
+    .from("bookings")
+    .select("starts_at, guests, amount_cents, currency, guest_email, guest_name, traveler_id")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (!bk) return;
+  const info = slotBookingEmailInfo(listing, bk);
+  const [op, trav, travProfile] = await Promise.all([
+    admin.auth.admin.getUserById(listing.operator_id),
+    admin.auth.admin.getUserById(bk.traveler_id),
+    admin.from("profiles").select("display_name").eq("id", bk.traveler_id).maybeSingle(),
+  ]);
+  const travName = (travProfile.data?.display_name && travProfile.data.display_name !== "Guest" ? travProfile.data.display_name : bk.guest_name) || "A traveler";
+  if (op.data?.user?.email) await sendOperatorBookingRequest(op.data.user.email, info, travName);
+  const guestEmail = trav.data?.user?.email || bk.guest_email;
+  if (guestEmail) await sendGuestRequestReceived(guestEmail, info);
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 // Soft, in-memory per-operator rate limit for the assistant. Best-effort across
 // serverless instances — a light guard on the Anthropic bill, not security.
@@ -464,6 +536,114 @@ export function registerApiRoutes(app: Express) {
     if (readErr || !listing) return res.status(404).json({ error: "Listing not found." });
     if (listing.status !== "published") return res.status(400).json({ error: "This listing isn't open for booking." });
     if (!isBookableType(listing.type)) return res.status(400).json({ error: "This listing can't be booked online." });
+
+    // ── Slot booking (tour/experience with a time-slot schedule) ──────────────
+    // Governed by per-session capacity, not the daterange exclusion. Seats are
+    // reserved atomically before any charge; instant mode goes to PayLink now,
+    // request mode creates a 'requested' booking the operator approves first.
+    const sched = listing.session_schedule as { rules?: unknown[] } | null;
+    const isSlotListing = (listing.type === "tour" || listing.type === "experience") && !!sched && Array.isArray(sched.rules) && sched.rules.length > 0;
+    if (isSlotListing) {
+      const admin = supabaseAdmin();
+      if (!admin) return res.status(503).json({ error: "Booking isn't available right now." });
+      const { sessionId } = parsed.data;
+      if (!sessionId) return res.status(400).json({ error: "Pick a time slot." });
+
+      const { data: session } = await admin.from("listing_sessions").select("id, listing_id, starts_at, capacity, seats_taken, status").eq("id", sessionId).maybeSingle();
+      if (!session || session.listing_id !== listingId) return res.status(404).json({ error: "That time slot wasn't found." });
+      if (session.status !== "open") return res.status(409).json({ error: "That time is no longer available." });
+      if (Date.parse(session.starts_at as string) < Date.now()) return res.status(400).json({ error: "That time has already passed." });
+
+      const perTotal = computeBookingAmountCents(
+        {
+          priceCents: listing.price_cents,
+          priceUnit: listing.price_unit,
+          cancellationPolicy: listing.cancellation_policy ?? "flexible",
+          nonrefundableDiscountPercent: listing.nonrefundable_discount_percent ?? 0,
+          seasonalRates: [],
+        },
+        { startDate, endDate, guests },
+      );
+      if (perTotal <= 0) return res.status(400).json({ error: "This listing is rate-on-request — contact the operator to book." });
+      const { netCents } = promoDiscount(
+        perTotal,
+        { discountType: listing.discount_type, discountValue: listing.discount_value, discountStart: listing.discount_start, discountEnd: listing.discount_end },
+        startDate,
+      );
+      const slotCharge = computeBookingCharge(netCents);
+      const currency = process.env.PAYLINK_CURRENCY || DEFAULT_CURRENCY;
+
+      // Reserve seats atomically FIRST — if this fails the slot just filled up.
+      const reserved = await reserveSeats(admin, sessionId, guests);
+      if (!reserved) return res.status(409).json({ error: "That time just filled up — pick another slot." });
+
+      const slotRow: Record<string, unknown> = {
+        listing_id: listingId,
+        traveler_id: userId,
+        start_date: startDate,
+        end_date: endDate,
+        starts_at: session.starts_at,
+        session_id: sessionId,
+        guests,
+        amount_cents: slotCharge.totalCents,
+        base_cents: slotCharge.baseCents,
+        tax_cents: slotCharge.taxCents,
+        currency,
+        cancellation_policy: listing.cancellation_policy ?? "flexible",
+        free_cancel_days: listing.free_cancel_days ?? 7,
+      };
+      if (guestName || guestEmail || guestPhone) {
+        slotRow.guest_name = guestName || null;
+        slotRow.guest_email = guestEmail || null;
+        slotRow.guest_phone = guestPhone || null;
+      }
+
+      // Request-to-book: no charge now — create a pending request for the operator.
+      if (listing.booking_mode === "request") {
+        const { data: created, error: insErr } = await admin.from("bookings").insert({ ...slotRow, status: "requested", provider: "paylink" }).select("id").single();
+        if (insErr) {
+          await releaseSeats(admin, sessionId, guests);
+          console.error("[start-checkout] request insert failed", insErr.message);
+          return res.status(500).json({ error: "Couldn't record your request." });
+        }
+        try {
+          await notifyOperatorOfRequest(admin, listing, created.id);
+        } catch (e) {
+          console.error("[start-checkout] request notify failed", e);
+        }
+        return res.json({ requested: true, bookingId: created.id });
+      }
+
+      // Instant: charge via PayLink now.
+      const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
+      try {
+        const pay = await registerPayment({
+          amount: currency === "AMD" ? Math.round(slotCharge.totalCents / 100) : slotCharge.totalCents / 100,
+          currency,
+          returnUrl: `${site}/account?checkout=return`,
+          info: `Revamp booking · ${listing.title}`,
+        });
+        if (!pay.redirectUrl) {
+          await releaseSeats(admin, sessionId, guests);
+          return res.status(502).json({ error: "Couldn't start checkout." });
+        }
+        const { error: insErr } = await admin
+          .from("bookings")
+          .insert({ ...slotRow, status: "pending_payment", provider: "paylink", paylink_request_id: pay.requestId, paylink_order_id: pay.orderId })
+          .select("id")
+          .maybeSingle();
+        if (insErr) {
+          await releaseSeats(admin, sessionId, guests);
+          console.error("[start-checkout] slot insert failed", insErr.message);
+          return res.status(500).json({ error: "Couldn't record your booking." });
+        }
+        return res.json({ redirectUrl: pay.redirectUrl });
+      } catch (err) {
+        await releaseSeats(admin, sessionId, guests);
+        console.error("[start-checkout] slot", err);
+        return res.status(502).json({ error: "Couldn't start checkout." });
+      }
+    }
 
     // Enforce the operator's minimum stay (stays only; stored in facts).
     if (listing.type === "stay") {
@@ -786,7 +966,7 @@ export function registerApiRoutes(app: Express) {
 
     const { data: booking } = await admin
       .from("bookings")
-      .select("id, listing_id, traveler_id, status, start_date, end_date, guests, amount_cents, currency, paid_at, cancellation_policy, free_cancel_days, guest_email, gift_card_id, gift_applied_cents")
+      .select("id, listing_id, traveler_id, status, start_date, end_date, guests, amount_cents, currency, paid_at, cancellation_policy, free_cancel_days, guest_email, gift_card_id, gift_applied_cents, session_id")
       .eq("id", parsed.data.bookingId)
       .maybeSingle();
     if (!booking) return res.status(404).json({ error: "Booking not found." });
@@ -804,7 +984,8 @@ export function registerApiRoutes(app: Express) {
     const isOperator = !!listing && userId === listing.operator_id;
     if (!isTraveler && !isOperator && !isAdmin) return res.status(403).json({ error: "You can't cancel this booking." });
 
-    if (booking.status !== "pending_payment" && booking.status !== "confirmed") {
+    const cancellable = ["pending_payment", "confirmed", "requested", "awaiting_payment"];
+    if (!cancellable.includes(booking.status)) {
       return res.status(400).json({ error: `This booking is already ${booking.status.replace(/_/g, " ")}.` });
     }
     const today = new Date().toISOString().slice(0, 10);
@@ -840,7 +1021,7 @@ export function registerApiRoutes(app: Express) {
       .from("bookings")
       .update({ status: "cancelled", refund_amount_cents: refundCents })
       .eq("id", booking.id)
-      .in("status", ["pending_payment", "confirmed"])
+      .in("status", ["pending_payment", "confirmed", "requested", "awaiting_payment"])
       .select("id");
     if (updErr || !upd || upd.length === 0) {
       return res.status(409).json({ error: "Couldn't cancel — it may have already changed." });
@@ -849,6 +1030,8 @@ export function registerApiRoutes(app: Express) {
     // A never-completed pending hold releases its gift reservation (no purchase
     // happened). A confirmed booking's gift is non-refundable → left forfeited.
     if (booking.status === "pending_payment" && giftApplied > 0) await refundGiftForBooking(admin, booking.id);
+    // Slot booking → free the seats it was holding, regardless of prior status.
+    if (booking.session_id) await releaseSeats(admin, booking.session_id, booking.guests);
 
     // Void the operator payout for this booking (unless it was already paid out).
     await admin.from("payouts").update({ status: "cancelled" }).eq("booking_id", booking.id).neq("status", "paid");
@@ -1750,6 +1933,141 @@ export function registerApiRoutes(app: Express) {
       console.error("[subscription/cancel]", err);
       res.status(500).json({ error: "Couldn't cancel your subscription." });
     }
+  });
+
+  // POST /api/sessions/save-schedule — an operator sets a tour/experience's
+  // recurring time-slot schedule + booking mode, then we generate the rolling
+  // window of sessions. Ownership-checked; writes are service-role.
+  app.post("/api/sessions/save-schedule", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const parsed = saveScheduleSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+
+    const { data: listing } = await admin.from("listings").select("operator_id, type").eq("id", parsed.data.listingId).maybeSingle();
+    if (!listing) return res.status(404).json({ error: "Listing not found." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (listing.operator_id !== userId && me?.role !== "admin") return res.status(403).json({ error: "That's not your listing." });
+    if (listing.type !== "tour" && listing.type !== "experience") return res.status(400).json({ error: "Time slots are only for tours and experiences." });
+
+    try {
+      const { error } = await admin
+        .from("listings")
+        .update({ session_schedule: parsed.data.schedule, booking_mode: parsed.data.bookingMode })
+        .eq("id", parsed.data.listingId);
+      if (error) throw new Error(error.message);
+      const gen = parsed.data.schedule ? await syncListingSessions(admin, parsed.data.listingId) : { created: 0 };
+      res.json({ ok: true, created: gen.created });
+    } catch (err) {
+      console.error("[sessions/save-schedule]", err);
+      res.status(500).json({ error: "Couldn't save your schedule." });
+    }
+  });
+
+  // POST /api/booking-approve — the operator (or admin) approves a request-to-book
+  // slot: registers a PayLink charge, moves it to awaiting_payment, and emails the
+  // guest a secure pay link. Seats were already held at request time.
+  app.post("/api/booking-approve", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    if (!paylinkConfigured()) return res.status(503).json({ error: "Payments aren't available yet." });
+    const parsed = bookingDecisionSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+
+    const { data: booking } = await admin
+      .from("bookings")
+      .select("id, listing_id, traveler_id, status, guests, amount_cents, currency, starts_at, guest_email, session_id")
+      .eq("id", parsed.data.bookingId)
+      .maybeSingle();
+    if (!booking) return res.status(404).json({ error: "Request not found." });
+    if (booking.status !== "requested") return res.status(400).json({ error: `This request is already ${String(booking.status).replace(/_/g, " ")}.` });
+
+    const { data: listing } = await admin.from("listings").select("title, city, region, slug, operator_id, type, facts, lat, lng").eq("id", booking.listing_id).maybeSingle();
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (!listing) return res.status(404).json({ error: "Listing not found." });
+    if (listing.operator_id !== userId && me?.role !== "admin") return res.status(403).json({ error: "That's not your listing." });
+
+    const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
+    const currency = booking.currency || process.env.PAYLINK_CURRENCY || DEFAULT_CURRENCY;
+    try {
+      const pay = await registerPayment({
+        amount: currency === "AMD" ? Math.round(booking.amount_cents / 100) : booking.amount_cents / 100,
+        currency,
+        returnUrl: `${site}/account?checkout=return`,
+        info: `Revamp booking · ${listing.title}`,
+      });
+      if (!pay.redirectUrl) return res.status(502).json({ error: "Couldn't create the payment link." });
+      const { data: upd } = await admin
+        .from("bookings")
+        .update({ status: "awaiting_payment", paylink_request_id: pay.requestId, paylink_order_id: pay.orderId })
+        .eq("id", booking.id)
+        .eq("status", "requested")
+        .select("id");
+      if (!upd || upd.length === 0) return res.status(409).json({ error: "This request just changed — refresh and try again." });
+
+      await logBookingEvent(admin, booking.id, "status_approved", "Request approved — awaiting guest payment");
+      // Email the guest the pay link (best-effort).
+      try {
+        const info = slotBookingEmailInfo(listing, booking);
+        const { data: trav } = await admin.auth.admin.getUserById(booking.traveler_id);
+        const to = trav?.user?.email || booking.guest_email;
+        if (to) await sendGuestBookingApproved(to, info, pay.redirectUrl);
+      } catch (e) {
+        console.error("[booking-approve] email failed", e);
+      }
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[booking-approve]", err);
+      res.status(502).json({ error: "Couldn't approve the request." });
+    }
+  });
+
+  // POST /api/booking-decline — the operator (or admin) declines a request: frees
+  // the held seats and emails the guest. No charge was ever made.
+  app.post("/api/booking-decline", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const parsed = bookingDecisionSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+
+    const { data: booking } = await admin
+      .from("bookings")
+      .select("id, listing_id, traveler_id, status, guests, amount_cents, currency, starts_at, guest_email, session_id")
+      .eq("id", parsed.data.bookingId)
+      .maybeSingle();
+    if (!booking) return res.status(404).json({ error: "Request not found." });
+    if (booking.status !== "requested") return res.status(400).json({ error: `This request is already ${String(booking.status).replace(/_/g, " ")}.` });
+
+    const { data: listing } = await admin.from("listings").select("title, city, region, slug, operator_id, type, facts, lat, lng").eq("id", booking.listing_id).maybeSingle();
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (!listing) return res.status(404).json({ error: "Listing not found." });
+    if (listing.operator_id !== userId && me?.role !== "admin") return res.status(403).json({ error: "That's not your listing." });
+
+    const { data: upd } = await admin.from("bookings").update({ status: "cancelled" }).eq("id", booking.id).eq("status", "requested").select("id");
+    if (!upd || upd.length === 0) return res.status(409).json({ error: "This request just changed — refresh and try again." });
+    if (booking.session_id) await releaseSeats(admin, booking.session_id, booking.guests);
+    await logBookingEvent(admin, booking.id, "status_cancelled", "Request declined by host");
+    try {
+      const info = slotBookingEmailInfo(listing, booking);
+      const { data: trav } = await admin.auth.admin.getUserById(booking.traveler_id);
+      const to = trav?.user?.email || booking.guest_email;
+      if (to) await sendGuestBookingDeclined(to, info);
+    } catch (e) {
+      console.error("[booking-decline] email failed", e);
+    }
+    res.json({ ok: true });
   });
 
   // POST /api/admin-gift-void — admin-only: void a gift card so it can no longer

@@ -53,6 +53,8 @@ interface TripRow {
 }
 
 const STATUS_STYLE: Record<BookingStatus, { label: string; className: string }> = {
+  requested: { label: "Requested", className: "bg-apricot/15 text-apricot" },
+  awaiting_payment: { label: "Approved · pay to confirm", className: "bg-tuff/15 text-tuff" },
   pending_payment: { label: "Awaiting payment", className: "bg-tuff/15 text-tuff" },
   confirmed: { label: "Confirmed", className: "bg-sevan/15 text-sevan" },
   completed: { label: "Completed", className: "bg-basalt/10 text-basalt/60" },

@@ -14,6 +14,7 @@
  */
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { Listing, ListingInput, ListingType } from "@shared/listings";
+import type { SessionSchedule } from "@shared/sessions";
 import { seedListings, placeholderImage } from "@shared/listings";
 import { supabase } from "@/lib/supabase";
 import { slugify } from "@/lib/slug";
@@ -46,6 +47,10 @@ export type LiveListing = Listing & {
   /** Operator-set manual unavailability (end EXCLUSIVE), separate from iCal blocked_ranges. */
   manualBlockedRanges: BlockedRange[];
   seasonalRates: SeasonalRate[];
+  /** Tour/experience recurring time-slot schedule (null = day-level, legacy). */
+  sessionSchedule: SessionSchedule | null;
+  /** How a slot booking is confirmed: pay now vs. provider approves first. */
+  bookingMode: "instant" | "request";
 };
 
 interface ListingsContextType {
@@ -131,6 +136,8 @@ interface ListingRow {
   rooms: { name: string; beds: { type: string; count: number }[] }[] | null;
   venue_type: string | null;
   cover_focus: string | null;
+  session_schedule: SessionSchedule | null;
+  booking_mode: "instant" | "request" | null;
   cuisine: string | null;
   price_band: "$" | "$$" | "$$$" | null;
   website: string | null;
@@ -203,6 +210,8 @@ function mapListingRow(row: ListingRow): LiveListing {
     discountEnd: row.discount_end ?? undefined,
     rooms: Array.isArray(row.rooms) ? row.rooms : [],
     coverFocus: row.cover_focus ?? undefined,
+    sessionSchedule: row.session_schedule ?? null,
+    bookingMode: row.booking_mode ?? "instant",
     venueType: row.venue_type ?? undefined,
     cuisine: row.cuisine ?? undefined,
     priceBand: row.price_band ?? undefined,
@@ -295,6 +304,8 @@ function fallbackListings(): LiveListing[] {
     blockedRanges: [],
     manualBlockedRanges: [],
     seasonalRates: [],
+    sessionSchedule: null,
+    bookingMode: "instant" as const,
   }));
 }
 

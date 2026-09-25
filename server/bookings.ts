@@ -19,6 +19,8 @@ import { computeBookingCharge, DEFAULT_CURRENCY } from "../shared/bookings.js";
 import type { ListingType } from "../shared/listings.js";
 import { refundGiftForBooking } from "./giftcards.js";
 import { resolveOperatorCommissionPercent } from "./subscriptions.js";
+import { releaseSeats } from "./sessions.js";
+import { formatSlotTime } from "../shared/sessions.js";
 
 export interface BookingRow {
   id: string;
@@ -37,10 +39,12 @@ export interface BookingRow {
   guest_name: string | null;
   guest_email: string | null;
   addons: { name: string; amountCents: number; qty: number; onRequest?: boolean }[] | null;
+  session_id: string | null;
+  starts_at: string | null;
 }
 
 // Columns every confirm/reconcile query needs (row detail for the emails too).
-const BOOKING_COLS = "id, listing_id, traveler_id, status, start_date, end_date, guests, amount_cents, base_cents, currency, paylink_request_id, paylink_order_id, created_at, guest_name, guest_email, addons";
+const BOOKING_COLS = "id, listing_id, traveler_id, status, start_date, end_date, guests, amount_cents, base_cents, currency, paylink_request_id, paylink_order_id, created_at, guest_name, guest_email, addons, session_id, starts_at";
 
 /**
  * Fire booking-confirmed emails (traveler + operator). Best-effort: any failure
@@ -97,6 +101,7 @@ async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promi
     slug: listing.slug,
     addons: row.addons ?? [],
     type: listing.type,
+    time: row.starts_at ? formatSlotTime(row.starts_at) : undefined,
     lat: typeof listing.lat === "number" ? listing.lat : undefined,
     lng: typeof listing.lng === "number" ? listing.lng : undefined,
     meetingPoint: fact("starting point", "meeting point", "start"),
@@ -168,7 +173,10 @@ const TERMINAL_FAIL = /fail|declin|cancel|expire|reject/i;
  */
 export async function confirmBookingRow(admin: SupabaseClient, row: BookingRow): Promise<ConfirmResult> {
   if (row.status === "confirmed") return { granted: true, status: "confirmed", already: true };
-  if (row.status !== "pending_payment") return { granted: false, status: row.status };
+  // Confirmable states: a normal pending hold, or a request the operator approved
+  // that's now awaiting the guest's payment.
+  if (row.status !== "pending_payment" && row.status !== "awaiting_payment") return { granted: false, status: row.status };
+  const payableStatuses = ["pending_payment", "awaiting_payment"];
 
   const check = await checkPayment({ requestId: row.paylink_request_id, orderId: row.paylink_order_id });
   if (!check.ok) return { granted: false, status: "unconfirmed" };
@@ -176,14 +184,15 @@ export async function confirmBookingRow(admin: SupabaseClient, row: BookingRow):
   if (!check.approved) {
     // Record a terminal failure so we stop polling it forever.
     if (TERMINAL_FAIL.test(String(check.status))) {
-      await admin.from("bookings").update({ status: "payment_failed" }).eq("id", row.id).eq("status", "pending_payment");
+      await admin.from("bookings").update({ status: "payment_failed" }).eq("id", row.id).in("status", payableStatuses);
       await refundGiftForBooking(admin, row.id); // release any gift-card hold
+      if (row.session_id) await releaseSeats(admin, row.session_id, row.guests); // free the slot
       return { granted: false, status: "payment_failed" };
     }
     return { granted: false, status: check.status };
   }
 
-  // Approved → flip to confirmed, but only if still pending (guards a concurrent
+  // Approved → flip to confirmed, but only if still payable (guards a concurrent
   // confirm) and backfill the orderId PayLink assigned once payment was made.
   const { data, error } = await admin
     .from("bookings")
@@ -193,7 +202,7 @@ export async function confirmBookingRow(admin: SupabaseClient, row: BookingRow):
       paylink_order_id: check.orderId ?? row.paylink_order_id,
     })
     .eq("id", row.id)
-    .eq("status", "pending_payment")
+    .in("status", payableStatuses)
     .select("id");
 
   if (error) {
@@ -235,7 +244,7 @@ export async function reconcileUserBookings(admin: SupabaseClient, userId: strin
     .from("bookings")
     .select(BOOKING_COLS)
     .eq("traveler_id", userId)
-    .eq("status", "pending_payment")
+    .in("status", ["pending_payment", "awaiting_payment"])
     .order("created_at", { ascending: false })
     .limit(10);
   if (error || !data) return { confirmed: 0, checked: 0, amountCents: 0, currency: DEFAULT_CURRENCY, bookingIds: [] };
@@ -269,7 +278,7 @@ export async function reconcileAllPendingBookings(
   const { data, error } = await admin
     .from("bookings")
     .select(BOOKING_COLS)
-    .eq("status", "pending_payment")
+    .in("status", ["pending_payment", "awaiting_payment"])
     .lt("created_at", cutoff)
     .order("created_at", { ascending: true })
     .limit(limit);
@@ -291,11 +300,12 @@ export async function reconcileAllPendingBookings(
           .from("bookings")
           .update({ status: "expired" })
           .eq("id", row.id)
-          .eq("status", "pending_payment")
+          .in("status", ["pending_payment", "awaiting_payment"])
           .select("id");
         if (upd && upd.length) {
           expired++;
           await refundGiftForBooking(admin, row.id); // release any gift-card hold
+          if (row.session_id) await releaseSeats(admin, row.session_id, row.guests); // free the slot
           await logBookingEvent(admin, row.id, "status_expired", `Unpaid hold expired after ${expireAfterHours}h`);
         }
       }

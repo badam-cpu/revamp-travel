@@ -40,6 +40,7 @@ import {
   describeCancellationPolicy,
   TAX_PERCENT,
 } from "@shared/bookings";
+import { formatSlotTime } from "@shared/sessions";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -64,9 +65,13 @@ export default function Checkout({ slug }: { slug: string }) {
   const startDate = params.get("start") ?? "";
   const endDate = params.get("end") ?? "";
   const guests = Math.max(1, Number(params.get("guests")) || 1);
+  const sessionId = params.get("session") || undefined; // slot booking (tour/experience)
+  const slotIso = params.get("slot") || ""; // the chosen slot's UTC start, for display
 
   const listing = useMemo(() => listings.find((l) => l.slug === slug) ?? null, [listings, slug]);
   const isStay = listing?.type === "stay";
+  // Request-to-book: the host approves before the guest pays (per-listing setting).
+  const isRequest = !!sessionId && listing?.bookingMode === "request";
 
   // Anonymous sessions (e.g. from support chat) are treated as guests — they
   // have no email/profile — so we still collect contact details from them.
@@ -195,10 +200,17 @@ export default function Checkout({ slug }: { slug: string }) {
         startDate,
         endDate,
         guests,
+        ...(sessionId ? { sessionId } : {}),
         ...(addonSel.length ? { addons: addonSel } : {}),
         ...(giftBalance != null && giftCode.trim() ? { giftCode: giftCode.trim() } : {}),
         ...(isGuest ? { guestName: guestName.trim(), guestEmail: guestEmail.trim(), guestPhone: guestPhone.trim() } : {}),
       });
+      // Request-to-book: no payment now — the host approves, then we email a pay link.
+      if (result.requested) {
+        toast.success("Request sent! The host will confirm shortly, then you'll get a link to pay.");
+        navigate("/account?tab=trips");
+        return;
+      }
       // Fully covered by the gift card → no PayLink; already confirmed server-side.
       if (result.confirmed) {
         toast("Booking confirmed with your gift card!");
@@ -335,8 +347,8 @@ export default function Checkout({ slug }: { slug: string }) {
 
               <div className="mt-4 grid gap-1.5 text-sm">
                 <div className="flex items-center justify-between text-basalt/55">
-                  <span>{isStay ? "Dates" : "Date"}</span>
-                  <span className="font-medium text-basalt">{fmtDate(startDate)}{isStay ? ` → ${fmtDate(endDate)}` : ""}</span>
+                  <span>{isStay ? "Dates" : slotIso ? "When" : "Date"}</span>
+                  <span className="font-medium text-basalt">{fmtDate(startDate)}{isStay ? ` → ${fmtDate(endDate)}` : slotIso ? ` · ${formatSlotTime(slotIso)}` : ""}</span>
                 </div>
                 <div className="flex items-center justify-between text-basalt/55">
                   <span>Guests</span>
@@ -399,13 +411,19 @@ export default function Checkout({ slug }: { slug: string }) {
                 disabled={submitting || authLoading}
                 className={cn("mt-5 h-12 w-full rounded-none bg-apricot text-white hover:bg-apricot/90", (submitting || authLoading) && "opacity-60")}
               >
-                {submitting ? "Taking you to payment…" : dueCents === 0 && giftAppliedCents > 0 ? "Complete booking (gift card)" : `Pay · ${format(dueCents)}`}
+                {submitting ? (isRequest ? "Sending request…" : "Taking you to payment…") : isRequest ? "Request to book" : dueCents === 0 && giftAppliedCents > 0 ? "Complete booking (gift card)" : `Pay · ${format(dueCents)}`}
               </Button>
-              <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">
-                You'll pay securely via{" "}
-                <a href="https://paylink.am" target="_blank" rel="noreferrer" className="font-semibold text-basalt/55 underline underline-offset-2 hover:text-apricot">PayLink</a>
-                . Your dates are confirmed once payment clears.{displayCurrency === "USD" ? " Charged in AMD; USD shown for reference." : ""}
-              </p>
+              {isRequest ? (
+                <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">
+                  No charge now — the host confirms availability first, then emails you a secure link to pay via PayLink.
+                </p>
+              ) : (
+                <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">
+                  You'll pay securely via{" "}
+                  <a href="https://paylink.am" target="_blank" rel="noreferrer" className="font-semibold text-basalt/55 underline underline-offset-2 hover:text-apricot">PayLink</a>
+                  . Your dates are confirmed once payment clears.{displayCurrency === "USD" ? " Charged in AMD; USD shown for reference." : ""}
+                </p>
+              )}
             </div>
           </aside>
         </div>
