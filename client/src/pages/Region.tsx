@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { useListings } from "@/contexts/ListingsContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { findRegionGuide, listingInRegion, REGION_GUIDES } from "@shared/regionGuides";
+import { slugify } from "@/lib/slug";
 import { buildCollectionPageJsonLd, buildFaqJsonLd, buildBreadcrumbJsonLd } from "@shared/seo";
 
 const SECTIONS: { type: "stay" | "tour" | "experience" | "eat"; heading: string; sub: string }[] = [
@@ -111,7 +112,14 @@ export default function Region({ slug }: { slug: string }) {
             if (items.length === 0) return null;
             return (
               <section key={s.type} className="mt-14">
-                <h2 className="font-display text-3xl tracking-[-0.03em] sm:text-4xl">{s.heading}</h2>
+                <div className="flex items-baseline justify-between gap-3">
+                  <h2 className="font-display text-3xl tracking-[-0.03em] sm:text-4xl">{s.heading}</h2>
+                  {s.type === "eat" && (
+                    <Link href={`/eat/${slugify(guide.name)}`} className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-apricot hover:underline">
+                      Full eat guide →
+                    </Link>
+                  )}
+                </div>
                 <p className="mt-2 max-w-xl text-sm text-basalt/55">{s.sub}</p>
                 <div className="mt-7 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
                   {items.map((l) => <ListingCard key={l.id} listing={l} />)}

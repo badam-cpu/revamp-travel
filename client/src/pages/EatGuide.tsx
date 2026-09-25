@@ -14,6 +14,9 @@ import { ListingCardSkeleton } from "@/components/ListingCardSkeleton";
 import { useListings, type LiveListing } from "@/contexts/ListingsContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { cn } from "@/lib/utils";
+import { ARMENIA_REGIONS } from "@shared/listings";
+import { EAT_CATEGORIES } from "@/lib/eatCategories";
+import { slugify } from "@/lib/slug";
 
 const OTHER = "More spots";
 const normalizeRegion = (r: string) => r.trim().replace(/\s+(province|marz)$/i, "").trim();
@@ -165,21 +168,73 @@ export default function EatGuide() {
           ) : (
             <div className="grid gap-14">
               {groups.map(([name, items]) => (
-                <div key={name}>
-                  <div className="mb-6 flex items-baseline justify-between gap-3">
-                    <h2 className="font-display text-2xl tracking-[-0.02em]">{name}</h2>
-                    <span className="text-xs font-semibold uppercase tracking-[0.12em] text-basalt/40">{items.length} spot{items.length === 1 ? "" : "s"}</span>
-                  </div>
-                  <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-                    {items.map((l) => <ListingCard key={l.id} listing={l} />)}
-                  </div>
-                </div>
+                <EatGroup key={name} name={name} items={items} />
               ))}
             </div>
           )}
         </section>
+
+        {/* Browse-by hubs — internal links to the SEO/GEO eat landing pages. */}
+        {!loading && (() => {
+          const all = listings.filter((l) => l.type === "eat");
+          const areaLinks = ARMENIA_REGIONS.filter((r) => all.some((l) => normalizeRegion(l.region || "").toLowerCase() === normalizeRegion(r).toLowerCase()));
+          const cuisineLinks = EAT_CATEGORIES.filter((c) => all.some((l) => (l.cuisine || "").trim().toLowerCase() === c.toLowerCase()));
+          if (areaLinks.length === 0 && cuisineLinks.length === 0) return null;
+          return (
+            <section className="container border-t border-basalt/10 py-12">
+              {areaLinks.length > 0 && (
+                <div>
+                  <h2 className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Where to eat by area</h2>
+                  <div className="mt-4 flex flex-wrap gap-2.5">
+                    {areaLinks.map((r) => (
+                      <Link key={r} href={`/eat/${slugify(r)}`} className="rounded-none border border-basalt/15 px-3.5 py-2 text-sm hover:border-apricot hover:text-apricot">Eat in {r}</Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {cuisineLinks.length > 0 && (
+                <div className={areaLinks.length > 0 ? "mt-8" : ""}>
+                  <h2 className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Browse by cuisine</h2>
+                  <div className="mt-4 flex flex-wrap gap-2.5">
+                    {cuisineLinks.map((c) => (
+                      <Link key={c} href={`/eat/cuisine/${slugify(c)}`} className="rounded-none border border-basalt/15 px-3.5 py-2 text-sm hover:border-apricot hover:text-apricot">{c}</Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+          );
+        })()}
       </main>
       <SiteFooter />
+    </div>
+  );
+}
+
+/** One venue-type group with a "Show all" expander — caps long groups so the
+ *  guide never becomes an endless scroll. */
+const GROUP_CAP = 6;
+function EatGroup({ name, items }: { name: string; items: LiveListing[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? items : items.slice(0, GROUP_CAP);
+  return (
+    <div>
+      <div className="mb-6 flex items-baseline justify-between gap-3">
+        <h2 className="font-display text-2xl tracking-[-0.02em]">{name}</h2>
+        <span className="text-xs font-semibold uppercase tracking-[0.12em] text-basalt/40">{items.length} spot{items.length === 1 ? "" : "s"}</span>
+      </div>
+      <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+        {shown.map((l) => <ListingCard key={l.id} listing={l} />)}
+      </div>
+      {items.length > GROUP_CAP && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-6 rounded-none border border-basalt/20 px-5 py-2.5 text-sm font-semibold text-basalt transition-colors hover:border-apricot hover:text-apricot"
+        >
+          {expanded ? "Show fewer" : `Show all ${items.length} ${name.toLowerCase()}`}
+        </button>
+      )}
     </div>
   );
 }

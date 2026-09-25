@@ -9,6 +9,7 @@ import { ListingCard } from "@/components/ListingCard";
 import { TourDetail } from "@/components/TourDetail";
 import { BookingPanel } from "@/components/BookingPanel";
 import { EatGuidePanel } from "@/components/EatGuidePanel";
+import { slugify } from "@/lib/slug";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { groupAmenitiesForDisplay } from "@/components/AmenityPicker";
@@ -293,6 +294,20 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
         <div className="container mt-6">
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-tuff">{typeLabels[listing.type]} · {listing.city}</p>
           <h1 className="mt-1.5 font-display text-4xl leading-[1.0] tracking-[-0.035em] sm:text-5xl">{listing.title}</h1>
+          {isEat && (
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              {listing.region && (
+                <Link href={`/eat/${slugify(listing.region.replace(/\s+(province|marz)$/i, "").trim())}`} className="rounded-none border border-basalt/15 px-3 py-1.5 font-semibold hover:border-apricot hover:text-apricot">
+                  More places to eat in {listing.region}
+                </Link>
+              )}
+              {listing.cuisine && (
+                <Link href={`/eat/cuisine/${slugify(listing.cuisine)}`} className="rounded-none border border-basalt/15 px-3 py-1.5 font-semibold hover:border-apricot hover:text-apricot">
+                  More {listing.cuisine}
+                </Link>
+              )}
+            </div>
+          )}
         </div>
 
         <section className="container grid gap-12 py-14 lg:grid-cols-[minmax(0,1fr)_340px] lg:py-20">

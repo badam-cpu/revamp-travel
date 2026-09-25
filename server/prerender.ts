@@ -19,7 +19,8 @@
  */
 import type { PublicListing } from "./supabase.js";
 import { getPublishedCatalog, getPublishedPosts, getPublishedPostBySlug, getSiteFaq, getPartnerOperators, getSitePartners, type PublicPost } from "./supabase.js";
-import { regions, typeLabels } from "../shared/listings.js";
+import { regions, typeLabels, ARMENIA_REGIONS } from "../shared/listings.js";
+import { slugify } from "../shared/slug.js";
 import type { ListingType } from "../shared/listings.js";
 import { buildArticleJsonLd, buildBlogListJsonLd, buildBreadcrumbJsonLd, buildCollectionPageJsonLd, buildFaqJsonLd, buildListingJsonLd, buildOrganizationJsonLd, buildWebsiteJsonLd } from "../shared/seo.js";
 import { renderMarkdown, markdownToPlain } from "../shared/markdown.js";
@@ -35,6 +36,8 @@ export type PageKind =
   | "plan"
   | "listing-detail"
   | "region"
+  | "eat-region"
+  | "eat-cuisine"
   | "faq"
   | "partners"
   | "gift-cards"
@@ -70,6 +73,10 @@ export function matchRoute(pathname: string): MatchedRoute {
   if (path === "/faq") return { kind: "faq" };
   if (path === "/partners") return { kind: "partners" };
   if (path === "/gift-cards") return { kind: "gift-cards" };
+  const eatCuisineMatch = path.match(/^\/eat\/cuisine\/([^/]+)$/);
+  if (eatCuisineMatch) return { kind: "eat-cuisine", slug: decodeURIComponent(eatCuisineMatch[1]) };
+  const eatRegionMatch = path.match(/^\/eat\/([^/]+)$/);
+  if (eatRegionMatch) return { kind: "eat-region", slug: decodeURIComponent(eatRegionMatch[1]) };
   const regionMatch = path.match(/^\/region\/([^/]+)$/);
   if (regionMatch) return { kind: "region", slug: decodeURIComponent(regionMatch[1]) };
   if (path === "/blog") return { kind: "blog" };
@@ -113,6 +120,14 @@ export async function renderForBot(pathname: string, origin: string): Promise<Re
       const guide = route.slug ? findRegionGuide(route.slug) : undefined;
       if (!guide) return { status: 404, body: renderNotFound(origin) };
       return { status: 200, body: renderRegion(guide, catalog, origin) };
+    }
+    case "eat-region": {
+      const body = renderEatLanding(catalog, origin, "region", route.slug ?? "");
+      return body ? { status: 200, body } : { status: 404, body: renderNotFound(origin) };
+    }
+    case "eat-cuisine": {
+      const body = renderEatLanding(catalog, origin, "cuisine", route.slug ?? "");
+      return body ? { status: 200, body } : { status: 404, body: renderNotFound(origin) };
     }
     case "login":
       return { status: 200, body: renderAuthPage(origin, "login") };
@@ -457,6 +472,62 @@ ${guide.faq.map((f) => `<section><h3>${escapeHtml(f.q)}</h3><p>${escapeHtml(f.a)
       buildBreadcrumbJsonLd(origin, [
         { name: "Home", path: "/" },
         { name: guide.name, path: `/region/${guide.slug}` },
+      ]),
+    ],
+    bodyHtml,
+  });
+}
+
+const normalizeRegionName = (r: string) => r.trim().replace(/\s+(province|marz)$/i, "").trim();
+
+/** Eat landing pages (/eat/:region, /eat/cuisine/:cuisine) for crawlers/AI. The
+ *  label is derived from the matching listings (only populated pages are served;
+ *  an empty one returns null → the caller 404s, so no thin pages reach bots). */
+function renderEatLanding(catalog: PublicListing[], origin: string, mode: "region" | "cuisine", slug: string): string | null {
+  const eats = catalog.filter((l) => l.type === "eat");
+  let label = "";
+  let matched: PublicListing[] = [];
+  if (mode === "region") {
+    matched = eats.filter((l) => slugify(normalizeRegionName(l.region || "")) === slug);
+    label = ARMENIA_REGIONS.find((r) => slugify(r) === slug) || (matched[0] ? normalizeRegionName(matched[0].region) : "");
+  } else {
+    matched = eats.filter((l) => slugify((l.cuisine || "").trim()) === slug);
+    label = matched[0]?.cuisine?.trim() || "";
+  }
+  if (!label || matched.length === 0) return null;
+
+  const path = mode === "region" ? `/eat/${slug}` : `/eat/cuisine/${slug}`;
+  const title = mode === "region" ? `Where to eat in ${label}` : `The best ${label} food in Armenia`;
+  const examples = matched.slice(0, 3).map((l) => l.title).join(", ");
+  const intro =
+    mode === "region"
+      ? `An independent, hand-picked guide to eating in ${label}, Armenia — ${matched.length} place${matched.length === 1 ? "" : "s"} chosen by Revamp${examples ? `, including ${examples}` : ""}. Free recommendations, no paid placements.`
+      : `The best ${label.toLowerCase()} food in Armenia, hand-picked by Revamp — ${matched.length} spot${matched.length === 1 ? "" : "s"}${examples ? ` including ${examples}` : ""}. Honest recommendations, no paid placements.`;
+
+  // Region pages cross-link to nearby bookable inventory (the funnel to revenue).
+  const nearby =
+    mode === "region"
+      ? catalog.filter((l) => (l.type === "stay" || l.type === "tour" || l.type === "experience") && slugify(normalizeRegionName(l.region || "")) === slug).slice(0, 6)
+      : [];
+
+  const bodyHtml = `
+<h1>${escapeHtml(title)}</h1>
+<p>${escapeHtml(intro)}</p>
+${listingGridHtml(matched, origin)}
+${nearby.length ? `<h2>Where to stay &amp; what to do in ${escapeHtml(label)}</h2>\n${listingGridHtml(nearby, origin)}` : ""}
+<p><a href="${origin}/explore/eat">All restaurant recommendations across Armenia</a></p>`;
+
+  return renderPageShell({
+    title: `${title} | Revamp Vacations`,
+    description: intro.slice(0, 155),
+    canonical: `${origin}${path}`,
+    ogImage: `${origin}${OG_IMAGE}`,
+    jsonLd: [
+      buildCollectionPageJsonLd(origin, path, title, matched),
+      buildBreadcrumbJsonLd(origin, [
+        { name: "Home", path: "/" },
+        { name: "Where to eat", path: "/explore/eat" },
+        { name: label, path },
       ]),
     ],
     bodyHtml,

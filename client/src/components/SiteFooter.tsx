@@ -4,11 +4,20 @@ import { Link } from "wouter";
 import { BrandMark } from "./BrandMark";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
+import { useListings } from "@/contexts/ListingsContext";
 import { cn } from "@/lib/utils";
+import { slugify } from "@/lib/slug";
+
+const normalizeRegion = (r: string) => r.trim().replace(/\s+(province|marz)$/i, "").trim();
 
 export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolean; wide?: boolean } = {}) {
   const { profile } = useAuth();
   const { settings } = useSiteSettings();
+  const { listings } = useListings();
+
+  // Regions that actually have restaurant picks → footer "Eat in {region}" links
+  // (site-wide crawl paths into the Eat landing pages). Deduped, capped.
+  const eatRegions = Array.from(new Set(listings.filter((l) => l.type === "eat").map((l) => normalizeRegion(l.region || "")).filter(Boolean))).slice(0, 6);
 
   // Slim footer for app surfaces (operator dashboard) — just the wordmark,
   // copyright, and legal links, without the tall marketing columns. `wide`
@@ -65,6 +74,16 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
           </div>
         </div>
       </div>
+      {eatRegions.length > 0 && (
+        <div className="border-t border-white/10">
+          <div className="container flex flex-wrap items-center gap-x-5 gap-y-2 py-5 text-[13px] text-paper/60">
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Where to eat</span>
+            {eatRegions.map((r) => (
+              <Link key={r} href={`/eat/${slugify(r)}`} className="hover:text-white">Eat in {r}</Link>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="border-t border-white/10">
         <div className="container flex flex-col gap-3 py-5 text-[11px] text-paper/40 sm:flex-row sm:items-center sm:justify-between">
           <span>© 2026 Revamp Hospitality.</span>
