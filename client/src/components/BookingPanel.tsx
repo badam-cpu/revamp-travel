@@ -70,6 +70,19 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
   }, [slotMode, listing.id]);
   const sessionsByDate = useMemo(() => groupSessionsByDate(sessions), [sessions]);
   const selectedSession = useMemo(() => sessions.find((s) => s.id === sessionId) ?? null, [sessions, sessionId]);
+  // Disable every day WITHOUT a session so the calendar only lights up bookable
+  // days (like GYG) instead of us dumping a wall of date chips.
+  const slotBlockedRanges = useMemo(() => {
+    if (!slotMode) return [] as BlockedRange[];
+    const have = new Set(sessions.map((s) => slotLocalDate(s.startsAt)));
+    const today = new Date().toISOString().slice(0, 10);
+    const out: BlockedRange[] = [];
+    for (let i = 0; i < 120; i++) {
+      const d = addDays(today, i);
+      if (!have.has(d)) out.push({ start: d, end: addDays(d, 1) });
+    }
+    return out;
+  }, [slotMode, sessions]);
 
   // Confirmed bookings for this listing (identity-free public view).
   useEffect(() => {
@@ -188,62 +201,43 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
         )}
       </div>
 
-      {/* Dates. Slot mode → pick a date then a time; otherwise the calendar. */}
+      {/* Dates. Slot mode → the same month calendar (only session days enabled),
+          then a tidy row of time chips for the chosen day. */}
       <div className="mt-5">
         <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">
-          {slotMode ? "Choose a date & time" : isStay ? "Choose your dates" : "Choose a date"}
+          {slotMode ? "Choose a date" : isStay ? "Choose your dates" : "Choose a date"}
         </span>
-        {slotMode ? (
-          sessions.length === 0 ? (
-            <p className="border border-dashed border-basalt/20 bg-paper px-4 py-6 text-center text-xs text-basalt/50">No upcoming sessions right now — check back soon.</p>
-          ) : (
-            <div>
-              {/* Date chips */}
-              <div className="flex flex-wrap gap-1.5">
-                {sessionsByDate.map(({ date }) => {
-                  const on = slotDate === date;
-                  const d = new Date(date + "T00:00:00Z");
-                  return (
-                    <button
-                      key={date}
-                      type="button"
-                      onClick={() => { setSlotDate(date); setSessionId(null); }}
-                      className={cn("rounded-none border px-2.5 py-1.5 text-center text-xs leading-tight", on ? "border-apricot bg-apricot text-white" : "border-basalt/15 text-basalt/70 hover:border-basalt/30")}
-                    >
-                      <span className="block font-semibold">{d.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })}</span>
-                      <span className={cn("block text-[10px]", on ? "text-white/80" : "text-basalt/45")}>{d.toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" })}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              {/* Time chips for the chosen date */}
-              {slotDate && (
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {(sessionsByDate.find((g) => g.date === slotDate)?.sessions ?? []).map((s) => {
-                    const on = sessionId === s.id;
-                    return (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => setSessionId(s.id)}
-                        className={cn("rounded-none border px-3 py-1.5 text-xs font-semibold", on ? "border-apricot bg-apricot text-white" : "border-basalt/15 text-basalt/70 hover:border-basalt/30")}
-                      >
-                        {formatSlotTime(s.startsAt)}
-                        <span className={cn("ml-1.5 text-[10px] font-normal", on ? "text-white/80" : "text-basalt/40")}>{s.seatsLeft} left</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )
+        {slotMode && sessions.length === 0 ? (
+          <p className="border border-dashed border-basalt/20 bg-paper px-4 py-6 text-center text-xs text-basalt/50">No upcoming sessions right now — check back soon.</p>
         ) : (
           <AvailabilityCalendar
             mode={isStay ? "range" : "single"}
-            blockedRanges={[...(listing.blockedRanges ?? []), ...(listing.manualBlockedRanges ?? [])]}
-            bookedRanges={booked}
-            onChange={setRange}
+            blockedRanges={slotMode ? slotBlockedRanges : [...(listing.blockedRanges ?? []), ...(listing.manualBlockedRanges ?? [])]}
+            bookedRanges={slotMode ? [] : booked}
+            onChange={slotMode ? (r) => { setSlotDate(r.start); setSessionId(null); } : setRange}
           />
+        )}
+        {/* Time chips for the chosen day (slot mode). */}
+        {slotMode && slotDate && (
+          <div className="mt-4">
+            <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">Start time</span>
+            <div className="flex flex-wrap gap-1.5">
+              {(sessionsByDate.find((g) => g.date === slotDate)?.sessions ?? []).map((s) => {
+                const on = sessionId === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setSessionId(s.id)}
+                    className={cn("rounded-none border px-3.5 py-2 text-sm font-semibold transition-colors", on ? "border-apricot bg-apricot text-white" : "border-basalt/15 text-basalt/75 hover:border-apricot/50")}
+                  >
+                    {formatSlotTime(s.startsAt)}
+                    {s.seatsLeft <= 3 && <span className={cn("ml-1.5 text-[10px] font-normal", on ? "text-white/80" : "text-apricot")}>{s.seatsLeft} left</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         )}
       </div>
 
