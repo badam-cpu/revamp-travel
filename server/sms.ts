@@ -1,27 +1,34 @@
 /**
- * SMS + WhatsApp delivery via Twilio (REST, native fetch — same lightweight,
- * no-SDK style as server/email.ts and server/paylink.ts). Both channels are a
- * silent no-op when their env isn't configured, so bookings keep working without
- * them, exactly like email.
+ * SMS + WhatsApp + Viber delivery via Infobip (REST, native fetch — same
+ * lightweight, no-SDK style as server/email.ts and server/paylink.ts). Chosen
+ * over Twilio because Infobip onboards in Armenia and covers Viber, which is a
+ * primary messaging channel there. Each channel is a silent no-op when its env
+ * isn't configured, so bookings keep working without them, exactly like email.
  *
- * Env:
- *   TWILIO_ACCOUNT_SID   — Twilio account SID (starts with AC…)
- *   TWILIO_AUTH_TOKEN    — Twilio auth token
- *   TWILIO_SMS_FROM      — sender phone in E.164 (+374…) OR a Messaging Service SID (MG…)
- *   TWILIO_WHATSAPP_FROM — WhatsApp sender, e.g. "+14155238886" or "whatsapp:+14155238886"
+ * Env (all from your Infobip account — the base URL is account-specific):
+ *   INFOBIP_BASE_URL     — e.g. "https://xxxxx.api.infobip.com" (no trailing slash needed)
+ *   INFOBIP_API_KEY      — API key (sent as `Authorization: App <key>`)
+ *   INFOBIP_SMS_FROM     — registered SMS Sender ID / number (Armenia requires registration)
+ *   INFOBIP_WHATSAPP_FROM— your WhatsApp sender number
+ *   INFOBIP_VIBER_FROM   — your registered Viber sender name
  *
  * WhatsApp note: business-initiated messages OUTSIDE the 24-hour customer-service
- * window must use a pre-approved template. Pass `contentSid` (+ `contentVariables`)
- * for a Twilio Content template; otherwise the plain `body` is sent, which only
- * delivers inside the 24h window or the Twilio sandbox. See CLAUDE.md.
+ * window must use a pre-approved template. Pass `templateName` (+ `placeholders`)
+ * for a template send; otherwise the plain `text` is sent, which only delivers
+ * inside the 24h window.
  */
-const TWILIO_BASE = "https://api.twilio.com/2010-04-01";
-
 export function smsConfigured(): boolean {
-  return !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_SMS_FROM);
+  return infobipReady() && !!process.env.INFOBIP_SMS_FROM;
 }
 export function whatsappConfigured(): boolean {
-  return !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_WHATSAPP_FROM);
+  return infobipReady() && !!process.env.INFOBIP_WHATSAPP_FROM;
+}
+export function viberConfigured(): boolean {
+  return infobipReady() && !!process.env.INFOBIP_VIBER_FROM;
+}
+
+function infobipReady(): boolean {
+  return !!(process.env.INFOBIP_API_KEY && process.env.INFOBIP_BASE_URL);
 }
 
 type SendResult = { sent: boolean; reason?: string };
@@ -34,20 +41,24 @@ export function normalizePhone(raw: string): string {
   return p;
 }
 
-async function twilioSend(params: Record<string, string>): Promise<SendResult> {
-  const sid = process.env.TWILIO_ACCOUNT_SID;
-  const token = process.env.TWILIO_AUTH_TOKEN;
-  if (!sid || !token) return { sent: false, reason: "not_configured" };
+/** Infobip expects international format WITHOUT the leading '+'. */
+function intl(raw: string): string {
+  return normalizePhone(raw).replace(/^\+/, "");
+}
+
+async function post(path: string, body: unknown): Promise<SendResult> {
+  const key = process.env.INFOBIP_API_KEY;
+  const base = (process.env.INFOBIP_BASE_URL || "").replace(/\/+$/, "");
+  if (!key || !base) return { sent: false, reason: "not_configured" };
   try {
-    const auth = Buffer.from(`${sid}:${token}`).toString("base64");
-    const res = await fetch(`${TWILIO_BASE}/Accounts/${sid}/Messages.json`, {
+    const res = await fetch(`${base}${path}`, {
       method: "POST",
-      headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams(params).toString(),
+      headers: { Authorization: `App ${key}`, "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      console.warn(`[sms] Twilio ${res.status}: ${text.slice(0, 300)}`);
+      console.warn(`[sms] Infobip ${path} ${res.status}: ${text.slice(0, 300)}`);
       return { sent: false, reason: `http_${res.status}` };
     }
     return { sent: true };
@@ -57,34 +68,44 @@ async function twilioSend(params: Record<string, string>): Promise<SendResult> {
   }
 }
 
-/** Applies From vs MessagingServiceSid depending on the configured sender shape. */
-function withSmsFrom(params: Record<string, string>): Record<string, string> {
-  const from = process.env.TWILIO_SMS_FROM || "";
-  if (from.startsWith("MG")) return { ...params, MessagingServiceSid: from };
-  return { ...params, From: from };
-}
-
-export async function sendSms(to: string, body: string): Promise<SendResult> {
+export async function sendSms(to: string, text: string): Promise<SendResult> {
   if (!smsConfigured()) return { sent: false, reason: "not_configured" };
   if (!to) return { sent: false, reason: "no_recipient" };
-  return twilioSend(withSmsFrom({ To: normalizePhone(to), Body: body }));
+  return post("/sms/2/text/advanced", {
+    messages: [{ from: process.env.INFOBIP_SMS_FROM, destinations: [{ to: intl(to) }], text }],
+  });
 }
 
 export async function sendWhatsApp(
   to: string,
-  body: string,
-  opts?: { contentSid?: string; contentVariables?: Record<string, string> },
+  text: string,
+  opts?: { templateName?: string; placeholders?: string[]; language?: string },
 ): Promise<SendResult> {
   if (!whatsappConfigured()) return { sent: false, reason: "not_configured" };
   if (!to) return { sent: false, reason: "no_recipient" };
-  const fromRaw = process.env.TWILIO_WHATSAPP_FROM || "";
-  const from = fromRaw.startsWith("whatsapp:") ? fromRaw : `whatsapp:${normalizePhone(fromRaw)}`;
-  const params: Record<string, string> = { To: `whatsapp:${normalizePhone(to)}`, From: from };
-  if (opts?.contentSid) {
-    params.ContentSid = opts.contentSid;
-    if (opts.contentVariables) params.ContentVariables = JSON.stringify(opts.contentVariables);
-  } else {
-    params.Body = body;
+  const from = process.env.INFOBIP_WHATSAPP_FROM;
+  if (opts?.templateName) {
+    return post("/whatsapp/1/message/template", {
+      messages: [
+        {
+          from,
+          to: intl(to),
+          content: {
+            templateName: opts.templateName,
+            templateData: { body: { placeholders: opts.placeholders ?? [] } },
+            language: opts.language ?? "en",
+          },
+        },
+      ],
+    });
   }
-  return twilioSend(params);
+  return post("/whatsapp/1/message/text", { from, to: intl(to), content: { text } });
+}
+
+export async function sendViber(to: string, text: string): Promise<SendResult> {
+  if (!viberConfigured()) return { sent: false, reason: "not_configured" };
+  if (!to) return { sent: false, reason: "no_recipient" };
+  return post("/viber/1/message/text", {
+    messages: [{ from: process.env.INFOBIP_VIBER_FROM, to: intl(to), content: { text } }],
+  });
 }

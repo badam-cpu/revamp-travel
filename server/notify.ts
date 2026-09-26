@@ -8,7 +8,7 @@
  * reached by email + the same inbox thread.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { sendSms, sendWhatsApp } from "./sms.js";
+import { sendSms, sendWhatsApp, sendViber } from "./sms.js";
 import { postSystemMessage } from "./inbox.js";
 
 async function logEvent(admin: SupabaseClient, bookingId: string, type: string, detail?: string): Promise<void> {
@@ -32,8 +32,8 @@ export async function notifyBooking(
     travelerId?: string | null;
     travelerPhone?: string | null;
     inboxBody: string;
-    smsBody?: string; // SMS + WhatsApp text; omit to skip phone channels
-    whatsapp?: { contentSid?: string; contentVariables?: Record<string, string> };
+    smsBody?: string; // SMS + WhatsApp + Viber text; omit to skip phone channels
+    whatsapp?: { templateName?: string; placeholders?: string[]; language?: string };
   },
 ): Promise<void> {
   await postSystemMessage(admin, {
@@ -47,11 +47,13 @@ export async function notifyBooking(
   const phone = (opts.travelerPhone || "").trim();
   const smsBody = opts.smsBody;
   if (phone && smsBody) {
-    const [sms, wa] = await Promise.all([
+    const [sms, wa, vb] = await Promise.all([
       sendSms(phone, smsBody),
       sendWhatsApp(phone, smsBody, opts.whatsapp),
+      sendViber(phone, smsBody),
     ]);
     if (sms.reason !== "not_configured") await logEvent(admin, opts.bookingId, sms.sent ? "sms_sent" : "sms_failed", sms.sent ? phone : `SMS to ${phone} failed (${sms.reason ?? "unknown"}).`);
     if (wa.reason !== "not_configured") await logEvent(admin, opts.bookingId, wa.sent ? "whatsapp_sent" : "whatsapp_failed", wa.sent ? phone : `WhatsApp to ${phone} failed (${wa.reason ?? "unknown"}).`);
+    if (vb.reason !== "not_configured") await logEvent(admin, opts.bookingId, vb.sent ? "viber_sent" : "viber_failed", vb.sent ? phone : `Viber to ${phone} failed (${vb.reason ?? "unknown"}).`);
   }
 }
