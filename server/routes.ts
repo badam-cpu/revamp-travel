@@ -88,6 +88,8 @@ const startCheckoutSchema = z.object({
   guestName: z.string().trim().max(120).optional(),
   guestEmail: z.string().trim().email().max(200).optional(),
   guestPhone: z.string().trim().max(40).optional(),
+  // Explicit opt-in to phone-channel notifications (SMS/WhatsApp/Viber/Telegram).
+  messagingConsent: z.boolean().optional().default(false),
   // Selected concierge add-ons (priced server-side from the admin catalog).
   addons: z.array(z.object({ id: z.string().max(80), qty: z.number().int().min(1).max(20) })).max(20).optional(),
   // Optional gift-card code to apply to this booking.
@@ -565,7 +567,7 @@ export function registerApiRoutes(app: Express) {
 
     const parsed = startCheckoutSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
-    const { listingId, startDate, endDate, guests, guestName, guestEmail, guestPhone, addons } = parsed.data;
+    const { listingId, startDate, endDate, guests, guestName, guestEmail, guestPhone, messagingConsent, addons } = parsed.data;
 
     if (endDate <= startDate) return res.status(400).json({ error: "Check-out must be after check-in." });
     const today = new Date().toISOString().slice(0, 10);
@@ -644,6 +646,7 @@ export function registerApiRoutes(app: Express) {
         slotRow.guest_email = guestEmail || null;
         slotRow.guest_phone = guestPhone || null;
       }
+      slotRow.messaging_consent = messagingConsent;
 
       // Request-to-book: no charge now — create a pending request for the operator.
       if (listing.booking_mode === "request") {
@@ -815,6 +818,7 @@ export function registerApiRoutes(app: Express) {
       baseRow.guest_email = guestEmail || null;
       baseRow.guest_phone = guestPhone || null;
     }
+    baseRow.messaging_consent = messagingConsent;
 
     // Fully covered by the gift card → no PayLink charge; confirm server-side now.
     if (remainingCents <= 0 && giftId && adminClient) {

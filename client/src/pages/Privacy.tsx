@@ -63,6 +63,7 @@ export default function Privacy() {
               <li><strong className="text-basalt">Cloud hosting &amp; database providers</strong> — securely store your account and booking data and run the website and application.</li>
               <li><strong className="text-basalt">Payment processing</strong> — a licensed payment provider handles payments. Your card and bank details are provided directly to them; we never collect or store them.</li>
               <li><strong className="text-basalt">Email delivery</strong> — sends transactional emails such as booking confirmations and notifications.</li>
+              <li><strong className="text-basalt">Messaging providers</strong> — if you opt in, sends your booking notifications by SMS, WhatsApp, Viber or Telegram. Those messages are delivered through the relevant messaging platform and mobile carriers.</li>
               <li><strong className="text-basalt">Sign-in &amp; maps</strong> — power optional third-party sign-in and the maps shown on listing pages.</li>
               <li><strong className="text-basalt">AI features</strong> — the messages you send to the support chat and trip planner are processed by an AI provider to generate a response.</li>
             </ul>

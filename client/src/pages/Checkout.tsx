@@ -79,6 +79,7 @@ export default function Checkout({ slug }: { slug: string }) {
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
+  const [notifyConsent, setNotifyConsent] = useState(true);
 
   const [addonQty, setAddonQty] = useState<Record<string, number>>({});
   const [showAllAddons, setShowAllAddons] = useState(false);
@@ -203,7 +204,7 @@ export default function Checkout({ slug }: { slug: string }) {
         ...(sessionId ? { sessionId } : {}),
         ...(addonSel.length ? { addons: addonSel } : {}),
         ...(giftBalance != null && giftCode.trim() ? { giftCode: giftCode.trim() } : {}),
-        ...(isGuest ? { guestName: guestName.trim(), guestEmail: guestEmail.trim(), guestPhone: guestPhone.trim() } : {}),
+        ...(isGuest ? { guestName: guestName.trim(), guestEmail: guestEmail.trim(), guestPhone: guestPhone.trim(), messagingConsent: notifyConsent } : {}),
       });
       // Request-to-book: no payment now — the host approves, then we email a pay link.
       if (result.requested) {
@@ -258,6 +259,10 @@ export default function Checkout({ slug }: { slug: string }) {
                     <Label htmlFor="co-phone" className="text-xs font-semibold text-basalt/60">Phone</Label>
                     <Input id="co-phone" type="tel" value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} placeholder="+374 …" autoComplete="tel" className="h-12 rounded-none" />
                   </div>
+                  <label className="flex items-start gap-2.5 pt-1 text-sm text-basalt/70">
+                    <Checkbox checked={notifyConsent} onCheckedChange={(c) => setNotifyConsent(c === true)} className="mt-0.5 rounded-[3px] border-basalt/30 data-[state=checked]:border-apricot data-[state=checked]:bg-apricot" />
+                    <span>Send me booking updates by SMS, WhatsApp, Viber or Telegram (in addition to email). You can opt out anytime.</span>
+                  </label>
                 </div>
                 <p className="mt-2 text-xs text-basalt/45">
                   Have an account?{" "}

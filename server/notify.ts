@@ -47,6 +47,9 @@ export async function notifyBooking(
   const phone = (opts.travelerPhone || "").trim();
   const smsBody = opts.smsBody;
   if (phone && smsBody) {
+    // Only text/WhatsApp/Viber a customer who explicitly opted in at checkout.
+    const { data: consentRow } = await admin.from("bookings").select("messaging_consent").eq("id", opts.bookingId).maybeSingle();
+    if (!consentRow?.messaging_consent) return;
     const [sms, wa, vb] = await Promise.all([
       sendSms(phone, smsBody),
       sendWhatsApp(phone, smsBody, opts.whatsapp),
