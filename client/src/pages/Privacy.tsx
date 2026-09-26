@@ -45,9 +45,9 @@ export default function Privacy() {
           </p>
 
           <Section title="Information we collect">
-            <p><strong className="text-basalt">Account information.</strong> When you sign up we collect your name and email, your role (traveler or operator), and for operators an optional business name and bio. Passwords are handled and stored by our authentication provider (Supabase) — we never see them in plain text. If you sign in with Google, we receive your name, email, and profile picture from Google.</p>
+            <p><strong className="text-basalt">Account information.</strong> When you sign up we collect your name and email, your role (traveler or operator), and for operators an optional business name and bio. Passwords are handled and stored by our authentication provider — we never see them in plain text. If you use third-party sign-in, we receive your name, email, and profile picture from that provider.</p>
             <p><strong className="text-basalt">Bookings &amp; saved places.</strong> The listings you save, and the dates, guest counts, and amounts of bookings you make.</p>
-            <p><strong className="text-basalt">Payments.</strong> Payments are processed by PayLink (Ameriabank). We do <strong className="text-basalt">not</strong> collect or store your card or bank details — those go directly to PayLink. We retain the booking amount, currency, and a payment reference to confirm and manage your booking.</p>
+            <p><strong className="text-basalt">Payments.</strong> Payments are processed by a licensed third-party payment provider. We do <strong className="text-basalt">not</strong> collect or store your card or bank details — those go directly to the payment provider. We retain the booking amount, currency, and a payment reference to confirm and manage your booking.</p>
             <p><strong className="text-basalt">Support messages.</strong> Messages you send to our support chat, and an email address if you choose to leave one as a guest. An AI assistant helps answer first; our team may follow up.</p>
             <p><strong className="text-basalt">Messages between guests and hosts.</strong> When you message a host (or, as a host, a guest) about a booking, we store those messages so both parties can see the conversation. For safety, fraud prevention, and support, our team may review these messages and step into a conversation when needed. Please keep bookings and payments on Revamp — arrangements made off-platform aren't covered by our protection.</p>
             <p><strong className="text-basalt">Technical &amp; preferences.</strong> Basic device and log data needed to run and secure the service, and small items stored in your browser (your currency choice, dismissed notices, unsent drafts). We do not run third-party advertising trackers.</p>
@@ -58,14 +58,13 @@ export default function Privacy() {
           </Section>
 
           <Section title="Service providers we share with">
-            <p>We share the minimum necessary with the providers that run the service. We do not sell your personal information.</p>
+            <p>We share the minimum necessary with the service providers that help us run the platform. We do not sell your personal information. These providers act on our instructions and only receive what they need for their part of the service:</p>
             <ul className="ml-5 list-disc space-y-1.5">
-              <li><strong className="text-basalt">Supabase</strong> — database, authentication, and secure storage of your account and booking data.</li>
-              <li><strong className="text-basalt">PayLink (Ameriabank)</strong> — payment processing. Your payment details are provided directly to them.</li>
-              <li><strong className="text-basalt">Netlify</strong> — website and application hosting.</li>
-              <li><strong className="text-basalt">Google</strong> — optional sign-in and the maps shown on listing pages.</li>
-              <li><strong className="text-basalt">Resend</strong> — delivery of transactional emails.</li>
-              <li><strong className="text-basalt">Anthropic</strong> — the AI that powers the support chat and trip planner; the messages you send to those features are processed by Anthropic to generate a response.</li>
+              <li><strong className="text-basalt">Cloud hosting &amp; database providers</strong> — securely store your account and booking data and run the website and application.</li>
+              <li><strong className="text-basalt">Payment processing</strong> — a licensed payment provider handles payments. Your card and bank details are provided directly to them; we never collect or store them.</li>
+              <li><strong className="text-basalt">Email delivery</strong> — sends transactional emails such as booking confirmations and notifications.</li>
+              <li><strong className="text-basalt">Sign-in &amp; maps</strong> — power optional third-party sign-in and the maps shown on listing pages.</li>
+              <li><strong className="text-basalt">AI features</strong> — the messages you send to the support chat and trip planner are processed by an AI provider to generate a response.</li>
             </ul>
           </Section>
 

@@ -391,8 +391,8 @@ export function AdminSiteContent() {
                     onCheckedChange={() => toggleFeatured(l.slug)}
                     className="rounded-[3px] border-basalt/30 data-[state=checked]:border-apricot data-[state=checked]:bg-apricot"
                   />
-                  <span className="truncate">{l.title}</span>
-                  <span className="ml-auto shrink-0 text-[10px] font-bold uppercase tracking-[0.1em] text-basalt/40">{l.type}</span>
+                  <span className="min-w-0 flex-1 truncate">{l.title}</span>
+                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.1em] text-basalt/40">{l.type}</span>
                 </label>
               ))}
             </div>
