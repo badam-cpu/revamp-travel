@@ -357,6 +357,18 @@ export async function updateBookingContact(
   });
 }
 
+/** Operator/admin sends the customer a PayLink payment link for an existing booking. */
+export async function sendBookingPaymentLink(bookingId: string): Promise<{ ok: boolean; redirectUrl?: string }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in as an operator.");
+  return request<{ ok: boolean; redirectUrl?: string }>("/api/operator-booking-send-link", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ bookingId }),
+  });
+}
+
 /** Operator flips a direct booking's payment status (paid/unpaid). */
 export async function setBookingPayment(bookingId: string, paymentStatus: "paid" | "unpaid"): Promise<{ ok: boolean }> {
   const { data } = await supabase.auth.getSession();

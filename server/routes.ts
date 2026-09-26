@@ -151,6 +151,8 @@ const bookingContactSchema = z.object({
   guestPhone: z.string().trim().max(40).optional().default(""),
 });
 
+const bookingIdSchema = z.object({ bookingId: z.string().uuid() });
+
 const supportChatSchema = z.object({
   message: z.string().trim().min(1).max(2000),
 });
@@ -1118,6 +1120,77 @@ export function registerApiRoutes(app: Express) {
     if (upErr) return res.status(500).json({ error: "Couldn't update the contact details." });
     await logBookingEvent(admin, bookingId, "contact_updated", "Guest contact details updated by the operator.");
     res.json({ ok: true });
+  });
+
+  // POST /api/operator-booking-send-link — for an existing (usually offline/direct)
+  // booking, register a PayLink payment and email the customer a pay link. The
+  // booking becomes pending_payment/paylink and the reconcile cron confirms it —
+  // and fires the usual confirmations — once they pay. Owner/admin only.
+  app.post("/api/operator-booking-send-link", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in as an operator." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available yet." });
+    if (!paylinkConfigured()) return res.status(503).json({ error: "Payments aren't available yet." });
+
+    const parsed = bookingIdSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    const { bookingId } = parsed.data;
+
+    const { data: bk, error: readErr } = await admin
+      .from("bookings")
+      .select("id, start_date, end_date, guests, amount_cents, currency, status, guest_email, starts_at, listings!inner(operator_id, title, city, region, slug, type)")
+      .eq("id", bookingId)
+      .maybeSingle();
+    if (readErr || !bk) return res.status(404).json({ error: "Booking not found." });
+    const L = (bk as unknown as { listings: { operator_id: string; title: string; city: string; region: string; slug: string; type: string } }).listings;
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (L.operator_id !== userId && me?.role !== "admin") return res.status(403).json({ error: "That booking isn't on your listing." });
+    if ((bk as { status: string }).status === "cancelled") return res.status(400).json({ error: "This booking is cancelled." });
+    const email = (bk as { guest_email: string | null }).guest_email;
+    if (!email) return res.status(400).json({ error: "Add the customer's email first, then send the link." });
+
+    const currency = (bk as { currency: string }).currency || DEFAULT_CURRENCY;
+    const amountCents = (bk as { amount_cents: number }).amount_cents;
+    const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
+    let pay;
+    try {
+      pay = await registerPayment({
+        amount: currency === "AMD" ? Math.round(amountCents / 100) : amountCents / 100,
+        currency,
+        returnUrl: `${site}/`,
+        info: `Revamp booking · ${L.title}`,
+      });
+    } catch (e) {
+      console.error("[booking-send-link] register", e);
+      return res.status(502).json({ error: "Couldn't create the payment link." });
+    }
+    if (!pay.redirectUrl) return res.status(502).json({ error: "Couldn't create the payment link." });
+
+    const { error: upErr } = await admin
+      .from("bookings")
+      .update({ status: "pending_payment", provider: "paylink", paylink_request_id: pay.requestId, paylink_order_id: pay.orderId })
+      .eq("id", bookingId);
+    if (upErr) return res.status(500).json({ error: "Couldn't update the booking." });
+
+    const info: BookingEmailInfo = {
+      listingTitle: L.title,
+      startDate: (bk as { start_date: string }).start_date,
+      endDate: (bk as { end_date: string }).end_date,
+      guests: (bk as { guests: number }).guests,
+      amountCents,
+      currency,
+      city: L.city,
+      region: L.region,
+      slug: L.slug,
+      type: L.type,
+      time: (bk as { starts_at: string | null }).starts_at ? formatSlotTime((bk as { starts_at: string }).starts_at) : undefined,
+    };
+    try { await sendPaymentLink(email, info, pay.redirectUrl); } catch (e) { console.error("[booking-send-link] email", e); }
+    await logBookingEvent(admin, bookingId, "payment_link_sent", `Payment link emailed to ${email}.`);
+    res.json({ ok: true, redirectUrl: pay.redirectUrl });
   });
 
   // POST /api/cancel-booking — cancel a booking. Allowed for the traveler who

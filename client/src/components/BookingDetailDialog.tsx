@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { Mail, Phone, User, Pencil } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
-import { setBookingPayment, cancelBooking, ensureBookingThread, updateBookingContact } from "@/lib/api";
+import { setBookingPayment, cancelBooking, ensureBookingThread, updateBookingContact, sendBookingPaymentLink } from "@/lib/api";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -91,6 +91,7 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
   const [cEmail, setCEmail] = useState("");
   const [cPhone, setCPhone] = useState("");
   const [savingContact, setSavingContact] = useState(false);
+  const [sendingLink, setSendingLink] = useState(false);
   const [, navigate] = useLocation();
 
   useEffect(() => {
@@ -127,6 +128,20 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
     setCEmail(b?.guest_email || "");
     setCPhone(b?.guest_phone || "");
     setEditingContact(true);
+  };
+  const sendLink = async () => {
+    if (!b) return;
+    setSendingLink(true);
+    try {
+      await sendBookingPaymentLink(b.id);
+      setReloadKey((k) => k + 1);
+      onChanged?.();
+      toast.success(b.guest_email ? `Payment link emailed to ${b.guest_email}.` : "Payment link created.");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't send the payment link.");
+    } finally {
+      setSendingLink(false);
+    }
   };
   const saveContact = async () => {
     if (!b) return;
@@ -281,6 +296,17 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
                         </button>
                       ))}
                     </div>
+                  </div>
+                )}
+                {/* Collect payment on an existing offline booking via a PayLink link. */}
+                {b.provider === "direct" && b.status !== "cancelled" && (b.payment_status ?? "unpaid") !== "paid" && (
+                  <div className="mt-3 border-t border-basalt/10 pt-3">
+                    <button type="button" onClick={sendLink} disabled={sendingLink} className="inline-flex items-center gap-2 rounded-none bg-apricot px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-apricot/90 disabled:opacity-60">
+                      {sendingLink ? "Sending…" : "Send payment link"}
+                    </button>
+                    <p className="mt-1.5 text-[11px] leading-4 text-basalt/45">
+                      Emails the customer a PayLink link{b.guest_email ? ` at ${b.guest_email}` : ""}; it confirms automatically when they pay.{b.guest_email ? "" : " Add their email above first."}
+                    </p>
                   </div>
                 )}
                 {b.addons && b.addons.length > 0 && (
