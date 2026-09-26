@@ -617,7 +617,10 @@ function ListingFormDialog({
                 </div>
                 {draft.type === "stay" && (
                   <div className="grid gap-2">
-                    <Label htmlFor="neighborhood" className="text-sm font-semibold">Describe the neighborhood <span className="font-normal text-basalt/45">(optional)</span></Label>
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="neighborhood" className="text-sm font-semibold">Describe the neighborhood <span className="font-normal text-basalt/45">(optional)</span></Label>
+                      <AhaAssist field="neighborhood" listingType={draft.type} getContext={ahaContext} getCurrent={() => fieldValue("neighborhood")} onApplyText={(t) => setField("neighborhood", t)} />
+                    </div>
                     <Textarea id="neighborhood" name="neighborhood" rows={3} placeholder="What's the area like — the street, the vibe, what's within a short walk?" defaultValue={draft.neighborhood} className="rounded-none text-base" />
                     <p className="text-xs text-basalt/45">Nearby major sights are shown automatically on your listing based on its location.</p>
                   </div>

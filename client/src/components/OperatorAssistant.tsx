@@ -92,7 +92,7 @@ export function OperatorAssistant() {
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
             {messages.length === 0 && (
               <div className="text-sm text-basalt/60">
-                <p>Hi, I'm Aha 👋 Ask me about your bookings and payouts (I only see your own data), or how to host well — I'll point you to the Partner Hub.</p>
+                <p>Hi, I'm Aha AI 👋 Ask me about your bookings and payouts (I only see your own data), or how to host well — I'll point you to the Partner Hub.</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {SUGGESTIONS.map((s) => (
                     <button

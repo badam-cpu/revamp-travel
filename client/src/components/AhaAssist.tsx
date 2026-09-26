@@ -1,5 +1,5 @@
 /**
- * Aha writing assist — a small "✨ Aha" control that sits next to a listing field
+ * Aha AI writing assist — a small "✨ Aha AI" control that sits next to a listing field
  * (title / short description / long description / highlights). It reads the draft
  * context from the caller, asks the server to generate or improve the field
  * (type-, SEO-, and standards-aware), previews the suggestion, and applies it only
@@ -39,10 +39,10 @@ export function AhaAssist({
     try {
       const ctx = { ...getContext(), notes: notes.trim() || undefined };
       const r = await ahaListingCopy({ field, mode, listingType, current: getCurrent(), context: ctx });
-      if (!r.text && !r.items?.length) throw new ApiError("Aha didn't return anything — try again.");
+      if (!r.text && !r.items?.length) throw new ApiError("Aha AI didn't return anything — try again.");
       setResult(r);
     } catch (e) {
-      toast(e instanceof ApiError || e instanceof Error ? e.message : "Aha couldn't draft that.");
+      toast(e instanceof ApiError || e instanceof Error ? e.message : "Aha AI couldn't draft that.");
     } finally {
       setBusy(false);
     }
@@ -54,7 +54,7 @@ export function AhaAssist({
     setResult(null);
     setOpen(false);
     setNotes("");
-    toast.success("Applied Aha's draft — edit it however you like.");
+    toast.success("Applied Aha AI's draft — edit it however you like.");
   };
 
   const hasText = () => !!getCurrent().trim();
@@ -66,20 +66,20 @@ export function AhaAssist({
         onClick={() => setOpen((v) => !v)}
         className="inline-flex items-center gap-1 rounded-full border border-apricot/30 bg-apricot/5 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-apricot transition-colors hover:bg-apricot/10"
       >
-        <Sparkles className="h-3 w-3" /> Aha
+        <Sparkles className="h-3 w-3" /> Aha AI
       </button>
 
       {open && (
         <div className="absolute right-0 z-30 mt-2 w-[min(92vw,360px)] rounded-none border border-basalt/15 bg-paper p-3 shadow-[0_20px_55px_rgba(35,35,33,0.18)]">
           <div className="flex items-center justify-between">
-            <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-basalt/50">Write with Aha</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-basalt/50">Write with Aha AI</p>
             <button type="button" onClick={() => { setOpen(false); setResult(null); }} className="text-basalt/40 hover:text-basalt" aria-label="Close"><X className="h-4 w-4" /></button>
           </div>
 
           <input
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Optional: a hint for Aha (e.g. 'family-friendly, near the metro')"
+            placeholder="Optional: a hint for Aha AI (e.g. 'family-friendly, near the metro')"
             className="mt-2 h-9 w-full rounded-none border border-basalt/15 bg-paper px-2.5 text-xs outline-none focus:border-apricot"
           />
 

@@ -22,7 +22,7 @@ export function ahaCopyConfigured(): boolean {
   return !!getClient();
 }
 
-export type AhaField = "title" | "shortDescription" | "longDescription" | "highlights";
+export type AhaField = "title" | "shortDescription" | "longDescription" | "highlights" | "neighborhood";
 export type AhaMode = "generate" | "improve";
 export type AhaListingType = "stay" | "tour" | "experience" | "eat";
 
@@ -64,9 +64,10 @@ const FIELD_GUIDE: Record<AhaField, string> = {
   shortDescription: "A one-line SHORT DESCRIPTION (~110–160 characters): a single sentence that leads with the place + the hook. No line breaks. Return the sentence only.",
   longDescription: "A LONG DESCRIPTION: 2–4 short paragraphs (roughly 60–140 words total). Scannable, concrete, warm. No headings, no bullet lists, no markdown. Return the paragraphs only, separated by blank lines.",
   highlights: "HIGHLIGHTS / itinerary: 4–6 short, punchy bullet points (each ≤ ~12 words), in a sensible order. Return ONE per line, no numbering, no bullet characters, no markdown.",
+  neighborhood: "A NEIGHBOURHOOD description: 1–3 short paragraphs about the area around the stay — the street, the vibe, and what's genuinely within a short walk (cafes, sights, transport, shops). Concrete and local, not generic. Only mention specific landmarks or walking distances you can infer from the city/region context — never invent them. No headings, no bullet lists, no markdown. Return the paragraphs only, separated by blank lines.",
 };
 
-const SYSTEM = `You are Aha, Revamp Vacations' writing assistant for operators listing on an Armenia-focused travel marketplace. You write and refine listing copy that converts and ranks.
+const SYSTEM = `You are Aha AI, Revamp Vacations' writing assistant for operators listing on an Armenia-focused travel marketplace. You write and refine listing copy that converts and ranks.
 
 Follow these standards on every request:
 - ACCURACY: Write ONLY from the details provided. Never invent facts, amenities, prices, distances, history, or specifics you weren't given. Never fabricate ratings, reviews, review counts, awards, "verified", "#1", "best", or any social proof.

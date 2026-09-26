@@ -29,7 +29,7 @@ export function operatorAssistantConfigured(): boolean {
   return !!getClient();
 }
 
-const SYSTEM = `You are Aha, the AI assistant for Revamp Vacations, an Armenia-focused travel marketplace. You help an operator (a host) with two things: (1) THEIR OWN bookings and payouts, and (2) how to be a great host, using Revamp's Partner Hub knowledge base.
+const SYSTEM = `You are Aha AI, the AI assistant for Revamp Vacations, an Armenia-focused travel marketplace. You help an operator (a host) with two things: (1) THEIR OWN bookings and payouts, and (2) how to be a great host, using Revamp's Partner Hub knowledge base.
 
 You are given two context sections. Rules:
 

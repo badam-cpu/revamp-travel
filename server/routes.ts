@@ -211,7 +211,7 @@ const bookingDecisionSchema = z.object({ bookingId: z.string().uuid() });
 
 // --- Aha writing assist (listing copy) ---
 const ahaCopySchema = z.object({
-  field: z.enum(["title", "shortDescription", "longDescription", "highlights"]),
+  field: z.enum(["title", "shortDescription", "longDescription", "highlights", "neighborhood"]),
   mode: z.enum(["generate", "improve"]),
   listingType: z.enum(["stay", "tour", "experience", "eat"]),
   current: z.string().max(6000).optional(),

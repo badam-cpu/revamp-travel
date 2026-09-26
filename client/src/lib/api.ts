@@ -262,7 +262,7 @@ export interface AhaCopyContext {
   notes?: string;
 }
 export interface AhaCopyParams {
-  field: "title" | "shortDescription" | "longDescription" | "highlights";
+  field: "title" | "shortDescription" | "longDescription" | "highlights" | "neighborhood";
   mode: "generate" | "improve";
   listingType: "stay" | "tour" | "experience" | "eat";
   current?: string;
