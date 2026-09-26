@@ -47,6 +47,7 @@ const EMPTY_HOME = {
   mapIntro: "",
   footerTagline: "",
   footerSubcopy: "",
+  operatorCallUrl: "",
 };
 
 type RegionCard = { id: string; name: string; label: string; image: string };
@@ -122,6 +123,7 @@ export function AdminSiteContent() {
       mapIntro: h.mapIntro ?? "",
       footerTagline: h.footerTagline ?? "",
       footerSubcopy: h.footerSubcopy ?? "",
+      operatorCallUrl: h.operatorCallUrl ?? "",
     });
     const seedRegions = h.regionCards && h.regionCards.length ? h.regionCards : HOME_REGIONS;
     setRegionCards(seedRegions.map((r) => ({ id: crypto.randomUUID(), name: r.name ?? "", label: r.label ?? "", image: (r as { image?: string }).image ?? "" })));
@@ -275,6 +277,7 @@ export function AdminSiteContent() {
             mapIntro: home.mapIntro.trim(),
             footerTagline: home.footerTagline.trim(),
             footerSubcopy: home.footerSubcopy.trim(),
+            operatorCallUrl: home.operatorCallUrl.trim(),
             faq: faq.map((f) => ({ q: f.q.trim(), a: f.a.trim() })).filter((f) => f.q && f.a),
             featuredOperatorIds: featuredOps,
             partners: partners
@@ -671,6 +674,10 @@ export function AdminSiteContent() {
           <div className="grid gap-2">
             <Label className="text-sm font-semibold">Sub-copy</Label>
             <Textarea rows={2} value={home.footerSubcopy} onChange={(e) => setHome((p) => ({ ...p, footerSubcopy: e.target.value }))} placeholder="Curated stays, tables, and local routes…" className="rounded-none text-base" />
+          </div>
+          <div className="grid gap-2 border-t border-basalt/10 pt-4">
+            <Label className="text-sm font-semibold">Operator "Book a quick call" link</Label>
+            <Input value={home.operatorCallUrl} onChange={(e) => setHome((p) => ({ ...p, operatorCallUrl: e.target.value }))} placeholder="https://calendly.com/… (shown on the /host operator pages; blank → sign-up)" className="rounded-none" />
           </div>
           {sectionSave()}
         </div>

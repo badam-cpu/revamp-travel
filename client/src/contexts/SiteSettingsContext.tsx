@@ -51,6 +51,9 @@ export interface HomeContent {
   mapIntro?: string;
   footerTagline?: string;
   footerSubcopy?: string;
+  /** "Book a quick call" scheduling link on the operator landing pages (/host).
+   *  Admin pastes a Calendly/cal.com URL; empty → the CTA falls back to signup. */
+  operatorCallUrl?: string;
   /** Admin-editable FAQ (falls back to the built-in FAQ_ITEMS when empty). */
   faq?: { q: string; a: string }[];
   /** Operator profile ids pinned to the top of /partners ("big names first"). */

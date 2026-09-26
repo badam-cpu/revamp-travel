@@ -23,6 +23,7 @@ import { regions, typeLabels, ARMENIA_REGIONS } from "../shared/listings.js";
 import { slugify } from "../shared/slug.js";
 import { compareEatListings } from "../shared/eat.js";
 import { GUIDES, GUIDE_HUB, findGuide, type Guide } from "../shared/guides.js";
+import { HOST_HUB, HOST_PAGES, findHostPage, type HostPage } from "../shared/hostLanding.js";
 import type { ListingType } from "../shared/listings.js";
 import { buildArticleJsonLd, buildBlogListJsonLd, buildBreadcrumbJsonLd, buildCollectionPageJsonLd, buildFaqJsonLd, buildListingJsonLd, buildOrganizationJsonLd, buildWebsiteJsonLd } from "../shared/seo.js";
 import { renderMarkdown, markdownToPlain } from "../shared/markdown.js";
@@ -42,6 +43,8 @@ export type PageKind =
   | "eat-cuisine"
   | "guide-hub"
   | "guide"
+  | "host-hub"
+  | "host"
   | "faq"
   | "partners"
   | "gift-cards"
@@ -84,6 +87,9 @@ export function matchRoute(pathname: string): MatchedRoute {
   if (path === "/guide") return { kind: "guide-hub" };
   const guideMatch = path.match(/^\/guide\/([^/]+)$/);
   if (guideMatch) return { kind: "guide", slug: decodeURIComponent(guideMatch[1]) };
+  if (path === "/host") return { kind: "host-hub" };
+  const hostMatch = path.match(/^\/host\/([^/]+)$/);
+  if (hostMatch) return { kind: "host", slug: decodeURIComponent(hostMatch[1]) };
   const regionMatch = path.match(/^\/region\/([^/]+)$/);
   if (regionMatch) return { kind: "region", slug: decodeURIComponent(regionMatch[1]) };
   if (path === "/blog") return { kind: "blog" };
@@ -142,6 +148,13 @@ export async function renderForBot(pathname: string, origin: string): Promise<Re
       const g = route.slug ? findGuide(route.slug) : undefined;
       if (!g) return { status: 404, body: renderNotFound(origin) };
       return { status: 200, body: renderGuideArticle(g, origin) };
+    }
+    case "host-hub":
+      return { status: 200, body: renderHostHub(origin) };
+    case "host": {
+      const p = route.slug ? findHostPage(route.slug) : undefined;
+      if (!p) return { status: 404, body: renderNotFound(origin) };
+      return { status: 200, body: renderHostPage(p, origin) };
     }
     case "login":
       return { status: 200, body: renderAuthPage(origin, "login") };
@@ -604,6 +617,53 @@ ${sourcesHtml}
         { name: "Home", path: "/" },
         { name: "Travel guide", path: "/guide" },
         { name: guide.cardTitle, path },
+      ]),
+    ],
+    bodyHtml,
+  });
+}
+
+function renderHostHub(origin: string): string {
+  const bodyHtml = `
+<nav aria-label="Breadcrumb"><a href="${origin}/">Home</a> &gt; List with us</nav>
+<h1>${escapeHtml(HOST_HUB.title)}</h1>
+<p>${escapeHtml(HOST_HUB.intro)}</p>
+<p><a href="${origin}/signup">Become an operator</a></p>
+<ul>${HOST_HUB.cards.map((c) => `<li><a href="${origin}/host/${c.type}">${escapeHtml(c.title)}</a> — ${escapeHtml(c.blurb)}</li>`).join("")}</ul>`;
+  return renderPageShell({
+    title: "List with Revamp — Become an Operator in Armenia | Revamp Vacations",
+    description: HOST_HUB.intro.slice(0, 155),
+    canonical: `${origin}/host`,
+    ogImage: `${origin}${OG_IMAGE}`,
+    jsonLd: [buildBreadcrumbJsonLd(origin, [{ name: "Home", path: "/" }, { name: "List with us", path: "/host" }])],
+    bodyHtml,
+  });
+}
+
+function renderHostPage(page: HostPage, origin: string): string {
+  const path = `/host/${page.type}`;
+  const featuresHtml = `<h2>Everything you need to run it</h2><ul>${page.features.map((f) => `<li><strong>${escapeHtml(f.title)}:</strong> ${escapeHtml(f.body)}</li>`).join("")}</ul>`;
+  const stepsHtml = `<h2>How it works</h2><ol>${page.steps.map((s) => `<li><strong>${escapeHtml(s.title)}:</strong> ${escapeHtml(s.body)}</li>`).join("")}</ol>`;
+  const faqHtml = `<h2>Questions, answered</h2>${page.faq.map((f) => `<section><h3>${escapeHtml(f.q)}</h3><p>${escapeHtml(f.a)}</p></section>`).join("")}`;
+  const bodyHtml = `
+<nav aria-label="Breadcrumb"><a href="${origin}/">Home</a> &gt; <a href="${origin}/host">List with us</a> &gt; ${escapeHtml(page.title)}</nav>
+<h1>${escapeHtml(page.title)}</h1>
+<p>${escapeHtml(page.subtitle)}</p>
+<p><a href="${origin}/signup">Become an operator</a></p>
+${featuresHtml}
+${stepsHtml}
+${faqHtml}`;
+  return renderPageShell({
+    title: `${page.title} | Revamp Vacations`,
+    description: page.subtitle.slice(0, 155),
+    canonical: `${origin}${path}`,
+    ogImage: `${origin}${OG_IMAGE}`,
+    jsonLd: [
+      buildFaqJsonLd(page.faq),
+      buildBreadcrumbJsonLd(origin, [
+        { name: "Home", path: "/" },
+        { name: "List with us", path: "/host" },
+        { name: page.title, path },
       ]),
     ],
     bodyHtml,
