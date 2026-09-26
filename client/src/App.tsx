@@ -38,6 +38,7 @@ import Faq from "./pages/Faq";
 import Partners from "./pages/Partners";
 import GiftCards from "./pages/GiftCards";
 import Region from "./pages/Region";
+import Guide from "./pages/Guide";
 import Plan from "./pages/Plan";
 
 /** Loads GA4 (if configured) and reports a page view on every route change. */
@@ -92,6 +93,8 @@ function Router() {
       <Route path="/partners" component={Partners} />
       <Route path="/gift-cards" component={GiftCards} />
       <Route path="/region/:slug">{(params) => <Region slug={params.slug} />}</Route>
+      <Route path="/guide">{() => <Guide />}</Route>
+      <Route path="/guide/:slug">{(params) => <Guide slug={params.slug} />}</Route>
       <Route path="/blog" component={Blog} />
       <Route path="/blog/:slug">{(params) => <BlogPost params={params} />}</Route>
       <Route path="/checkout/:slug">{(params) => <Checkout slug={params.slug} />}</Route>

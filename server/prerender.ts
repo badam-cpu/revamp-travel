@@ -22,6 +22,7 @@ import { getPublishedCatalog, getPublishedPosts, getPublishedPostBySlug, getSite
 import { regions, typeLabels, ARMENIA_REGIONS } from "../shared/listings.js";
 import { slugify } from "../shared/slug.js";
 import { compareEatListings } from "../shared/eat.js";
+import { GUIDES, GUIDE_HUB, findGuide, type Guide } from "../shared/guides.js";
 import type { ListingType } from "../shared/listings.js";
 import { buildArticleJsonLd, buildBlogListJsonLd, buildBreadcrumbJsonLd, buildCollectionPageJsonLd, buildFaqJsonLd, buildListingJsonLd, buildOrganizationJsonLd, buildWebsiteJsonLd } from "../shared/seo.js";
 import { renderMarkdown, markdownToPlain } from "../shared/markdown.js";
@@ -39,6 +40,8 @@ export type PageKind =
   | "region"
   | "eat-region"
   | "eat-cuisine"
+  | "guide-hub"
+  | "guide"
   | "faq"
   | "partners"
   | "gift-cards"
@@ -78,6 +81,9 @@ export function matchRoute(pathname: string): MatchedRoute {
   if (eatCuisineMatch) return { kind: "eat-cuisine", slug: decodeURIComponent(eatCuisineMatch[1]) };
   const eatRegionMatch = path.match(/^\/eat\/([^/]+)$/);
   if (eatRegionMatch) return { kind: "eat-region", slug: decodeURIComponent(eatRegionMatch[1]) };
+  if (path === "/guide") return { kind: "guide-hub" };
+  const guideMatch = path.match(/^\/guide\/([^/]+)$/);
+  if (guideMatch) return { kind: "guide", slug: decodeURIComponent(guideMatch[1]) };
   const regionMatch = path.match(/^\/region\/([^/]+)$/);
   if (regionMatch) return { kind: "region", slug: decodeURIComponent(regionMatch[1]) };
   if (path === "/blog") return { kind: "blog" };
@@ -129,6 +135,13 @@ export async function renderForBot(pathname: string, origin: string): Promise<Re
     case "eat-cuisine": {
       const body = renderEatLanding(catalog, origin, "cuisine", route.slug ?? "");
       return body ? { status: 200, body } : { status: 404, body: renderNotFound(origin) };
+    }
+    case "guide-hub":
+      return { status: 200, body: renderGuideHub(origin) };
+    case "guide": {
+      const g = route.slug ? findGuide(route.slug) : undefined;
+      if (!g) return { status: 404, body: renderNotFound(origin) };
+      return { status: 200, body: renderGuideArticle(g, origin) };
     }
     case "login":
       return { status: 200, body: renderAuthPage(origin, "login") };
@@ -530,6 +543,67 @@ ${nearby.length ? `<h2>Where to stay &amp; what to do in ${escapeHtml(label)}</h
         { name: "Home", path: "/" },
         { name: "Where to eat", path: "/explore/eat" },
         { name: label, path },
+      ]),
+    ],
+    bodyHtml,
+  });
+}
+
+function renderGuideHub(origin: string): string {
+  const bodyHtml = `
+<nav aria-label="Breadcrumb"><a href="${origin}/">Home</a> &gt; Travel guide</nav>
+<h1>${escapeHtml(GUIDE_HUB.title)}</h1>
+<p>${escapeHtml(GUIDE_HUB.intro)}</p>
+<ul>${GUIDES.map((g) => `<li><a href="${origin}/guide/${g.slug}">${escapeHtml(g.cardTitle)}</a> — ${escapeHtml(g.cardBlurb)}</li>`).join("")}</ul>`;
+  return renderPageShell({
+    title: "Armenia Travel Essentials — Visa, Money, Transport & More | Revamp Vacations",
+    description: GUIDE_HUB.intro.slice(0, 155),
+    canonical: `${origin}/guide`,
+    ogImage: `${origin}${OG_IMAGE}`,
+    jsonLd: [buildBreadcrumbJsonLd(origin, [{ name: "Home", path: "/" }, { name: "Travel guide", path: "/guide" }])],
+    bodyHtml,
+  });
+}
+
+function renderGuideArticle(guide: Guide, origin: string): string {
+  const path = `/guide/${guide.slug}`;
+  const sectionsHtml = guide.sections
+    .map((s) => `${s.heading ? `<h2>${escapeHtml(s.heading)}</h2>` : ""}${(s.body ?? []).map((p) => `<p>${escapeHtml(p)}</p>`).join("")}${s.bullets ? `<ul>${s.bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join("")}</ul>` : ""}`)
+    .join("\n");
+  const faqHtml = `<h2>Good to know</h2>${guide.faq.map((f) => `<section><h3>${escapeHtml(f.q)}</h3><p>${escapeHtml(f.a)}</p></section>`).join("")}`;
+  const sourcesHtml = guide.sources?.length ? `<p>Official sources: ${guide.sources.map((s) => `<a href="${escapeHtml(s.url)}">${escapeHtml(s.label)}</a>`).join(" · ")}</p>` : "";
+  const bodyHtml = `
+<nav aria-label="Breadcrumb"><a href="${origin}/">Home</a> &gt; <a href="${origin}/guide">Travel guide</a> &gt; ${escapeHtml(guide.cardTitle)}</nav>
+<h1>${escapeHtml(guide.title)}</h1>
+<p>${escapeHtml(guide.summary)}</p>
+${sectionsHtml}
+${faqHtml}
+${sourcesHtml}
+<a href="${origin}/guide">All travel essentials</a>`;
+  const articleJsonLd: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: guide.title,
+    description: guide.summary,
+    url: `${origin}${path}`,
+    mainEntityOfPage: `${origin}${path}`,
+    dateModified: guide.updated,
+    inLanguage: "en",
+    publisher: { "@type": "Organization", name: "Revamp Vacations" },
+    about: { "@type": "Country", name: "Armenia" },
+  };
+  return renderPageShell({
+    title: `${guide.title} | Revamp Vacations`,
+    description: guide.summary.slice(0, 155),
+    canonical: `${origin}${path}`,
+    ogImage: `${origin}${OG_IMAGE}`,
+    jsonLd: [
+      articleJsonLd,
+      buildFaqJsonLd(guide.faq),
+      buildBreadcrumbJsonLd(origin, [
+        { name: "Home", path: "/" },
+        { name: "Travel guide", path: "/guide" },
+        { name: guide.cardTitle, path },
       ]),
     ],
     bodyHtml,

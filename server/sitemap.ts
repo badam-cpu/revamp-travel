@@ -9,9 +9,10 @@
 import type { Request, Response } from "express";
 import { getPublishedCatalog, getPublishedPosts } from "./supabase.js";
 import { REGION_GUIDES } from "../shared/regionGuides.js";
+import { GUIDES } from "../shared/guides.js";
 import { slugify } from "../shared/slug.js";
 
-const STATIC_ROUTES = ["/", "/explore", "/explore/stay", "/explore/eat", "/explore/tour", "/explore/experience", "/map", "/plan", "/faq", "/partners", "/gift-cards", "/blog", "/login", "/signup", ...REGION_GUIDES.map((g) => `/region/${g.slug}`)];
+const STATIC_ROUTES = ["/", "/explore", "/explore/stay", "/explore/eat", "/explore/tour", "/explore/experience", "/map", "/plan", "/faq", "/partners", "/gift-cards", "/blog", "/guide", "/login", "/signup", ...REGION_GUIDES.map((g) => `/region/${g.slug}`), ...GUIDES.map((g) => `/guide/${g.slug}`)];
 
 const normalizeRegionName = (r: string) => r.trim().replace(/\s+(province|marz)$/i, "").trim();
 

@@ -55,6 +55,7 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
             <Link href="/explore/experience" className="hover:text-white">Experiences</Link>
             <Link href="/map" className="hover:text-white">Open the map</Link>
             <Link href="/plan" className="hover:text-white">AI trip planner</Link>
+            <Link href="/guide" className="hover:text-white">Travel guide</Link>
             <Link href="/blog" className="hover:text-white">Blog</Link>
             <Link href="/partners" className="hover:text-white">Partners</Link>
             <Link href="/gift-cards" className="hover:text-white">Gift cards</Link>
