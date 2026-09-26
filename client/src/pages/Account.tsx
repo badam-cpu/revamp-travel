@@ -35,6 +35,7 @@ import { supabase } from "@/lib/supabase";
 import { confirmCheckout, cancelBooking, ensureBookingThread } from "@/lib/api";
 import { uploadImage } from "@/lib/imageUpload";
 import { trackEvent } from "@/lib/analytics";
+import { TelegramConnect } from "@/components/TelegramConnect";
 import type { BookingStatus } from "@shared/bookings";
 import { toast } from "sonner";
 
@@ -188,6 +189,7 @@ export function ProfileTab() {
           {saving ? "Saving…" : "Save profile"}
         </Button>
       </div>
+      <TelegramConnect />
     </form>
   );
 }

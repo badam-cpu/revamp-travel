@@ -30,6 +30,8 @@ import { isAllowedGiftAmount } from "../shared/giftcards.js";
 import { payoutState } from "../shared/payouts.js";
 import { sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, type BookingEmailInfo } from "./email.js";
 import { notifyBooking } from "./notify.js";
+import { telegramConfigured, telegramConnectLink, telegramBotUsername, setTelegramWebhook, sendTelegram } from "./telegram.js";
+import { randomUUID } from "crypto";
 import { formatSlotTime, slotLocalDate } from "../shared/sessions.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, promoDiscount, addonUnitCost, nightsBetween, type Addon, DEFAULT_CURRENCY } from "../shared/bookings.js";
@@ -1512,6 +1514,102 @@ export function registerApiRoutes(app: Express) {
       console.error("[listing-inquiry-thread]", err);
       res.status(500).json({ error: "Couldn't open the conversation. Please try again." });
     }
+  });
+
+  // --- Telegram opt-in notifications (free channel) -------------------------
+  // POST /api/telegram/connect — issue a one-time deep link the customer taps to
+  // link their Telegram chat to their account.
+  app.post("/api/telegram/connect", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in first." });
+    if (!telegramConfigured()) return res.status(503).json({ error: "Telegram isn't available right now." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Telegram isn't available right now." });
+    const connectToken = randomUUID().replace(/-/g, "");
+    const { error } = await admin
+      .from("telegram_links")
+      .upsert({ user_id: userId, connect_token: connectToken, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+    if (error) {
+      console.error("[telegram/connect]", error);
+      return res.status(500).json({ error: "Couldn't start the connection." });
+    }
+    res.json({ url: telegramConnectLink(connectToken), username: telegramBotUsername() });
+  });
+
+  // GET /api/telegram/status — is this account's Telegram linked?
+  app.get("/api/telegram/status", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in first." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.json({ connected: false, configured: telegramConfigured() });
+    const { data } = await admin.from("telegram_links").select("chat_id").eq("user_id", userId).maybeSingle();
+    res.json({ connected: !!data?.chat_id, configured: telegramConfigured() });
+  });
+
+  // POST /api/telegram/disconnect — unlink.
+  app.post("/api/telegram/disconnect", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in first." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    await admin.from("telegram_links").update({ chat_id: null, connect_token: null, updated_at: new Date().toISOString() }).eq("user_id", userId);
+    res.json({ ok: true });
+  });
+
+  // POST /api/telegram-webhook — Telegram calls this. A `/start <token>` from the
+  // deep link links the sender's chat id to the account that owns the token.
+  // Always acknowledges (200) so Telegram doesn't retry-storm.
+  app.post("/api/telegram-webhook", async (req: Request, res: Response) => {
+    const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+    if (secret && req.get("X-Telegram-Bot-Api-Secret-Token") !== secret) return res.status(401).end();
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(200).json({ ok: true });
+    try {
+      const msg = (req.body as { message?: { text?: string; chat?: { id?: number | string } } })?.message;
+      const text = msg?.text;
+      const chatId = msg?.chat?.id;
+      if (text && chatId != null && text.startsWith("/start")) {
+        const startToken = text.split(/\s+/)[1];
+        if (startToken) {
+          const { data: link } = await admin.from("telegram_links").select("user_id").eq("connect_token", startToken).maybeSingle();
+          if (link) {
+            await admin.from("telegram_links").update({ chat_id: String(chatId), connect_token: null, updated_at: new Date().toISOString() }).eq("user_id", link.user_id);
+            await sendTelegram(String(chatId), "✅ Connected to Revamp. You'll get your booking updates right here.");
+          } else {
+            await sendTelegram(String(chatId), "That link has expired. Open your Revamp account and tap ‘Connect Telegram’ again.");
+          }
+        } else {
+          await sendTelegram(String(chatId), "Welcome to Revamp! Open your account on revampvacations.com and tap ‘Connect Telegram’ to link this chat.");
+        }
+      }
+    } catch (e) {
+      console.error("[telegram-webhook]", e);
+    }
+    res.status(200).json({ ok: true });
+  });
+
+  // POST /api/telegram/set-webhook — admin: register the webhook with Telegram
+  // (one-time after deploy, or when the URL/secret changes).
+  app.post("/api/telegram/set-webhook", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    if (!telegramConfigured()) return res.status(503).json({ error: "Set TELEGRAM_BOT_TOKEN first." });
+    const admin = supabaseAdmin();
+    if (admin) {
+      const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+      if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+    }
+    const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
+    const r = await setTelegramWebhook(`${site}/api/telegram-webhook`, process.env.TELEGRAM_WEBHOOK_SECRET);
+    res.json(r);
   });
 
   // POST /api/message-send — post a message into a conversation. The caller must

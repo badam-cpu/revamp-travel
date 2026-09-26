@@ -403,6 +403,30 @@ export async function ensureListingInquiryThread(
   return res.conversationId;
 }
 
+/** Telegram opt-in — get a one-time deep link to connect the account's Telegram. */
+export async function telegramConnect(): Promise<{ url: string; username: string }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in first.");
+  return request<{ url: string; username: string }>("/api/telegram/connect", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+}
+
+/** Telegram opt-in — is this account's Telegram linked, and is the feature configured? */
+export async function telegramStatus(): Promise<{ connected: boolean; configured: boolean }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return { connected: false, configured: false };
+  return request<{ connected: boolean; configured: boolean }>("/api/telegram/status", { headers: { Authorization: `Bearer ${token}` } });
+}
+
+/** Telegram opt-in — unlink. */
+export async function telegramDisconnect(): Promise<{ ok: boolean }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in first.");
+  return request<{ ok: boolean }>("/api/telegram/disconnect", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+}
+
 /** Unified inbox — send a message into a conversation (guardrail-scanned server-side). */
 export async function sendInboxMessage(conversationId: string, body: string): Promise<{ id: string }> {
   const { data } = await supabase.auth.getSession();

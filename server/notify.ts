@@ -9,6 +9,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendSms, sendWhatsApp, sendViber } from "./sms.js";
+import { sendTelegram } from "./telegram.js";
 import { postSystemMessage } from "./inbox.js";
 
 async function logEvent(admin: SupabaseClient, bookingId: string, type: string, detail?: string): Promise<void> {
@@ -44,8 +45,21 @@ export async function notifyBooking(
     body: opts.inboxBody,
   });
 
-  const phone = (opts.travelerPhone || "").trim();
   const smsBody = opts.smsBody;
+
+  // Telegram: a free opt-in channel. The customer links it via the bot, so being
+  // connected IS the consent — send whenever the traveler has a linked chat,
+  // independent of the phone-channel checkbox. (Guests without an account can't
+  // link, so this only reaches signed-in travelers.)
+  if (opts.travelerId && smsBody) {
+    const { data: tg } = await admin.from("telegram_links").select("chat_id").eq("user_id", opts.travelerId).maybeSingle();
+    if (tg?.chat_id) {
+      const r = await sendTelegram(tg.chat_id, smsBody);
+      if (r.reason !== "not_configured") await logEvent(admin, opts.bookingId, r.sent ? "telegram_sent" : "telegram_failed", r.sent ? "telegram" : `Telegram failed (${r.reason ?? "unknown"}).`);
+    }
+  }
+
+  const phone = (opts.travelerPhone || "").trim();
   if (phone && smsBody) {
     // Only text/WhatsApp/Viber a customer who explicitly opted in at checkout.
     const { data: consentRow } = await admin.from("bookings").select("messaging_consent").eq("id", opts.bookingId).maybeSingle();
