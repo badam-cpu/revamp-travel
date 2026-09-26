@@ -144,6 +144,13 @@ const bookingPaymentSchema = z.object({
   paymentStatus: z.enum(["paid", "unpaid"]),
 });
 
+const bookingContactSchema = z.object({
+  bookingId: z.string().uuid(),
+  guestName: z.string().trim().max(120).optional().default(""),
+  guestEmail: z.string().trim().max(200).optional().default(""),
+  guestPhone: z.string().trim().max(40).optional().default(""),
+});
+
 const supportChatSchema = z.object({
   message: z.string().trim().min(1).max(2000),
 });
@@ -1076,6 +1083,40 @@ export function registerApiRoutes(app: Express) {
     const { error: upErr } = await admin.from("bookings").update({ payment_status: paymentStatus }).eq("id", bookingId);
     if (upErr) return res.status(500).json({ error: "Couldn't update the payment status." });
     await logBookingEvent(admin, bookingId, "payment_status", `Marked ${paymentStatus} by the operator.`);
+    res.json({ ok: true });
+  });
+
+  // POST /api/operator-booking-contact — edit the guest's contact details on a
+  // booking (name / email / phone). Useful for direct bookings entered by hand.
+  // Allowed for the owning operator or an admin; service-role update.
+  app.post("/api/operator-booking-contact", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in as an operator." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available yet." });
+
+    const parsed = bookingContactSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    const { bookingId, guestName, guestEmail, guestPhone } = parsed.data;
+
+    const { data: bk, error: readErr } = await admin
+      .from("bookings")
+      .select("id, listings!inner(operator_id)")
+      .eq("id", bookingId)
+      .maybeSingle();
+    if (readErr || !bk) return res.status(404).json({ error: "Booking not found." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if ((bk as unknown as { listings: { operator_id: string } }).listings.operator_id !== userId && me?.role !== "admin") {
+      return res.status(403).json({ error: "That booking isn't on your listing." });
+    }
+    const { error: upErr } = await admin
+      .from("bookings")
+      .update({ guest_name: guestName || null, guest_email: guestEmail || null, guest_phone: guestPhone || null })
+      .eq("id", bookingId);
+    if (upErr) return res.status(500).json({ error: "Couldn't update the contact details." });
+    await logBookingEvent(admin, bookingId, "contact_updated", "Guest contact details updated by the operator.");
     res.json({ ok: true });
   });
 

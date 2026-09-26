@@ -342,6 +342,21 @@ export async function createDirectBooking(input: DirectBookingInput): Promise<{ 
   });
 }
 
+/** Operator/admin edits a booking's guest contact details (name/email/phone). */
+export async function updateBookingContact(
+  bookingId: string,
+  contact: { name?: string; email?: string; phone?: string },
+): Promise<{ ok: boolean }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in as an operator.");
+  return request<{ ok: boolean }>("/api/operator-booking-contact", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ bookingId, guestName: contact.name || "", guestEmail: contact.email || "", guestPhone: contact.phone || "" }),
+  });
+}
+
 /** Operator flips a direct booking's payment status (paid/unpaid). */
 export async function setBookingPayment(bookingId: string, paymentStatus: "paid" | "unpaid"): Promise<{ ok: boolean }> {
   const { data } = await supabase.auth.getSession();

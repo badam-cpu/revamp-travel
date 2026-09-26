@@ -6,12 +6,13 @@
  * the operator's own listings.
  */
 import { useEffect, useState } from "react";
-import { Mail, Phone, User } from "lucide-react";
+import { Mail, Phone, User, Pencil } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
-import { setBookingPayment, cancelBooking, ensureBookingThread } from "@/lib/api";
+import { setBookingPayment, cancelBooking, ensureBookingThread, updateBookingContact } from "@/lib/api";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { BookingStatus } from "@shared/bookings";
@@ -84,6 +85,12 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
   const [savingPay, setSavingPay] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [messaging, setMessaging] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [editingContact, setEditingContact] = useState(false);
+  const [cName, setCName] = useState("");
+  const [cEmail, setCEmail] = useState("");
+  const [cPhone, setCPhone] = useState("");
+  const [savingContact, setSavingContact] = useState(false);
   const [, navigate] = useLocation();
 
   useEffect(() => {
@@ -110,10 +117,32 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
       .eq("booking_id", bookingId)
       .order("created_at", { ascending: false })
       .then(({ data, error }) => setEvents(error ? [] : ((data ?? []) as BookingEvent[])));
-  }, [bookingId]);
+  }, [bookingId, reloadKey]);
 
   const b = booking;
   const guestName = b?.guest_name || b?.profiles?.display_name || "Guest";
+
+  const startEditContact = () => {
+    setCName(b?.guest_name || "");
+    setCEmail(b?.guest_email || "");
+    setCPhone(b?.guest_phone || "");
+    setEditingContact(true);
+  };
+  const saveContact = async () => {
+    if (!b) return;
+    setSavingContact(true);
+    try {
+      await updateBookingContact(b.id, { name: cName.trim(), email: cEmail.trim(), phone: cPhone.trim() });
+      setEditingContact(false);
+      setReloadKey((k) => k + 1);
+      onChanged?.();
+      toast("Contact details updated.");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't update the contact details.");
+    } finally {
+      setSavingContact(false);
+    }
+  };
   const todayIso = new Date().toISOString().slice(0, 10);
   const canCancel = !!b && (b.status === "pending_payment" || b.status === "confirmed") && b.start_date >= todayIso;
 
@@ -175,12 +204,31 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
             <div className="grid gap-6 p-5">
               {/* Guest */}
               <section>
-                <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-basalt/45">Guest</h3>
-                <div className="mt-2 grid gap-1.5 text-sm">
-                  <p className="flex items-center gap-2"><User className="h-4 w-4 text-basalt/40" /> {guestName}</p>
-                  <p className="flex items-center gap-2"><Mail className="h-4 w-4 text-basalt/40" /> {b.guest_email ? <a href={`mailto:${b.guest_email}`} className="text-apricot hover:underline">{b.guest_email}</a> : <span className="text-basalt/40">Not shared (account guest)</span>}</p>
-                  <p className="flex items-center gap-2"><Phone className="h-4 w-4 text-basalt/40" /> {b.guest_phone ? <a href={`tel:${b.guest_phone}`} className="text-apricot hover:underline">{b.guest_phone}</a> : <span className="text-basalt/40">—</span>}</p>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-basalt/45">Guest</h3>
+                  {!editingContact && (
+                    <button type="button" onClick={startEditContact} className="inline-flex items-center gap-1 text-[11px] font-semibold text-basalt/50 transition-colors hover:text-apricot">
+                      <Pencil className="h-3 w-3" /> Edit
+                    </button>
+                  )}
                 </div>
+                {editingContact ? (
+                  <div className="mt-2 grid gap-2">
+                    <Input value={cName} onChange={(e) => setCName(e.target.value)} placeholder="Guest name" className="h-10 rounded-none" />
+                    <Input type="email" value={cEmail} onChange={(e) => setCEmail(e.target.value)} placeholder="Email (optional)" className="h-10 rounded-none" />
+                    <Input type="tel" value={cPhone} onChange={(e) => setCPhone(e.target.value)} placeholder="Phone (optional)" className="h-10 rounded-none" />
+                    <div className="flex items-center gap-2">
+                      <Button onClick={saveContact} disabled={savingContact} className="h-9 rounded-none bg-apricot text-white hover:bg-apricot/90">{savingContact ? "Saving…" : "Save"}</Button>
+                      <button type="button" onClick={() => setEditingContact(false)} disabled={savingContact} className="text-sm font-semibold text-basalt/50 hover:text-basalt">Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-2 grid gap-1.5 text-sm">
+                    <p className="flex items-center gap-2"><User className="h-4 w-4 text-basalt/40" /> {guestName}</p>
+                    <p className="flex items-center gap-2"><Mail className="h-4 w-4 text-basalt/40" /> {b.guest_email ? <a href={`mailto:${b.guest_email}`} className="text-apricot hover:underline">{b.guest_email}</a> : <span className="text-basalt/40">Not shared (account guest)</span>}</p>
+                    <p className="flex items-center gap-2"><Phone className="h-4 w-4 text-basalt/40" /> {b.guest_phone ? <a href={`tel:${b.guest_phone}`} className="text-apricot hover:underline">{b.guest_phone}</a> : <span className="text-basalt/40">—</span>}</p>
+                  </div>
+                )}
               </section>
 
               {/* Stay */}
