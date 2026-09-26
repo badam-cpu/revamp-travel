@@ -28,7 +28,7 @@ import { scanMessage } from "./messaging.js";
 import { reserveGift, releaseGift, refundGiftForBooking, lookupRedeemableGift, reconcilePurchaserGiftCards, logGiftEvent, voidGiftCard } from "./giftcards.js";
 import { isAllowedGiftAmount } from "../shared/giftcards.js";
 import { payoutState } from "../shared/payouts.js";
-import { sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, type BookingEmailInfo } from "./email.js";
+import { sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, type BookingEmailInfo } from "./email.js";
 import { notifyBooking } from "./notify.js";
 import { telegramConfigured, telegramConnectLink, telegramBotUsername, setTelegramWebhook, sendTelegram } from "./telegram.js";
 import { randomUUID } from "crypto";
@@ -134,6 +134,9 @@ const directBookingSchema = z.object({
   guestPhone: z.string().trim().max(40).optional().default(""),
   baseCents: z.number().int().min(0).max(1_000_000_000), // pre-tax: rate×nights + cleaning, or the tour total
   paymentStatus: z.enum(["paid", "unpaid"]).default("unpaid"),
+  // "offline" (default): confirmed now, money handled offline. "paylink": create a
+  // pending booking + email the customer a PayLink payment link to pay themselves.
+  collectVia: z.enum(["offline", "paylink"]).optional().default("offline"),
 });
 
 const bookingPaymentSchema = z.object({
@@ -927,16 +930,25 @@ export function registerApiRoutes(app: Express) {
 
     const parsed = directBookingSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
-    const { listingId, sessionId, startDate, endDate, guests, guestName, guestEmail, guestPhone, baseCents, paymentStatus } = parsed.data;
+    const { listingId, sessionId, startDate, endDate, guests, guestName, guestEmail, guestPhone, baseCents, paymentStatus, collectVia } = parsed.data;
     if (endDate <= startDate) return res.status(400).json({ error: "The end date must be after the start date." });
 
     // The caller must own the listing.
-    const { data: listing, error: readErr } = await admin.from("listings").select("id, operator_id").eq("id", listingId).maybeSingle();
+    const { data: listing, error: readErr } = await admin.from("listings").select("id, operator_id, title, city, region, slug, type").eq("id", listingId).maybeSingle();
     if (readErr || !listing) return res.status(404).json({ error: "Listing not found." });
     if (listing.operator_id !== userId) return res.status(403).json({ error: "That listing isn't yours." });
 
-    // Slot booking: reserve a seat on a specific time slot so an operator's
-    // offline sale and online bookings can't oversell the same session.
+    const viaPayLink = collectVia === "paylink";
+    if (viaPayLink) {
+      if (!paylinkConfigured()) return res.status(503).json({ error: "Payments aren't available yet." });
+      if (!guestEmail) return res.status(400).json({ error: "Add the customer's email to send them a payment link." });
+    }
+
+    // Resolve a time slot (tour/experience) and reserve its seat, if one was picked,
+    // so an operator's sale and online bookings can't oversell the same session.
+    let slotStartsAt: string | null = null;
+    let rowStart = startDate;
+    let rowEnd = endDate;
     if (sessionId) {
       const { data: session } = await admin
         .from("listing_sessions")
@@ -945,76 +957,94 @@ export function registerApiRoutes(app: Express) {
         .maybeSingle();
       if (!session || session.listing_id !== listingId) return res.status(404).json({ error: "That time slot wasn't found." });
       if (Date.parse(session.starts_at as string) < Date.now()) return res.status(400).json({ error: "That time slot has already passed." });
-
       const reserved = await reserveSeats(admin, sessionId, guests);
       if (!reserved) return res.status(409).json({ error: "That time slot doesn't have enough seats left." });
-
-      const slotCharge = computeBookingCharge(baseCents);
-      const slotDate = slotLocalDate(session.starts_at as string);
-      const slotEnd = new Date(Date.parse(slotDate + "T00:00:00Z") + 86_400_000).toISOString().slice(0, 10);
-      const { data: slot, error: slotErr } = await admin
-        .from("bookings")
-        .insert({
-          listing_id: listingId,
-          traveler_id: null,
-          start_date: slotDate,
-          end_date: slotEnd,
-          starts_at: session.starts_at,
-          session_id: sessionId,
-          guests,
-          amount_cents: slotCharge.totalCents,
-          base_cents: slotCharge.baseCents,
-          tax_cents: slotCharge.taxCents,
-          currency: DEFAULT_CURRENCY,
-          status: "confirmed",
-          provider: "direct",
-          payment_status: paymentStatus,
-          guest_name: guestName,
-          guest_email: guestEmail || null,
-          guest_phone: guestPhone || null,
-        })
-        .select("id")
-        .single();
-      if (slotErr) {
-        await releaseSeats(admin, sessionId, guests);
-        console.error("[direct-booking:slot]", slotErr);
-        return res.status(500).json({ error: "Couldn't create the booking." });
-      }
-      await logBookingEvent(admin, slot.id, "direct_created", `Direct slot booking recorded by the operator (${paymentStatus}).`);
-      return res.json({ id: slot.id, totalCents: slotCharge.totalCents });
+      slotStartsAt = session.starts_at as string;
+      rowStart = slotLocalDate(slotStartsAt);
+      rowEnd = new Date(Date.parse(rowStart + "T00:00:00Z") + 86_400_000).toISOString().slice(0, 10);
     }
+    const releaseSlot = async () => { if (sessionId) await releaseSeats(admin, sessionId, guests); };
 
     const charge = computeBookingCharge(baseCents);
+    const row: Record<string, unknown> = {
+      listing_id: listingId,
+      traveler_id: null,
+      start_date: rowStart,
+      end_date: rowEnd,
+      guests,
+      amount_cents: charge.totalCents,
+      base_cents: charge.baseCents,
+      tax_cents: charge.taxCents,
+      currency: DEFAULT_CURRENCY,
+      guest_name: guestName,
+      guest_email: guestEmail || null,
+      guest_phone: guestPhone || null,
+    };
+    if (slotStartsAt) { row.session_id = sessionId; row.starts_at = slotStartsAt; }
+
+    const emailInfo: BookingEmailInfo = {
+      listingTitle: listing.title,
+      startDate: rowStart,
+      endDate: rowEnd,
+      guests,
+      amountCents: charge.totalCents,
+      currency: DEFAULT_CURRENCY,
+      city: listing.city,
+      region: listing.region,
+      slug: listing.slug,
+      type: listing.type,
+      time: slotStartsAt ? formatSlotTime(slotStartsAt) : undefined,
+    };
+
+    // PayLink: create a PENDING booking and email the customer a payment link.
+    // They pay themselves; the reconcile cron confirms it (and fires the usual
+    // confirmation notifications) once the payment clears — same as online.
+    if (viaPayLink) {
+      const currency = process.env.PAYLINK_CURRENCY || DEFAULT_CURRENCY;
+      const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
+      let pay;
+      try {
+        pay = await registerPayment({
+          amount: currency === "AMD" ? Math.round(charge.totalCents / 100) : charge.totalCents / 100,
+          currency,
+          returnUrl: `${site}/`,
+          info: `Revamp booking · ${listing.title}`,
+        });
+      } catch (e) {
+        await releaseSlot();
+        console.error("[direct-booking:paylink] register", e);
+        return res.status(502).json({ error: "Couldn't create the payment link." });
+      }
+      if (!pay.redirectUrl) { await releaseSlot(); return res.status(502).json({ error: "Couldn't create the payment link." }); }
+      const { data: created, error: insErr } = await admin
+        .from("bookings")
+        .insert({ ...row, currency, status: "pending_payment", provider: "paylink", paylink_request_id: pay.requestId, paylink_order_id: pay.orderId })
+        .select("id")
+        .single();
+      if (insErr) {
+        await releaseSlot();
+        console.error("[direct-booking:paylink] insert", insErr);
+        return res.status(500).json({ error: "Couldn't create the booking." });
+      }
+      try { await sendPaymentLink(guestEmail as string, emailInfo, pay.redirectUrl); } catch (e) { console.error("[direct-booking:paylink] email", e); }
+      await logBookingEvent(admin, created.id, "payment_link_sent", `Operator created a booking and emailed a PayLink link to ${guestEmail}.`);
+      return res.json({ id: created.id, totalCents: charge.totalCents, paymentLinkSent: true, redirectUrl: pay.redirectUrl });
+    }
+
+    // Offline: confirmed now, money handled outside Revamp.
     const { data, error } = await admin
       .from("bookings")
-      .insert({
-        listing_id: listingId,
-        traveler_id: null,
-        start_date: startDate,
-        end_date: endDate,
-        guests,
-        amount_cents: charge.totalCents,
-        base_cents: charge.baseCents,
-        tax_cents: charge.taxCents,
-        currency: DEFAULT_CURRENCY,
-        status: "confirmed",
-        provider: "direct",
-        payment_status: paymentStatus,
-        guest_name: guestName,
-        guest_email: guestEmail || null,
-        guest_phone: guestPhone || null,
-      })
+      .insert({ ...row, status: "confirmed", provider: "direct", payment_status: paymentStatus })
       .select("id")
       .single();
     if (error) {
+      await releaseSlot();
       // 23P01 = exclusion_violation: overlaps an existing confirmed booking.
-      if ((error as { code?: string }).code === "23P01") {
-        return res.status(409).json({ error: "Those dates already have a confirmed booking." });
-      }
+      if ((error as { code?: string }).code === "23P01") return res.status(409).json({ error: "Those dates already have a confirmed booking." });
       console.error("[direct-booking]", error);
       return res.status(500).json({ error: "Couldn't create the booking." });
     }
-    await logBookingEvent(admin, data.id, "direct_created", `Direct booking recorded by the operator (${paymentStatus}).`);
+    await logBookingEvent(admin, data.id, "direct_created", `Direct booking recorded by the operator (${paymentStatus}${sessionId ? ", slot" : ""}).`);
     res.json({ id: data.id, totalCents: charge.totalCents });
   });
 

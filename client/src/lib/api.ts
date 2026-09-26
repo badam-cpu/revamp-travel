@@ -326,14 +326,16 @@ export interface DirectBookingInput {
   /** Pre-tax amount in AMD cents (rate×nights + cleaning, or the tour total). */
   baseCents: number;
   paymentStatus: "paid" | "unpaid";
+  /** "offline" (default): confirmed now. "paylink": email the customer a payment link. */
+  collectVia?: "offline" | "paylink";
 }
 
-/** Operator records an offline/direct booking that blocks the dates. */
-export async function createDirectBooking(input: DirectBookingInput): Promise<{ id: string; totalCents: number }> {
+/** Operator records a direct booking — offline (confirmed) or by emailing a PayLink link. */
+export async function createDirectBooking(input: DirectBookingInput): Promise<{ id: string; totalCents: number; paymentLinkSent?: boolean; redirectUrl?: string }> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new ApiError("Sign in as an operator.");
-  return request<{ id: string; totalCents: number }>("/api/operator-direct-booking", {
+  return request<{ id: string; totalCents: number; paymentLinkSent?: boolean; redirectUrl?: string }>("/api/operator-direct-booking", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify(input),

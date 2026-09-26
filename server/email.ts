@@ -224,6 +224,20 @@ export function sendGuestBookingApproved(to: string, b: BookingEmailInfo, payUrl
   return send(to, `Approved — pay to confirm: ${b.listingTitle}`, html);
 }
 
+/** To the customer: an operator arranged a booking and is requesting payment via a PayLink link. */
+export function sendPaymentLink(to: string, b: BookingEmailInfo, payUrl: string) {
+  const site = SITE();
+  const html = shell(
+    `Complete your booking — ${esc(b.listingTitle)}`,
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 6px;">Your host has set up a booking for <strong>${esc(b.listingTitle)}</strong>. Complete your payment below to confirm it — your spot is held until then.</p>
+     ${detailRows(b)}
+     <p style="margin:0 0 8px;"><a href="${esc(payUrl)}" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Pay securely via PayLink</a></p>
+     <p style="font-size:13px;line-height:1.6;color:#6B6357;margin:0;">If you didn't arrange this booking, you can ignore this email — nothing will be charged.</p>`,
+    site,
+  );
+  return send(to, `Complete your booking: ${b.listingTitle}`, html);
+}
+
 /** To the guest: the host couldn't accommodate the request. */
 export function sendGuestBookingDeclined(to: string, b: BookingEmailInfo) {
   const site = SITE();

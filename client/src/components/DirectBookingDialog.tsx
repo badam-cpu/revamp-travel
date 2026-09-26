@@ -57,6 +57,7 @@ function DirectBookingForm({ listing, startDate, onClose, onCreated }: { listing
   const [cleaning, setCleaning] = useState(String(Math.round((listing.cleaningFeeCents ?? 0) / 100) || ""));
   const [flat, setFlat] = useState(String(Math.round(listing.price) || "")); // tours/experiences total
   const [paid, setPaid] = useState(false);
+  const [collectVia, setCollectVia] = useState<"offline" | "paylink">("offline");
   const [saving, setSaving] = useState(false);
 
   // Slot mode: load the listing's bookable sessions once, then filter to the
@@ -112,9 +113,13 @@ function DirectBookingForm({ listing, startDate, onClose, onCreated }: { listing
       toast("Enter the price.");
       return;
     }
+    if (collectVia === "paylink" && !email.trim()) {
+      toast("Add the customer's email to send them a payment link.");
+      return;
+    }
     setSaving(true);
     try {
-      await createDirectBooking({
+      const r = await createDirectBooking({
         listingId: listing.id,
         sessionId: slotMode ? sessionId : undefined,
         startDate: checkIn,
@@ -125,8 +130,10 @@ function DirectBookingForm({ listing, startDate, onClose, onCreated }: { listing
         guestPhone: phone.trim(),
         baseCents,
         paymentStatus: paid ? "paid" : "unpaid",
+        collectVia,
       });
-      toast(slotMode ? "Direct booking created — the seat is reserved on that slot." : "Direct booking created — the dates are now blocked.");
+      if (r.paymentLinkSent) toast.success(`Payment link emailed to ${email.trim()} — the booking confirms once they pay.`);
+      else toast(slotMode ? "Direct booking created — the seat is reserved on that slot." : "Direct booking created — the dates are now blocked.");
       onCreated();
       onClose();
     } catch (e) {
@@ -237,29 +244,55 @@ function DirectBookingForm({ listing, startDate, onClose, onCreated }: { listing
           <div className="flex justify-between border-t border-basalt/10 pt-1.5 font-semibold"><span>Total</span><span className="font-display text-lg font-normal">{format(charge.totalCents)}</span></div>
         </div>
 
-        {/* Payment status */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold uppercase tracking-[0.1em] text-basalt/45">Payment</span>
-          <div className="ml-auto flex border border-basalt/15">
-            {([["unpaid", "Unpaid"], ["paid", "Paid"]] as const).map(([v, lbl]) => (
+        {/* How to collect payment */}
+        <div className="grid gap-1.5">
+          <span className="text-xs font-bold uppercase tracking-[0.1em] text-basalt/45">Collect payment</span>
+          <div className="grid grid-cols-2 gap-2">
+            {([["offline", "Record offline"], ["paylink", "Send payment link"]] as const).map(([v, lbl]) => (
               <button
                 key={v}
                 type="button"
-                onClick={() => setPaid(v === "paid")}
-                className={cn("px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition-colors", (paid ? "paid" : "unpaid") === v ? "bg-basalt text-paper" : "text-basalt/55 hover:text-basalt")}
+                onClick={() => setCollectVia(v)}
+                className={cn("rounded-none border px-3 py-2 text-sm font-semibold transition-colors", collectVia === v ? "border-apricot bg-apricot/10 text-basalt" : "border-basalt/15 text-basalt/60 hover:border-apricot/60")}
               >
                 {lbl}
               </button>
             ))}
           </div>
+          {collectVia === "paylink" && (
+            <p className="text-[11px] leading-4 text-basalt/50">We'll email the customer a secure PayLink link. The booking confirms automatically once they pay — enter their email above.</p>
+          )}
         </div>
+
+        {/* Payment status — only for offline bookings */}
+        {collectVia === "offline" && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-[0.1em] text-basalt/45">Payment</span>
+            <div className="ml-auto flex border border-basalt/15">
+              {([["unpaid", "Unpaid"], ["paid", "Paid"]] as const).map(([v, lbl]) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setPaid(v === "paid")}
+                  className={cn("px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition-colors", (paid ? "paid" : "unpaid") === v ? "bg-basalt text-paper" : "text-basalt/55 hover:text-basalt")}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <DialogFooter className="mt-4">
         <Button variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
-        <Button onClick={submit} disabled={saving} className="rounded-none bg-apricot text-white hover:bg-apricot/90">{saving ? "Creating…" : "Create booking"}</Button>
+        <Button onClick={submit} disabled={saving} className="rounded-none bg-apricot text-white hover:bg-apricot/90">{saving ? (collectVia === "paylink" ? "Sending…" : "Creating…") : collectVia === "paylink" ? "Send payment link" : "Create booking"}</Button>
       </DialogFooter>
-      <p className="mt-1 text-center text-[11px] leading-4 text-basalt/45">{slotMode ? "Reserves a seat on the selected time slot" : "Blocks these dates"}. Money is collected offline — no charge is made here.</p>
+      <p className="mt-1 text-center text-[11px] leading-4 text-basalt/45">
+        {collectVia === "paylink"
+          ? "Emails the customer a PayLink link; the booking confirms automatically when they pay."
+          : `${slotMode ? "Reserves a seat on the selected time slot" : "Blocks these dates"}. Money is collected offline — no charge is made here.`}
+      </p>
     </>
   );
 }
