@@ -150,6 +150,10 @@ const messageThreadSchema = z.object({
   bookingId: z.string().uuid(),
 });
 
+const listingInquirySchema = z.object({
+  listingId: z.string().uuid(),
+});
+
 const messageSendSchema = z.object({
   conversationId: z.string().uuid(),
   body: z.string().trim().min(1).max(4000),
@@ -1422,6 +1426,69 @@ export function registerApiRoutes(app: Express) {
       res.json({ conversationId: convo.id });
     } catch (err) {
       console.error("[message-thread]", err);
+      res.status(500).json({ error: "Couldn't open the conversation. Please try again." });
+    }
+  });
+
+  // POST /api/listing-inquiry-thread — a traveler opens a PRE-BOOKING question
+  // thread with a listing's host (unified inbox, kind='listing_inquiry'). No
+  // booking required. One thread per (listing, traveler); the operator is derived
+  // from the listing (never client-supplied). Only published listings, and not a
+  // host inquiring on their own listing.
+  app.post("/api/listing-inquiry-thread", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in to message the host." });
+
+    const parsed = listingInquirySchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Messaging isn't available right now." });
+
+    try {
+      const { data: listing } = await admin
+        .from("listings")
+        .select("id, operator_id, status")
+        .eq("id", parsed.data.listingId)
+        .maybeSingle();
+      if (!listing || listing.status !== "published") return res.status(404).json({ error: "Listing not found." });
+      if (listing.operator_id === userId) return res.status(400).json({ error: "That's your own listing." });
+
+      // Existing inquiry thread for this (listing, traveler)?
+      const { data: candidates } = await admin
+        .from("conversations")
+        .select("id")
+        .eq("kind", "listing_inquiry")
+        .eq("listing_id", listing.id);
+      const ids = (candidates ?? []).map((c) => c.id as string);
+      if (ids.length) {
+        const { data: mine } = await admin
+          .from("conversation_participants")
+          .select("conversation_id")
+          .eq("user_id", userId)
+          .in("conversation_id", ids)
+          .maybeSingle();
+        if (mine) return res.json({ conversationId: mine.conversation_id });
+      }
+
+      const { data: convo, error: cErr } = await admin
+        .from("conversations")
+        .insert({ kind: "listing_inquiry", listing_id: listing.id })
+        .select("id")
+        .single();
+      if (cErr || !convo) throw new Error(cErr?.message || "conversation create failed");
+
+      const { error: pErr } = await admin.from("conversation_participants").insert([
+        { conversation_id: convo.id, user_id: userId, role: "traveler" },
+        { conversation_id: convo.id, user_id: listing.operator_id, role: "operator" },
+      ]);
+      if (pErr) throw new Error(pErr.message);
+
+      res.json({ conversationId: convo.id });
+    } catch (err) {
+      console.error("[listing-inquiry-thread]", err);
       res.status(500).json({ error: "Couldn't open the conversation. Please try again." });
     }
   });

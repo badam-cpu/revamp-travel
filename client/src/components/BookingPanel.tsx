@@ -20,6 +20,7 @@ import { Minus, Plus, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { LiveListing, BlockedRange } from "@/contexts/ListingsContext";
 import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
+import { AskHostButton } from "@/components/AskHostButton";
 import { getListingSessions, groupSessionsByDate, formatSlotTime, type ListingSession } from "@/lib/sessions";
 import { scheduleHasSlots, slotLocalDate } from "@shared/sessions";
 import { Button } from "@/components/ui/button";
@@ -348,6 +349,10 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
         <a href="https://paylink.am" target="_blank" rel="noreferrer" className="font-semibold text-basalt/55 underline underline-offset-2 hover:text-apricot">PayLink</a>
         . No account needed.{displayCurrency === "USD" ? " Charged in AMD; USD shown for reference." : ""}
       </p>
+      <div className="mt-4 border-t border-basalt/10 pt-4">
+        <AskHostButton listing={listing} />
+        <p className="mt-2 text-center text-[11px] leading-5 text-basalt/42">Have a question? Ask the host before you book.</p>
+      </div>
     </div>
   );
 }

@@ -383,6 +383,23 @@ export async function ensureBookingThread(bookingId: string): Promise<string> {
   return res.conversationId;
 }
 
+/**
+ * Unified inbox — open (or fetch) a PRE-BOOKING inquiry thread with a listing's
+ * host. One thread per (listing, traveler); the server derives the operator and
+ * seeds both participants. Idempotent.
+ */
+export async function ensureListingInquiryThread(listingId: string): Promise<string> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in to message the host.");
+  const res = await request<{ conversationId: string }>("/api/listing-inquiry-thread", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ listingId }),
+  });
+  return res.conversationId;
+}
+
 /** Unified inbox — send a message into a conversation (guardrail-scanned server-side). */
 export async function sendInboxMessage(conversationId: string, body: string): Promise<{ id: string }> {
   const { data } = await supabase.auth.getSession();
