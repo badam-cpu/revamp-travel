@@ -31,6 +31,7 @@ import { payoutState } from "../shared/payouts.js";
 import { sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, type BookingEmailInfo } from "./email.js";
 import { notifyBooking } from "./notify.js";
 import { telegramConfigured, telegramConnectLink, telegramBotUsername, setTelegramWebhook, sendTelegram } from "./telegram.js";
+import { isCrawlerUserAgent } from "./botDetect.js";
 import { randomUUID } from "crypto";
 import { formatSlotTime, slotLocalDate } from "../shared/sessions.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -152,6 +153,19 @@ const bookingContactSchema = z.object({
 });
 
 const bookingIdSchema = z.object({ bookingId: z.string().uuid() });
+
+const trackSchema = z.object({
+  events: z
+    .array(
+      z.object({
+        listingId: z.string().uuid(),
+        kind: z.enum(["impression", "view", "directions", "website", "call", "menu", "save", "share", "card_click"]),
+        surface: z.string().max(24).optional().default(""),
+      }),
+    )
+    .min(1)
+    .max(30),
+});
 
 const supportChatSchema = z.object({
   message: z.string().trim().min(1).max(2000),
@@ -331,6 +345,7 @@ const giftPurchaseHits = new Map<string, number[]>();
 // Per-IP cap for the public (unauthenticated) AI trip planner — protects the Anthropic bill.
 const planTripHits = new Map<string, number[]>();
 const ahaCopyHits = new Map<string, number[]>();
+const trackHits = new Map<string, number[]>();
 function rateLimited(map: Map<string, number[]>, key: string, max: number, windowMs = 60_000): boolean {
   const now = Date.now();
   const hits = (map.get(key) ?? []).filter((t) => t > now - windowMs);
@@ -416,6 +431,33 @@ export function registerApiRoutes(app: Express) {
       db: db.ok ? "up" : db.configured ? "down" : "unconfigured",
       time: new Date().toISOString(),
     });
+  });
+
+  // POST /api/track — anonymous, first-party engagement events (impressions,
+  // views, intent clicks) for per-listing analytics. Bot-filtered, rate-limited,
+  // best-effort (always 204). Increments daily counters via the bump RPC.
+  app.post("/api/track", async (req: Request, res: Response) => {
+    if (isCrawlerUserAgent(req.get("user-agent"))) return res.status(204).end();
+    if (rateLimited(trackHits, req.ip || "?", 240)) return res.status(204).end();
+    const parsed = trackSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(204).end();
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(204).end();
+    const day = new Date().toISOString().slice(0, 10);
+    const seen = new Set<string>();
+    await Promise.all(
+      parsed.data.events.map(async (e) => {
+        const key = `${e.listingId}:${e.kind}:${e.surface}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        try {
+          await admin.rpc("bump_listing_metric", { p_listing: e.listingId, p_day: day, p_kind: e.kind, p_surface: e.surface || "" });
+        } catch {
+          /* best-effort */
+        }
+      }),
+    );
+    res.status(204).end();
   });
 
   // Dynamic robots.txt / sitemap.xml. Registered at both the public path (for

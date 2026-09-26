@@ -182,7 +182,7 @@ export default function EatLanding({ mode, value }: { mode: "region" | "cuisine"
         ) : eats.length > 0 ? (
           <section className="mt-12">
             <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-              {eats.slice(0, visible).map((l) => <ListingCard key={l.id} listing={l} />)}
+              {eats.slice(0, visible).map((l) => <ListingCard key={l.id} listing={l} surface="landing" />)}
             </div>
             {eats.length > visible && (
               <div className="mt-8 text-center">

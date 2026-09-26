@@ -24,6 +24,7 @@ import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { cn } from "@/lib/utils";
 import { imgAttrs } from "@/lib/responsiveImg";
 import { trackEvent } from "@/lib/analytics";
+import { trackListing } from "@/lib/track";
 import { OperatorBrand } from "@/components/OperatorBrand";
 import { ExternalReviews } from "@/components/ExternalReviews";
 import { describeCancellationPolicy, averageNightlyCents } from "@shared/bookings";
@@ -181,7 +182,10 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
 
   // GA funnel: listing viewed.
   useEffect(() => {
-    if (listing) trackEvent("view_item", { item_id: listing.id, item_name: listing.title, item_category: listing.type });
+    if (listing) {
+      trackEvent("view_item", { item_id: listing.id, item_name: listing.title, item_category: listing.type });
+      trackListing(listing.id, "view", "detail");
+    }
   }, [listing?.id]);
 
   if (!listing) {
@@ -485,7 +489,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
                           <span className="font-medium text-basalt">{loc.label}</span>
                           {loc.address && <span className="block text-basalt/50">{loc.address}</span>}
                         </span>
-                        <a href={`https://www.google.com/maps?q=${loc.lat},${loc.lng}`} target="_blank" rel="noreferrer" className="mt-[1px] shrink-0 text-xs font-semibold text-apricot hover:underline">Directions</a>
+                        <a href={`https://www.google.com/maps?q=${loc.lat},${loc.lng}`} target="_blank" rel="noreferrer" onClick={() => trackListing(listing.id, "directions", "detail")} className="mt-[1px] shrink-0 text-xs font-semibold text-apricot hover:underline">Directions</a>
                       </li>
                     ))}
                   </ul>

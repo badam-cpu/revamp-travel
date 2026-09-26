@@ -14,6 +14,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { trackListing } from "@/lib/track";
 import { toast } from "sonner";
 
 interface SavedPlacesContextType {
@@ -92,6 +93,7 @@ export function SavedPlacesProvider({ children }: { children: React.ReactNode })
             .from("saved_places")
             .upsert({ traveler_id: user.id, listing_id: id }, { onConflict: "traveler_id,listing_id" });
           if (error) throw error;
+          trackListing(id, "save", "detail");
           toast(`Saved ${title}.`);
         }
       } catch (err) {

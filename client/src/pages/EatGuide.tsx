@@ -226,7 +226,7 @@ function EatGroup({ name, items }: { name: string; items: LiveListing[] }) {
         <span className="text-xs font-semibold uppercase tracking-[0.12em] text-basalt/40">{items.length} spot{items.length === 1 ? "" : "s"}</span>
       </div>
       <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-        {shown.map((l) => <ListingCard key={l.id} listing={l} />)}
+        {shown.map((l) => <ListingCard key={l.id} listing={l} surface="guide" />)}
       </div>
       {items.length > GROUP_CAP && (
         <button
