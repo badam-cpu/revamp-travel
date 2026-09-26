@@ -1,6 +1,6 @@
 /** Revamp brandbook: marketplace utility uses bold sans hierarchy, white surfaces, orange filters, rounded cards, and a synchronized atlas. */
 import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { Filter, Map as MapIcon, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -26,13 +26,27 @@ const normalizeRegion = (r: string) => r.trim().replace(/\s+(province|marz)$/i, 
 
 export default function Explore({ initialType = "" }: { initialType?: string }) {
   const [, navigate] = useLocation();
+  const searchStr = useSearch(); // live query string — re-renders when the URL changes
   const { listings, loading } = useListings();
   const { settings } = useSiteSettings();
-  const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
+  const params = new URLSearchParams(searchStr);
   const urlType = params.get("type") || initialType;
   const [query, setQuery] = useState(params.get("query") || "");
   const [type, setType] = useState(validTypes.has(urlType) ? urlType : "all");
-  const [region, setRegion] = useState("all");
+  const [region, setRegion] = useState(params.get("region") || "all");
+  const PAGE = 12;
+  const [visible, setVisible] = useState(PAGE);
+
+  // Re-sync from the URL whenever it changes — e.g. a new SearchBar submit while
+  // we're already on /explore (same route, so the component isn't remounted).
+  // Local edits (the in-page filter / chips) don't touch the URL, so they persist.
+  useEffect(() => {
+    const p = new URLSearchParams(searchStr);
+    const t = p.get("type") || initialType;
+    setType(validTypes.has(t) ? t : "all");
+    setQuery(p.get("query") || "");
+    setRegion(p.get("region") || "all");
+  }, [searchStr, initialType]);
   const [selectedId, setSelectedId] = useState<string | undefined>();
   // Stay-availability filter: when a date range is searched, hide stays whose
   // dates are blocked (iCal/manual) or already confirmed-booked for that window.
@@ -99,6 +113,10 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, type, region, listings, hasRange, checkin, checkout, bookedByListing]);
+
+  // Reset the visible window whenever the result set's filters change.
+  useEffect(() => setVisible(PAGE), [query, type, region, hasRange]);
+  const shown = filtered.slice(0, visible);
 
   const reset = () => {
     setQuery("");
@@ -192,8 +210,17 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
             </div>
           ) : filtered.length ? (
             <div className="mt-7 grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(390px,0.9fr)]">
-              <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2">
-                {filtered.map((listing) => <ListingCard key={listing.id} listing={listing} active={listing.id === selectedId} onHover={setSelectedId} />)}
+              <div>
+                <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2">
+                  {shown.map((listing) => <ListingCard key={listing.id} listing={listing} active={listing.id === selectedId} onHover={setSelectedId} />)}
+                </div>
+                {filtered.length > visible && (
+                  <div className="mt-10 text-center">
+                    <Button onClick={() => setVisible((v) => v + PAGE)} variant="outline" className="rounded-none border-basalt/20 px-6">
+                      Show more ({filtered.length - visible} more)
+                    </Button>
+                  </div>
+                )}
               </div>
               <div className="hidden lg:block">
                 <ArmeniaMap listings={filtered} selectedId={selectedId} onSelect={setSelectedId} className="sticky top-[100px] h-[calc(100vh-124px)] min-h-[560px]" />
