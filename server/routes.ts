@@ -117,6 +117,10 @@ const cancelBookingSchema = z.object({
 
 const directBookingSchema = z.object({
   listingId: z.string().uuid(),
+  // For a tour/experience with a time-slot schedule, the operator books a
+  // specific session; the seat is reserved in the same inventory online
+  // bookings draw from. Omitted for stays and legacy day-level tours.
+  sessionId: z.string().uuid().optional(),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   guests: z.number().int().min(1).max(50).default(1),
@@ -900,13 +904,62 @@ export function registerApiRoutes(app: Express) {
 
     const parsed = directBookingSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
-    const { listingId, startDate, endDate, guests, guestName, guestEmail, guestPhone, baseCents, paymentStatus } = parsed.data;
+    const { listingId, sessionId, startDate, endDate, guests, guestName, guestEmail, guestPhone, baseCents, paymentStatus } = parsed.data;
     if (endDate <= startDate) return res.status(400).json({ error: "The end date must be after the start date." });
 
     // The caller must own the listing.
     const { data: listing, error: readErr } = await admin.from("listings").select("id, operator_id").eq("id", listingId).maybeSingle();
     if (readErr || !listing) return res.status(404).json({ error: "Listing not found." });
     if (listing.operator_id !== userId) return res.status(403).json({ error: "That listing isn't yours." });
+
+    // Slot booking: reserve a seat on a specific time slot so an operator's
+    // offline sale and online bookings can't oversell the same session.
+    if (sessionId) {
+      const { data: session } = await admin
+        .from("listing_sessions")
+        .select("id, listing_id, starts_at, capacity, seats_taken, status")
+        .eq("id", sessionId)
+        .maybeSingle();
+      if (!session || session.listing_id !== listingId) return res.status(404).json({ error: "That time slot wasn't found." });
+      if (Date.parse(session.starts_at as string) < Date.now()) return res.status(400).json({ error: "That time slot has already passed." });
+
+      const reserved = await reserveSeats(admin, sessionId, guests);
+      if (!reserved) return res.status(409).json({ error: "That time slot doesn't have enough seats left." });
+
+      const slotCharge = computeBookingCharge(baseCents);
+      const slotDate = slotLocalDate(session.starts_at as string);
+      const slotEnd = new Date(Date.parse(slotDate + "T00:00:00Z") + 86_400_000).toISOString().slice(0, 10);
+      const { data: slot, error: slotErr } = await admin
+        .from("bookings")
+        .insert({
+          listing_id: listingId,
+          traveler_id: null,
+          start_date: slotDate,
+          end_date: slotEnd,
+          starts_at: session.starts_at,
+          session_id: sessionId,
+          guests,
+          amount_cents: slotCharge.totalCents,
+          base_cents: slotCharge.baseCents,
+          tax_cents: slotCharge.taxCents,
+          currency: DEFAULT_CURRENCY,
+          status: "confirmed",
+          provider: "direct",
+          payment_status: paymentStatus,
+          guest_name: guestName,
+          guest_email: guestEmail || null,
+          guest_phone: guestPhone || null,
+        })
+        .select("id")
+        .single();
+      if (slotErr) {
+        await releaseSeats(admin, sessionId, guests);
+        console.error("[direct-booking:slot]", slotErr);
+        return res.status(500).json({ error: "Couldn't create the booking." });
+      }
+      await logBookingEvent(admin, slot.id, "direct_created", `Direct slot booking recorded by the operator (${paymentStatus}).`);
+      return res.json({ id: slot.id, totalCents: slotCharge.totalCents });
+    }
 
     const charge = computeBookingCharge(baseCents);
     const { data, error } = await admin

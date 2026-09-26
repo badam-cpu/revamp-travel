@@ -5,7 +5,7 @@
  * that blocks the dates. Money is handled offline, so there's a manual
  * paid/unpaid status (no PayLink). 10% tax is added on top of the entered base.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import type { LiveListing } from "@/contexts/ListingsContext";
 import { computeBookingCharge, nightsBetween, TAX_PERCENT } from "@shared/bookings";
+import { scheduleHasSlots } from "@shared/sessions";
+import { getListingSessions, slotLocalDate, formatSlotTime, type ListingSession } from "@/lib/sessions";
 import { createDirectBooking } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -43,6 +45,7 @@ export function DirectBookingDialog({
 function DirectBookingForm({ listing, startDate, onClose, onCreated }: { listing: LiveListing; startDate: string; onClose: () => void; onCreated: () => void }) {
   const { format } = useCurrency();
   const isStay = listing.type === "stay";
+  const slotMode = !isStay && scheduleHasSlots(listing.sessionSchedule);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -55,6 +58,31 @@ function DirectBookingForm({ listing, startDate, onClose, onCreated }: { listing
   const [flat, setFlat] = useState(String(Math.round(listing.price) || "")); // tours/experiences total
   const [paid, setPaid] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Slot mode: load the listing's bookable sessions once, then filter to the
+  // chosen date so the operator picks a real time slot (whose seat we reserve).
+  const [sessions, setSessions] = useState<ListingSession[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(slotMode);
+  const [sessionId, setSessionId] = useState("");
+  useEffect(() => {
+    if (!slotMode) return;
+    let live = true;
+    setLoadingSlots(true);
+    getListingSessions(listing.id)
+      .then((s) => { if (live) setSessions(s); })
+      .finally(() => { if (live) setLoadingSlots(false); });
+    return () => { live = false; };
+  }, [slotMode, listing.id]);
+
+  const daySessions = useMemo(
+    () => sessions.filter((s) => slotLocalDate(s.startsAt) === checkIn).sort((a, b) => a.startsAt.localeCompare(b.startsAt)),
+    [sessions, checkIn],
+  );
+  const selectedSession = daySessions.find((s) => s.id === sessionId) ?? null;
+  // Drop a stale selection when the date changes to one without that slot.
+  useEffect(() => {
+    if (sessionId && !daySessions.some((s) => s.id === sessionId)) setSessionId("");
+  }, [daySessions, sessionId]);
 
   const nights = isStay ? nightsBetween(checkIn, checkOut) : 1;
   const baseCents = useMemo(() => {
@@ -72,6 +100,14 @@ function DirectBookingForm({ listing, startDate, onClose, onCreated }: { listing
       toast("Check-out must be after check-in.");
       return;
     }
+    if (slotMode && !sessionId) {
+      toast("Pick a time slot.");
+      return;
+    }
+    if (slotMode && selectedSession && guests > selectedSession.seatsLeft) {
+      toast(`Only ${selectedSession.seatsLeft} seat${selectedSession.seatsLeft === 1 ? "" : "s"} left on that slot.`);
+      return;
+    }
     if (baseCents <= 0) {
       toast("Enter the price.");
       return;
@@ -80,6 +116,7 @@ function DirectBookingForm({ listing, startDate, onClose, onCreated }: { listing
     try {
       await createDirectBooking({
         listingId: listing.id,
+        sessionId: slotMode ? sessionId : undefined,
         startDate: checkIn,
         endDate: isStay ? checkOut : addDays(checkIn, 1),
         guests,
@@ -89,7 +126,7 @@ function DirectBookingForm({ listing, startDate, onClose, onCreated }: { listing
         baseCents,
         paymentStatus: paid ? "paid" : "unpaid",
       });
-      toast("Direct booking created — the dates are now blocked.");
+      toast(slotMode ? "Direct booking created — the seat is reserved on that slot." : "Direct booking created — the dates are now blocked.");
       onCreated();
       onClose();
     } catch (e) {
@@ -141,10 +178,37 @@ function DirectBookingForm({ listing, startDate, onClose, onCreated }: { listing
           </div>
         )}
 
+        {slotMode && (
+          <div className="grid gap-1.5">
+            <Label className="text-xs font-bold uppercase tracking-[0.1em] text-basalt/45">Time slot</Label>
+            {loadingSlots ? (
+              <p className="text-sm text-basalt/45">Loading slots…</p>
+            ) : daySessions.length === 0 ? (
+              <p className="text-sm text-basalt/55">No open time slots on this date. Pick another date, or add slots in the listing's schedule.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {daySessions.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => { setSessionId(s.id); if (guests > s.seatsLeft) setGuests(s.seatsLeft); }}
+                    className={cn(
+                      "rounded-none border px-3 py-1.5 text-sm transition-colors",
+                      sessionId === s.id ? "border-apricot bg-apricot/10 text-basalt" : "border-basalt/15 text-basalt/70 hover:border-apricot/60",
+                    )}
+                  >
+                    {formatSlotTime(s.startsAt)} · <span className="text-basalt/50">{s.seatsLeft} left</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <div className="grid gap-1.5">
             <Label htmlFor="db-guests" className="text-xs font-bold uppercase tracking-[0.1em] text-basalt/45">Guests</Label>
-            <Input id="db-guests" type="number" min={1} max={50} value={guests} onChange={(e) => setGuests(Math.max(1, Number(e.target.value) || 1))} className={field} />
+            <Input id="db-guests" type="number" min={1} max={slotMode ? (selectedSession?.seatsLeft ?? 1) : 50} value={guests} onChange={(e) => setGuests(Math.max(1, Math.min(slotMode && selectedSession ? selectedSession.seatsLeft : 50, Number(e.target.value) || 1)))} className={field} />
           </div>
           {isStay ? (
             <div className="grid gap-1.5">
@@ -195,7 +259,7 @@ function DirectBookingForm({ listing, startDate, onClose, onCreated }: { listing
         <Button variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
         <Button onClick={submit} disabled={saving} className="rounded-none bg-apricot text-white hover:bg-apricot/90">{saving ? "Creating…" : "Create booking"}</Button>
       </DialogFooter>
-      <p className="mt-1 text-center text-[11px] leading-4 text-basalt/45">Blocks these dates. Money is collected offline — no charge is made here.</p>
+      <p className="mt-1 text-center text-[11px] leading-4 text-basalt/45">{slotMode ? "Reserves a seat on the selected time slot" : "Blocks these dates"}. Money is collected offline — no charge is made here.</p>
     </>
   );
 }

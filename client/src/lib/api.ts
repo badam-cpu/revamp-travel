@@ -315,6 +315,8 @@ export async function saveSessionSchedule(
 
 export interface DirectBookingInput {
   listingId: string;
+  /** Tour/experience time-slot to reserve a seat on (omit for stays / day-level tours). */
+  sessionId?: string;
   startDate: string;
   endDate: string;
   guests: number;
