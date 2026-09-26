@@ -29,6 +29,7 @@ import { reserveGift, releaseGift, refundGiftForBooking, lookupRedeemableGift, r
 import { isAllowedGiftAmount } from "../shared/giftcards.js";
 import { payoutState } from "../shared/payouts.js";
 import { sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, type BookingEmailInfo } from "./email.js";
+import { notifyBooking } from "./notify.js";
 import { formatSlotTime, slotLocalDate } from "../shared/sessions.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, promoDiscount, addonUnitCost, nightsBetween, type Addon, DEFAULT_CURRENCY } from "../shared/bookings.js";
@@ -270,7 +271,7 @@ function slotBookingEmailInfo(listing: any, bk: any): BookingEmailInfo {
 async function notifyOperatorOfRequest(admin: SupabaseClient, listing: any, bookingId: string): Promise<void> {
   const { data: bk } = await admin
     .from("bookings")
-    .select("starts_at, guests, amount_cents, currency, guest_email, guest_name, traveler_id")
+    .select("starts_at, guests, amount_cents, currency, guest_email, guest_phone, guest_name, traveler_id")
     .eq("id", bookingId)
     .maybeSingle();
   if (!bk) return;
@@ -284,6 +285,16 @@ async function notifyOperatorOfRequest(admin: SupabaseClient, listing: any, book
   if (op.data?.user?.email) await sendOperatorBookingRequest(op.data.user.email, info, travName);
   const guestEmail = trav.data?.user?.email || bk.guest_email;
   if (guestEmail) await sendGuestRequestReceived(guestEmail, info);
+  const whenLine = `${info.startDate}${info.time ? ` at ${info.time}` : ""}`;
+  await notifyBooking(admin, {
+    bookingId,
+    listingId: listing.id,
+    operatorId: listing.operator_id,
+    travelerId: bk.traveler_id,
+    travelerPhone: bk.guest_phone,
+    inboxBody: `📩 Booking request received — ${info.listingTitle}, ${whenLine}, ${info.guests} guest${info.guests === 1 ? "" : "s"}. Awaiting the host's approval; no charge yet.`,
+    smsBody: `Revamp: we received your booking request for ${info.listingTitle}, ${whenLine}. The host will approve it — no charge yet.`,
+  });
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
@@ -1045,7 +1056,7 @@ export function registerApiRoutes(app: Express) {
 
     const { data: booking } = await admin
       .from("bookings")
-      .select("id, listing_id, traveler_id, status, start_date, end_date, guests, amount_cents, currency, paid_at, cancellation_policy, free_cancel_days, guest_email, gift_card_id, gift_applied_cents, session_id")
+      .select("id, listing_id, traveler_id, status, start_date, end_date, guests, amount_cents, currency, paid_at, cancellation_policy, free_cancel_days, guest_email, guest_phone, gift_card_id, gift_applied_cents, session_id")
       .eq("id", parsed.data.bookingId)
       .maybeSingle();
     if (!booking) return res.status(404).json({ error: "Booking not found." });
@@ -1147,6 +1158,17 @@ export function registerApiRoutes(app: Express) {
       } catch (err) {
         console.error("[cancel-booking] email failed", err);
       }
+      // Inbox mirror + text/WhatsApp the traveler (the customer) either way.
+      const refundLine = refundCents > 0 ? ` A refund of ${Math.round(refundCents / 100).toLocaleString("en-US")} ${booking.currency} applies per the cancellation policy.` : "";
+      await notifyBooking(admin, {
+        bookingId: booking.id,
+        listingId: booking.listing_id,
+        operatorId: listing.operator_id,
+        travelerId: booking.traveler_id,
+        travelerPhone: booking.guest_phone,
+        inboxBody: `🚫 Booking cancelled — ${listing.title}.${refundLine}`,
+        smsBody: `Revamp: your booking for ${listing.title} has been cancelled.${refundLine}`,
+      });
     }
 
     res.json({ cancelled: true, refundOwed, refundCents });
@@ -2091,7 +2113,7 @@ export function registerApiRoutes(app: Express) {
 
     const { data: booking } = await admin
       .from("bookings")
-      .select("id, listing_id, traveler_id, status, guests, amount_cents, currency, starts_at, guest_email, session_id")
+      .select("id, listing_id, traveler_id, status, guests, amount_cents, currency, starts_at, guest_email, guest_phone, session_id")
       .eq("id", parsed.data.bookingId)
       .maybeSingle();
     if (!booking) return res.status(404).json({ error: "Request not found." });
@@ -2130,6 +2152,16 @@ export function registerApiRoutes(app: Express) {
       } catch (e) {
         console.error("[booking-approve] email failed", e);
       }
+      const approveWhen = `${slotBookingEmailInfo(listing, booking).startDate}${booking.starts_at ? ` at ${formatSlotTime(booking.starts_at)}` : ""}`;
+      await notifyBooking(admin, {
+        bookingId: booking.id,
+        listingId: booking.listing_id,
+        operatorId: listing.operator_id,
+        travelerId: booking.traveler_id,
+        travelerPhone: booking.guest_phone,
+        inboxBody: `✅ Request approved — ${listing.title}, ${approveWhen}. Complete payment to lock in your seat: ${pay.redirectUrl}`,
+        smsBody: `Revamp: your booking for ${listing.title} (${approveWhen}) is approved. Pay to confirm: ${pay.redirectUrl}`,
+      });
       res.json({ ok: true });
     } catch (err) {
       console.error("[booking-approve]", err);
@@ -2151,7 +2183,7 @@ export function registerApiRoutes(app: Express) {
 
     const { data: booking } = await admin
       .from("bookings")
-      .select("id, listing_id, traveler_id, status, guests, amount_cents, currency, starts_at, guest_email, session_id")
+      .select("id, listing_id, traveler_id, status, guests, amount_cents, currency, starts_at, guest_email, guest_phone, session_id")
       .eq("id", parsed.data.bookingId)
       .maybeSingle();
     if (!booking) return res.status(404).json({ error: "Request not found." });
@@ -2174,6 +2206,15 @@ export function registerApiRoutes(app: Express) {
     } catch (e) {
       console.error("[booking-decline] email failed", e);
     }
+    await notifyBooking(admin, {
+      bookingId: booking.id,
+      listingId: booking.listing_id,
+      operatorId: listing.operator_id,
+      travelerId: booking.traveler_id,
+      travelerPhone: booking.guest_phone,
+      inboxBody: `❌ Booking request declined — ${listing.title}. No charge was made; the seats have been released.`,
+      smsBody: `Revamp: unfortunately your booking request for ${listing.title} was declined. No charge was made.`,
+    });
     res.json({ ok: true });
   });
 

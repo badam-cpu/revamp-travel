@@ -191,6 +191,21 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
               {messages.map((m) => {
                 const mine = !admin && m.senderId === userId;
                 const isSupport = m.senderRole === "support";
+                const isSystem = m.senderRole === "system";
+                if (isSystem) {
+                  // Automated confirmations (booking confirmed / requested / approved /
+                  // declined / cancelled) — a centered, non-chat notice.
+                  return (
+                    <div key={m.id} className="flex justify-center">
+                      <div className="max-w-[88%] rounded-full border border-basalt/12 bg-paper px-3.5 py-1.5 text-center text-xs leading-snug text-basalt/70">
+                        <span className={cn("whitespace-pre-wrap break-words", m.redacted && "italic opacity-70")}>{m.body}</span>
+                        {admin && !m.redacted && (
+                          <button type="button" onClick={() => redact(m.id)} className="ml-2 font-semibold text-amber-600 underline-offset-2 hover:underline">redact</button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
                 return (
                   <div key={m.id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
                     <div

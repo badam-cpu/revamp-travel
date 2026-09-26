@@ -11,7 +11,7 @@
  */
 import { supabase } from "@/lib/supabase";
 
-export type SenderRole = "traveler" | "operator" | "support";
+export type SenderRole = "traveler" | "operator" | "support" | "system";
 
 export interface InboxMessage {
   id: string;

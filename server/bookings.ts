@@ -14,6 +14,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkPayment } from "./paylink.js";
 import { sendTravelerConfirmation, sendOperatorNewBooking, sendReviewRequest, type BookingEmailInfo } from "./email.js";
+import { notifyBooking } from "./notify.js";
 import { payoutDueDate } from "../shared/payouts.js";
 import { computeBookingCharge, DEFAULT_CURRENCY } from "../shared/bookings.js";
 import type { ListingType } from "../shared/listings.js";
@@ -38,13 +39,14 @@ export interface BookingRow {
   created_at: string;
   guest_name: string | null;
   guest_email: string | null;
+  guest_phone: string | null;
   addons: { name: string; amountCents: number; qty: number; onRequest?: boolean }[] | null;
   session_id: string | null;
   starts_at: string | null;
 }
 
 // Columns every confirm/reconcile query needs (row detail for the emails too).
-const BOOKING_COLS = "id, listing_id, traveler_id, status, start_date, end_date, guests, amount_cents, base_cents, currency, paylink_request_id, paylink_order_id, created_at, guest_name, guest_email, addons, session_id, starts_at";
+const BOOKING_COLS = "id, listing_id, traveler_id, status, start_date, end_date, guests, amount_cents, base_cents, currency, paylink_request_id, paylink_order_id, created_at, guest_name, guest_email, guest_phone, addons, session_id, starts_at";
 
 /**
  * Fire booking-confirmed emails (traveler + operator). Best-effort: any failure
@@ -134,6 +136,21 @@ async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promi
   if (operatorEmail) {
     await logBookingEvent(admin, row.id, operatorRes.sent ? "email_operator_new_booking" : "email_failed", operatorRes.sent ? operatorEmail : `Operator email to ${operatorEmail} failed (${operatorRes.reason ?? "unknown"}).`);
   }
+
+  // New channels on top of email: mirror into the unified inbox + text/WhatsApp
+  // the traveler (best-effort, self-gating).
+  const whenLine = info.type === "stay"
+    ? `${info.startDate} → ${info.endDate}`
+    : `${info.startDate}${info.time ? ` at ${info.time}` : ""}`;
+  await notifyBooking(admin, {
+    bookingId: row.id,
+    listingId: row.listing_id,
+    operatorId: listing.operator_id,
+    travelerId: row.traveler_id,
+    travelerPhone: row.guest_phone,
+    inboxBody: `✅ Booking confirmed — ${info.listingTitle}, ${whenLine}, ${info.guests} guest${info.guests === 1 ? "" : "s"}.`,
+    smsBody: `Revamp: your booking is confirmed — ${info.listingTitle}, ${whenLine}. Details are in your account.`,
+  });
 }
 
 /**
