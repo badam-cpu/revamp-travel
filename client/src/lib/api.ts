@@ -388,14 +388,17 @@ export async function ensureBookingThread(bookingId: string): Promise<string> {
  * host. One thread per (listing, traveler); the server derives the operator and
  * seeds both participants. Idempotent.
  */
-export async function ensureListingInquiryThread(listingId: string): Promise<string> {
+export async function ensureListingInquiryThread(
+  listingId: string,
+  guest?: { name?: string; email?: string },
+): Promise<string> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
-  if (!token) throw new ApiError("Sign in to message the host.");
+  if (!token) throw new ApiError("Couldn't start the conversation — please try again.");
   const res = await request<{ conversationId: string }>("/api/listing-inquiry-thread", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ listingId }),
+    body: JSON.stringify({ listingId, guestName: guest?.name || "", guestEmail: guest?.email || "" }),
   });
   return res.conversationId;
 }

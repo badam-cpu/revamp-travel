@@ -152,6 +152,8 @@ const messageThreadSchema = z.object({
 
 const listingInquirySchema = z.object({
   listingId: z.string().uuid(),
+  guestName: z.string().trim().max(120).optional().default(""),
+  guestEmail: z.string().trim().max(200).optional().default(""),
 });
 
 const messageSendSchema = z.object({
@@ -1462,6 +1464,17 @@ export function registerApiRoutes(app: Express) {
         .select("id")
         .eq("kind", "listing_inquiry")
         .eq("listing_id", listing.id);
+      const guestName = parsed.data.guestName.trim();
+      const guestEmail = parsed.data.guestEmail.trim();
+
+      // Show the host who's asking: an anonymous guest's profile is "Guest", so
+      // set their display_name to the name they gave (never overwrite a real
+      // traveler's name).
+      if (guestName) {
+        const { data: u } = await admin.auth.admin.getUserById(userId);
+        if (u?.user?.is_anonymous) await admin.from("profiles").update({ display_name: guestName }).eq("id", userId);
+      }
+
       const ids = (candidates ?? []).map((c) => c.id as string);
       if (ids.length) {
         const { data: mine } = await admin
@@ -1470,12 +1483,16 @@ export function registerApiRoutes(app: Express) {
           .eq("user_id", userId)
           .in("conversation_id", ids)
           .maybeSingle();
-        if (mine) return res.json({ conversationId: mine.conversation_id });
+        if (mine) {
+          // Keep the latest contact details on the thread for host follow-up.
+          if (guestEmail || guestName) await admin.from("conversations").update({ guest_email: guestEmail || null, guest_name: guestName || null }).eq("id", mine.conversation_id);
+          return res.json({ conversationId: mine.conversation_id });
+        }
       }
 
       const { data: convo, error: cErr } = await admin
         .from("conversations")
-        .insert({ kind: "listing_inquiry", listing_id: listing.id })
+        .insert({ kind: "listing_inquiry", listing_id: listing.id, guest_email: guestEmail || null, guest_name: guestName || null })
         .select("id")
         .single();
       if (cErr || !convo) throw new Error(cErr?.message || "conversation create failed");
@@ -1518,7 +1535,7 @@ export function registerApiRoutes(app: Express) {
       // The conversation must exist and be open.
       const { data: convo } = await admin
         .from("conversations")
-        .select("id, status, listing_id, listings(title)")
+        .select("id, status, listing_id, guest_email, listings(title)")
         .eq("id", parsed.data.conversationId)
         .maybeSingle();
       if (!convo) return res.status(404).json({ error: "Conversation not found." });
@@ -1578,7 +1595,9 @@ export function registerApiRoutes(app: Express) {
           if (rr.muted || rr.role === "support") continue;
           if (rr.last_read_at && Date.parse(rr.last_read_at) > activeCutoff) continue;
           const { data: u } = await admin.auth.admin.getUserById(rr.user_id);
-          const to = u?.user?.email;
+          // Anonymous guests have no auth email — fall back to the contact email
+          // they left on a listing_inquiry so they still get the host's reply.
+          const to = u?.user?.email || (rr.role === "traveler" ? (convo as { guest_email?: string | null }).guest_email || null : null);
           if (to) await sendNewMessage(to, { fromName: String(senderName), listingTitle, snippet, recipientRole: rr.role === "operator" ? "operator" : "traveler" });
         }
       } catch (emailErr) {
