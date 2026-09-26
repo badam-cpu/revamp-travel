@@ -48,6 +48,8 @@ import { cn } from "@/lib/utils";
 import { PlaceAutocomplete } from "@/components/PlaceAutocomplete";
 import { geocodeQuery } from "@/lib/googleMaps";
 import { AmenityPicker, AmenityPickerHandle } from "@/components/AmenityPicker";
+import { AhaAssist } from "@/components/AhaAssist";
+import type { AhaCopyContext } from "@/lib/api";
 import { HouseRulesPicker, HouseRulesPickerHandle } from "@/components/HouseRulesPicker";
 import { RoomsEditor, RoomsEditorHandle } from "@/components/RoomsEditor";
 import { RatesEditor, RatesEditorHandle } from "@/components/RatesEditor";
@@ -302,6 +304,24 @@ function ListingFormDialog({
 
   const fieldValue = (name: string) =>
     ((formRef.current?.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement | null)?.value ?? "").trim();
+
+  // Draft context Aha uses to write/improve copy (reads the live form values).
+  const ahaContext = (): AhaCopyContext => ({
+    title: fieldValue("title"),
+    city: fieldValue("city"),
+    region: fieldValue("region"),
+    priceUnit: fieldValue("priceUnit"),
+    amenities: amenitiesRef.current?.getValue() ?? [],
+    facts: [
+      { label: "Property type", value: fieldValue("fact_propertytype") },
+      { label: "Duration", value: fieldValue("tourDuration") },
+      { label: "Languages", value: fieldValue("tourLanguages") },
+      { label: "Starting point", value: fieldValue("fact_startpoint") },
+    ].filter((f) => f.value),
+    shortDescription: fieldValue("shortDescription"),
+    longDescription: fieldValue("longDescription"),
+    highlights: itinerary,
+  });
   const fail = (message: string): boolean => {
     setStepError(message);
     return false;
@@ -481,7 +501,10 @@ function ListingFormDialog({
                   </div>
                 )}
                 <div className="grid gap-2">
-                  <Label htmlFor="title" className="text-sm font-semibold">Title</Label>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label htmlFor="title" className="text-sm font-semibold">Title</Label>
+                    <AhaAssist field="title" listingType={draft.type} getContext={ahaContext} getCurrent={() => fieldValue("title")} onApplyText={(t) => setField("title", t)} />
+                  </div>
                   <Input id="title" name="title" maxLength={LISTING_LIMITS.title} placeholder="e.g. Forest House Dilijan" defaultValue={draft.title} className={FIELD} />
                 </div>
                 <div className="grid gap-2">
@@ -578,12 +601,18 @@ function ListingFormDialog({
               {/* Step 3 — describe it */}
               <div hidden={step !== 2} className="mt-10 grid gap-6">
                 <div className="grid gap-2">
-                  <Label htmlFor="shortDescription" className="text-sm font-semibold">Short description</Label>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label htmlFor="shortDescription" className="text-sm font-semibold">Short description</Label>
+                    <AhaAssist field="shortDescription" listingType={draft.type} getContext={ahaContext} getCurrent={() => fieldValue("shortDescription")} onApplyText={(t) => setField("shortDescription", t)} />
+                  </div>
                   <Textarea id="shortDescription" name="shortDescription" maxLength={LISTING_LIMITS.shortDescription} rows={2} placeholder="One or two lines shown on cards." defaultValue={draft.shortDescription} className="rounded-none text-base" />
                   <p className="text-xs text-basalt/45">Max {LISTING_LIMITS.shortDescription} characters — a tight one or two lines for cards.</p>
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="longDescription" className="text-sm font-semibold">Full description</Label>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label htmlFor="longDescription" className="text-sm font-semibold">Full description</Label>
+                    <AhaAssist field="longDescription" listingType={draft.type} getContext={ahaContext} getCurrent={() => fieldValue("longDescription")} onApplyText={(t) => setField("longDescription", t)} />
+                  </div>
                   <Textarea id="longDescription" name="longDescription" rows={5} placeholder="The full write-up shown on the listing page." defaultValue={draft.longDescription} className="rounded-none text-base" />
                 </div>
                 {draft.type === "stay" && (
@@ -647,6 +676,9 @@ function ListingFormDialog({
                 {/* Tour & experience-only detail fields. */}
                 {(draft.type === "tour" || draft.type === "experience") && (
                   <div className="grid gap-6">
+                    <div className="flex items-center justify-end">
+                      <AhaAssist field="highlights" listingType={draft.type} getContext={ahaContext} getCurrent={() => itinerary.join("\n")} onApplyItems={(items) => setItinerary(items)} />
+                    </div>
                     <ListEditor
                       label={draft.type === "tour" ? "Itinerary" : "Highlights"}
                       numbered

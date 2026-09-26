@@ -247,6 +247,39 @@ export async function cancelBooking(bookingId: string): Promise<{ cancelled: boo
   });
 }
 
+export interface AhaCopyContext {
+  title?: string;
+  city?: string;
+  region?: string;
+  venueType?: string;
+  cuisine?: string;
+  priceUnit?: string;
+  amenities?: string[];
+  facts?: { label: string; value: string }[];
+  shortDescription?: string;
+  longDescription?: string;
+  highlights?: string[];
+  notes?: string;
+}
+export interface AhaCopyParams {
+  field: "title" | "shortDescription" | "longDescription" | "highlights";
+  mode: "generate" | "improve";
+  listingType: "stay" | "tour" | "experience" | "eat";
+  current?: string;
+  context: AhaCopyContext;
+}
+/** Aha writes/improves a listing field, tuned to type + SEO + Revamp standards. */
+export async function ahaListingCopy(input: AhaCopyParams): Promise<{ text?: string; items?: string[] }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<{ text?: string; items?: string[] }>("/api/aha-listing-copy", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(input),
+  });
+}
+
 /** Operator/admin approves a request-to-book slot → guest gets a pay link. */
 export async function approveBooking(bookingId: string): Promise<{ ok: boolean }> {
   const { data } = await supabase.auth.getSession();

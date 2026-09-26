@@ -67,10 +67,11 @@ import { AmenityPicker, AmenityPickerHandle } from "@/components/AmenityPicker";
 import { PlaceAutocomplete } from "@/components/PlaceAutocomplete";
 import { PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
 import { ListEditor } from "@/components/ListEditor";
+import { AhaAssist } from "@/components/AhaAssist";
 import type { ResolvedPlace } from "@/lib/googleMaps";
 import { useListings, LiveListing } from "@/contexts/ListingsContext";
 import type { ListingFact, ListingInput } from "@shared/listings";
-import { ApiError } from "@/lib/api";
+import { ApiError, type AhaCopyContext } from "@/lib/api";
 import { factValue } from "@/lib/tourFacts";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -311,10 +312,13 @@ const STEP_VALIDATORS: ((data: WizardData) => boolean)[] = [
   () => true,
 ];
 
-function StepField({ label, help, children }: { label: string; help?: string; children: ReactNode }) {
+function StepField({ label, help, action, children }: { label: string; help?: string; action?: ReactNode; children: ReactNode }) {
   return (
     <div className="grid gap-1.5">
-      <Label>{label}</Label>
+      <div className="flex items-center justify-between gap-2">
+        <Label>{label}</Label>
+        {action}
+      </div>
       {help && <p className="-mt-1 text-xs text-basalt/45">{help}</p>}
       {children}
     </div>
@@ -382,6 +386,20 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
   const notFound = isEdit && hydrated === false && !listingsLoading && !existing;
 
   const set = <K extends keyof WizardData>(key: K, value: WizardData[K]) => setData((d) => ({ ...d, [key]: value }));
+
+  // Draft context handed to Aha so its suggestions are grounded in what the
+  // operator has entered so far (type is always "experience" on this wizard).
+  const ahaCtx = (): AhaCopyContext => ({
+    title: data.title.trim() || undefined,
+    city: data.city.trim() || undefined,
+    region: data.region.trim() || undefined,
+    priceUnit: data.priceUnit || undefined,
+    amenities: data.amenities.length ? data.amenities : undefined,
+    facts: buildFacts(data),
+    shortDescription: data.shortDescription.trim() || undefined,
+    longDescription: data.longDescription.trim() || undefined,
+    highlights: data.highlights.length ? data.highlights : undefined,
+  });
 
   const handlePlaceSelected = (place: ResolvedPlace) => {
     if (place.city) { set("city", place.city); if (cityRef.current) cityRef.current.value = place.city; }
@@ -497,7 +515,10 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                     <StepField label="Category label" help='Short and specific — e.g. "Hands-on kitchen class" or "Craft workshop".'>
                       <Input value={data.eyebrow} onChange={(e) => set("eyebrow", e.target.value)} placeholder="Hands-on kitchen class" />
                     </StepField>
-                    <StepField label="Title">
+                    <StepField
+                      label="Title"
+                      action={<AhaAssist field="title" listingType="experience" getContext={ahaCtx} getCurrent={() => data.title} onApplyText={(t) => set("title", t)} />}
+                    >
                       <Input value={data.title} onChange={(e) => set("title", e.target.value)} placeholder="Lavash & Wine Craft Afternoon" />
                     </StepField>
                     <ListEditor
@@ -549,16 +570,33 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
 
                   {/* Step 2 — Tell your story */}
                   <div className={cn("grid gap-6", currentStep !== 2 && "hidden")}>
-                    <StepField label="Short description" help="One or two sentences — shown on the listing card.">
+                    <StepField
+                      label="Short description"
+                      help="One or two sentences — shown on the listing card."
+                      action={<AhaAssist field="shortDescription" listingType="experience" getContext={ahaCtx} getCurrent={() => data.shortDescription} onApplyText={(t) => set("shortDescription", t)} />}
+                    >
                       <Textarea rows={2} value={data.shortDescription} onChange={(e) => set("shortDescription", e.target.value)} />
                     </StepField>
-                    <StepField label="Full description" help="The story of the experience — what makes it worth doing, told in your own voice.">
+                    <StepField
+                      label="Full description"
+                      help="The story of the experience — what makes it worth doing, told in your own voice."
+                      action={<AhaAssist field="longDescription" listingType="experience" getContext={ahaCtx} getCurrent={() => data.longDescription} onApplyText={(t) => set("longDescription", t)} />}
+                    >
                       <Textarea rows={6} value={data.longDescription} onChange={(e) => set("longDescription", e.target.value)} />
                     </StepField>
                   </div>
 
                   {/* Step 3 — Itinerary */}
                   <div className={cn(currentStep !== 3 && "hidden")}>
+                    <div className="mb-2 flex items-center justify-end">
+                      <AhaAssist
+                        field="highlights"
+                        listingType="experience"
+                        getContext={ahaCtx}
+                        getCurrent={() => data.highlights.join("\n")}
+                        onApplyItems={(items) => set("highlights", items)}
+                      />
+                    </div>
                     <ListEditor
                       label="Itinerary steps"
                       placeholder="e.g. Bake traditional lavash against a working tonir oven"

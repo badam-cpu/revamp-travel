@@ -21,6 +21,7 @@ import { paylinkConfigured, registerPayment } from "./paylink.js";
 import { reconcileUserBookings, logBookingEvent, finalizeConfirmedBooking } from "./bookings.js";
 import { startOperatorSubscription, reconcileOperatorSubscriptions, cancelOperatorSubscription, ensurePlanRegistered, type PlanRow } from "./subscriptions.js";
 import { syncListingSessions, reserveSeats, releaseSeats } from "./sessions.js";
+import { generateListingCopy, ahaCopyConfigured } from "./ahaCopy.js";
 import { generateSupportReply, type SupportTurn } from "./support.js";
 import { generateOperatorReply, type OperatorTurn } from "./operatorAssistant.js";
 import { scanMessage } from "./messaging.js";
@@ -208,6 +209,30 @@ const saveScheduleSchema = z.object({
 });
 const bookingDecisionSchema = z.object({ bookingId: z.string().uuid() });
 
+// --- Aha writing assist (listing copy) ---
+const ahaCopySchema = z.object({
+  field: z.enum(["title", "shortDescription", "longDescription", "highlights"]),
+  mode: z.enum(["generate", "improve"]),
+  listingType: z.enum(["stay", "tour", "experience", "eat"]),
+  current: z.string().max(6000).optional(),
+  context: z
+    .object({
+      title: z.string().max(200).optional(),
+      city: z.string().max(120).optional(),
+      region: z.string().max(120).optional(),
+      venueType: z.string().max(80).optional(),
+      cuisine: z.string().max(80).optional(),
+      priceUnit: z.string().max(40).optional(),
+      amenities: z.array(z.string().max(80)).max(60).optional(),
+      facts: z.array(z.object({ label: z.string().max(60), value: z.string().max(200) })).max(30).optional(),
+      shortDescription: z.string().max(2000).optional(),
+      longDescription: z.string().max(6000).optional(),
+      highlights: z.array(z.string().max(200)).max(30).optional(),
+      notes: z.string().max(1000).optional(),
+    })
+    .default({}),
+});
+
 function issuesToMessage(err: z.ZodError): string {
   return err.issues.map((issue) => `${issue.path.join(".") || "value"}: ${issue.message}`).join("; ");
 }
@@ -268,6 +293,7 @@ const giftLookupHits = new Map<string, number[]>();
 const giftPurchaseHits = new Map<string, number[]>();
 // Per-IP cap for the public (unauthenticated) AI trip planner — protects the Anthropic bill.
 const planTripHits = new Map<string, number[]>();
+const ahaCopyHits = new Map<string, number[]>();
 function rateLimited(map: Map<string, number[]>, key: string, max: number, windowMs = 60_000): boolean {
   const now = Date.now();
   const hits = (map.get(key) ?? []).filter((t) => t > now - windowMs);
@@ -1965,6 +1991,34 @@ export function registerApiRoutes(app: Express) {
     } catch (err) {
       console.error("[sessions/save-schedule]", err);
       res.status(500).json({ error: "Couldn't save your schedule." });
+    }
+  });
+
+  // POST /api/aha-listing-copy — Aha writes/improves one listing field (title,
+  // short/long description, highlights), tuned to type + SEO + Revamp standards.
+  // Operators (and admins) only; rate-limited. Returns { text } or { items }.
+  app.post("/api/aha-listing-copy", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    if (!ahaCopyConfigured()) return res.status(503).json({ error: "Aha isn't available right now." });
+    if (rateLimited(ahaCopyHits, userId, 30)) return res.status(429).json({ error: "You're going a bit fast — give Aha a few seconds." });
+    const parsed = ahaCopySchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+
+    const admin = supabaseAdmin();
+    if (admin) {
+      const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+      if (me?.role !== "operator" && me?.role !== "admin") return res.status(403).json({ error: "Operators only." });
+    }
+    try {
+      const result = await generateListingCopy(parsed.data);
+      if (!result.text && !result.items) return res.status(502).json({ error: "Aha couldn't draft that — try again in a moment." });
+      res.json(result);
+    } catch (err) {
+      console.error("[aha-listing-copy]", err);
+      res.status(500).json({ error: "Aha couldn't draft that. Please try again." });
     }
   });
 
