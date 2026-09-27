@@ -28,6 +28,8 @@ import { scanMessage } from "./messaging.js";
 import { reserveGift, releaseGift, refundGiftForBooking, lookupRedeemableGift, reconcilePurchaserGiftCards, logGiftEvent, voidGiftCard } from "./giftcards.js";
 import { reconcilePurchaserVouchers, redeemVoucher } from "./vouchers.js";
 import { voucherPriceCents, isAllowedVoucherAmount } from "../shared/vouchers.js";
+import { resolvePromo } from "./promo.js";
+import { promoDiscountCents } from "../shared/promo.js";
 import { isAllowedGiftAmount } from "../shared/giftcards.js";
 import { payoutState } from "../shared/payouts.js";
 import { sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, type BookingEmailInfo } from "./email.js";
@@ -99,6 +101,15 @@ const startCheckoutSchema = z.object({
   addons: z.array(z.object({ id: z.string().max(80), qty: z.number().int().min(1).max(20) })).max(20).optional(),
   // Optional gift-card code to apply to this booking.
   giftCode: z.string().trim().max(40).optional(),
+  // Optional operator promo code (discount).
+  promoCode: z.string().trim().max(40).optional(),
+});
+
+const promoValidateSchema = z.object({
+  listingId: z.string().uuid(),
+  code: z.string().trim().min(1).max(40),
+  startDate: isoDate,
+  endDate: isoDate,
 });
 
 const giftCardStartSchema = z.object({
@@ -648,6 +659,26 @@ export function registerApiRoutes(app: Express) {
     if (listing.status !== "published") return res.status(400).json({ error: "This listing isn't open for booking." });
     if (!isBookableType(listing.type)) return res.status(400).json({ error: "This listing can't be booked online." });
 
+    // Resolve an optional operator promo code once, validated against the booking
+    // context (code/travel window, weekday, min stay, usage caps, listing scope).
+    // The per-path base below applies the discount and snapshots it on the booking.
+    let promoResolved: { id: string; discount_type: "percent" | "amount"; discount_value: number } | null = null;
+    if (parsed.data.promoCode) {
+      const adminForPromo = supabaseAdmin();
+      if (!adminForPromo) return res.status(503).json({ error: "Promo codes aren't available right now." });
+      const pr = await resolvePromo(adminForPromo, {
+        listingId,
+        operatorId: listing.operator_id,
+        code: parsed.data.promoCode,
+        travelerId: userId,
+        startDate,
+        endDate,
+        listingType: listing.type,
+      });
+      if (!pr.ok) return res.status(400).json({ error: pr.error });
+      promoResolved = pr.promo;
+    }
+
     // ── Slot booking (tour/experience with a time-slot schedule) ──────────────
     // Governed by per-session capacity, not the daterange exclusion. Seats are
     // reserved atomically before any charge; instant mode goes to PayLink now,
@@ -681,7 +712,13 @@ export function registerApiRoutes(app: Express) {
         { discountType: listing.discount_type, discountValue: listing.discount_value, discountStart: listing.discount_start, discountEnd: listing.discount_end },
         startDate,
       );
-      const slotCharge = computeBookingCharge(netCents);
+      let slotBase = netCents;
+      let slotPromoDisc = 0;
+      if (promoResolved) {
+        slotPromoDisc = promoDiscountCents(slotBase, promoResolved.discount_type, promoResolved.discount_value);
+        slotBase -= slotPromoDisc;
+      }
+      const slotCharge = computeBookingCharge(slotBase);
       const currency = process.env.PAYLINK_CURRENCY || DEFAULT_CURRENCY;
 
       // Reserve seats atomically FIRST — if this fails the slot just filled up.
@@ -702,6 +739,8 @@ export function registerApiRoutes(app: Express) {
         currency,
         cancellation_policy: listing.cancellation_policy ?? "flexible",
         free_cancel_days: listing.free_cancel_days ?? 7,
+        promo_code_id: promoResolved?.id ?? null,
+        promo_discount_cents: slotPromoDisc,
       };
       if (guestName || guestEmail || guestPhone) {
         slotRow.guest_name = guestName || null;
@@ -787,7 +826,13 @@ export function registerApiRoutes(app: Express) {
       { discountType: listing.discount_type, discountValue: listing.discount_value, discountStart: listing.discount_start, discountEnd: listing.discount_end },
       startDate,
     );
-    const charge = computeBookingCharge(netAccommodationCents + (listing.cleaning_fee_cents ?? 0)); // base + tax = accommodation portion the guest pays
+    let nsBase = netAccommodationCents + (listing.cleaning_fee_cents ?? 0);
+    let promoDisc = 0;
+    if (promoResolved) {
+      promoDisc = promoDiscountCents(nsBase, promoResolved.discount_type, promoResolved.discount_value);
+      nsBase -= promoDisc;
+    }
+    const charge = computeBookingCharge(nsBase); // base + tax = accommodation portion the guest pays (after any promo)
 
     // Concierge add-ons — priced server-side from the admin catalog (never trust
     // client prices). Added on top of the booking; not part of the operator base.
@@ -874,6 +919,8 @@ export function registerApiRoutes(app: Express) {
       free_cancel_days: listing.free_cancel_days ?? 7,
       gift_card_id: giftId,
       gift_applied_cents: giftApplied,
+      promo_code_id: promoResolved?.id ?? null,
+      promo_discount_cents: promoDisc,
     };
     if (guestName || guestEmail || guestPhone) {
       baseRow.guest_name = guestName || null;
@@ -2353,6 +2400,33 @@ export function registerApiRoutes(app: Express) {
     const r = await redeemVoucher(admin, parsed.data.voucherId, userId);
     if (!r.ok) return res.status(400).json({ error: r.error });
     res.json({ ok: true });
+  });
+
+  // POST /api/promo/validate — check an operator promo code for a listing + dates
+  // (checkout preview). Returns the discount terms; the actual amount is applied
+  // server-side at start-checkout.
+  app.post("/api/promo/validate", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const parsed = promoValidateSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: listing } = await admin.from("listings").select("operator_id, type, status").eq("id", parsed.data.listingId).maybeSingle();
+    if (!listing || listing.status !== "published") return res.status(404).json({ error: "Listing not found." });
+    const pr = await resolvePromo(admin, {
+      listingId: parsed.data.listingId,
+      operatorId: listing.operator_id,
+      code: parsed.data.code,
+      travelerId: userId,
+      startDate: parsed.data.startDate,
+      endDate: parsed.data.endDate,
+      listingType: listing.type,
+    });
+    if (!pr.ok) return res.status(400).json({ error: pr.error });
+    res.json({ ok: true, discountType: pr.promo.discount_type, discountValue: pr.promo.discount_value });
   });
 
   // POST /api/admin-subscription-plan — admin-only: create or update a recurring
