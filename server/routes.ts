@@ -2410,8 +2410,8 @@ export function registerApiRoutes(app: Express) {
     if (!token) return res.status(400).json({ error: "Missing token." });
     const admin = supabaseAdmin();
     if (!admin) return res.status(503).json({ error: "Not available right now." });
-    const { data: offer } = await admin.from("restaurant_voucher_offers").select("listing_id, active, staff_note").eq("redeem_token", token).maybeSingle();
-    if (!offer || !offer.active) return res.status(404).json({ error: "This redemption link isn't active." });
+    const { data: offer } = await admin.from("restaurant_voucher_offers").select("listing_id, redeem_active, staff_note").eq("redeem_token", token).maybeSingle();
+    if (!offer || !offer.redeem_active) return res.status(404).json({ error: "This redemption link isn't active." });
     const { data: listing } = await admin.from("listings").select("title, city, image").eq("id", offer.listing_id).maybeSingle();
     if (!listing) return res.status(404).json({ error: "Restaurant not found." });
     res.json({ restaurantTitle: listing.title, city: listing.city, image: listing.image, staffNote: offer.staff_note ?? null });

@@ -151,8 +151,9 @@ export async function redeemVoucherByCode(
   const code = (opts.code || "").trim();
   if (!token || !code) return { ok: false, error: "Enter the voucher code." };
 
-  const { data: offer } = await admin.from("restaurant_voucher_offers").select("listing_id").eq("redeem_token", token).maybeSingle();
+  const { data: offer } = await admin.from("restaurant_voucher_offers").select("listing_id, redeem_active").eq("redeem_token", token).maybeSingle();
   if (!offer) return { ok: false, error: "Invalid redemption link." };
+  if (!offer.redeem_active) return { ok: false, error: "Redemption is currently turned off for this restaurant." };
 
   const { data: v } = await admin
     .from("restaurant_vouchers")
