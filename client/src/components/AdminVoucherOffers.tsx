@@ -15,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { voucherPayoutCents } from "@shared/vouchers";
 import { toast } from "sonner";
 
-interface OfferRow { listing_id: string; active: boolean; customer_discount_percent: number; commission_percent: number; redeem_token: string | null }
+interface OfferRow { listing_id: string; active: boolean; customer_discount_percent: number; commission_percent: number; redeem_token: string | null; staff_note: string | null }
 interface VoucherAgg { listing_id: string; status: string; face_cents: number; commission_percent: number }
 
 export function AdminVoucherOffers() {
@@ -28,7 +28,7 @@ export function AdminVoucherOffers() {
   const load = () => {
     setLoading(true);
     Promise.all([
-      supabase.from("restaurant_voucher_offers").select("listing_id, active, customer_discount_percent, commission_percent, redeem_token"),
+      supabase.from("restaurant_voucher_offers").select("listing_id, active, customer_discount_percent, commission_percent, redeem_token, staff_note"),
       supabase.from("restaurant_vouchers").select("listing_id, status, face_cents, commission_percent"),
     ]).then(([o, v]) => {
       const map: Record<string, OfferRow> = {};
@@ -89,6 +89,7 @@ function OfferEditor({
   const [active, setActive] = useState(offer?.active ?? false);
   const [discount, setDiscount] = useState(String(offer?.customer_discount_percent ?? 10));
   const [commission, setCommission] = useState(String(offer?.commission_percent ?? 15));
+  const [staffNote, setStaffNote] = useState(offer?.staff_note ?? "");
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -107,6 +108,7 @@ function OfferEditor({
         customer_discount_percent: Math.min(90, Math.max(0, Math.round(Number(discount) || 0))),
         commission_percent: Math.min(90, Math.max(0, Math.round(Number(commission) || 0))),
         redeem_token: nextToken,
+        staff_note: staffNote.trim() || null,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "listing_id" },
@@ -159,6 +161,11 @@ function OfferEditor({
             <code className="min-w-0 flex-1 truncate bg-chalk px-2.5 py-1.5 text-xs text-basalt/70">{redeemUrl}</code>
             <button type="button" onClick={copyLink} className="shrink-0 border border-basalt/15 px-3 py-1.5 text-xs font-semibold text-basalt/70 hover:border-apricot hover:text-apricot">{copied ? "Copied" : "Copy"}</button>
           </div>
+          <label className="mt-3 grid gap-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-basalt/45">Staff note on the redeem page (optional)</span>
+            <Input value={staffNote} onChange={(e) => setStaffNote(e.target.value)} placeholder="e.g. Apply the ֏ as a discount under 'Revamp' on the POS" className="h-9 rounded-none" />
+            <span className="text-[11px] text-basalt/40">Save to update. The page also shows the restaurant's name automatically.</span>
+          </label>
         </div>
       )}
       {agg && (agg.sold > 0 || agg.redeemed > 0) && (

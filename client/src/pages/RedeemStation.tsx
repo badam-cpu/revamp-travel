@@ -4,12 +4,12 @@
  * URL is the credential). They type the code the guest shows; the server redeems
  * it single-use, scoped to this restaurant. No app to install — just a web page.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCurrency } from "@/contexts/CurrencyContext";
-import { staffRedeemVoucher, ApiError } from "@/lib/api";
+import { staffRedeemVoucher, voucherRedeemInfo, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export default function RedeemStation({ token }: { token: string }) {
@@ -17,6 +17,16 @@ export default function RedeemStation({ token }: { token: string }) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [info, setInfo] = useState<{ restaurantTitle: string; city: string; image: string | null; staffNote: string | null } | null>(null);
+  const [infoError, setInfoError] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    voucherRedeemInfo(token)
+      .then((i) => { if (live) setInfo(i); })
+      .catch(() => { if (live) setInfoError(true); });
+    return () => { live = false; };
+  }, [token]);
 
   const redeem = async () => {
     const c = code.trim();
@@ -37,9 +47,21 @@ export default function RedeemStation({ token }: { token: string }) {
   return (
     <div className="grid min-h-screen place-items-center bg-chalk p-6">
       <div className="brand-notch w-full max-w-md border border-basalt/12 bg-paper p-7 shadow-[0_20px_55px_rgba(35,35,33,0.1)]">
-        <p className="font-display text-2xl leading-none">revamp<span className="text-apricot">.</span></p>
+        {info ? (
+          <div className="flex items-center gap-3 border-b border-basalt/10 pb-4">
+            {info.image && info.image.startsWith("http") && <img src={info.image} alt="" className="h-11 w-11 shrink-0 rounded-full object-cover" />}
+            <div className="min-w-0">
+              <p className="truncate font-display text-lg leading-tight text-basalt">{info.restaurantTitle}</p>
+              <p className="truncate text-xs uppercase tracking-[0.1em] text-basalt/45">{info.city} · Voucher redemption</p>
+            </div>
+          </div>
+        ) : (
+          <p className="font-display text-2xl leading-none">revamp<span className="text-apricot">.</span></p>
+        )}
         <h1 className="mt-4 font-display text-xl">Redeem a voucher</h1>
         <p className="mt-1 text-sm text-basalt/55">Enter the code the guest shows you.</p>
+        {info?.staffNote && <p className="mt-3 border border-apricot/25 bg-apricot/5 p-3 text-sm text-basalt/75">{info.staffNote}</p>}
+        {infoError && <p className="mt-3 text-sm text-destructive">This redemption link isn't active. Check with your Revamp contact.</p>}
         <Input
           value={code}
           onChange={(e) => setCode(e.target.value.toUpperCase())}

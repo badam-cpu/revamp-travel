@@ -394,6 +394,11 @@ export async function confirmVoucherPurchase(): Promise<{ activated: number }> {
   return request<{ activated: number }>("/api/voucher/confirm", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
 }
 
+/** Public: resolve a redeem token to its restaurant, to brand the validator page. */
+export async function voucherRedeemInfo(token: string): Promise<{ restaurantTitle: string; city: string; image: string | null; staffNote: string | null }> {
+  return request<{ restaurantTitle: string; city: string; image: string | null; staffNote: string | null }>(`/api/voucher/redeem-info?token=${encodeURIComponent(token)}`);
+}
+
 /** Restaurant-side redemption (model B): staff enter the guest's code in the
  * validator link. No auth — the secret token in the link is the credential. */
 export async function staffRedeemVoucher(token: string, code: string): Promise<{ ok: boolean; restaurantTitle: string; faceCents: number; currency: string }> {

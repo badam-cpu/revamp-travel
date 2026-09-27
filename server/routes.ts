@@ -2403,6 +2403,20 @@ export function registerApiRoutes(app: Express) {
     res.json({ ok: true });
   });
 
+  // GET /api/voucher/redeem-info — public: resolve a redeem token to its restaurant
+  // so the validator page brands itself (name/city) + shows the admin staff note.
+  app.get("/api/voucher/redeem-info", async (req: Request, res: Response) => {
+    const token = String(req.query.token || "").trim();
+    if (!token) return res.status(400).json({ error: "Missing token." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: offer } = await admin.from("restaurant_voucher_offers").select("listing_id, active, staff_note").eq("redeem_token", token).maybeSingle();
+    if (!offer || !offer.active) return res.status(404).json({ error: "This redemption link isn't active." });
+    const { data: listing } = await admin.from("listings").select("title, city, image").eq("id", offer.listing_id).maybeSingle();
+    if (!listing) return res.status(404).json({ error: "Restaurant not found." });
+    res.json({ restaurantTitle: listing.title, city: listing.city, image: listing.image, staffNote: offer.staff_note ?? null });
+  });
+
   // POST /api/voucher/redeem-staff — restaurant-side redemption (model B). No
   // login: the secret redeem_token (from the per-restaurant validator link) is the
   // credential. Staff enter the code the guest shows; single-use, scoped to the
