@@ -238,6 +238,25 @@ export function sendPaymentLink(to: string, b: BookingEmailInfo, payUrl: string)
   return send(to, `Complete your booking: ${b.listingTitle}`, html);
 }
 
+/** To the buyer: their restaurant voucher is active — the code to show in-venue. */
+export function sendVoucherPurchased(
+  to: string,
+  opts: { restaurantTitle: string; code: string; faceCents: number; currency: string; expiresAt: string },
+) {
+  const site = SITE();
+  const face = `${Math.round(opts.faceCents / 100).toLocaleString("en-US")} ${esc(opts.currency)}`;
+  const expiry = new Date(opts.expiresAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  const html = shell(
+    `Your voucher for ${esc(opts.restaurantTitle)}`,
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 6px;">Your <strong>${face}</strong> dining voucher for <strong>${esc(opts.restaurantTitle)}</strong> is ready. Show this code (or open it in your Revamp account) when you dine — the staff will redeem it.</p>
+     <p style="font-size:22px;font-weight:700;letter-spacing:2px;margin:14px 0;text-align:center;background:#F7F4EF;padding:14px;border-radius:8px;">${esc(opts.code)}</p>
+     <p style="font-size:13px;line-height:1.6;color:#6B6357;margin:0 0 8px;">Valid until ${esc(expiry)}. One-time use.</p>
+     <p style="margin:0 0 8px;"><a href="${esc(site)}/account?tab=vouchers" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">View in my account</a></p>`,
+    site,
+  );
+  return send(to, `Your voucher: ${opts.restaurantTitle}`, html);
+}
+
 /** To the guest: the host couldn't accommodate the request. */
 export function sendGuestBookingDeclined(to: string, b: BookingEmailInfo) {
   const site = SITE();

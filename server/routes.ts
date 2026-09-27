@@ -26,6 +26,8 @@ import { generateSupportReply, type SupportTurn } from "./support.js";
 import { generateOperatorReply, type OperatorTurn } from "./operatorAssistant.js";
 import { scanMessage } from "./messaging.js";
 import { reserveGift, releaseGift, refundGiftForBooking, lookupRedeemableGift, reconcilePurchaserGiftCards, logGiftEvent, voidGiftCard } from "./giftcards.js";
+import { reconcilePurchaserVouchers, redeemVoucher } from "./vouchers.js";
+import { voucherPriceCents, isAllowedVoucherAmount } from "../shared/vouchers.js";
 import { isAllowedGiftAmount } from "../shared/giftcards.js";
 import { payoutState } from "../shared/payouts.js";
 import { sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, type BookingEmailInfo } from "./email.js";
@@ -153,6 +155,9 @@ const bookingContactSchema = z.object({
 });
 
 const bookingIdSchema = z.object({ bookingId: z.string().uuid() });
+
+const voucherStartSchema = z.object({ listingId: z.string().uuid(), faceCents: z.number().int().positive() });
+const voucherRedeemSchema = z.object({ voucherId: z.string().uuid() });
 
 const trackSchema = z.object({
   events: z
@@ -346,6 +351,7 @@ const giftPurchaseHits = new Map<string, number[]>();
 const planTripHits = new Map<string, number[]>();
 const ahaCopyHits = new Map<string, number[]>();
 const trackHits = new Map<string, number[]>();
+const voucherPurchaseHits = new Map<string, number[]>();
 function rateLimited(map: Map<string, number[]>, key: string, max: number, windowMs = 60_000): boolean {
   const now = Date.now();
   const hits = (map.get(key) ?? []).filter((t) => t > now - windowMs);
@@ -2256,6 +2262,97 @@ export function registerApiRoutes(app: Express) {
     const look = await lookupRedeemableGift(admin, parsed.data.code, currency);
     if ("error" in look) return res.status(404).json({ error: look.error });
     res.json({ balanceCents: look.balanceCents, currency: look.currency });
+  });
+
+  // POST /api/voucher/start-checkout — buy a prepaid dining voucher for a specific
+  // restaurant (consignment). Signed-in buyer; creates a pending voucher + a
+  // PayLink link. Activated (code assigned, buyer emailed) once payment verifies.
+  app.post("/api/voucher/start-checkout", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in to buy a voucher." });
+    if (!paylinkConfigured()) return res.status(503).json({ error: "Payments aren't available yet." });
+    if (rateLimited(voucherPurchaseHits, userId, 8)) return res.status(429).json({ error: "You're going a bit fast — give it a few seconds." });
+    const parsed = voucherStartSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    if (!isAllowedVoucherAmount(parsed.data.faceCents)) return res.status(400).json({ error: "Pick one of the available voucher amounts." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Vouchers aren't available right now." });
+
+    const { data: offer } = await admin
+      .from("restaurant_voucher_offers")
+      .select("active, customer_discount_percent, commission_percent")
+      .eq("listing_id", parsed.data.listingId)
+      .maybeSingle();
+    if (!offer || !offer.active) return res.status(400).json({ error: "This restaurant isn't selling vouchers right now." });
+    const { data: listing } = await admin.from("listings").select("title, status").eq("id", parsed.data.listingId).maybeSingle();
+    if (!listing || listing.status !== "published") return res.status(404).json({ error: "Restaurant not found." });
+
+    const priceCents = voucherPriceCents(parsed.data.faceCents, offer.customer_discount_percent as number);
+    const currency = process.env.PAYLINK_CURRENCY || DEFAULT_CURRENCY;
+    const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
+    const { data: buyer } = await admin.auth.admin.getUserById(userId);
+    try {
+      const pay = await registerPayment({
+        amount: currency === "AMD" ? Math.round(priceCents / 100) : priceCents / 100,
+        currency,
+        returnUrl: `${site}/account?voucher=return`,
+        info: `Revamp voucher · ${listing.title}`,
+      });
+      if (!pay.redirectUrl) return res.status(502).json({ error: "Couldn't start checkout." });
+      const { error: insErr } = await admin.from("restaurant_vouchers").insert({
+        listing_id: parsed.data.listingId,
+        status: "pending_payment",
+        face_cents: parsed.data.faceCents,
+        price_cents: priceCents,
+        commission_percent: offer.commission_percent,
+        currency,
+        purchaser_id: userId,
+        purchaser_email: buyer?.user?.email ?? null,
+        paylink_request_id: pay.requestId,
+      });
+      if (insErr) {
+        console.error("[voucher/start] insert", insErr.message);
+        return res.status(500).json({ error: "Couldn't record your voucher." });
+      }
+      res.json({ redirectUrl: pay.redirectUrl, priceCents });
+    } catch (err) {
+      console.error("[voucher/start]", err);
+      res.status(502).json({ error: "Couldn't start checkout." });
+    }
+  });
+
+  // POST /api/voucher/confirm — server-verified activation on the buyer's return.
+  app.post("/api/voucher/confirm", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    try {
+      const r = await reconcilePurchaserVouchers(admin, userId);
+      res.json({ activated: r.activated });
+    } catch (err) {
+      console.error("[voucher/confirm]", err);
+      res.status(500).json({ error: "Couldn't confirm your purchase." });
+    }
+  });
+
+  // POST /api/voucher/redeem — customer-initiated, single-use in-venue redemption.
+  app.post("/api/voucher/redeem", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const parsed = voucherRedeemSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const r = await redeemVoucher(admin, parsed.data.voucherId, userId);
+    if (!r.ok) return res.status(400).json({ error: r.error });
+    res.json({ ok: true });
   });
 
   // POST /api/admin-subscription-plan — admin-only: create or update a recurring
