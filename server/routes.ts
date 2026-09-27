@@ -26,7 +26,7 @@ import { generateSupportReply, type SupportTurn } from "./support.js";
 import { generateOperatorReply, type OperatorTurn } from "./operatorAssistant.js";
 import { scanMessage } from "./messaging.js";
 import { reserveGift, releaseGift, refundGiftForBooking, lookupRedeemableGift, reconcilePurchaserGiftCards, logGiftEvent, voidGiftCard } from "./giftcards.js";
-import { reconcilePurchaserVouchers, redeemVoucher } from "./vouchers.js";
+import { reconcilePurchaserVouchers, redeemVoucher, redeemVoucherByCode } from "./vouchers.js";
 import { voucherPriceCents, isAllowedVoucherAmount } from "../shared/vouchers.js";
 import { resolvePromo } from "./promo.js";
 import { promoDiscountCents } from "../shared/promo.js";
@@ -169,6 +169,7 @@ const bookingIdSchema = z.object({ bookingId: z.string().uuid() });
 
 const voucherStartSchema = z.object({ listingId: z.string().uuid(), faceCents: z.number().int().positive() });
 const voucherRedeemSchema = z.object({ voucherId: z.string().uuid() });
+const voucherRedeemStaffSchema = z.object({ token: z.string().trim().min(8).max(64), code: z.string().trim().min(1).max(40) });
 
 const trackSchema = z.object({
   events: z
@@ -2400,6 +2401,21 @@ export function registerApiRoutes(app: Express) {
     const r = await redeemVoucher(admin, parsed.data.voucherId, userId);
     if (!r.ok) return res.status(400).json({ error: r.error });
     res.json({ ok: true });
+  });
+
+  // POST /api/voucher/redeem-staff — restaurant-side redemption (model B). No
+  // login: the secret redeem_token (from the per-restaurant validator link) is the
+  // credential. Staff enter the code the guest shows; single-use, scoped to the
+  // token's restaurant. Rate-limited by IP.
+  app.post("/api/voucher/redeem-staff", async (req: Request, res: Response) => {
+    if (rateLimited(voucherPurchaseHits, `redeem:${req.ip || "?"}`, 60)) return res.status(429).json({ error: "Too many attempts — wait a moment." });
+    const parsed = voucherRedeemStaffSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const r = await redeemVoucherByCode(admin, parsed.data);
+    if (!r.ok) return res.status(400).json({ error: r.error });
+    res.json({ ok: true, restaurantTitle: r.restaurantTitle, faceCents: r.faceCents, currency: r.currency });
   });
 
   // POST /api/promo/validate — check an operator promo code for a listing + dates

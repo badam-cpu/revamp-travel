@@ -140,6 +140,40 @@ export async function reconcileAllVouchers(
   return { polled: rows.length, activated, cancelled: stale?.length ?? 0 };
 }
 
+/** Restaurant-side redemption (model B): staff enter the code shown by the guest
+ *  in the per-restaurant validator (authorized by its secret redeem_token). Atomic
+ *  single-use, scoped to the token's restaurant. */
+export async function redeemVoucherByCode(
+  admin: SupabaseClient,
+  opts: { token: string; code: string },
+): Promise<{ ok: true; restaurantTitle: string; faceCents: number; currency: string } | { ok: false; error: string }> {
+  const token = (opts.token || "").trim();
+  const code = (opts.code || "").trim();
+  if (!token || !code) return { ok: false, error: "Enter the voucher code." };
+
+  const { data: offer } = await admin.from("restaurant_voucher_offers").select("listing_id").eq("redeem_token", token).maybeSingle();
+  if (!offer) return { ok: false, error: "Invalid redemption link." };
+
+  const { data: v } = await admin
+    .from("restaurant_vouchers")
+    .select("id, status, expires_at, face_cents, currency, listing_id")
+    .ilike("code", code)
+    .maybeSingle();
+  if (!v || v.listing_id !== offer.listing_id) return { ok: false, error: "That code isn't valid for this restaurant." };
+  if (v.status === "redeemed") return { ok: false, error: "This voucher was already redeemed." };
+  if (v.status === "expired" || (v.expires_at && Date.parse(v.expires_at as string) < Date.now())) {
+    if (v.status === "active") await admin.from("restaurant_vouchers").update({ status: "expired" }).eq("id", v.id).eq("status", "active");
+    return { ok: false, error: "This voucher has expired." };
+  }
+  if (v.status !== "active") return { ok: false, error: "This voucher isn't active." };
+
+  const { data: upd } = await admin.from("restaurant_vouchers").update({ status: "redeemed", redeemed_at: new Date().toISOString() }).eq("id", v.id).eq("status", "active").select("id").maybeSingle();
+  if (!upd) return { ok: false, error: "This voucher was just redeemed." };
+
+  const { data: listing } = await admin.from("listings").select("title").eq("id", v.listing_id).maybeSingle();
+  return { ok: true, restaurantTitle: (listing?.title as string) ?? "Restaurant", faceCents: v.face_cents as number, currency: v.currency as string };
+}
+
 /** Customer-initiated, single-use in-venue redemption. Atomic: only the first
  *  attempt on an active, unexpired voucher owned by the caller succeeds. */
 export async function redeemVoucher(admin: SupabaseClient, voucherId: string, purchaserId: string): Promise<{ ok: boolean; error?: string }> {

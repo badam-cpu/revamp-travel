@@ -40,6 +40,7 @@ import GiftCards from "./pages/GiftCards";
 import Region from "./pages/Region";
 import Guide from "./pages/Guide";
 import Host from "./pages/Host";
+import RedeemStation from "./pages/RedeemStation";
 import Plan from "./pages/Plan";
 
 /** Loads GA4 (if configured) and reports a page view on every route change. */
@@ -102,6 +103,7 @@ function Router() {
       <Route path="/blog/:slug">{(params) => <BlogPost params={params} />}</Route>
       <Route path="/checkout/:slug">{(params) => <Checkout slug={params.slug} />}</Route>
       <Route path="/listing/:slug">{(params) => <ListingPage params={params} />}</Route>
+      <Route path="/redeem/:token">{(params) => <RedeemStation token={params.token} />}</Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

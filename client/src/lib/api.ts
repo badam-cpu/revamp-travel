@@ -394,6 +394,15 @@ export async function confirmVoucherPurchase(): Promise<{ activated: number }> {
   return request<{ activated: number }>("/api/voucher/confirm", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
 }
 
+/** Restaurant-side redemption (model B): staff enter the guest's code in the
+ * validator link. No auth — the secret token in the link is the credential. */
+export async function staffRedeemVoucher(token: string, code: string): Promise<{ ok: boolean; restaurantTitle: string; faceCents: number; currency: string }> {
+  return request<{ ok: boolean; restaurantTitle: string; faceCents: number; currency: string }>("/api/voucher/redeem-staff", {
+    method: "POST",
+    body: JSON.stringify({ token, code }),
+  });
+}
+
 /** Customer-initiated single-use redemption (tap when at the restaurant). */
 export async function redeemVoucher(voucherId: string): Promise<{ ok: boolean }> {
   const { data } = await supabase.auth.getSession();

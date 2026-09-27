@@ -33,7 +33,7 @@ import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useListings } from "@/contexts/ListingsContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { supabase } from "@/lib/supabase";
-import { confirmCheckout, cancelBooking, ensureBookingThread, confirmVoucherPurchase, redeemVoucher } from "@/lib/api";
+import { confirmCheckout, cancelBooking, ensureBookingThread, confirmVoucherPurchase } from "@/lib/api";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { uploadImage } from "@/lib/imageUpload";
 import { trackEvent } from "@/lib/analytics";
@@ -105,8 +105,6 @@ function VouchersTab({ reloadKey }: { reloadKey: number }) {
   const { format } = useCurrency();
   const [rows, setRows] = useState<VoucherListRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [reload, setReload] = useState(0);
-  const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -119,21 +117,7 @@ function VouchersTab({ reloadKey }: { reloadKey: number }) {
         setRows((data as unknown as VoucherListRow[]) ?? []);
         setLoading(false);
       });
-  }, [user?.id, reload, reloadKey]);
-
-  const doRedeem = async (id: string) => {
-    if (!window.confirm("Redeem this voucher now? Do this only at the restaurant — it can be used once.")) return;
-    setBusy(id);
-    try {
-      await redeemVoucher(id);
-      toast.success("Redeemed — show this screen to the staff.");
-      setReload((k) => k + 1);
-    } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't redeem.");
-    } finally {
-      setBusy(null);
-    }
-  };
+  }, [user?.id, reloadKey]);
 
   if (loading) return <p className="text-sm text-basalt/45">Loading…</p>;
   if (!rows.length)
@@ -160,11 +144,9 @@ function VouchersTab({ reloadKey }: { reloadKey: number }) {
             <p className="mt-2 font-display text-2xl font-normal">{format(v.face_cents)} <span className="text-sm text-basalt/50">dining credit</span></p>
             {v.status === "active" && (
               <>
-                <p className="mt-2 bg-chalk py-2 text-center text-xl font-bold tracking-[0.2em] text-basalt">{v.code}</p>
+                <p className="mt-2 bg-chalk py-3 text-center text-2xl font-bold tracking-[0.25em] text-basalt">{v.code}</p>
                 {v.expires_at && <p className="mt-1 text-center text-[11px] text-basalt/45">Valid until {new Date(v.expires_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>}
-                <Button onClick={() => doRedeem(v.id)} disabled={busy === v.id} className="mt-3 w-full rounded-none bg-apricot text-white hover:bg-apricot/90">
-                  {busy === v.id ? "…" : "Redeem now (at the restaurant)"}
-                </Button>
+                <p className="mt-2 text-center text-xs font-semibold text-apricot">Show this code at the restaurant — the staff will redeem it.</p>
               </>
             )}
             {v.status === "redeemed" && v.redeemed_at && (
