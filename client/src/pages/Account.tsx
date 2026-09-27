@@ -16,12 +16,13 @@
  */
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { Bookmark, LogOut, MapPin, MessageSquare, ShieldCheck, Star, Ticket, User as UserIcon } from "lucide-react";
+import { Bookmark, LogOut, MapPin, MessageSquare, ShieldCheck, Star, Ticket, Utensils, User as UserIcon } from "lucide-react";
 import { Inbox } from "@/components/Inbox";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { ListingCard } from "@/components/ListingCard";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,7 +33,8 @@ import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useListings } from "@/contexts/ListingsContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { supabase } from "@/lib/supabase";
-import { confirmCheckout, cancelBooking, ensureBookingThread } from "@/lib/api";
+import { confirmCheckout, cancelBooking, ensureBookingThread, confirmVoucherPurchase, redeemVoucher } from "@/lib/api";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { uploadImage } from "@/lib/imageUpload";
 import { trackEvent } from "@/lib/analytics";
 import { TelegramConnect } from "@/components/TelegramConnect";
@@ -75,8 +77,105 @@ function fmtMoney(cents: number, currency: string): string {
   return currency === "USD" ? `$${n}` : currency === "AMD" ? `֏${n}` : `${n} ${currency}`;
 }
 
-const VALID_TABS = ["trips", "messages", "saved", "profile", "security"] as const;
+const VALID_TABS = ["trips", "messages", "saved", "vouchers", "profile", "security"] as const;
 type TabKey = (typeof VALID_TABS)[number];
+
+interface VoucherListRow {
+  id: string;
+  code: string | null;
+  status: string;
+  face_cents: number;
+  currency: string;
+  expires_at: string | null;
+  redeemed_at: string | null;
+  created_at: string;
+  listings: { title: string; slug: string; city: string } | null;
+}
+
+const VOUCHER_STATUS: Record<string, { label: string; cls: string }> = {
+  active: { label: "Active", cls: "bg-sevan text-white" },
+  redeemed: { label: "Redeemed", cls: "bg-basalt/15 text-basalt/55" },
+  expired: { label: "Expired", cls: "bg-basalt/15 text-basalt/50" },
+  pending_payment: { label: "Pending payment", cls: "bg-tuff text-white" },
+  cancelled: { label: "Cancelled", cls: "bg-basalt/15 text-basalt/50" },
+};
+
+function VouchersTab({ reloadKey }: { reloadKey: number }) {
+  const { user } = useAuth();
+  const { format } = useCurrency();
+  const [rows, setRows] = useState<VoucherListRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [reload, setReload] = useState(0);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    setLoading(true);
+    supabase
+      .from("restaurant_vouchers")
+      .select("id, code, status, face_cents, currency, expires_at, redeemed_at, created_at, listings(title, slug, city)")
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        setRows((data as unknown as VoucherListRow[]) ?? []);
+        setLoading(false);
+      });
+  }, [user?.id, reload, reloadKey]);
+
+  const doRedeem = async (id: string) => {
+    if (!window.confirm("Redeem this voucher now? Do this only at the restaurant — it can be used once.")) return;
+    setBusy(id);
+    try {
+      await redeemVoucher(id);
+      toast.success("Redeemed — show this screen to the staff.");
+      setReload((k) => k + 1);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't redeem.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (loading) return <p className="text-sm text-basalt/45">Loading…</p>;
+  if (!rows.length)
+    return (
+      <div className="border border-dashed border-basalt/20 bg-chalk px-6 py-12 text-center">
+        <Utensils className="mx-auto h-7 w-7 text-basalt/30" />
+        <p className="mt-3 text-sm text-basalt/55">No dining vouchers yet — you'll find them on a restaurant's page.</p>
+      </div>
+    );
+
+  return (
+    <div className="grid max-w-xl gap-3">
+      {rows.map((v) => {
+        const st = VOUCHER_STATUS[v.status] ?? { label: v.status, cls: "bg-basalt/15 text-basalt/50" };
+        return (
+          <div key={v.id} className="border border-basalt/10 bg-paper p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-basalt">{v.listings?.title ?? "Restaurant"}</p>
+                <p className="text-xs text-basalt/45">{v.listings?.city}</p>
+              </div>
+              <span className={cn("shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em]", st.cls)}>{st.label}</span>
+            </div>
+            <p className="mt-2 font-display text-2xl font-normal">{format(v.face_cents)} <span className="text-sm text-basalt/50">dining credit</span></p>
+            {v.status === "active" && (
+              <>
+                <p className="mt-2 bg-chalk py-2 text-center text-xl font-bold tracking-[0.2em] text-basalt">{v.code}</p>
+                {v.expires_at && <p className="mt-1 text-center text-[11px] text-basalt/45">Valid until {new Date(v.expires_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>}
+                <Button onClick={() => doRedeem(v.id)} disabled={busy === v.id} className="mt-3 w-full rounded-none bg-apricot text-white hover:bg-apricot/90">
+                  {busy === v.id ? "…" : "Redeem now (at the restaurant)"}
+                </Button>
+              </>
+            )}
+            {v.status === "redeemed" && v.redeemed_at && (
+              <p className="mt-2 text-xs text-basalt/45">Redeemed {new Date(v.redeemed_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export function ProfileTab() {
   const { profile, user, updateProfile } = useAuth();
@@ -516,6 +615,7 @@ export default function Account() {
   const [tab, setTab] = useState<TabKey>(initialTab);
   useEffect(() => setTab(initialTab), [initialTab]);
   const [tripsReload, setTripsReload] = useState(0);
+  const [voucherReload, setVoucherReload] = useState(0);
 
   // Sign-in gate (mirrors RequireRole, without the role check).
   useEffect(() => {
@@ -558,6 +658,27 @@ export default function Account() {
     };
   }, [user?.id, isReturn]);
 
+  // Voucher purchase return (?voucher=return): activate the paid voucher(s).
+  const isVoucherReturn = new URLSearchParams(search).get("voucher") === "return";
+  useEffect(() => {
+    if (!user?.id) return;
+    let active = true;
+    confirmVoucherPurchase()
+      .then((r) => {
+        if (!active) return;
+        if (r.activated > 0) {
+          toast(r.activated === 1 ? "Voucher ready — find it under Vouchers." : `${r.activated} vouchers ready!`);
+          setTab("vouchers");
+          setVoucherReload((k) => k + 1);
+        } else if (isVoucherReturn) {
+          toast("Payment received — we're still confirming it. Your voucher will appear here shortly.");
+          setTab("vouchers");
+        }
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [user?.id, isVoucherReturn]);
+
   if (loading || !user) {
     return (
       <div className="container py-24 text-center">
@@ -585,6 +706,7 @@ export default function Account() {
               { key: "trips", label: "Trips", icon: Ticket },
               { key: "messages", label: "Messages", icon: MessageSquare },
               { key: "saved", label: "Saved", icon: Bookmark },
+              { key: "vouchers", label: "Vouchers", icon: Utensils },
               { key: "profile", label: "Profile", icon: UserIcon },
               { key: "security", label: "Security", icon: ShieldCheck },
             ].map(({ key, label, icon: Icon }) => (
@@ -601,6 +723,7 @@ export default function Account() {
           <TabsContent value="trips" className="mt-8"><TripsTab reloadKey={tripsReload} /></TabsContent>
           <TabsContent value="messages" className="mt-8">{user && <Inbox userId={user.id} />}</TabsContent>
           <TabsContent value="saved" className="mt-8"><SavedTab /></TabsContent>
+          <TabsContent value="vouchers" className="mt-8"><VouchersTab reloadKey={voucherReload} /></TabsContent>
           <TabsContent value="profile" className="mt-8"><ProfileTab /></TabsContent>
           <TabsContent value="security" className="mt-8"><SecurityTab /></TabsContent>
         </Tabs>

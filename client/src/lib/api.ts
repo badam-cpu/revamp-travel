@@ -357,6 +357,38 @@ export async function updateBookingContact(
   });
 }
 
+/** Buy a prepaid dining voucher for a restaurant — returns the PayLink redirect URL. */
+export async function startVoucherCheckout(listingId: string, faceCents: number): Promise<{ redirectUrl?: string; priceCents?: number }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in to buy a voucher.");
+  return request<{ redirectUrl?: string; priceCents?: number }>("/api/voucher/start-checkout", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ listingId, faceCents }),
+  });
+}
+
+/** Server-verified activation of the buyer's pending vouchers (on return from PayLink). */
+export async function confirmVoucherPurchase(): Promise<{ activated: number }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return { activated: 0 };
+  return request<{ activated: number }>("/api/voucher/confirm", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+}
+
+/** Customer-initiated single-use redemption (tap when at the restaurant). */
+export async function redeemVoucher(voucherId: string): Promise<{ ok: boolean }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<{ ok: boolean }>("/api/voucher/redeem", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ voucherId }),
+  });
+}
+
 /** Operator/admin sends the customer a PayLink payment link for an existing booking. */
 export async function sendBookingPaymentLink(bookingId: string): Promise<{ ok: boolean; redirectUrl?: string }> {
   const { data } = await supabase.auth.getSession();

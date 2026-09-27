@@ -9,6 +9,7 @@ import { ListingCard } from "@/components/ListingCard";
 import { TourDetail } from "@/components/TourDetail";
 import { BookingPanel } from "@/components/BookingPanel";
 import { EatGuidePanel } from "@/components/EatGuidePanel";
+import { RestaurantVoucherCard } from "@/components/RestaurantVoucherCard";
 import { slugify } from "@/lib/slug";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -454,7 +455,10 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
 
           <aside>
             {live && isEat ? (
-              <EatGuidePanel listing={live} />
+              <>
+                <EatGuidePanel listing={live} />
+                <RestaurantVoucherCard listing={{ id: live.id, title: live.title, slug: live.slug }} />
+              </>
             ) : live ? (
               <BookingPanel listing={live} />
             ) : (
