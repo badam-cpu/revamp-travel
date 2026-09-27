@@ -23,7 +23,7 @@ export function EatGuidePanel({ listing }: { listing: LiveListing }) {
   const saved = isSaved(listing.id);
   const gmaps = googleUrl(listing);
   return (
-    <div className="brand-notch sticky top-[104px] border border-basalt/12 bg-chalk p-6 shadow-[0_20px_55px_rgba(35,35,33,0.1)]">
+    <div className="brand-notch border border-basalt/12 bg-chalk p-6 shadow-[0_20px_55px_rgba(35,35,33,0.1)]">
       {/* Lead with what a diner cares about: the rating. */}
       {typeof listing.googleRating === "number" ? (
         <div>

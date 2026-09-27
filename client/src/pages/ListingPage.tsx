@@ -455,10 +455,10 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
 
           <aside>
             {live && isEat ? (
-              <>
+              <div className="grid gap-6 lg:sticky lg:top-[104px] lg:max-h-[calc(100vh-124px)] lg:overflow-y-auto">
                 <EatGuidePanel listing={live} />
                 <RestaurantVoucherCard listing={{ id: live.id, title: live.title, slug: live.slug }} />
-              </>
+              </div>
             ) : live ? (
               <BookingPanel listing={live} />
             ) : (

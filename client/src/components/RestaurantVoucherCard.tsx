@@ -58,7 +58,7 @@ export function RestaurantVoucherCard({ listing }: { listing: { id: string; titl
   };
 
   return (
-    <div className="brand-notch mt-6 border border-basalt/12 bg-chalk p-6">
+    <div className="brand-notch border border-basalt/12 bg-chalk p-6">
       <h3 className="flex items-center gap-2 font-display text-xl"><Ticket className="h-5 w-5 text-apricot" /> Dining vouchers</h3>
       <p className="mt-1 text-sm text-basalt/55">Prepay{discount > 0 ? ` and save ${discount}%` : ""} — redeem in person at {listing.title}.</p>
       <div className="mt-4 grid gap-2">
