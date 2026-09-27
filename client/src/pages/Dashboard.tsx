@@ -23,7 +23,7 @@
  */
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, ArrowLeft, ArrowRight, BookOpen, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, CreditCard, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, Pencil, Plug, Plus, Settings, Sparkles, Trash2, Wallet, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, BookOpen, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, CreditCard, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, Pencil, Plug, Plus, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
 import { Inbox } from "@/components/Inbox";
 import { PartnerHub } from "@/components/PartnerHub";
 import { PriceLabsConnect } from "@/components/PriceLabsConnect";
@@ -60,6 +60,7 @@ import { ListEditor } from "@/components/ListEditor";
 import { OperatorBookings } from "@/components/OperatorBookings";
 import { PricingCalendar } from "@/components/PricingCalendar";
 import { OperatorBookingsTimeline } from "@/components/OperatorBookingsTimeline";
+import { PromoCodes } from "@/components/PromoCodes";
 import { OperatorPayouts } from "@/components/OperatorPayouts";
 import { OperatorSubscription } from "@/components/OperatorSubscription";
 import { SessionScheduleEditor } from "@/components/SessionScheduleEditor";
@@ -1241,11 +1242,12 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
   );
 }
 
-type OperatorSection = "overview" | "listings" | "bookings" | "messages" | "hub" | "integrations" | "payouts" | "billing" | "settings";
+type OperatorSection = "overview" | "listings" | "bookings" | "promos" | "messages" | "hub" | "integrations" | "payouts" | "billing" | "settings";
 const OPERATOR_SECTIONS: { key: OperatorSection; label: string; icon: typeof Home }[] = [
   { key: "overview", label: "Dashboard", icon: LayoutDashboard },
   { key: "listings", label: "Listings", icon: List },
   { key: "bookings", label: "Bookings", icon: CalendarCheck },
+  { key: "promos", label: "Promo codes", icon: Ticket },
   { key: "messages", label: "Messages", icon: MessageSquare },
   { key: "hub", label: "Partner Hub", icon: BookOpen },
   { key: "integrations", label: "Integrations", icon: Plug },
@@ -1451,6 +1453,7 @@ function DashboardContent() {
             )}
 
             {section === "bookings" && <BookingsSection />}
+            {section === "promos" && <PromoCodes />}
 
             {section === "messages" && (
               <div>

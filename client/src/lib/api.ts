@@ -166,7 +166,7 @@ export interface StartCheckoutParams {
  * happens server-side after the traveler returns — see confirmCheckout.
  */
 export async function startCheckout(
-  params: StartCheckoutParams & { sessionId?: string; guestName?: string; guestEmail?: string; guestPhone?: string; messagingConsent?: boolean; addons?: { id: string; qty: number }[]; giftCode?: string },
+  params: StartCheckoutParams & { sessionId?: string; guestName?: string; guestEmail?: string; guestPhone?: string; messagingConsent?: boolean; addons?: { id: string; qty: number }[]; giftCode?: string; promoCode?: string },
 ): Promise<{ redirectUrl?: string; confirmed?: boolean; fullyCovered?: boolean; requested?: boolean; bookingId?: string }> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
@@ -175,6 +175,23 @@ export async function startCheckout(
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify(params),
+  });
+}
+
+/** Validate an operator promo code for a listing + dates (checkout preview). Throws ApiError if invalid. */
+export async function validatePromoCode(
+  listingId: string,
+  code: string,
+  startDate: string,
+  endDate: string,
+): Promise<{ discountType: "percent" | "amount"; discountValue: number }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in to use a code.");
+  return request<{ ok: boolean; discountType: "percent" | "amount"; discountValue: number }>("/api/promo/validate", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ listingId, code, startDate, endDate }),
   });
 }
 

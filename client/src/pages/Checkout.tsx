@@ -27,7 +27,8 @@ import { useListings } from "@/contexts/ListingsContext";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
-import { startCheckout, lookupGiftCard, ApiError } from "@/lib/api";
+import { startCheckout, lookupGiftCard, validatePromoCode, ApiError } from "@/lib/api";
+import { promoDiscountCents as computePromoCodeDiscount } from "@shared/promo";
 import { trackEvent } from "@/lib/analytics";
 import {
   computeBookingAmountCents,
@@ -87,6 +88,9 @@ export default function Checkout({ slug }: { slug: string }) {
   const [giftCode, setGiftCode] = useState("");
   const [giftBalance, setGiftBalance] = useState<number | null>(null);
   const [giftApplying, setGiftApplying] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [promoInfo, setPromoInfo] = useState<{ discountType: "percent" | "amount"; discountValue: number } | null>(null);
+  const [promoApplying, setPromoApplying] = useState(false);
 
   // --- pricing (mirrors BookingPanel / the server) --------------------------
   const valid = !!listing && isBookableType(listing.type) && !!startDate && !!endDate && listing.price > 0;
@@ -106,7 +110,9 @@ export default function Checkout({ slug }: { slug: string }) {
     : 0;
   const promo = listing ? promoDiscount(accommodationCents, listing, startDate) : { active: false, discountCents: 0, netCents: 0 };
   const cleaningCents = accommodationCents > 0 ? listing?.cleaningFeeCents ?? 0 : 0;
-  const charge = computeBookingCharge(promo.netCents + cleaningCents);
+  const preTaxBase = promo.netCents + cleaningCents;
+  const promoCodeDiscountCents = promoInfo ? computePromoCodeDiscount(preTaxBase, promoInfo.discountType, promoInfo.discountValue) : 0;
+  const charge = computeBookingCharge(Math.max(0, preTaxBase - promoCodeDiscountCents));
 
   const addons = isStay
     ? (settings.addons ?? []).filter((a) => a.enabled && a.name && (a.priceCents > 0 || a.onRequest))
@@ -177,6 +183,23 @@ export default function Checkout({ slug }: { slug: string }) {
     }
   };
 
+  const applyPromo = async () => {
+    const code = promoCode.trim();
+    if (!code || !listing || !startDate || !endDate) return;
+    setPromoApplying(true);
+    try {
+      if (!user) await signInAnonymously();
+      const r = await validatePromoCode(listing.id, code, startDate, endDate);
+      setPromoInfo({ discountType: r.discountType, discountValue: r.discountValue });
+      toast("Promo code applied.");
+    } catch (e) {
+      setPromoInfo(null);
+      toast(e instanceof ApiError ? e.message : "Couldn't apply that code.");
+    } finally {
+      setPromoApplying(false);
+    }
+  };
+
   const pay = async () => {
     if (isGuest) {
       if (!guestName.trim() || !guestEmail.trim() || !guestPhone.trim()) {
@@ -204,6 +227,7 @@ export default function Checkout({ slug }: { slug: string }) {
         ...(sessionId ? { sessionId } : {}),
         ...(addonSel.length ? { addons: addonSel } : {}),
         ...(giftBalance != null && giftCode.trim() ? { giftCode: giftCode.trim() } : {}),
+        ...(promoInfo && promoCode.trim() ? { promoCode: promoCode.trim() } : {}),
         ...(isGuest ? { guestName: guestName.trim(), guestEmail: guestEmail.trim(), guestPhone: guestPhone.trim(), messagingConsent: notifyConsent } : {}),
       });
       // Request-to-book: no payment now — the host approves, then we email a pay link.
@@ -337,6 +361,29 @@ export default function Checkout({ slug }: { slug: string }) {
                 <p className="mt-2 text-xs font-semibold text-apricot">Applied — {format(giftAppliedCents)} covered{dueCents === 0 ? " (fully covered)" : ""}.</p>
               )}
             </section>
+
+            {/* Promo code */}
+            <section>
+              <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-basalt/50">Promo code</h2>
+              <p className="mt-1 text-sm text-basalt/55">Have a discount code from the host? Apply it here.</p>
+              <div className="mt-3 flex items-start gap-2">
+                <Input
+                  value={promoCode}
+                  onChange={(e) => {
+                    setPromoCode(e.target.value.toUpperCase());
+                    setPromoInfo(null);
+                  }}
+                  placeholder="e.g. SUMMER10"
+                  className="h-12 flex-1 rounded-none uppercase"
+                />
+                <Button type="button" variant="outline" onClick={applyPromo} disabled={promoApplying || !promoCode.trim()} className="h-12 shrink-0 rounded-none border-basalt/20">
+                  {promoApplying ? "…" : "Apply"}
+                </Button>
+              </div>
+              {promoInfo && promoCodeDiscountCents > 0 && (
+                <p className="mt-2 text-xs font-semibold text-apricot">Applied — {format(promoCodeDiscountCents)} off.</p>
+              )}
+            </section>
           </div>
 
           {/* Right: summary */}
@@ -370,6 +417,12 @@ export default function Checkout({ slug }: { slug: string }) {
                   <div className="flex items-center justify-between font-semibold text-apricot">
                     <span>Discount{listing!.discountType === "percent" ? ` (${listing!.discountValue}% off)` : " (sale)"}</span>
                     <span>−{format(promo.discountCents)}</span>
+                  </div>
+                )}
+                {promoCodeDiscountCents > 0 && (
+                  <div className="flex items-center justify-between font-semibold text-apricot">
+                    <span>Promo code{promoInfo?.discountType === "percent" ? ` (${promoInfo.discountValue}% off)` : ""}</span>
+                    <span>−{format(promoCodeDiscountCents)}</span>
                   </div>
                 )}
                 {cleaningCents > 0 && (

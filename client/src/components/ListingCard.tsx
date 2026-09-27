@@ -10,10 +10,14 @@ import { imgAttrs } from "@/lib/responsiveImg";
 import { DiscountBadge } from "@/components/DiscountBadge";
 import { useExternalRatings } from "@/hooks/useExternalRatings";
 import { useImpressionRef, trackListing } from "@/lib/track";
+import { usePromoBadges } from "@/hooks/usePromoBadges";
+import { promoBadgeText } from "@shared/promo";
 
 export function ListingCard({ listing, large = false, active = false, onHover, surface = "" }: { listing: Listing; large?: boolean; active?: boolean; onHover?: (id?: string) => void; surface?: string }) {
   const { isSaved, toggleSaved } = useSavedPlaces();
   const impressionRef = useImpressionRef<HTMLElement>(listing.id, surface);
+  const promoFor = usePromoBadges();
+  const promoBadge = promoFor(listing.id, (listing as { operatorId?: string }).operatorId);
   const { format } = useCurrency();
   const isEat = listing.type === "eat";
   const ratingFor = useExternalRatings();
@@ -44,6 +48,11 @@ export function ListingCard({ listing, large = false, active = false, onHover, s
             {typeLabels[listing.type]}
           </span>
           <DiscountBadge listing={listing} className="absolute left-4 top-14" />
+          {promoBadge && (
+            <span className="absolute right-14 top-4 bg-apricot px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white shadow-sm">
+              {promoBadgeText(promoBadge, format)}
+            </span>
+          )}
           <button
             type="button"
             aria-label={saved ? `Remove ${listing.title} from saved` : `Save ${listing.title}`}
