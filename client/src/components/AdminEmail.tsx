@@ -194,7 +194,7 @@ export function AdminEmail() {
                 />
               </div>
               <div className="border-t border-basalt/8 px-6 py-3 text-[11px] text-basalt/45">
-                Revamp Vacations · revampvacations.com<br />Don't want these emails? <span className="underline">Unsubscribe</span>.
+                Revamp Vacations · revampvacations.com · Sent {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}<br />Don't want these emails? <span className="underline">Unsubscribe</span>.
               </div>
             </div>
             <p className="mt-2 text-center text-[11px] text-basalt/40">{"{first_name}"} shown as “Anna” — replaced per recipient at send.</p>
