@@ -432,6 +432,30 @@ export async function sendBookingPaymentLink(bookingId: string): Promise<{ ok: b
   });
 }
 
+/** Admin: preview how many recipients an audience segment resolves to. */
+export async function adminEmailPreview(audience: string): Promise<{ count: number; sample: string[] }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<{ count: number; sample: string[] }>("/api/admin-email/preview", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ audience }),
+  });
+}
+
+/** Admin: send a composed email to an audience segment. */
+export async function adminEmailSend(input: { audience: string; subject: string; body: string }): Promise<{ total: number; sent: number; failed: number }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<{ total: number; sent: number; failed: number }>("/api/admin-email/send", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(input),
+  });
+}
+
 /** Operator flips a direct booking's payment status (paid/unpaid). */
 export async function setBookingPayment(bookingId: string, paymentStatus: "paid" | "unpaid"): Promise<{ ok: boolean }> {
   const { data } = await supabase.auth.getSession();
