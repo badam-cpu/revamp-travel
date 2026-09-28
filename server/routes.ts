@@ -30,7 +30,7 @@ import { reconcilePurchaserVouchers, redeemVoucher, redeemVoucherByCode } from "
 import { voucherPriceCents, isAllowedVoucherAmount } from "../shared/vouchers.js";
 import { resolvePromo } from "./promo.js";
 import { promoDiscountCents } from "../shared/promo.js";
-import { resolveAudience, sendCampaign, marketingConfigured, verifyUnsub, generateEmailBody, emailGenConfigured, parseContactsCsv, importContacts } from "./marketing.js";
+import { resolveAudience, sendCampaign, marketingConfigured, verifyUnsub, generateEmailBody, emailGenConfigured, parseContactsCsv, importContacts, sendTelegramCampaign, resolveTelegramRecipients, telegramBroadcastConfigured } from "./marketing.js";
 import { isAllowedGiftAmount } from "../shared/giftcards.js";
 import { payoutState } from "../shared/payouts.js";
 import { sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, type BookingEmailInfo } from "./email.js";
@@ -177,6 +177,7 @@ const emailSendSchema = z.object({
   audience: z.enum(["everyone", "operators", "travelers", "guests", "contacts"]),
   subject: z.string().trim().min(1).max(200),
   body: z.string().trim().min(1).max(20000),
+  channel: z.enum(["email", "telegram"]).optional().default("email"),
 });
 
 const trackSchema = z.object({
@@ -2478,6 +2479,10 @@ export function registerApiRoutes(app: Express) {
     if (!admin) return res.status(503).json({ error: "Not available right now." });
     const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
     if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+    if (String(req.body?.channel) === "telegram") {
+      const tg = await resolveTelegramRecipients(admin);
+      return res.json({ count: tg.length, sample: [] });
+    }
     const parsed = emailAudienceSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
     const recipients = await resolveAudience(admin, parsed.data.audience);
@@ -2532,7 +2537,6 @@ export function registerApiRoutes(app: Express) {
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
     const userId = token ? await verifyUser(token) : null;
     if (!userId || !token) return res.status(401).json({ error: "Sign in." });
-    if (!marketingConfigured()) return res.status(503).json({ error: "Email isn't configured (set RESEND_API_KEY + EMAIL_FROM)." });
     const admin = supabaseAdmin();
     if (!admin) return res.status(503).json({ error: "Not available right now." });
     const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
@@ -2540,6 +2544,24 @@ export function registerApiRoutes(app: Express) {
     const parsed = emailSendSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
 
+    // Telegram broadcast: recipients are everyone who linked the bot (opt-in).
+    if (parsed.data.channel === "telegram") {
+      if (!telegramBroadcastConfigured()) return res.status(503).json({ error: "Telegram isn't configured (set TELEGRAM_BOT_TOKEN)." });
+      const { sent, failed, total } = await sendTelegramCampaign(admin, { subject: parsed.data.subject, markdown: parsed.data.body });
+      if (total === 0) return res.status(400).json({ error: "No one has linked Telegram yet." });
+      await admin.from("email_campaigns").insert({
+        subject: parsed.data.subject,
+        body: parsed.data.body,
+        audience: "telegram",
+        channel: "telegram",
+        recipient_count: total,
+        sent_count: sent,
+        created_by: userId,
+      });
+      return res.json({ total, sent, failed });
+    }
+
+    if (!marketingConfigured()) return res.status(503).json({ error: "Email isn't configured (set RESEND_API_KEY + EMAIL_FROM)." });
     const recipients = await resolveAudience(admin, parsed.data.audience);
     if (recipients.length === 0) return res.status(400).json({ error: "No recipients in that audience." });
     const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
@@ -2548,6 +2570,7 @@ export function registerApiRoutes(app: Express) {
       subject: parsed.data.subject,
       body: parsed.data.body,
       audience: parsed.data.audience,
+      channel: "email",
       recipient_count: recipients.length,
       sent_count: sent,
       created_by: userId,

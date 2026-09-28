@@ -433,14 +433,14 @@ export async function sendBookingPaymentLink(bookingId: string): Promise<{ ok: b
 }
 
 /** Admin: preview how many recipients an audience segment resolves to. */
-export async function adminEmailPreview(audience: string): Promise<{ count: number; sample: string[] }> {
+export async function adminEmailPreview(audience: string, channel: "email" | "telegram" = "email"): Promise<{ count: number; sample: string[] }> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new ApiError("Sign in.");
   return request<{ count: number; sample: string[] }>("/api/admin-email/preview", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ audience }),
+    body: JSON.stringify({ audience, channel }),
   });
 }
 
@@ -456,8 +456,8 @@ export async function adminEmailGenerate(prompt: string): Promise<{ body: string
   });
 }
 
-/** Admin: send a composed email to an audience segment. */
-export async function adminEmailSend(input: { audience: string; subject: string; body: string }): Promise<{ total: number; sent: number; failed: number }> {
+/** Admin: send a composed email or Telegram broadcast to an audience segment. */
+export async function adminEmailSend(input: { audience: string; subject: string; body: string; channel?: "email" | "telegram" }): Promise<{ total: number; sent: number; failed: number }> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new ApiError("Sign in.");

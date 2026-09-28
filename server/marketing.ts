@@ -12,6 +12,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { renderMarkdown } from "../shared/markdown.js";
+import { sendTelegram, telegramConfigured } from "./telegram.js";
 
 const RESEND_BATCH_URL = "https://api.resend.com/emails/batch";
 
@@ -272,6 +273,66 @@ function shell(bodyHtml: string, siteUrl: string, unsubUrl: string, nonce: strin
       </div>
     </div>
   </body></html>`;
+}
+
+// --- Telegram broadcast ---------------------------------------------------
+
+export function telegramBroadcastConfigured(): boolean {
+  return telegramConfigured();
+}
+
+/**
+ * Markdown → Telegram-friendly plain text: keep paragraphs/line breaks, turn
+ * [label](url) into "label (url)" (Telegram auto-links the bare URL), and drop
+ * heading/emphasis markers. Capped at Telegram's 4096-char message limit.
+ */
+export function markdownToTelegram(src: string): string {
+  const text = (src || "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")               // images: drop
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, "$1 ($2)")   // links: label (url)
+    .replace(/^#{1,6}\s*/gm, "")                          // headings
+    .replace(/^>\s?/gm, "")                               // blockquotes
+    .replace(/\*\*([^*]+)\*\*/g, "$1")                   // bold
+    .replace(/(^|[^*])\*([^*]+)\*/g, "$1$2")            // italic *
+    .replace(/(^|[^_])_([^_]+)_/g, "$1$2")               // italic _
+    .replace(/`{1,3}([^`]*)`{1,3}/g, "$1")               // code
+    .replace(/^\s*[-*]\s+/gm, "• ")                       // bullets
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return text.length > 4096 ? text.slice(0, 4095) + "…" : text;
+}
+
+/** Everyone who linked the Telegram bot (linking is the opt-in). */
+export async function resolveTelegramRecipients(admin: SupabaseClient): Promise<{ chatId: string; name: string | null }[]> {
+  const { data } = await admin.from("telegram_links").select("chat_id, profiles(display_name)").not("chat_id", "is", null);
+  const out: { chatId: string; name: string | null }[] = [];
+  for (const row of (data ?? []) as { chat_id: string | null; profiles: { display_name: string | null } | { display_name: string | null }[] | null }[]) {
+    if (!row.chat_id) continue;
+    const prof = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+    out.push({ chatId: row.chat_id, name: prof?.display_name ?? null });
+  }
+  return out;
+}
+
+/** Send a Telegram broadcast (subject as a first line + the plain-text body). */
+export async function sendTelegramCampaign(
+  admin: SupabaseClient,
+  opts: { subject: string; markdown: string },
+): Promise<{ sent: number; failed: number; total: number }> {
+  const recipients = await resolveTelegramRecipients(admin);
+  let sent = 0;
+  let failed = 0;
+  const bodyPlain = markdownToTelegram(opts.markdown);
+  for (const r of recipients) {
+    const subject = personalize(opts.subject, { email: "", name: r.name }).trim();
+    const body = personalize(bodyPlain, { email: "", name: r.name });
+    const text = subject ? `${subject}\n\n${body}` : body;
+    const res = await sendTelegram(r.chatId, text.slice(0, 4096));
+    if (res.sent) sent++;
+    else failed++;
+  }
+  return { sent, failed, total: recipients.length };
 }
 
 /** Send a campaign to the resolved recipients via Resend batch (chunks of 100). */
