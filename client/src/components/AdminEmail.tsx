@@ -185,7 +185,7 @@ export function AdminEmail() {
           <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-basalt/45">Preview</p>
           <div className="overflow-hidden rounded-[14px] border border-basalt/12 bg-[#F5F2EC] p-4">
             <div className="mx-auto max-w-[600px] overflow-hidden rounded-[14px] border border-basalt/10 bg-white">
-              <div className="border-b border-basalt/8 px-6 py-4"><span className="font-display text-xl">revamp<span className="text-apricot">.</span></span></div>
+              <div className="border-b border-basalt/8 px-6 py-4"><span className="font-display text-xl">revamp<span style={{ color: "#F15822" }}>.</span></span></div>
               <div className="px-6 py-4">
                 <p className="font-display text-2xl leading-tight text-basalt">{previewText(subject) || "Subject"}</p>
                 <div
