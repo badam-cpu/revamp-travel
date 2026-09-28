@@ -6,9 +6,9 @@
  * unsubscribe link (added server-side).
  */
 import { useEffect, useRef, useState } from "react";
-import { Sparkles, Loader2 } from "lucide-react";
+import { Sparkles, Loader2, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { adminEmailPreview, adminEmailSend, adminEmailGenerate, ApiError } from "@/lib/api";
+import { adminEmailPreview, adminEmailSend, adminEmailGenerate, adminEmailImportContacts, ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +22,7 @@ const AUDIENCES = [
   { value: "operators", label: "Operators" },
   { value: "travelers", label: "Registered travelers" },
   { value: "guests", label: "Guests (no account)" },
+  { value: "contacts", label: "Imported contacts" },
 ];
 
 const TEMPLATES: { value: string; label: string; subject: string; body: string }[] = [
@@ -60,13 +61,45 @@ export function AdminEmail() {
   const [previewing, setPreviewing] = useState(false);
   const [sending, setSending] = useState(false);
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
+  const [contactCount, setContactCount] = useState<number | null>(null);
+  const [importing, setImporting] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const loadCampaigns = () => {
     supabase.from("email_campaigns").select("id, subject, audience, recipient_count, sent_count, created_at").order("created_at", { ascending: false }).limit(30).then(({ data }) => setCampaigns((data as CampaignRow[]) ?? []));
   };
-  useEffect(loadCampaigns, []);
+  const loadContactCount = () => {
+    supabase.from("email_contacts").select("email", { count: "exact", head: true }).then(({ count }) => setContactCount(count ?? 0));
+  };
+  useEffect(() => { loadCampaigns(); loadContactCount(); }, []);
   useEffect(() => { setPreview(null); }, [audience]);
+
+  const importCsv = async (text: string, source: string) => {
+    if (!text.trim()) return toast("That file looks empty.");
+    setImporting(true);
+    try {
+      const r = await adminEmailImportContacts(text, source);
+      toast.success(`Imported ${r.imported} contact${r.imported === 1 ? "" : "s"}${r.skipped ? ` · ${r.skipped} skipped` : ""}. ${r.total} total.`);
+      setContactCount(r.total);
+      setAudience("contacts");
+      setPreview(null);
+    } catch (e) {
+      toast(e instanceof ApiError || e instanceof Error ? e.message : "Couldn't import.");
+    } finally {
+      setImporting(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => importCsv(String(reader.result || ""), `csv:${file.name}`.slice(0, 120));
+    reader.onerror = () => toast("Couldn't read that file.");
+    reader.readAsText(file);
+  };
 
   const applyTemplate = (v: string) => {
     const t = TEMPLATES.find((x) => x.value === v);
@@ -149,6 +182,18 @@ export function AdminEmail() {
                 <SelectContent>{TEMPLATES.map((t) => <SelectItem key={t.value || "scratch"} value={t.value || "scratch"}>{t.label}</SelectItem>)}</SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* Import contacts */}
+          <div className="flex flex-wrap items-center gap-3 border border-dashed border-basalt/20 bg-chalk/40 p-3">
+            <input ref={fileRef} type="file" accept=".csv,.tsv,.txt,text/csv" onChange={onFile} className="hidden" />
+            <Button type="button" variant="outline" onClick={() => fileRef.current?.click()} disabled={importing} className="h-9 rounded-none">
+              {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Upload className="mr-1.5 h-4 w-4" /> Import contacts (CSV)</>}
+            </Button>
+            <span className="text-xs text-basalt/55">
+              {contactCount != null ? `${contactCount} imported contact${contactCount === 1 ? "" : "s"} on file. ` : ""}
+              A column named <code className="text-basalt/70">email</code> (and optionally <code className="text-basalt/70">name</code>). Export from Excel as CSV.
+            </span>
           </div>
 
           <div className="grid gap-1.5">

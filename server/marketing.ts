@@ -15,7 +15,7 @@ import { renderMarkdown } from "../shared/markdown.js";
 
 const RESEND_BATCH_URL = "https://api.resend.com/emails/batch";
 
-export type Audience = "everyone" | "operators" | "travelers" | "guests";
+export type Audience = "everyone" | "operators" | "travelers" | "guests" | "contacts";
 export interface Recipient { email: string; name?: string | null }
 
 export function marketingConfigured(): boolean {
@@ -91,6 +91,91 @@ function normEmail(e?: string | null): string | null {
   return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(t) ? t : null;
 }
 
+// --- CSV contact import ---------------------------------------------------
+
+/** Split a CSV line, honoring simple double-quoted fields. */
+function splitCsvLine(line: string, delim: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQ) {
+      if (c === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++; }
+        else inQ = false;
+      } else cur += c;
+    } else if (c === '"') inQ = true;
+    else if (c === delim) { out.push(cur); cur = ""; }
+    else cur += c;
+  }
+  out.push(cur);
+  return out.map((s) => s.trim());
+}
+
+/**
+ * Parse a pasted/uploaded CSV (or TSV) of contacts into deduped recipients.
+ * Accepts a header row (email/name columns, any order, common aliases) or a
+ * plain "email[,name]" per line with no header. Invalid emails are skipped.
+ */
+export function parseContactsCsv(text: string): { recipients: Recipient[]; skipped: number } {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n").map((l) => l.trim()).filter(Boolean);
+  if (lines.length === 0) return { recipients: [], skipped: 0 };
+
+  const delim = lines[0].includes("\t") ? "\t" : lines[0].includes(";") && !lines[0].includes(",") ? ";" : ",";
+  const first = splitCsvLine(lines[0], delim).map((c) => c.toLowerCase());
+  const hasHeader = first.some((c) => /^(e-?mail|email address)$/.test(c)) || (first.some((c) => c.includes("mail")) && !first.some((c) => c.includes("@")));
+
+  let emailIdx = 0;
+  let nameIdx = 1;
+  let start = 0;
+  if (hasHeader) {
+    start = 1;
+    const findIdx = (pred: (c: string) => boolean, fallback: number) => {
+      const i = first.findIndex(pred);
+      return i >= 0 ? i : fallback;
+    };
+    emailIdx = findIdx((c) => c.includes("mail"), 0);
+    nameIdx = findIdx((c) => c === "name" || c.includes("full") || c.includes("first") || c.includes("guest"), 1);
+  }
+
+  const seen = new Map<string, Recipient>();
+  let skipped = 0;
+  for (let i = start; i < lines.length; i++) {
+    const cols = splitCsvLine(lines[i], delim);
+    const email = normEmail(cols[emailIdx]);
+    if (!email) { skipped++; continue; }
+    const name = (cols[nameIdx] || "").trim() || null;
+    if (!seen.has(email)) seen.set(email, { email, name });
+  }
+  return { recipients: Array.from(seen.values()), skipped };
+}
+
+/** Upsert imported contacts into email_contacts. Returns how many landed. */
+export async function importContacts(
+  admin: SupabaseClient,
+  recipients: Recipient[],
+  source: string,
+  createdBy: string,
+): Promise<{ imported: number }> {
+  if (recipients.length === 0) return { imported: 0 };
+  const now = new Date().toISOString();
+  let imported = 0;
+  for (let i = 0; i < recipients.length; i += 500) {
+    const chunk = recipients.slice(i, i + 500).map((r) => ({
+      email: r.email,
+      name: r.name ?? null,
+      source,
+      created_by: createdBy,
+      updated_at: now,
+    }));
+    const { error } = await admin.from("email_contacts").upsert(chunk, { onConflict: "email" });
+    if (!error) imported += chunk.length;
+    else console.warn("[marketing] contact upsert", error.message);
+  }
+  return { imported };
+}
+
 function unsubSecret(): string {
   return process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.RESEND_API_KEY || "revamp-unsub";
 }
@@ -158,6 +243,11 @@ export async function resolveAudience(admin: SupabaseClient, audience: Audience)
       add(r.purchaser_email);
     }
     for (const r of (rv.data ?? []) as { purchaser_email: string | null }[]) add(r.purchaser_email);
+  }
+
+  if (audience === "everyone" || audience === "contacts") {
+    const { data: contacts } = await admin.from("email_contacts").select("email, name");
+    for (const c of (contacts ?? []) as { email: string; name: string | null }[]) add(c.email, c.name);
   }
 
   return Array.from(out.values());

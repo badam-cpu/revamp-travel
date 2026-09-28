@@ -30,7 +30,7 @@ import { reconcilePurchaserVouchers, redeemVoucher, redeemVoucherByCode } from "
 import { voucherPriceCents, isAllowedVoucherAmount } from "../shared/vouchers.js";
 import { resolvePromo } from "./promo.js";
 import { promoDiscountCents } from "../shared/promo.js";
-import { resolveAudience, sendCampaign, marketingConfigured, verifyUnsub, generateEmailBody, emailGenConfigured } from "./marketing.js";
+import { resolveAudience, sendCampaign, marketingConfigured, verifyUnsub, generateEmailBody, emailGenConfigured, parseContactsCsv, importContacts } from "./marketing.js";
 import { isAllowedGiftAmount } from "../shared/giftcards.js";
 import { payoutState } from "../shared/payouts.js";
 import { sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, type BookingEmailInfo } from "./email.js";
@@ -172,9 +172,9 @@ const voucherStartSchema = z.object({ listingId: z.string().uuid(), faceCents: z
 const voucherRedeemSchema = z.object({ voucherId: z.string().uuid() });
 const voucherRedeemStaffSchema = z.object({ token: z.string().trim().min(8).max(64), code: z.string().trim().min(1).max(40) });
 
-const emailAudienceSchema = z.object({ audience: z.enum(["everyone", "operators", "travelers", "guests"]) });
+const emailAudienceSchema = z.object({ audience: z.enum(["everyone", "operators", "travelers", "guests", "contacts"]) });
 const emailSendSchema = z.object({
-  audience: z.enum(["everyone", "operators", "travelers", "guests"]),
+  audience: z.enum(["everyone", "operators", "travelers", "guests", "contacts"]),
   subject: z.string().trim().min(1).max(200),
   body: z.string().trim().min(1).max(20000),
 });
@@ -2502,6 +2502,28 @@ export function registerApiRoutes(app: Express) {
     const body = await generateEmailBody(prompt.slice(0, 1000));
     if (!body) return res.status(502).json({ error: "Couldn't draft that — try again." });
     res.json({ body });
+  });
+
+  // POST /api/admin-email/import-contacts — admin-only: parse a pasted/uploaded
+  // CSV of {email,name} into the reusable "Imported contacts" list.
+  app.post("/api/admin-email/import-contacts", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+    const csv = String(req.body?.csv || "");
+    if (!csv.trim()) return res.status(400).json({ error: "Paste or upload some CSV data." });
+    if (csv.length > 5_000_000) return res.status(413).json({ error: "That file is too large (max ~5 MB)." });
+    const source = String(req.body?.source || "csv").slice(0, 120);
+    const { recipients, skipped } = parseContactsCsv(csv);
+    if (recipients.length === 0) return res.status(400).json({ error: `No valid email addresses found${skipped ? ` (${skipped} rows skipped)` : ""}.` });
+    const { imported } = await importContacts(admin, recipients, source, userId);
+    const { count } = await admin.from("email_contacts").select("email", { count: "exact", head: true });
+    res.json({ imported, skipped, total: count ?? imported });
   });
 
   // POST /api/admin-email/send — admin-only: send a composed email to an audience.

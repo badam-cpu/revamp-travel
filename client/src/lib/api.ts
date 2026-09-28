@@ -468,6 +468,18 @@ export async function adminEmailSend(input: { audience: string; subject: string;
   });
 }
 
+/** Admin: import a CSV of {email,name} into the reusable contacts list. */
+export async function adminEmailImportContacts(csv: string, source?: string): Promise<{ imported: number; skipped: number; total: number }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<{ imported: number; skipped: number; total: number }>("/api/admin-email/import-contacts", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ csv, source }),
+  });
+}
+
 /** Operator flips a direct booking's payment status (paid/unpaid). */
 export async function setBookingPayment(bookingId: string, paymentStatus: "paid" | "unpaid"): Promise<{ ok: boolean }> {
   const { data } = await supabase.auth.getSession();
