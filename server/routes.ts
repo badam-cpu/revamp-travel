@@ -30,7 +30,7 @@ import { reconcilePurchaserVouchers, redeemVoucher, redeemVoucherByCode } from "
 import { voucherPriceCents, isAllowedVoucherAmount } from "../shared/vouchers.js";
 import { resolvePromo } from "./promo.js";
 import { promoDiscountCents } from "../shared/promo.js";
-import { resolveAudience, sendCampaign, marketingConfigured, verifyUnsub } from "./marketing.js";
+import { resolveAudience, sendCampaign, marketingConfigured, verifyUnsub, generateEmailBody, emailGenConfigured } from "./marketing.js";
 import { isAllowedGiftAmount } from "../shared/giftcards.js";
 import { payoutState } from "../shared/payouts.js";
 import { sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, type BookingEmailInfo } from "./email.js";
@@ -2482,6 +2482,26 @@ export function registerApiRoutes(app: Express) {
     if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
     const recipients = await resolveAudience(admin, parsed.data.audience);
     res.json({ count: recipients.length, sample: recipients.slice(0, 5).map((r) => r.email) });
+  });
+
+  // POST /api/admin-email/generate — admin-only: AI-draft an email body (Markdown)
+  // from a short brief, for the composer to edit.
+  app.post("/api/admin-email/generate", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    if (!emailGenConfigured()) return res.status(503).json({ error: "AI drafting isn't available (set ANTHROPIC_API_KEY)." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+    const prompt = String(req.body?.prompt || "").trim();
+    if (!prompt) return res.status(400).json({ error: "Describe the email you want." });
+    if (rateLimited(ahaCopyHits, `email:${userId}`, 20)) return res.status(429).json({ error: "Give it a few seconds." });
+    const body = await generateEmailBody(prompt.slice(0, 1000));
+    if (!body) return res.status(502).json({ error: "Couldn't draft that — try again." });
+    res.json({ body });
   });
 
   // POST /api/admin-email/send — admin-only: send a composed email to an audience.

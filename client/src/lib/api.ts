@@ -444,6 +444,18 @@ export async function adminEmailPreview(audience: string): Promise<{ count: numb
   });
 }
 
+/** Admin: AI-draft an email body (Markdown) from a short brief. */
+export async function adminEmailGenerate(prompt: string): Promise<{ body: string }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<{ body: string }>("/api/admin-email/generate", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ prompt }),
+  });
+}
+
 /** Admin: send a composed email to an audience segment. */
 export async function adminEmailSend(input: { audience: string; subject: string; body: string }): Promise<{ total: number; sent: number; failed: number }> {
   const { data } = await supabase.auth.getSession();
