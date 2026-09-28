@@ -30,6 +30,7 @@ import { reconcilePurchaserVouchers, redeemVoucher, redeemVoucherByCode } from "
 import { voucherPriceCents, isAllowedVoucherAmount } from "../shared/vouchers.js";
 import { resolvePromo } from "./promo.js";
 import { promoDiscountCents } from "../shared/promo.js";
+import { resolveAudience, sendCampaign, marketingConfigured, verifyUnsub } from "./marketing.js";
 import { isAllowedGiftAmount } from "../shared/giftcards.js";
 import { payoutState } from "../shared/payouts.js";
 import { sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, type BookingEmailInfo } from "./email.js";
@@ -170,6 +171,13 @@ const bookingIdSchema = z.object({ bookingId: z.string().uuid() });
 const voucherStartSchema = z.object({ listingId: z.string().uuid(), faceCents: z.number().int().positive() });
 const voucherRedeemSchema = z.object({ voucherId: z.string().uuid() });
 const voucherRedeemStaffSchema = z.object({ token: z.string().trim().min(8).max(64), code: z.string().trim().min(1).max(40) });
+
+const emailAudienceSchema = z.object({ audience: z.enum(["everyone", "operators", "travelers", "guests"]) });
+const emailSendSchema = z.object({
+  audience: z.enum(["everyone", "operators", "travelers", "guests"]),
+  subject: z.string().trim().min(1).max(200),
+  body: z.string().trim().min(1).max(20000),
+});
 
 const trackSchema = z.object({
   events: z
@@ -2457,6 +2465,67 @@ export function registerApiRoutes(app: Express) {
     });
     if (!pr.ok) return res.status(400).json({ error: pr.error });
     res.json({ ok: true, discountType: pr.promo.discount_type, discountValue: pr.promo.discount_value });
+  });
+
+  // POST /api/admin-email/preview — admin-only: how many recipients an audience
+  // resolves to (deduped, minus unsubscribes) + a small sample.
+  app.post("/api/admin-email/preview", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+    const parsed = emailAudienceSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    const recipients = await resolveAudience(admin, parsed.data.audience);
+    res.json({ count: recipients.length, sample: recipients.slice(0, 5).map((r) => r.email) });
+  });
+
+  // POST /api/admin-email/send — admin-only: send a composed email to an audience.
+  app.post("/api/admin-email/send", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    if (!marketingConfigured()) return res.status(503).json({ error: "Email isn't configured (set RESEND_API_KEY + EMAIL_FROM)." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+    const parsed = emailSendSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+
+    const recipients = await resolveAudience(admin, parsed.data.audience);
+    if (recipients.length === 0) return res.status(400).json({ error: "No recipients in that audience." });
+    const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
+    const { sent, failed } = await sendCampaign({ subject: parsed.data.subject, markdown: parsed.data.body, recipients, siteUrl: site });
+    await admin.from("email_campaigns").insert({
+      subject: parsed.data.subject,
+      body: parsed.data.body,
+      audience: parsed.data.audience,
+      recipient_count: recipients.length,
+      sent_count: sent,
+      created_by: userId,
+    });
+    res.json({ total: recipients.length, sent, failed });
+  });
+
+  // GET /api/email/unsubscribe?e=&t= — public one-click unsubscribe. Adds the
+  // email to the suppression list; the token stops arbitrary-address abuse.
+  app.get("/api/email/unsubscribe", async (req: Request, res: Response) => {
+    const email = String(req.query.e || "").trim().toLowerCase();
+    const t = String(req.query.t || "");
+    const page = (msg: string) =>
+      `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#F5F2EC;color:#212121;display:grid;place-items:center;min-height:100vh;margin:0;"><div style="max-width:420px;background:#fff;border:1px solid rgba(33,33,33,.1);border-radius:14px;padding:28px;text-align:center;"><p style="font-size:22px;font-weight:700;margin:0 0 10px;">revamp<span style="color:#F15822;">.</span></p><p style="font-size:15px;line-height:1.6;color:#4a463f;margin:0;">${msg}</p></div></body></html>`;
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    if (!email || !verifyUnsub(email, t)) return res.status(400).send(page("This unsubscribe link is invalid or expired."));
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).send(page("We couldn't process that right now — please try again later."));
+    await admin.from("email_optouts").upsert({ email }, { onConflict: "email" });
+    res.send(page("You've been unsubscribed. You won't receive marketing emails from Revamp anymore."));
   });
 
   // POST /api/admin-subscription-plan — admin-only: create or update a recurring
