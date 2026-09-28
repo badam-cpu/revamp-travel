@@ -247,7 +247,7 @@ const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: typeof Home }[] 
   { key: "subscriptions", label: "Subscriptions", icon: CreditCard },
   { key: "support", label: "Support", icon: MessageSquare },
   { key: "messages", label: "All messages", icon: MessagesSquare },
-  { key: "email", label: "Broadcast", icon: Mail },
+  { key: "email", label: "Campaigns", icon: Mail },
   { key: "payouts", label: "Payouts", icon: Wallet },
   { key: "blog", label: "Blog", icon: Newspaper },
   { key: "hub", label: "Partner Hub", icon: BookOpen },

@@ -184,7 +184,7 @@ export function AdminEmail() {
   return (
     <div className="grid gap-6">
       <div>
-        <h2 className="font-display text-3xl font-normal text-basalt">Broadcast</h2>
+        <h2 className="font-display text-3xl font-normal text-basalt">Campaigns</h2>
         <p className="mt-1 max-w-2xl text-sm text-basalt/55">Compose a message, preview it, and send it over email or Telegram. {isTg ? "Telegram goes to everyone who linked the Revamp bot." : "Unsubscribed recipients are excluded automatically."}</p>
       </div>
 
