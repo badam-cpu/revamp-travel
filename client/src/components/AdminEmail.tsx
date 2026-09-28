@@ -189,7 +189,7 @@ export function AdminEmail() {
               <div className="px-6 py-4">
                 <p className="font-display text-2xl leading-tight text-basalt">{previewText(subject) || "Subject"}</p>
                 <div
-                  className="prose-blog mt-3 text-sm leading-6 text-basalt/80"
+                  className="prose-blog mt-3 text-sm leading-6 text-basalt/80 [&_a]:text-apricot [&_a]:underline"
                   dangerouslySetInnerHTML={{ __html: body.trim() ? renderMarkdown(previewText(body)) : "<p style='color:#9a958c'>The body text will be displayed here.</p>" }}
                 />
               </div>

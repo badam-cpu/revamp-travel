@@ -26,10 +26,20 @@ export function emailGenConfigured(): boolean {
   return !!process.env.ANTHROPIC_API_KEY;
 }
 
-/** First name for personalization; falls back to "there" for blanks/"Guest". */
+// Names that aren't a real person's first name — often an operator's business
+// name or a role inbox — so we greet with the neutral fallback instead.
+const GENERIC_NAMES = new Set(["guest", "revamp", "admin", "team", "host", "operator", "owner", "info", "support", "hello", "hi", "sales", "contact", "the"]);
+
+/** First name for personalization; falls back to "there" for blanks/brand/role names. */
 function firstName(name?: string | null): string {
   const n = (name || "").trim().split(/\s+/)[0];
-  return n && n.toLowerCase() !== "guest" ? n : "there";
+  if (!n || GENERIC_NAMES.has(n.toLowerCase())) return "there";
+  return n;
+}
+
+/** Email clients drop CSS classes, so inline the brand link color on body links. */
+function styleEmailLinks(html: string): string {
+  return html.replace(/<a (?![^>]*\bstyle=)/g, '<a style="color:#F15822;text-decoration:underline;" ');
 }
 
 /** Replace supported merge tags with this recipient's values. */
@@ -183,7 +193,7 @@ export async function sendCampaign(
     const chunk = opts.recipients.slice(i, i + 100);
     const batch = chunk.map((r) => {
       const unsubUrl = `${opts.siteUrl}/api/email/unsubscribe?e=${encodeURIComponent(r.email)}&t=${unsubToken(r.email)}`;
-      const html = shell(renderMarkdown(personalize(opts.markdown, r)), opts.siteUrl, unsubUrl);
+      const html = shell(styleEmailLinks(renderMarkdown(personalize(opts.markdown, r))), opts.siteUrl, unsubUrl);
       return { from, to: r.email, subject: personalize(opts.subject, r), html, headers: { "List-Unsubscribe": `<${unsubUrl}>` } };
     });
     try {
