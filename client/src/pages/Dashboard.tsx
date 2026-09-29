@@ -23,7 +23,7 @@
  */
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, ArrowLeft, ArrowRight, BookOpen, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, CreditCard, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, Pencil, Plug, Plus, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, CreditCard, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, Pencil, Plug, Plus, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
 import { Inbox } from "@/components/Inbox";
 import { PartnerHub } from "@/components/PartnerHub";
 import { PriceLabsConnect } from "@/components/PriceLabsConnect";
@@ -65,6 +65,7 @@ import { OperatorPayouts } from "@/components/OperatorPayouts";
 import { OperatorSubscription } from "@/components/OperatorSubscription";
 import { SessionScheduleEditor } from "@/components/SessionScheduleEditor";
 import { OperatorAnalytics } from "@/components/OperatorAnalytics";
+import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
 import { ProfileTab, SecurityTab } from "@/pages/Account";
 import { EXPERIENCE_PREFILL_STORAGE_KEY } from "@/pages/ExperienceOnboarding";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
@@ -1242,10 +1243,11 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
   );
 }
 
-type OperatorSection = "overview" | "listings" | "bookings" | "promos" | "messages" | "hub" | "integrations" | "payouts" | "billing" | "settings";
+type OperatorSection = "overview" | "listings" | "analytics" | "bookings" | "promos" | "messages" | "hub" | "integrations" | "payouts" | "billing" | "settings";
 const OPERATOR_SECTIONS: { key: OperatorSection; label: string; icon: typeof Home }[] = [
   { key: "overview", label: "Dashboard", icon: LayoutDashboard },
   { key: "listings", label: "Listings", icon: List },
+  { key: "analytics", label: "Analytics", icon: BarChart3 },
   { key: "bookings", label: "Bookings", icon: CalendarCheck },
   { key: "promos", label: "Promo codes", icon: Ticket },
   { key: "messages", label: "Messages", icon: MessageSquare },
@@ -1452,6 +1454,15 @@ function DashboardContent() {
               </div>
             )}
 
+            {section === "analytics" && (
+              <div className="grid gap-8">
+                <AnalyticsDashboard scope="operator" />
+                <div>
+                  <SectionHead title="Bookings & revenue." sub="Your confirmed bookings and generated revenue over the last 12 months." />
+                  <OperatorAnalytics />
+                </div>
+              </div>
+            )}
             {section === "bookings" && <BookingsSection />}
             {section === "promos" && <PromoCodes />}
 

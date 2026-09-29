@@ -27,7 +27,7 @@ import { AdminHub } from "@/components/AdminHub";
 import { Inbox } from "@/components/Inbox";
 import { AdminListings } from "@/components/AdminListings";
 import { AdminEateries } from "@/components/AdminEateries";
-import { AdminListingAnalytics } from "@/components/AdminListingAnalytics";
+import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
 import { AdminVoucherOffers } from "@/components/AdminVoucherOffers";
 import { AdminEmail } from "@/components/AdminEmail";
 import { AdminAccounts } from "@/components/AdminAccounts";
@@ -341,7 +341,7 @@ function AdminConsole() {
             {section === "reviews" && <ReviewsPanel />}
             {section === "listings" && <AdminListings />}
             {section === "eateries" && <AdminEateries />}
-            {section === "analytics" && <AdminListingAnalytics />}
+            {section === "analytics" && <AnalyticsDashboard scope="admin" />}
             {section === "vouchers" && <AdminVoucherOffers />}
             {section === "users" && <AdminUsers />}
             {section === "accounts" && <AdminAccounts />}

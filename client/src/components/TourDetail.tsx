@@ -28,6 +28,7 @@ import { factValue, otherFacts } from "@/lib/tourFacts";
 import { cn } from "@/lib/utils";
 import { imgAttrs } from "@/lib/responsiveImg";
 import { trackEvent } from "@/lib/analytics";
+import { trackListing } from "@/lib/track";
 import { OperatorBrand } from "@/components/OperatorBrand";
 import { ExternalReviews } from "@/components/ExternalReviews";
 
@@ -66,9 +67,10 @@ export function TourDetail({ listing }: { listing: Listing }) {
     [listings, listing.id, listing.type],
   );
 
-  // GA funnel: listing viewed.
+  // GA funnel + first-party per-listing view (powers the analytics dashboard).
   useEffect(() => {
     trackEvent("view_item", { item_id: listing.id, item_name: listing.title, item_category: listing.type });
+    trackListing(listing.id, "view", "detail");
   }, [listing.id]);
 
   // The prop is typed as the base Listing, but the runtime object is a LiveListing.
@@ -326,7 +328,7 @@ export function TourDetail({ listing }: { listing: Listing }) {
           </div>
           <div className="mt-9 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {relatedItems.map((item) => (
-              <TourCard key={item.id} listing={item} />
+              <TourCard key={item.id} listing={item} surface="related" />
             ))}
           </div>
         </section>

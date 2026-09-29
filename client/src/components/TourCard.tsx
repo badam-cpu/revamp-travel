@@ -17,8 +17,10 @@ import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useExternalRatings } from "@/hooks/useExternalRatings";
 import { DiscountBadge } from "@/components/DiscountBadge";
+import { useImpressionRef, trackListing } from "@/lib/track";
 
-export function TourCard({ listing }: { listing: Listing }) {
+export function TourCard({ listing, surface = "tours" }: { listing: Listing; surface?: string }) {
+  const impressionRef = useImpressionRef<HTMLElement>(listing.id, surface);
   const images = listing.gallery.length ? listing.gallery : [listing.image];
   const [index, setIndex] = useState(0);
   const { isSaved, toggleSaved } = useSavedPlaces();
@@ -39,8 +41,8 @@ export function TourCard({ listing }: { listing: Listing }) {
   };
 
   return (
-    <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-basalt/12 bg-paper transition-all duration-200 hover:-translate-y-1 hover:border-basalt/20 hover:shadow-[0_18px_40px_rgba(33,33,33,0.14)]">
-      <Link href={`/listing/${listing.slug}`} className="flex h-full flex-col focus-visible:outline-none">
+    <article ref={impressionRef} className="group flex h-full flex-col overflow-hidden rounded-2xl border border-basalt/12 bg-paper transition-all duration-200 hover:-translate-y-1 hover:border-basalt/20 hover:shadow-[0_18px_40px_rgba(33,33,33,0.14)]">
+      <Link href={`/listing/${listing.slug}`} onClick={() => trackListing(listing.id, "card_click", surface)} className="flex h-full flex-col focus-visible:outline-none">
         <div className="relative aspect-[4/3] overflow-hidden bg-basalt/5">
           {images.map((src, i) => (
             <img
