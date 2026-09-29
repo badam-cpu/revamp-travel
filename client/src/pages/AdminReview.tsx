@@ -16,7 +16,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, BarChart3, BookOpen, Check, CreditCard, ExternalLink, Gift, Home, LayoutDashboard, ListChecks, Mail, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, Ticket, Users, Utensils, Wallet, X } from "lucide-react";
+import { AlertTriangle, BarChart3, BookOpen, Check, CreditCard, ExternalLink, Gift, Home, LayoutDashboard, ListChecks, Mail, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, Ticket, UserSearch, Users, Utensils, Wallet, X } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { AdminSiteContent } from "@/components/AdminSiteContent";
@@ -31,6 +31,7 @@ import { AdminListingAnalytics } from "@/components/AdminListingAnalytics";
 import { AdminVoucherOffers } from "@/components/AdminVoucherOffers";
 import { AdminEmail } from "@/components/AdminEmail";
 import { AdminAccounts } from "@/components/AdminAccounts";
+import { AdminUsers } from "@/components/AdminUsers";
 import { AdminGiftCards } from "@/components/AdminGiftCards";
 import { AdminSubscriptions } from "@/components/AdminSubscriptions";
 import { useAuth } from "@/contexts/AuthContext";
@@ -234,7 +235,7 @@ function StatTile({ n, label, onClick }: { n: number | string; label: string; on
   );
 }
 
-type AdminSection = "overview" | "reviews" | "listings" | "eateries" | "analytics" | "vouchers" | "accounts" | "giftcards" | "subscriptions" | "support" | "messages" | "email" | "payouts" | "blog" | "hub" | "site";
+type AdminSection = "overview" | "reviews" | "listings" | "eateries" | "analytics" | "vouchers" | "users" | "accounts" | "giftcards" | "subscriptions" | "support" | "messages" | "email" | "payouts" | "blog" | "hub" | "site";
 const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: typeof Home }[] = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
   { key: "reviews", label: "Reviews", icon: ListChecks },
@@ -242,6 +243,7 @@ const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: typeof Home }[] 
   { key: "eateries", label: "Eat guide", icon: Utensils },
   { key: "analytics", label: "Analytics", icon: BarChart3 },
   { key: "vouchers", label: "Vouchers", icon: Ticket },
+  { key: "users", label: "Users", icon: UserSearch },
   { key: "accounts", label: "Accounts", icon: Users },
   { key: "giftcards", label: "Gift cards", icon: Gift },
   { key: "subscriptions", label: "Subscriptions", icon: CreditCard },
@@ -341,6 +343,7 @@ function AdminConsole() {
             {section === "eateries" && <AdminEateries />}
             {section === "analytics" && <AdminListingAnalytics />}
             {section === "vouchers" && <AdminVoucherOffers />}
+            {section === "users" && <AdminUsers />}
             {section === "accounts" && <AdminAccounts />}
             {section === "giftcards" && <AdminGiftCards />}
             {section === "subscriptions" && <AdminSubscriptions />}

@@ -31,6 +31,7 @@ import { voucherPriceCents, isAllowedVoucherAmount } from "../shared/vouchers.js
 import { resolvePromo } from "./promo.js";
 import { promoDiscountCents } from "../shared/promo.js";
 import { resolveAudience, sendCampaign, marketingConfigured, verifyUnsub, generateEmailBody, emailGenConfigured, parseContactsCsv, importContacts, sendTelegramCampaign, resolveTelegramRecipients, telegramBroadcastConfigured } from "./marketing.js";
+import { listAdminUsers } from "./adminUsers.js";
 import { isAllowedGiftAmount } from "../shared/giftcards.js";
 import { payoutState } from "../shared/payouts.js";
 import { sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, type BookingEmailInfo } from "./email.js";
@@ -2032,6 +2033,38 @@ export function registerApiRoutes(app: Express) {
     } catch (err) {
       console.error("[admin-set-role]", err);
       res.status(500).json({ error: "Couldn't change that account's role. Please try again." });
+    }
+  });
+
+  // POST /api/admin-users — admin-only searchable/filterable user directory
+  // (auth email/phone + profile role/name + listing/booking activity counts).
+  app.post("/api/admin-users", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const str = (v: unknown) => (typeof v === "string" ? v.slice(0, 200) : undefined);
+    try {
+      const result = await listAdminUsers(admin, {
+        userId: str(b.userId),
+        email: str(b.email),
+        phone: str(b.phone),
+        name: str(b.name),
+        bookingId: str(b.bookingId),
+        role: (["traveler", "operator", "admin"].includes(String(b.role)) ? b.role : "") as "" | "traveler" | "operator" | "admin",
+        flag: (["has_listings", "has_bookings", "no_activity"].includes(String(b.flag)) ? b.flag : "") as "" | "has_listings" | "has_bookings" | "no_activity",
+        page: typeof b.page === "number" ? b.page : 1,
+        pageSize: typeof b.pageSize === "number" ? b.pageSize : 25,
+      });
+      res.json(result);
+    } catch (err) {
+      console.error("[admin-users]", err);
+      res.status(500).json({ error: "Couldn't load users." });
     }
   });
 

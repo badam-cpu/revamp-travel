@@ -468,6 +468,35 @@ export async function adminEmailSend(input: { audience: string; subject: string;
   });
 }
 
+export interface AdminUserRow {
+  id: string;
+  email: string | null;
+  phone: string | null;
+  role: "traveler" | "operator" | "admin";
+  displayName: string | null;
+  businessName: string | null;
+  createdAt: string | null;
+  lastSignInAt: string | null;
+  listingCount: number;
+  bookingCount: number;
+}
+export interface AdminUsersFilters {
+  userId?: string; email?: string; phone?: string; name?: string; bookingId?: string;
+  role?: string; flag?: string; page?: number; pageSize?: number;
+}
+
+/** Admin: searchable/filterable user directory (auth + profile + activity). */
+export async function adminUsers(filters: AdminUsersFilters): Promise<{ users: AdminUserRow[]; total: number; page: number; pageSize: number }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<{ users: AdminUserRow[]; total: number; page: number; pageSize: number }>("/api/admin-users", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(filters),
+  });
+}
+
 /** Admin: import a CSV of {email,name} into the reusable contacts list. */
 export async function adminEmailImportContacts(csv: string, source?: string): Promise<{ imported: number; skipped: number; total: number }> {
   const { data } = await supabase.auth.getSession();
