@@ -12,9 +12,12 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useListings } from "@/contexts/ListingsContext";
+import { InfoTip } from "@/components/InfoTip";
+import { METRIC_INFO } from "@/lib/metricInfo";
 import { cn } from "@/lib/utils";
 
 type Row = { listing_id: string; day: string; kind: string; count: number };
+const help = (kind: string) => METRIC_INFO[kind]?.help ?? "";
 
 const TYPE_ORDER = ["stay", "tour", "experience", "eat"] as const;
 const TYPE_LABEL: Record<string, string> = { stay: "Stays", tour: "Tours", experience: "Experiences", eat: "Restaurants" };
@@ -222,6 +225,7 @@ export function AnalyticsDashboard({ scope }: { scope: "admin" | "operator" }) {
                 key={m.kind}
                 type="button"
                 onClick={() => setMetric(m.kind)}
+                title={help(m.kind)}
                 className={cn(
                   "border bg-paper p-4 text-left transition-colors",
                   metric === m.kind ? "border-apricot bg-apricot/5" : "border-basalt/10 hover:border-apricot/50",
@@ -277,7 +281,7 @@ export function AnalyticsDashboard({ scope }: { scope: "admin" | "operator" }) {
                   <tr className="border-b border-basalt/12 bg-chalk/40 text-left text-[11px] uppercase tracking-[0.08em] text-basalt/50">
                     <th className="px-3 py-2.5 font-semibold">Listing</th>
                     {metrics.map((m) => (
-                      <th key={m.kind} className="px-3 py-2.5 text-right font-semibold">{m.label}</th>
+                      <th key={m.kind} className="px-3 py-2.5 text-right font-semibold"><span className="inline-flex items-center gap-1">{m.label}<InfoTip text={help(m.kind)} label={m.label} /></span></th>
                     ))}
                   </tr>
                 </thead>

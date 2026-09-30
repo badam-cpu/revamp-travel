@@ -18,6 +18,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { restaurantSummary, ApiError, type VenueSummaryResponse } from "@/lib/api";
+import { InfoTip } from "@/components/InfoTip";
+import { METRIC_INFO } from "@/lib/metricInfo";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -125,7 +127,10 @@ export default function VenueDashboard() {
               {METRIC_TILES.map((m) => (
                 <div key={m.kind} className="border border-basalt/10 bg-paper p-4">
                   <p className="font-display text-2xl font-normal tabular-nums text-basalt">{(s?.analytics.totals[m.kind] ?? 0).toLocaleString("en-US")}</p>
-                  <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-basalt/45">{m.label}</p>
+                  <p className="mt-0.5 flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.1em] text-basalt/45">
+                    {m.label}
+                    {METRIC_INFO[m.kind]?.help && <InfoTip text={METRIC_INFO[m.kind].help} label={m.label} />}
+                  </p>
                 </div>
               ))}
             </div>

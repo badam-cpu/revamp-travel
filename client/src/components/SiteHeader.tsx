@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { useManagedVenue } from "@/hooks/useManagedVenue";
 
 const baseLinks = [
   { href: "/explore/stay", label: "Stay" },
@@ -30,6 +31,7 @@ export function SiteHeader({ minimal = false, flush = false, wide = false }: { m
   const [location] = useLocation();
   const { user, profile, signOut } = useAuth();
   const unread = useUnreadMessages();
+  const hasVenue = useManagedVenue();
   // The support chat signs a shopper in ANONYMOUSLY (a "Guest") so they can ask
   // without an account — that's not a real login, so the header should still
   // show Sign in / Sign up, not the account menu.
@@ -88,6 +90,11 @@ export function SiteHeader({ minimal = false, flush = false, wide = false }: { m
           )}
           {signedIn ? (
             <>
+              {hasVenue && (
+                <Link href="/venue" className="hidden text-xs font-semibold text-basalt/60 transition-colors hover:text-basalt sm:inline">
+                  My venue
+                </Link>
+              )}
               <Link
                 href="/account?tab=profile"
                 className="relative inline-flex items-center gap-1.5 pl-1 pr-2 text-xs font-semibold text-basalt/60 transition-colors hover:text-basalt"
@@ -151,9 +158,16 @@ export function SiteHeader({ minimal = false, flush = false, wide = false }: { m
               <div className="mt-auto border-t border-white/15 pt-6">
                 {signedIn ? (
                   <div className="flex items-center justify-between text-sm text-paper/70">
-                    <SheetClose asChild>
-                      <Link href="/account?tab=profile" className="inline-flex items-center gap-1.5 font-semibold hover:text-white"><User className="h-3.5 w-3.5" /> {profile?.displayName || "Account"}{unread > 0 && <span className="ml-1 grid h-5 min-w-5 place-items-center rounded-full bg-apricot px-1.5 text-[10px] font-bold text-white">{unread}</span>}</Link>
-                    </SheetClose>
+                    <div className="flex flex-col gap-2">
+                      <SheetClose asChild>
+                        <Link href="/account?tab=profile" className="inline-flex items-center gap-1.5 font-semibold hover:text-white"><User className="h-3.5 w-3.5" /> {profile?.displayName || "Account"}{unread > 0 && <span className="ml-1 grid h-5 min-w-5 place-items-center rounded-full bg-apricot px-1.5 text-[10px] font-bold text-white">{unread}</span>}</Link>
+                      </SheetClose>
+                      {hasVenue && (
+                        <SheetClose asChild>
+                          <Link href="/venue" className="font-semibold text-paper/70 hover:text-white">My venue</Link>
+                        </SheetClose>
+                      )}
+                    </div>
                     <SheetClose asChild>
                       <button onClick={handleSignOut} className="inline-flex items-center gap-1.5 font-semibold text-apricot">
                         <LogOut className="h-3.5 w-3.5" /> Sign out
