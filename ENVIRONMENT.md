@@ -42,6 +42,18 @@ The SEO/crawler layer — dynamic `robots.txt`/`sitemap.xml`, per-page metadata,
 
 Promoting an account to `admin` (so it can review pending listings at `/admin`) is a one-time SQL statement run by hand in the Supabase dashboard, not an environment variable — see `README.md`'s Supabase Setup, step 5.
 
+**Google sign-in ("Continue with Google") — no environment variable, dashboard config only.** The code is already wired: `AuthContext.signInWithGoogle` → `supabase.auth.signInWithOAuth({ provider: "google" })`, the `GoogleSignInButton` on `/login` and `/signup`, and `handle_new_user` (migration `0012`) which fills a new Google user's `display_name` from their Google name and defaults them to `traveler`. Until the provider is turned on in the two dashboards below, the button renders but the redirect errors. Nothing is read from `.env` for this — the client ID/secret live in Supabase, not in this repo.
+
+1. **Google Cloud Console** → *APIs & Services → Credentials → Create credentials → OAuth client ID → Web application.*
+   - **Authorized JavaScript origins:** your site origin(s) — `https://revampvacations.com` (and `http://localhost:3000` for local dev).
+   - **Authorized redirect URI:** your Supabase project's callback, exactly — `https://<project-ref>.supabase.co/auth/v1/callback` (copy it from Supabase's Google provider screen). This is Supabase's URL, *not* your app's.
+   - You may need to fill the OAuth consent screen first (app name, support email, logo); a public app that requests only email/profile needs no Google verification review.
+   - Copy the generated **Client ID** and **Client secret**.
+2. **Supabase dashboard** → *Authentication → Providers → Google* → enable, paste the Client ID + Client secret, save.
+3. **Supabase dashboard** → *Authentication → URL Configuration* → set **Site URL** to `https://revampvacations.com` and add **Redirect URLs**. The app returns the user to wherever they started (e.g. `/login?redirect=/listing/x` after a booking click), so allow-list a wildcard per environment: `https://revampvacations.com/**` and, for local dev, `http://localhost:3000/**`. Without the wildcard, sign-in still works but always lands on the Site URL instead of the page they were on.
+
+Notes: Google sign-in currently creates a **traveler** account (operators still sign up with email + a business name, since the OAuth flow carries no role/business fields). Anonymous sign-in used by the support widget is a *separate* toggle (*Authentication → Providers → Anonymous*), also dashboard-only.
+
 Copy `.env.example` to `.env` and fill in what you need:
 
 ```bash
