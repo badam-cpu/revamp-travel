@@ -9,6 +9,7 @@ import { ListingCard } from "@/components/ListingCard";
 import { TourDetail } from "@/components/TourDetail";
 import { BookingPanel } from "@/components/BookingPanel";
 import { EatGuidePanel } from "@/components/EatGuidePanel";
+import { ListingVideo } from "@/components/ListingVideo";
 import { RestaurantVoucherCard } from "@/components/RestaurantVoucherCard";
 import { slugify } from "@/lib/slug";
 import { Button } from "@/components/ui/button";
@@ -349,6 +350,9 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
                 <p className="text-lg font-medium leading-relaxed text-basalt sm:text-xl">{listing.shortDescription}</p>
                 {listing.longDescription && listing.longDescription.trim() !== listing.shortDescription.trim() && (
                   <p className="mt-4 whitespace-pre-line text-[15px] leading-8 text-basalt/90">{listing.longDescription}</p>
+                )}
+                {listing.videoUrl && (
+                  <ListingVideo url={listing.videoUrl} poster={listing.image} className="mt-6 aspect-video" />
                 )}
               </div>
 

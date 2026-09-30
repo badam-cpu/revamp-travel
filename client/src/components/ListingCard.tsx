@@ -1,5 +1,5 @@
 /** Revamp brandbook: use rounded image-led cards, compact marketplace facts, restrained motion, and no fabricated review signals. */
-import { Bookmark, MapPin, MoveUpRight, Star } from "lucide-react";
+import { Bookmark, MapPin, MoveUpRight, Play, Star } from "lucide-react";
 import { Link } from "wouter";
 import { Listing, typeLabels } from "@/data/listings";
 import { cn } from "@/lib/utils";
@@ -11,6 +11,7 @@ import { DiscountBadge } from "@/components/DiscountBadge";
 import { useExternalRatings } from "@/hooks/useExternalRatings";
 import { useImpressionRef, trackListing } from "@/lib/track";
 import { usePromoBadges } from "@/hooks/usePromoBadges";
+import { hasVideo } from "@/lib/video";
 import { promoBadgeText } from "@shared/promo";
 
 export function ListingCard({ listing, large = false, active = false, onHover, surface = "" }: { listing: Listing; large?: boolean; active?: boolean; onHover?: (id?: string) => void; surface?: string }) {
@@ -51,6 +52,11 @@ export function ListingCard({ listing, large = false, active = false, onHover, s
           {promoBadge && (
             <span className="absolute right-14 top-4 bg-apricot px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white shadow-sm">
               {promoBadgeText(promoBadge, format)}
+            </span>
+          )}
+          {hasVideo(listing.videoUrl) && (
+            <span className="absolute bottom-4 right-4 inline-flex items-center gap-1 rounded-full bg-basalt/70 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-white backdrop-blur-sm">
+              <Play className="h-3 w-3 fill-white" /> Video
             </span>
           )}
           <button

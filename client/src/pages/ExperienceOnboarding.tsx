@@ -66,6 +66,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AmenityPicker, AmenityPickerHandle } from "@/components/AmenityPicker";
 import { PlaceAutocomplete } from "@/components/PlaceAutocomplete";
 import { PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
+import { VideoField, VideoFieldHandle } from "@/components/VideoField";
 import { ListEditor } from "@/components/ListEditor";
 import { AhaAssist } from "@/components/AhaAssist";
 import type { ResolvedPlace } from "@/lib/googleMaps";
@@ -102,6 +103,7 @@ interface WizardData {
   importantInfo: string;
   photos: string[];
   coverFocus: string;
+  videoUrl: string;
   prefillImageUrl?: string;
   price: number;
   priceUnit: string;
@@ -141,6 +143,7 @@ function emptyWizardData(): WizardData {
     importantInfo: "",
     photos: [],
     coverFocus: "50% 50%",
+    videoUrl: "",
     price: 0,
     priceUnit: "person",
     cancellationPolicy: "flexible",
@@ -211,6 +214,7 @@ function listingToWizardData(listing: LiveListing): WizardData {
     importantInfo: listing.importantInfo ?? "",
     photos: realPhotos(listing),
     coverFocus: listing.coverFocus ?? "50% 50%",
+    videoUrl: listing.videoUrl ?? "",
     price: listing.price,
     priceUnit: listing.priceUnit,
     cancellationPolicy: listing.cancellationPolicy ?? "flexible",
@@ -248,6 +252,7 @@ function toListingInput(data: WizardData): ListingInput {
     region: data.region.trim(),
     coordinates: data.coordinates,
     image: data.photos[0] || undefined,
+    videoUrl: data.videoUrl || undefined,
     gallery: data.photos.length ? data.photos : undefined,
     coverFocus: data.coverFocus || undefined,
     shortDescription: data.shortDescription.trim(),
@@ -344,6 +349,7 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
 
   const amenitiesRef = useRef<AmenityPickerHandle>(null);
   const photosRef = useRef<PhotoUploaderHandle>(null);
+  const videoRef = useRef<VideoFieldHandle>(null);
   const cityRef = useRef<HTMLInputElement>(null);
   const regionRef = useRef<HTMLInputElement>(null);
   const latRef = useRef<HTMLInputElement>(null);
@@ -374,6 +380,8 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
     if (value) setData((d) => ({ ...d, amenities: value }));
     const photos = photosRef.current?.getValue();
     if (photos) setData((d) => ({ ...d, photos, coverFocus: photosRef.current?.getCoverFocus() ?? d.coverFocus }));
+    const video = videoRef.current?.getValue();
+    if (video !== undefined) setData((d) => ({ ...d, videoUrl: video }));
   }, [currentStep]);
 
   useDocumentMeta({
@@ -681,6 +689,9 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                     <StepField label="Photos" help="Drag &amp; drop or click to upload — the first photo is the cover. Leave empty to use a brand illustration.">
                       {/* keyed on `hydrated` so an edit reseeds the uploader once the listing's photos load */}
                       <PhotoUploader key={hydrated ? "ready" : "loading"} ref={photosRef} defaultValue={data.photos} defaultFocus={data.coverFocus} />
+                    </StepField>
+                    <StepField label="Intro video (optional)" help="A short clip (≤ 60s) really helps bookings — upload one, or paste a YouTube/Vimeo link.">
+                      <VideoField key={hydrated ? "v-ready" : "v-loading"} ref={videoRef} defaultValue={data.videoUrl} />
                     </StepField>
                   </div>
 

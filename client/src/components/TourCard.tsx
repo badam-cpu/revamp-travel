@@ -7,7 +7,7 @@
  * so the card leads with information that's actually true instead.
  */
 import { useState } from "react";
-import { Bookmark, ChevronLeft, ChevronRight, Clock, Gauge, MapPin, Star, Users } from "lucide-react";
+import { Bookmark, ChevronLeft, ChevronRight, Clock, Gauge, MapPin, Play, Star, Users } from "lucide-react";
 import { Link } from "wouter";
 import { Listing } from "@/data/listings";
 import { factValue } from "@/lib/tourFacts";
@@ -18,6 +18,7 @@ import { useCurrency } from "@/contexts/CurrencyContext";
 import { useExternalRatings } from "@/hooks/useExternalRatings";
 import { DiscountBadge } from "@/components/DiscountBadge";
 import { useImpressionRef, trackListing } from "@/lib/track";
+import { hasVideo } from "@/lib/video";
 
 export function TourCard({ listing, surface = "tours" }: { listing: Listing; surface?: string }) {
   const impressionRef = useImpressionRef<HTMLElement>(listing.id, surface);
@@ -58,6 +59,11 @@ export function TourCard({ listing, surface = "tours" }: { listing: Listing; sur
           {listing.featured && (
             <span className="absolute left-3 top-3 rounded-full bg-apricot px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white shadow-sm">
               Revamp pick
+            </span>
+          )}
+          {hasVideo(listing.videoUrl) && (
+            <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-basalt/75 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-white shadow-sm backdrop-blur-sm">
+              <Play className="h-3 w-3 fill-white" /> Video
             </span>
           )}
           <DiscountBadge listing={listing} className="absolute bottom-3 left-3" />

@@ -90,6 +90,9 @@ export interface Listing {
   accent: "apricot" | "sevan" | "tuff";
   /** Cover-photo focal point as a CSS object-position ("50% 30%"); frames crops. */
   coverFocus?: string;
+  /** Short intro/hero video (stay/tour/experience): an uploaded MP4/WebM public
+   * URL, or a YouTube/Vimeo link. Detected + rendered by client/src/lib/video.ts. */
+  videoUrl?: string;
   // `type: "experience"` only (see supabase/migrations/0003_experience_listing_type.sql)
   // — optional on every other type so nothing else has to change shape.
   // Duration/group size/meeting point/languages are deliberately NOT
@@ -570,6 +573,9 @@ export interface ListingInput {
   accent: "apricot" | "sevan" | "tuff";
   /** Cover-photo focal point as a CSS object-position ("50% 30%"); frames crops. */
   coverFocus?: string;
+  /** Short intro/hero video (stay/tour/experience): an uploaded MP4/WebM public
+   * URL, or a YouTube/Vimeo link. Detected + rendered by client/src/lib/video.ts. */
+  videoUrl?: string;
   highlights?: string[];
   notIncluded?: string[];
   whatToBring?: string[];

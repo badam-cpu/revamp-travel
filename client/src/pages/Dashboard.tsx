@@ -55,6 +55,7 @@ import { RoomsEditor, RoomsEditorHandle } from "@/components/RoomsEditor";
 import { RatesEditor, RatesEditorHandle } from "@/components/RatesEditor";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
+import { VideoField, VideoFieldHandle } from "@/components/VideoField";
 import { SearchableMultiSelect, SearchableMultiSelectHandle } from "@/components/SearchableMultiSelect";
 import { ListEditor } from "@/components/ListEditor";
 import { OperatorBookings } from "@/components/OperatorBookings";
@@ -106,6 +107,7 @@ interface RefLists {
   rooms: import("@shared/listings").ListingRoom[];
   seasonalRates: import("@shared/listings").SeasonalRate[];
   coverFocus: string;
+  videoUrl: string;
 }
 
 function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLists): ListingInput {
@@ -151,6 +153,7 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
     image: photos[0] || undefined,
     gallery: photos.length ? photos : undefined,
     coverFocus: lists.coverFocus || undefined,
+    videoUrl: lists.videoUrl || undefined,
     shortDescription: get("shortDescription").trim(),
     longDescription: get("longDescription").trim(),
     price,
@@ -279,6 +282,7 @@ function ListingFormDialog({
   const ratesRef = useRef<RatesEditorHandle>(null);
   const { settings: siteSettings } = useSiteSettings();
   const photosRef = useRef<PhotoUploaderHandle>(null);
+  const videoRef = useRef<VideoFieldHandle>(null);
   const notIncludedRef = useRef<SearchableMultiSelectHandle>(null);
   const whatToBringRef = useRef<SearchableMultiSelectHandle>(null);
   const notSuitableForRef = useRef<SearchableMultiSelectHandle>(null);
@@ -411,6 +415,7 @@ function ListingFormDialog({
         rooms: roomsRef.current?.getValue() ?? [],
         seasonalRates: ratesRef.current?.getValue() ?? [],
         coverFocus: photosRef.current?.getCoverFocus() ?? "50% 50%",
+        videoUrl: videoRef.current?.getValue() ?? "",
       });
 
       // Keep the map pin (and the nearby-sights it drives) in sync with the
@@ -827,6 +832,11 @@ function ListingFormDialog({
                 </details>
 
                 <PhotoUploader ref={photosRef} defaultValue={realPhotos(draft)} defaultFocus={draft.coverFocus} />
+
+                <div className="grid gap-2">
+                  <p className="text-sm font-semibold text-basalt">Intro video <span className="font-normal text-basalt/45">(optional — a short clip really helps)</span></p>
+                  <VideoField ref={videoRef} defaultValue={draft.videoUrl} />
+                </div>
 
                 <label className="flex items-center gap-3 border border-basalt/12 bg-chalk px-4 py-3 text-sm">
                   <input type="checkbox" name="featured" defaultChecked={draft.featured} className="h-4 w-4 accent-[#F15822]" />

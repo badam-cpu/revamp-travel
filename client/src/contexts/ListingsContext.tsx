@@ -138,6 +138,7 @@ interface ListingRow {
   rooms: { name: string; beds: { type: string; count: number }[] }[] | null;
   venue_type: string | null;
   cover_focus: string | null;
+  video_url: string | null;
   session_schedule: SessionSchedule | null;
   booking_mode: "instant" | "request" | null;
   cuisine: string | null;
@@ -214,6 +215,7 @@ function mapListingRow(row: ListingRow): LiveListing {
     discountEnd: row.discount_end ?? undefined,
     rooms: Array.isArray(row.rooms) ? row.rooms : [],
     coverFocus: row.cover_focus ?? undefined,
+    videoUrl: row.video_url ?? undefined,
     sessionSchedule: row.session_schedule ?? null,
     bookingMode: row.booking_mode ?? "instant",
     venueType: row.venue_type ?? undefined,
@@ -278,6 +280,7 @@ function toRow(input: ListingInput) {
     rooms: input.rooms ?? [],
     seasonal_rates: input.seasonalRates ?? [],
     cover_focus: input.coverFocus?.trim() || null,
+    video_url: input.videoUrl?.trim() || null,
     venue_type: input.venueType?.trim() || null,
     cuisine: input.cuisine?.trim() || null,
     price_band: input.priceBand ?? null,

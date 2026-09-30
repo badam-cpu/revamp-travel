@@ -30,6 +30,7 @@ import { imgAttrs } from "@/lib/responsiveImg";
 import { trackEvent } from "@/lib/analytics";
 import { trackListing } from "@/lib/track";
 import { OperatorBrand } from "@/components/OperatorBrand";
+import { ListingVideo } from "@/components/ListingVideo";
 import { ExternalReviews } from "@/components/ExternalReviews";
 
 export function TourDetail({ listing }: { listing: Listing }) {
@@ -137,6 +138,12 @@ export function TourDetail({ listing }: { listing: Listing }) {
           </p>
 
           {operatorId && <OperatorBrand operatorId={operatorId} className="mt-5" />}
+
+          {listing.videoUrl && (
+            <div className="mt-6">
+              <ListingVideo url={listing.videoUrl} poster={images[0]} className="aspect-video" />
+            </div>
+          )}
 
           <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 border-y border-basalt/10 py-5">
             {duration && (
