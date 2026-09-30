@@ -509,6 +509,47 @@ export async function adminEmailImportContacts(csv: string, source?: string): Pr
   });
 }
 
+export interface VenueSummaryResponse {
+  venues: { id: string; title: string; city: string }[];
+  selectedId?: string | null;
+  selected?: null;
+  summary?: {
+    windowDays: number;
+    analytics: { totals: Record<string, number>; days: string[]; views: number[]; impressions: number[] };
+    vouchers: {
+      soldCount: number; soldFaceCents: number; revenueCents: number;
+      redeemedCount: number; redeemedFaceCents: number;
+      outstandingCount: number; outstandingFaceCents: number;
+      payoutOwedCents: number; payoutSettledCents: number; currency: string;
+    };
+    redeemToken: string | null;
+  };
+}
+
+/** Restaurant owner: their managed venue(s) + analytics/voucher summary. */
+export async function restaurantSummary(listingId?: string, windowDays = 30): Promise<VenueSummaryResponse> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<VenueSummaryResponse>("/api/restaurant/summary", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ listingId, windowDays }),
+  });
+}
+
+/** Admin: link/unlink an account (by email) to a restaurant it manages. */
+export async function adminLinkVenue(email: string, listingId: string, action: "link" | "unlink" = "link"): Promise<{ ok: boolean; linked: boolean }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<{ ok: boolean; linked: boolean }>("/api/admin-link-venue", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ email, listingId, action }),
+  });
+}
+
 /** Operator flips a direct booking's payment status (paid/unpaid). */
 export async function setBookingPayment(bookingId: string, paymentStatus: "paid" | "unpaid"): Promise<{ ok: boolean }> {
   const { data } = await supabase.auth.getSession();

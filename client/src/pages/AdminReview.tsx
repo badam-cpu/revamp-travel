@@ -29,6 +29,7 @@ import { AdminListings } from "@/components/AdminListings";
 import { AdminEateries } from "@/components/AdminEateries";
 import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
 import { AdminVoucherOffers } from "@/components/AdminVoucherOffers";
+import { AdminVenueManagers } from "@/components/AdminVenueManagers";
 import { AdminEmail } from "@/components/AdminEmail";
 import { AdminAccounts } from "@/components/AdminAccounts";
 import { AdminUsers } from "@/components/AdminUsers";
@@ -342,7 +343,12 @@ function AdminConsole() {
             {section === "listings" && <AdminListings />}
             {section === "eateries" && <AdminEateries />}
             {section === "analytics" && <AnalyticsDashboard scope="admin" />}
-            {section === "vouchers" && <AdminVoucherOffers />}
+            {section === "vouchers" && (
+              <div className="grid gap-6">
+                <AdminVoucherOffers />
+                <AdminVenueManagers />
+              </div>
+            )}
             {section === "users" && <AdminUsers />}
             {section === "accounts" && <AdminAccounts />}
             {section === "giftcards" && <AdminGiftCards />}

@@ -32,6 +32,7 @@ import { resolvePromo } from "./promo.js";
 import { promoDiscountCents } from "../shared/promo.js";
 import { resolveAudience, sendCampaign, marketingConfigured, verifyUnsub, generateEmailBody, emailGenConfigured, parseContactsCsv, importContacts, sendTelegramCampaign, resolveTelegramRecipients, telegramBroadcastConfigured } from "./marketing.js";
 import { listAdminUsers } from "./adminUsers.js";
+import { listManagedVenues, venueSummary } from "./restaurant.js";
 import { isAllowedGiftAmount } from "../shared/giftcards.js";
 import { payoutState } from "../shared/payouts.js";
 import { sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, type BookingEmailInfo } from "./email.js";
@@ -2034,6 +2035,68 @@ export function registerApiRoutes(app: Express) {
       console.error("[admin-set-role]", err);
       res.status(500).json({ error: "Couldn't change that account's role. Please try again." });
     }
+  });
+
+  // POST /api/restaurant/summary — a venue manager's own dashboard data. Lists
+  // the venues the caller manages, and (for a chosen/first one) returns analytics
+  // + voucher performance. Membership is verified here; data is service-role.
+  app.post("/api/restaurant/summary", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    const isAdmin = me?.role === "admin";
+    const venues = await listManagedVenues(admin, userId);
+    // Admins may inspect any venue; managers only their own.
+    const requested = typeof req.body?.listingId === "string" ? req.body.listingId : null;
+    let selectedId = venues[0]?.id ?? null;
+    if (requested) {
+      if (isAdmin || venues.some((v) => v.id === requested)) selectedId = requested;
+      else return res.status(403).json({ error: "You don't manage that venue." });
+    }
+    const windowDays = [7, 30, 90].includes(Number(req.body?.windowDays)) ? Number(req.body.windowDays) : 30;
+    if (!selectedId) return res.json({ venues, selected: null });
+    const summary = await venueSummary(admin, selectedId, windowDays);
+    res.json({ venues, selectedId, summary });
+  });
+
+  // POST /api/admin-link-venue — admin: link/unlink an account (by email) to a
+  // restaurant it manages, granting the /venue dashboard for that venue.
+  app.post("/api/admin-link-venue", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const listingId = String(req.body?.listingId || "");
+    const action = req.body?.action === "unlink" ? "unlink" : "link";
+    if (!email || !listingId) return res.status(400).json({ error: "Email and venue are required." });
+    const { data: listing } = await admin.from("listings").select("id, type").eq("id", listingId).maybeSingle();
+    if (!listing || (listing as { type: string }).type !== "eat") return res.status(400).json({ error: "Pick a restaurant listing." });
+    // Resolve the email to a user id (they must have an account).
+    let targetId: string | null = null;
+    for (let page = 1; page <= 50 && !targetId; page++) {
+      const { data } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
+      const users = data?.users ?? [];
+      const hit = users.find((u) => (u.email || "").toLowerCase() === email);
+      if (hit) targetId = hit.id;
+      if (users.length < 1000) break;
+    }
+    if (!targetId) return res.status(404).json({ error: "No account with that email — ask them to sign up first." });
+    if (action === "unlink") {
+      await admin.from("restaurant_managers").delete().eq("listing_id", listingId).eq("user_id", targetId);
+      return res.json({ ok: true, linked: false });
+    }
+    const { error } = await admin.from("restaurant_managers").upsert({ listing_id: listingId, user_id: targetId }, { onConflict: "listing_id,user_id" });
+    if (error) return res.status(500).json({ error: "Couldn't link that account." });
+    res.json({ ok: true, linked: true });
   });
 
   // POST /api/admin-users — admin-only searchable/filterable user directory
