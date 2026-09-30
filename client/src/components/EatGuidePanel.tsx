@@ -4,9 +4,11 @@
  * the price band, the cached Google rating, honest "we don't earn from this"
  * attribution, and outward CTAs (directions, website, Google).
  */
+import { useEffect, useState } from "react";
 import { Star, MapPin, Globe, ExternalLink, Bookmark, UtensilsCrossed } from "lucide-react";
 import type { LiveListing } from "@/contexts/ListingsContext";
 import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
+import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
 function directionsUrl(l: LiveListing): string {
@@ -22,6 +24,22 @@ export function EatGuidePanel({ listing }: { listing: LiveListing }) {
   const { isSaved, toggleSaved } = useSavedPlaces();
   const saved = isSaved(listing.id);
   const gmaps = googleUrl(listing);
+
+  // When the restaurant has an active dining-voucher offer, Revamp DOES earn a
+  // margin — so the "independent pick / we don't earn" line would be false. Only
+  // show that claim once we know there's NO active offer (never while loading).
+  const [hasOffer, setHasOffer] = useState<boolean | null>(null);
+  useEffect(() => {
+    let live = true;
+    supabase
+      .from("restaurant_voucher_offers")
+      .select("listing_id")
+      .eq("listing_id", listing.id)
+      .eq("active", true)
+      .maybeSingle()
+      .then(({ data }) => { if (live) setHasOffer(!!data); });
+    return () => { live = false; };
+  }, [listing.id]);
   return (
     <div className="brand-notch border border-basalt/12 bg-chalk p-6 shadow-[0_20px_55px_rgba(35,35,33,0.1)]">
       {/* Lead with what a diner cares about: the rating. */}
@@ -113,7 +131,8 @@ export function EatGuidePanel({ listing }: { listing: LiveListing }) {
       </div>
 
       <p className="mt-5 border-t border-basalt/10 pt-4 text-xs leading-relaxed text-basalt/50">
-        An independent Revamp pick — we don't earn from this recommendation. This spot takes reservations directly; contact the venue to book a table.
+        {hasOffer === false && "An independent Revamp pick — we don't earn from this recommendation. "}
+        This spot takes reservations directly; contact the venue to book a table.
       </p>
     </div>
   );
