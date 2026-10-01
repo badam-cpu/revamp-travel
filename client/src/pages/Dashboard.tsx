@@ -1501,6 +1501,10 @@ function DashboardContent() {
                 <SectionHead title="Messages" sub="Talk with your guests about their bookings. Fast replies win bookings — aim for near-instant. Keep bookings and payments on Revamp — off-platform arrangements aren't covered by our protection." />
                 <OperatorResponseStat />
                 {user && <Inbox userId={user.id} />}
+                <div className="mt-10 border-t border-basalt/10 pt-8">
+                  <p className="mb-5 text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Templates &amp; auto-reply</p>
+                  <MessageTemplatesSettings />
+                </div>
               </div>
             )}
 
@@ -1538,10 +1542,6 @@ function DashboardContent() {
                   <div>
                     <p className="mb-5 text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Profile</p>
                     <ProfileTab />
-                  </div>
-                  <div className="border-t border-basalt/10 pt-10">
-                    <p className="mb-5 text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Messaging</p>
-                    <MessageTemplatesSettings />
                   </div>
                   <div className="border-t border-basalt/10 pt-10">
                     <p className="mb-5 text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Security</p>
