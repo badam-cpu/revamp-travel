@@ -1932,6 +1932,42 @@ export function registerApiRoutes(app: Express) {
       if (senderRole === "operator" && !c.first_operator_at && c.first_guest_at) convoPatch.first_operator_at = nowIso;
       await admin.from("conversations").update(convoPatch).eq("id", parsed.data.conversationId);
 
+      // Automatic initial message: when a guest opens a conversation and the
+      // operator has an auto-reply set, post it immediately (once per thread) so
+      // no inquiry sits unanswered. Marked `auto` so it never counts as the
+      // operator's human first reply in response metrics. Best-effort.
+      if (senderRole === "traveler") {
+        try {
+          const listingId = (convo as { listing_id?: string | null }).listing_id;
+          const { data: existingOp } = await admin
+            .from("messages")
+            .select("id")
+            .eq("conversation_id", parsed.data.conversationId)
+            .eq("sender_role", "operator")
+            .limit(1);
+          if ((existingOp?.length ?? 0) === 0 && listingId) {
+            const { data: lst } = await admin.from("listings").select("operator_id").eq("id", listingId).maybeSingle();
+            const operatorId = (lst as { operator_id?: string } | null)?.operator_id;
+            if (operatorId) {
+              const { data: op } = await admin.from("profiles").select("auto_reply_enabled, auto_reply_message").eq("id", operatorId).maybeSingle();
+              const autoBody = (op as { auto_reply_enabled?: boolean; auto_reply_message?: string | null } | null);
+              if (autoBody?.auto_reply_enabled && autoBody.auto_reply_message?.trim()) {
+                await admin.from("messages").insert({
+                  conversation_id: parsed.data.conversationId,
+                  sender_id: operatorId,
+                  sender_role: "operator",
+                  body: autoBody.auto_reply_message.trim(),
+                  auto: true,
+                });
+                await admin.from("conversations").update({ last_message_at: new Date().toISOString() }).eq("id", parsed.data.conversationId);
+              }
+            }
+          }
+        } catch (autoErr) {
+          console.error("[message-send] auto-reply failed", autoErr);
+        }
+      }
+
       hits.push(now);
       messageSendHits.set(userId, hits);
       res.json({ message: msg });

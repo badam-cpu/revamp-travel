@@ -11,7 +11,9 @@ import { Loader2, ShieldAlert, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { listConversations, getMessages, markConversationRead, type InboxConversation, type InboxMessage } from "@/lib/messaging";
+import { listTemplates, type MessageTemplate } from "@/lib/templates";
 import { sendInboxMessage, moderateInbox } from "@/lib/api";
+import { FileText } from "lucide-react";
 import { toast } from "sonner";
 
 function timeAgo(iso: string): string {
@@ -28,7 +30,14 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
   const [messages, setMessages] = useState<InboxMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [tplOpen, setTplOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Operator's own templates (travelers/admins own none → the control stays hidden).
+  useEffect(() => {
+    listTemplates(userId).then(setTemplates).catch(() => {});
+  }, [userId]);
 
   const loadConvos = useCallback(async () => {
     const list = await listConversations(userId);
@@ -240,6 +249,28 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
                 <p className="mb-1.5 text-[10px] leading-tight text-basalt/40">
                   Keep bookings & payments on Revamp — sharing contact details or paying off-platform isn't covered by our protection.
                 </p>
+              )}
+              {templates.length > 0 && (
+                <div className="relative mb-1.5">
+                  <button type="button" onClick={() => setTplOpen((o) => !o)} className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-apricot hover:underline">
+                    <FileText className="h-3.5 w-3.5" /> Templates
+                  </button>
+                  {tplOpen && (
+                    <div className="absolute bottom-6 left-0 z-10 max-h-56 w-72 overflow-y-auto border border-basalt/15 bg-paper shadow-lg">
+                      {templates.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => { setDraft((d) => (d.trim() ? `${d}\n${t.body}` : t.body)); setTplOpen(false); }}
+                          className="block w-full border-b border-basalt/8 px-3 py-2 text-left last:border-0 hover:bg-chalk/60"
+                        >
+                          <span className="block text-xs font-semibold text-basalt">{t.title}</span>
+                          <span className="mt-0.5 block truncate text-[11px] text-basalt/50">{t.body}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
               <div className="flex items-end gap-2">
                 <textarea
