@@ -251,7 +251,7 @@ const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: typeof Home }[] 
   { key: "subscriptions", label: "Subscriptions", icon: CreditCard },
   { key: "support", label: "Support", icon: MessageSquare },
   { key: "messages", label: "All messages", icon: MessagesSquare },
-  { key: "response", label: "Response times", icon: Timer },
+  { key: "response", label: "Response metrics", icon: Timer },
   { key: "email", label: "Campaigns", icon: Mail },
   { key: "payouts", label: "Payouts", icon: Wallet },
   { key: "blog", label: "Blog", icon: Newspaper },

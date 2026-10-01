@@ -62,7 +62,7 @@ export function AdminResponseTimes() {
   return (
     <div className="grid gap-6">
       <div>
-        <h2 className="font-display text-3xl font-normal text-basalt">Response times</h2>
+        <h2 className="font-display text-3xl font-normal text-basalt">Response metrics</h2>
         <p className="mt-1 max-w-2xl text-sm text-basalt/55">How fast guest inquiries get a first operator reply — fast replies win bookings. Across {overall?.total ?? 0} inquiries.</p>
       </div>
 

@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { Clock, CheckCircle2, AlertCircle } from "lucide-react";
 import { fetchResponseConversations, summarize, formatDuration, type ResponseSummary } from "@/lib/responseTime";
 
-export function OperatorResponseStat() {
+export function OperatorResponseStat({ showEmpty = false }: { showEmpty?: boolean }) {
   const [sum, setSum] = useState<ResponseSummary | null>(null);
   useEffect(() => {
     let active = true;
@@ -17,7 +17,9 @@ export function OperatorResponseStat() {
     return () => { active = false; };
   }, []);
 
-  if (!sum || sum.total === 0) return null;
+  if (!sum || sum.total === 0) {
+    return showEmpty ? <p className="text-sm text-basalt/50">No guest inquiries yet — your response time will show here once guests message you.</p> : null;
+  }
 
   return (
     <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">

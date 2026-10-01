@@ -1483,6 +1483,10 @@ function DashboardContent() {
               <div className="grid gap-8">
                 <AnalyticsDashboard scope="operator" />
                 <div>
+                  <SectionHead title="Response metrics." sub="How fast you reply to guest inquiries — fast replies win bookings." />
+                  <OperatorResponseStat showEmpty />
+                </div>
+                <div>
                   <SectionHead title="Bookings & revenue." sub="Your confirmed bookings and generated revenue over the last 12 months." />
                   <OperatorAnalytics />
                 </div>
