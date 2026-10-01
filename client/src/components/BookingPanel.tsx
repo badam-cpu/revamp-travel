@@ -16,7 +16,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { Minus, Plus, Users } from "lucide-react";
+import { Minus, Plus, Users, Calendar, ChevronRight, ChevronDown } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { LiveListing, BlockedRange } from "@/contexts/ListingsContext";
 import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
@@ -37,6 +37,13 @@ function addDays(iso: string, days: number): string {
   return new Date(Date.parse(iso + "T00:00:00Z") + days * DAY_MS).toISOString().slice(0, 10);
 }
 
+/** "Oct 15" from an ISO date (local, no timezone shift). */
+function fmtShort(iso: string | null): string {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, (m || 1) - 1, d || 1).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 export function BookingPanel({ listing }: { listing: LiveListing }) {
   const { format, currency: displayCurrency } = useCurrency();
   const [, navigate] = useLocation();
@@ -54,6 +61,9 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
   const [guests, setGuests] = useState(1);
   const [range, setRange] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
   const [booked, setBooked] = useState<BlockedRange[]>([]);
+  // The month calendar is collapsed by default so the Book button sits above the
+  // fold; it opens when the guest taps the dates field (or the empty CTA).
+  const [datesOpen, setDatesOpen] = useState(false);
 
   // Slot mode: load bookable sessions and track the chosen date + session.
   const [sessions, setSessions] = useState<ListingSession[]>([]);
@@ -128,6 +138,15 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
   }, [listing.facts]);
   const selectedNights = isStay && selected ? nightsBetween(selected.startDate, selected.endDate) : 0;
   const belowMin = isStay && selected !== null && selectedNights < minStay;
+
+  // Collapse the calendar once a complete selection is made (stays: both dates;
+  // activities: a date; slot mode keeps the calendar until a day is picked, then
+  // the time chips take over below).
+  useEffect(() => {
+    if (isStay && range.start && range.end) setDatesOpen(false);
+    else if (!isStay && !slotMode && range.start) setDatesOpen(false);
+    else if (slotMode && slotDate) setDatesOpen(false);
+  }, [isStay, slotMode, range.start, range.end, slotDate]);
 
   const accommodationCents = selected
     ? computeBookingAmountCents(
@@ -211,12 +230,50 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
         {slotMode && sessions.length === 0 ? (
           <p className="border border-dashed border-basalt/20 bg-paper px-4 py-6 text-center text-xs text-basalt/50">No upcoming sessions right now — check back soon.</p>
         ) : (
-          <AvailabilityCalendar
-            mode={isStay ? "range" : "single"}
-            blockedRanges={slotMode ? slotBlockedRanges : [...(listing.blockedRanges ?? []), ...(listing.manualBlockedRanges ?? [])]}
-            bookedRanges={slotMode ? [] : booked}
-            onChange={slotMode ? (r) => { setSlotDate(r.start); setSessionId(null); } : setRange}
-          />
+          <>
+            {/* Collapsed summary — stays get Check in › Check out; activities get a
+                single Date field. Tapping it reveals the month calendar. */}
+            {!datesOpen && (
+              isStay ? (
+                <button
+                  type="button"
+                  onClick={() => setDatesOpen(true)}
+                  aria-expanded={datesOpen}
+                  className="grid w-full grid-cols-[1fr_auto_1fr] items-center border border-basalt/15 bg-paper px-3 py-3 text-left text-sm transition-colors hover:border-apricot/50"
+                >
+                  <span className="flex items-center gap-2 truncate">
+                    <Calendar className="h-4 w-4 shrink-0 text-basalt/45" />
+                    <span className={cn("truncate", range.start ? "font-semibold text-basalt" : "text-basalt/45")}>{range.start ? fmtShort(range.start) : "Check in"}</span>
+                  </span>
+                  <ChevronRight className="mx-2 h-4 w-4 text-basalt/30" />
+                  <span className={cn("truncate text-right", range.end ? "font-semibold text-basalt" : "text-basalt/45")}>{range.end ? fmtShort(range.end) : "Check out"}</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setDatesOpen(true)}
+                  aria-expanded={datesOpen}
+                  className="flex w-full items-center justify-between border border-basalt/15 bg-paper px-3 py-3 text-left text-sm transition-colors hover:border-apricot/50"
+                >
+                  <span className="flex items-center gap-2 truncate">
+                    <Calendar className="h-4 w-4 shrink-0 text-basalt/45" />
+                    <span className={cn("truncate", (slotMode ? slotDate : range.start) ? "font-semibold text-basalt" : "text-basalt/45")}>
+                      {(slotMode ? slotDate : range.start) ? fmtShort(slotMode ? slotDate : range.start) : "Choose a date"}
+                    </span>
+                  </span>
+                  <ChevronDown className="h-4 w-4 text-basalt/30" />
+                </button>
+              )
+            )}
+            {datesOpen && (
+              <AvailabilityCalendar
+                mode={isStay ? "range" : "single"}
+                blockedRanges={slotMode ? slotBlockedRanges : [...(listing.blockedRanges ?? []), ...(listing.manualBlockedRanges ?? [])]}
+                bookedRanges={slotMode ? [] : booked}
+                onChange={slotMode ? (r) => { setSlotDate(r.start); setSessionId(null); } : setRange}
+              />
+            )}
+          </>
         )}
         {/* Time chips for the chosen day (slot mode). */}
         {slotMode && slotDate && (
@@ -326,8 +383,8 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
         </Button>
       ) : (
         <Button
-          onClick={goToCheckout}
-          disabled={!selected || belowMin}
+          onClick={() => { if (!selected) { setDatesOpen(true); return; } goToCheckout(); }}
+          disabled={belowMin}
           className={cn("mt-5 h-12 w-full rounded-none bg-apricot text-white hover:bg-apricot/90", (!selected || belowMin) && "opacity-60")}
         >
           {!selected
