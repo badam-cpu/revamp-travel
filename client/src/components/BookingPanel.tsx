@@ -24,7 +24,7 @@ import { AskHostButton } from "@/components/AskHostButton";
 import { getListingSessions, groupSessionsByDate, formatSlotTime, type ListingSession } from "@/lib/sessions";
 import { scheduleHasSlots, slotLocalDate } from "@shared/sessions";
 import { Button } from "@/components/ui/button";
-import { computeBookingAmountCents, computeBookingCharge, describeBookingBasis, describeCancellationPolicy, isBookableType, promoDiscount, averageNightlyCents, nightsBetween } from "@shared/bookings";
+import { computeBookingAmountCents, computeBookingCharge, describeBookingBasis, describeCancellationPolicy, isBookableType, promoDiscount, nightlyPriceRange, nightsBetween } from "@shared/bookings";
 import { TAX_PERCENT } from "@shared/bookings";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
@@ -54,9 +54,11 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
   // tours/experiences keep the day-level single-date flow.
   const slotMode = !isStay && scheduleHasSlots(listing.sessionSchedule);
   const maxGuests = listing.maxGuests ?? 8;
-  // Headline shows the day-weighted average nightly rate when the stay uses
-  // seasonal/daily rates; otherwise the base price.
-  const priceLabel = listing.price > 0 ? format(averageNightlyCents({ priceCents: Math.round(listing.price * 100), priceUnit: listing.priceUnit, seasonalRates: listing.seasonalRates })) : "Rate on request";
+  // Headline shows the LOWEST upcoming nightly rate ("from ֏X") when the stay
+  // uses seasonal/daily pricing; otherwise just the base price. Exact per-date
+  // pricing is applied once dates are chosen.
+  const priceRange = nightlyPriceRange({ priceCents: Math.round(listing.price * 100), priceUnit: listing.priceUnit, seasonalRates: listing.seasonalRates });
+  const priceLabel = listing.price > 0 ? format(priceRange.lowCents) : "Rate on request";
 
   const [guests, setGuests] = useState(1);
   const [range, setRange] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
@@ -213,11 +215,12 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
     <div id="book" className="brand-notch sticky top-[104px] border border-basalt/12 bg-chalk p-6 shadow-[0_20px_55px_rgba(35,35,33,0.1)] lg:max-h-[calc(100vh_-_124px)] lg:overflow-y-auto">
       <div className="border-b border-basalt/10 pb-5">
         <p>
+          {priceRange.varies && listing.price > 0 && <span className="text-sm text-basalt/50">from </span>}
           <strong className="font-display text-[1.75rem] font-normal">{priceLabel}</strong>{" "}
           {listing.price > 0 && <span className="text-sm text-basalt/50">/ {listing.priceUnit}</span>}
         </p>
         {isStay && listing.price > 0 && !selected && (
-          <p className="mt-1 text-xs text-basalt/50">Average nightly rate — select dates for exact pricing.</p>
+          <p className="mt-1 text-xs text-basalt/50">{priceRange.varies ? "Lowest nightly rate — select dates for exact pricing." : "Select dates for exact pricing."}</p>
         )}
       </div>
 

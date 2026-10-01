@@ -209,6 +209,38 @@ export function averageNightlyCents(
   return Math.round(sum / days);
 }
 
+/**
+ * Headline "from" price for a stay: the LOWEST nightly rate across a window
+ * (default: the next 365 days), honoring seasonal/daily overrides, plus whether
+ * the price varies across that window. This is what cards + the detail header
+ * show for dynamic pricing ("from ֏X / night") — always traceable to a real
+ * bookable night, never an average that matches no single field. Falls back to
+ * the base price for non-per-night units or when no seasonal rates are set.
+ * Returns AMD cents.
+ */
+export function nightlyPriceRange(
+  listing: { priceCents: number; priceUnit: string; seasonalRates?: { start: string; end: string; priceCents: number }[] },
+  opts?: { from?: string; days?: number },
+): { lowCents: number; highCents: number; varies: boolean } {
+  const unit = (listing.priceUnit || "").toLowerCase().trim();
+  const base = Math.max(0, Math.round(listing.priceCents));
+  const rates = listing.seasonalRates ?? [];
+  if (!PER_NIGHT_UNITS.has(unit) || rates.length === 0) return { lowCents: base, highCents: base, varies: false };
+  const days = Math.max(1, opts?.days ?? 365);
+  let d = opts?.from ?? new Date().toISOString().slice(0, 10);
+  let low = Infinity;
+  let high = 0;
+  for (let i = 0; i < days; i++) {
+    const match = rates.filter((r) => r.start <= d && d <= r.end).pop();
+    const cents = Math.max(0, Math.round(match ? match.priceCents : base));
+    if (cents < low) low = cents;
+    if (cents > high) high = cents;
+    d = addDaysIso(d, 1);
+  }
+  if (!Number.isFinite(low)) low = base;
+  return { lowCents: low, highCents: high, varies: high > low };
+}
+
 /** A Revamp concierge add-on (admin-managed catalog, see migration 0029). */
 export interface Addon {
   id: string;

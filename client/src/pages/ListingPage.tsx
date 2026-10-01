@@ -29,7 +29,7 @@ import { trackEvent } from "@/lib/analytics";
 import { trackListing } from "@/lib/track";
 import { OperatorBrand } from "@/components/OperatorBrand";
 import { ExternalReviews } from "@/components/ExternalReviews";
-import { describeCancellationPolicy, averageNightlyCents } from "@shared/bookings";
+import { describeCancellationPolicy, nightlyPriceRange } from "@shared/bookings";
 import { buildBreadcrumbJsonLd, buildListingJsonLd } from "@shared/seo";
 import { toast } from "sonner";
 
@@ -139,10 +139,11 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   const [showMobileBar, setShowMobileBar] = useState(false);
   const listing = findListing(params.slug, listings);
   const saved = listing ? isSaved(listing.id) : false;
-  // Headline shows the day-weighted average nightly rate when the stay uses
-  // seasonal/daily rates; otherwise it's the base price.
-  const nightlyCents = listing ? averageNightlyCents({ priceCents: Math.round(listing.price * 100), priceUnit: listing.priceUnit, seasonalRates: listing.seasonalRates }) : 0;
-  const priceLabel = listing && listing.price > 0 ? format(nightlyCents) : "Rate on request";
+  // Headline shows the LOWEST upcoming nightly rate ("from ֏X") when the stay
+  // uses seasonal/daily pricing; otherwise it's the base price.
+  const priceRange = listing ? nightlyPriceRange({ priceCents: Math.round(listing.price * 100), priceUnit: listing.priceUnit, seasonalRates: listing.seasonalRates }) : { lowCents: 0, highCents: 0, varies: false };
+  const priceLabel = listing && listing.price > 0 ? format(priceRange.lowCents) : "Rate on request";
+  const priceVaries = !!listing && listing.price > 0 && priceRange.varies;
 
   // Hook call must come before any early return (rules of hooks) — this
   // covers both the not-found and found cases with one call.
@@ -467,7 +468,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
               <BookingPanel listing={live} />
             ) : (
               <div className="brand-notch sticky top-[104px] border border-basalt/12 bg-chalk p-6 shadow-[0_20px_55px_rgba(35,35,33,0.1)]">
-                <p><strong className="font-display text-4xl font-normal">{priceLabel}</strong> {listing.price > 0 && <span className="text-sm text-basalt/50">/ {listing.priceUnit}</span>}</p>
+                <p>{priceVaries && <span className="text-sm text-basalt/50">from </span>}<strong className="font-display text-4xl font-normal">{priceLabel}</strong> {listing.price > 0 && <span className="text-sm text-basalt/50">/ {listing.priceUnit}</span>}</p>
                 <p className="mt-4 text-sm leading-6 text-basalt/55">Booking isn't available in offline preview.</p>
               </div>
             )}
@@ -543,7 +544,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
       </main>
 
       <div className={cn("fixed inset-x-0 bottom-0 z-40 items-center justify-between border-t border-basalt/10 bg-paper/95 px-4 py-3 shadow-[0_-10px_30px_rgba(35,35,33,0.08)] backdrop-blur lg:hidden", showMobileBar ? "flex" : "hidden")}>
-        <p><strong className="font-display text-2xl font-normal">{priceLabel}</strong> {listing.price > 0 && <span className="text-xs text-basalt/45">/ {listing.priceUnit}</span>}</p>
+        <p>{priceVaries && <span className="text-xs text-basalt/45">from </span>}<strong className="font-display text-2xl font-normal">{priceLabel}</strong> {listing.price > 0 && <span className="text-xs text-basalt/45">/ {listing.priceUnit}</span>}</p>
         <Button
           onClick={() => document.getElementById("book")?.scrollIntoView({ behavior: "smooth", block: "center" })}
           className="h-11 rounded-none bg-apricot px-6 text-white hover:bg-apricot/90"

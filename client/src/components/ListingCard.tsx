@@ -5,7 +5,7 @@ import { Listing, typeLabels } from "@/data/listings";
 import { cn } from "@/lib/utils";
 import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
-import { averageNightlyCents } from "@shared/bookings";
+import { nightlyPriceRange } from "@shared/bookings";
 import { imgAttrs } from "@/lib/responsiveImg";
 import { DiscountBadge } from "@/components/DiscountBadge";
 import { useExternalRatings } from "@/hooks/useExternalRatings";
@@ -30,10 +30,10 @@ export function ListingCard({ listing, large = false, active = false, onHover, s
       : null
     : external;
   const saved = isSaved(listing.id);
-  // Headline shows the day-weighted average nightly rate when the stay uses
-  // seasonal/daily rates; otherwise it's just the base price.
-  const nightlyCents = averageNightlyCents({ priceCents: Math.round(listing.price * 100), priceUnit: listing.priceUnit, seasonalRates: listing.seasonalRates });
-  const priceLabel = listing.price > 0 ? format(nightlyCents) : "Rate on request";
+  // Headline shows the LOWEST upcoming nightly rate ("from ֏X") when the stay
+  // uses seasonal/daily pricing; otherwise just the base price.
+  const priceRange = nightlyPriceRange({ priceCents: Math.round(listing.price * 100), priceUnit: listing.priceUnit, seasonalRates: listing.seasonalRates });
+  const priceLabel = listing.price > 0 ? format(priceRange.lowCents) : "Rate on request";
   return (
     <article
       ref={impressionRef}
@@ -102,7 +102,7 @@ export function ListingCard({ listing, large = false, active = false, onHover, s
           ) : (
             <>
               <span className="min-w-0 truncate">{listing.tags.slice(0, 2).join(" · ")}</span>
-              <span className="shrink-0 whitespace-nowrap"><strong className="text-sm text-basalt">{priceLabel}</strong>{listing.price > 0 ? ` / ${listing.priceUnit}` : ""}</span>
+              <span className="shrink-0 whitespace-nowrap">{priceRange.varies && listing.price > 0 ? "from " : ""}<strong className="text-sm text-basalt">{priceLabel}</strong>{listing.price > 0 ? ` / ${listing.priceUnit}` : ""}</span>
             </>
           )}
         </div>
