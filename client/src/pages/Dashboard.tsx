@@ -67,6 +67,7 @@ import { OperatorSubscription } from "@/components/OperatorSubscription";
 import { SessionScheduleEditor } from "@/components/SessionScheduleEditor";
 import { OperatorAnalytics } from "@/components/OperatorAnalytics";
 import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
+import { OperatorResponseStat } from "@/components/OperatorResponseStat";
 import { ProfileTab, SecurityTab } from "@/pages/Account";
 import { EXPERIENCE_PREFILL_STORAGE_KEY } from "@/pages/ExperienceOnboarding";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
@@ -1492,7 +1493,8 @@ function DashboardContent() {
 
             {section === "messages" && (
               <div>
-                <SectionHead title="Messages" sub="Talk with your guests about their bookings. Keep bookings and payments on Revamp — off-platform arrangements aren't covered by our protection." />
+                <SectionHead title="Messages" sub="Talk with your guests about their bookings. Fast replies win bookings — aim for near-instant. Keep bookings and payments on Revamp — off-platform arrangements aren't covered by our protection." />
+                <OperatorResponseStat />
                 {user && <Inbox userId={user.id} />}
               </div>
             )}

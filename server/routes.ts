@@ -1890,7 +1890,7 @@ export function registerApiRoutes(app: Express) {
       // The conversation must exist and be open.
       const { data: convo } = await admin
         .from("conversations")
-        .select("id, status, listing_id, guest_email, listings(title)")
+        .select("id, status, listing_id, guest_email, first_guest_at, first_operator_at, listings(title)")
         .eq("id", parsed.data.conversationId)
         .maybeSingle();
       if (!convo) return res.status(404).json({ error: "Conversation not found." });
@@ -1921,7 +1921,16 @@ export function registerApiRoutes(app: Express) {
         .single();
       if (mErr || !msg) throw new Error(mErr?.message || "message insert failed");
 
-      await admin.from("conversations").update({ last_message_at: new Date().toISOString() }).eq("id", parsed.data.conversationId);
+      // First-response tracking: stamp the first guest message and the operator's
+      // first reply, so we can report response times (operator + admin). Only the
+      // FIRST of each is recorded; auto/support messages don't count as the
+      // operator's human reply.
+      const nowIso = new Date().toISOString();
+      const convoPatch: Record<string, unknown> = { last_message_at: nowIso };
+      const c = convo as { first_guest_at?: string | null; first_operator_at?: string | null };
+      if (senderRole === "traveler" && !c.first_guest_at) convoPatch.first_guest_at = nowIso;
+      if (senderRole === "operator" && !c.first_operator_at && c.first_guest_at) convoPatch.first_operator_at = nowIso;
+      await admin.from("conversations").update(convoPatch).eq("id", parsed.data.conversationId);
 
       hits.push(now);
       messageSendHits.set(userId, hits);

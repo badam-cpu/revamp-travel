@@ -16,7 +16,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, BarChart3, BookOpen, Check, CreditCard, ExternalLink, Gift, Home, LayoutDashboard, ListChecks, Mail, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, Ticket, UserSearch, Users, Utensils, Wallet, X } from "lucide-react";
+import { AlertTriangle, BarChart3, BookOpen, Check, CreditCard, ExternalLink, Gift, Home, LayoutDashboard, ListChecks, Mail, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, Ticket, Timer, UserSearch, Users, Utensils, Wallet, X } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { AdminSiteContent } from "@/components/AdminSiteContent";
@@ -30,6 +30,7 @@ import { AdminEateries } from "@/components/AdminEateries";
 import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
 import { AdminVoucherOffers } from "@/components/AdminVoucherOffers";
 import { AdminVenueManagers } from "@/components/AdminVenueManagers";
+import { AdminResponseTimes } from "@/components/AdminResponseTimes";
 import { AdminEmail } from "@/components/AdminEmail";
 import { AdminAccounts } from "@/components/AdminAccounts";
 import { AdminUsers } from "@/components/AdminUsers";
@@ -236,7 +237,7 @@ function StatTile({ n, label, onClick }: { n: number | string; label: string; on
   );
 }
 
-type AdminSection = "overview" | "reviews" | "listings" | "eateries" | "analytics" | "vouchers" | "users" | "accounts" | "giftcards" | "subscriptions" | "support" | "messages" | "email" | "payouts" | "blog" | "hub" | "site";
+type AdminSection = "overview" | "reviews" | "listings" | "eateries" | "analytics" | "vouchers" | "users" | "accounts" | "giftcards" | "subscriptions" | "support" | "messages" | "response" | "email" | "payouts" | "blog" | "hub" | "site";
 const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: typeof Home }[] = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
   { key: "reviews", label: "Reviews", icon: ListChecks },
@@ -250,6 +251,7 @@ const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: typeof Home }[] 
   { key: "subscriptions", label: "Subscriptions", icon: CreditCard },
   { key: "support", label: "Support", icon: MessageSquare },
   { key: "messages", label: "All messages", icon: MessagesSquare },
+  { key: "response", label: "Response times", icon: Timer },
   { key: "email", label: "Campaigns", icon: Mail },
   { key: "payouts", label: "Payouts", icon: Wallet },
   { key: "blog", label: "Blog", icon: Newspaper },
@@ -361,6 +363,7 @@ function AdminConsole() {
                 {user && <Inbox userId={user.id} admin />}
               </div>
             )}
+            {section === "response" && <AdminResponseTimes />}
             {section === "payouts" && <AdminPayouts />}
             {section === "blog" && <AdminBlog />}
             {section === "hub" && <AdminHub />}
