@@ -170,6 +170,8 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
     featured: (form.elements.namedItem("featured") as HTMLInputElement | null)?.checked || false,
     accent: (get("accent") as ListingInput["accent"]) || "apricot",
     maxGuests: Number(get("maxGuests")) > 0 ? Number(get("maxGuests")) : undefined,
+    guestsIncluded: draft.type === "stay" && Number(get("guestsIncluded")) > 0 ? Number(get("guestsIncluded")) : undefined,
+    extraGuestFeeCents: draft.type === "stay" && Number(get("extraGuestFee")) > 0 ? Math.round(Number(get("extraGuestFee")) * 100) : undefined,
     cancellationPolicy: get("cancellationPolicy") === "non_refundable" ? "non_refundable" : "flexible",
     freeCancelDays: Number(get("freeCancelDays")) >= 0 && get("freeCancelDays") !== "" ? Number(get("freeCancelDays")) : 7,
     nonrefundableDiscountPercent: Number(get("nonrefundableDiscountPercent")) >= 0 && get("nonrefundableDiscountPercent") !== "" ? Number(get("nonrefundableDiscountPercent")) : 5,
@@ -738,6 +740,18 @@ function ListingFormDialog({
                     <Label htmlFor="cleaningFee" className="text-sm font-semibold">Cleaning fee in AMD <span className="font-normal text-basalt/45">(optional, per booking)</span></Label>
                     <Input id="cleaningFee" name="cleaningFee" type="number" min={0} placeholder="e.g. 10000" defaultValue={draft.cleaningFeeCents ? draft.cleaningFeeCents / 100 : ""} className={FIELD} />
                   </div>
+                  {draft.type === "stay" && (
+                    <>
+                      <div className="grid gap-2">
+                        <Label htmlFor="guestsIncluded" className="text-sm font-semibold">Guests included in price <span className="font-normal text-basalt/45">(optional)</span></Label>
+                        <Input id="guestsIncluded" name="guestsIncluded" type="number" min={1} max={50} placeholder="e.g. 2" defaultValue={draft.guestsIncluded || ""} className={FIELD} />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="extraGuestFee" className="text-sm font-semibold">Extra guest fee in AMD <span className="font-normal text-basalt/45">(per extra guest, per night)</span></Label>
+                        <Input id="extraGuestFee" name="extraGuestFee" type="number" min={0} placeholder="e.g. 8000" defaultValue={draft.extraGuestFeeCents ? draft.extraGuestFeeCents / 100 : ""} className={FIELD} />
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <div className="grid gap-4 border border-basalt/10 bg-chalk/60 p-4">

@@ -105,6 +105,10 @@ export interface Listing {
   notSuitableFor?: string[];
   /** Maximum number of guests the listing sleeps/hosts; caps the guest selector. */
   maxGuests?: number;
+  /** Stays: guests included in the base nightly price (no surcharge up to this). */
+  guestsIncluded?: number;
+  /** Stays: fee per extra guest, per night, for guests beyond `guestsIncluded` (AMD cents). */
+  extraGuestFeeCents?: number;
   /** Cancellation policy (default "flexible"). See shared/bookings.ts. */
   cancellationPolicy?: CancellationPolicy;
   /** Flexible policy: free cancellation until this many days before check-in. */
@@ -584,6 +588,10 @@ export interface ListingInput {
   notSuitableFor?: string[];
   /** Maximum number of guests the listing sleeps/hosts; caps the guest selector. */
   maxGuests?: number;
+  /** Stays: guests included in the base nightly price (no surcharge up to this). */
+  guestsIncluded?: number;
+  /** Stays: fee per extra guest, per night, for guests beyond `guestsIncluded` (AMD cents). */
+  extraGuestFeeCents?: number;
   /** Cancellation policy (default "flexible"). See shared/bookings.ts. */
   cancellationPolicy?: CancellationPolicy;
   /** Flexible policy: free cancellation until this many days before check-in. */

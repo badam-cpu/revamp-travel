@@ -828,6 +828,8 @@ export function registerApiRoutes(app: Express) {
         cancellationPolicy: listing.cancellation_policy ?? "flexible",
         nonrefundableDiscountPercent: listing.nonrefundable_discount_percent ?? 0,
         seasonalRates: Array.isArray(listing.seasonal_rates) ? listing.seasonal_rates : [],
+        guestsIncluded: listing.guests_included ?? undefined,
+        extraGuestFeeCents: listing.extra_guest_fee_cents ?? undefined,
       },
       { startDate, endDate, guests },
     );

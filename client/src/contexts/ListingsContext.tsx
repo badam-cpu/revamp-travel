@@ -119,6 +119,8 @@ interface ListingRow {
   manual_blocked_ranges: BlockedRange[] | null;
   seasonal_rates: SeasonalRate[] | null;
   max_guests: number | null;
+  guests_included: number | null;
+  extra_guest_fee_cents: number | null;
   highlights: string[] | null;
   not_included: string[] | null;
   what_to_bring: string[] | null;
@@ -197,6 +199,8 @@ function mapListingRow(row: ListingRow): LiveListing {
     manualBlockedRanges: Array.isArray(row.manual_blocked_ranges) ? row.manual_blocked_ranges : [],
     seasonalRates: Array.isArray(row.seasonal_rates) ? row.seasonal_rates : [],
     maxGuests: row.max_guests ?? undefined,
+    guestsIncluded: row.guests_included ?? undefined,
+    extraGuestFeeCents: row.extra_guest_fee_cents ?? undefined,
     highlights: row.highlights ?? [],
     notIncluded: row.not_included ?? [],
     whatToBring: row.what_to_bring ?? [],
@@ -261,6 +265,8 @@ function toRow(input: ListingInput) {
     branches: input.branches ?? [],
     accent: input.accent,
     max_guests: input.maxGuests ?? null,
+    guests_included: input.guestsIncluded ?? null,
+    extra_guest_fee_cents: input.extraGuestFeeCents ?? null,
     highlights: input.highlights ?? [],
     not_included: input.notIncluded ?? [],
     what_to_bring: input.whatToBring ?? [],

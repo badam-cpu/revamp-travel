@@ -143,6 +143,25 @@ export function addDaysIso(iso: string, days: number): string {
  *   • per-person units → unit × guests (a single-session activity)
  *   • anything else    → flat unit price
  */
+/**
+ * Extra-guest fee total (stays, per night): guests beyond the included count are
+ * charged a per-night fee. Returns 0 unless the operator set both an included
+ * count and a positive fee, and the party exceeds the included count.
+ */
+export function extraGuestFeeCentsTotal(
+  listing: { priceUnit: string; guestsIncluded?: number; extraGuestFeeCents?: number },
+  params: { nights: number; guests: number },
+): number {
+  const unit = (listing.priceUnit || "").toLowerCase().trim();
+  if (!PER_NIGHT_UNITS.has(unit)) return 0;
+  const included = Math.round(listing.guestsIncluded ?? 0);
+  const fee = Math.max(0, Math.round(listing.extraGuestFeeCents ?? 0));
+  if (included <= 0 || fee <= 0) return 0;
+  const extra = Math.max(0, Math.round(params.guests) - included);
+  const nights = Math.max(1, Math.round(params.nights));
+  return extra * fee * nights;
+}
+
 export function computeBookingAmountCents(
   listing: {
     priceCents: number;
@@ -150,6 +169,8 @@ export function computeBookingAmountCents(
     cancellationPolicy?: CancellationPolicy;
     nonrefundableDiscountPercent?: number;
     seasonalRates?: { start: string; end: string; priceCents: number }[];
+    guestsIncluded?: number;
+    extraGuestFeeCents?: number;
   },
   params: { startDate: string; endDate: string; guests: number },
 ): number {
@@ -165,6 +186,8 @@ export function computeBookingAmountCents(
       const match = rates.filter((r) => r.start <= d && d <= r.end).pop();
       sum += Math.max(0, Math.round(match ? match.priceCents : base));
     }
+    // Extra-guest fee: guests beyond the included count, per night.
+    sum += extraGuestFeeCentsTotal(listing, { nights: nightsBetween(params.startDate, params.endDate), guests: params.guests });
     total = sum;
   } else if (PER_PERSON_UNITS.has(unit)) {
     // Per-person activity: the date's rate (a per-date override if the operator

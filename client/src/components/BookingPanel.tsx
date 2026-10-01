@@ -24,7 +24,7 @@ import { AskHostButton } from "@/components/AskHostButton";
 import { getListingSessions, groupSessionsByDate, formatSlotTime, type ListingSession } from "@/lib/sessions";
 import { scheduleHasSlots, slotLocalDate } from "@shared/sessions";
 import { Button } from "@/components/ui/button";
-import { computeBookingAmountCents, computeBookingCharge, describeBookingBasis, describeCancellationPolicy, isBookableType, promoDiscount, nightlyPriceRange, nightsBetween } from "@shared/bookings";
+import { computeBookingAmountCents, computeBookingCharge, describeBookingBasis, describeCancellationPolicy, isBookableType, promoDiscount, nightlyPriceRange, nightsBetween, extraGuestFeeCentsTotal } from "@shared/bookings";
 import { TAX_PERCENT } from "@shared/bookings";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
@@ -158,9 +158,15 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
           cancellationPolicy: listing.cancellationPolicy,
           nonrefundableDiscountPercent: listing.nonrefundableDiscountPercent,
           seasonalRates: listing.seasonalRates,
+          guestsIncluded: listing.guestsIncluded,
+          extraGuestFeeCents: listing.extraGuestFeeCents,
         },
         { ...selected, guests },
       )
+    : 0;
+  // Extra-guest portion (shown as its own breakdown line).
+  const extraGuestCents = selected
+    ? extraGuestFeeCentsTotal({ priceUnit: listing.priceUnit, guestsIncluded: listing.guestsIncluded, extraGuestFeeCents: listing.extraGuestFeeCents }, { nights: selectedNights, guests })
     : 0;
   // Promo discount (applies when the check-in date is in the sale window).
   const promo = promoDiscount(accommodationCents, listing, selected?.startDate ?? "");
@@ -339,17 +345,25 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
           {(() => {
             // Compact basis: when seasonal/daily rates apply, show the average
             // nightly rate of the chosen dates ("avg ֏X × N nights"); otherwise
-            // the plain per-night rate. Either way it reconciles to the total.
+            // the plain per-night rate. The extra-guest fee is pulled out onto its
+            // own line below, so this reflects the room/night cost alone.
+            const roomCents = accommodationCents - extraGuestCents;
             const n = nightsBetween(selected.startDate, selected.endDate);
-            const perNight = n > 0 ? Math.round(accommodationCents / n) : Math.round(listing.price * 100);
+            const perNight = n > 0 ? Math.round(roomCents / n) : Math.round(listing.price * 100);
             const label = format(perNight);
             return (
               <div className="flex items-center justify-between text-basalt/55">
                 <span>{describeBookingBasis(listing, { ...selected, guests }, label)}</span>
-                <span>{format(accommodationCents)}</span>
+                <span>{format(roomCents)}</span>
               </div>
             );
           })()}
+          {extraGuestCents > 0 && (
+            <div className="flex items-center justify-between text-basalt/55">
+              <span>Extra guests ({guests - (listing.guestsIncluded ?? 0)} × {selectedNights} {selectedNights === 1 ? "night" : "nights"})</span>
+              <span>{format(extraGuestCents)}</span>
+            </div>
+          )}
           {promo.active && (
             <div className="flex items-center justify-between font-semibold text-apricot">
               <span>Discount{listing.discountType === "percent" ? ` (${listing.discountValue}% off)` : " (sale)"}</span>
