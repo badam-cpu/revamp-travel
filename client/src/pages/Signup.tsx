@@ -23,6 +23,9 @@ import { cn } from "@/lib/utils";
 export default function Signup() {
   const { signUp, user, loading: authLoading } = useAuth();
   const [, navigate] = useLocation();
+  // Anonymous support-chat sessions (no email) aren't real accounts — still show
+  // the sign-up form for them. Mirrors SiteHeader / Login.
+  const signedIn = !!user && !((user as { is_anonymous?: boolean }).is_anonymous === true || !user.email);
   useDocumentMeta({
     title: "Sign up | Revamp Vacations",
     description: "Create a Revamp Vacations account as a traveler or an operator.",
@@ -31,9 +34,9 @@ export default function Signup() {
 
   // Already signed in? Don't show the sign-up form — send them home.
   useEffect(() => {
-    if (authLoading || !user) return;
+    if (authLoading || !signedIn) return;
     navigate("/");
-  }, [authLoading, user, navigate]);
+  }, [authLoading, signedIn, navigate]);
   const [role, setRole] = useState<UserRole>("traveler");
   const [displayName, setDisplayName] = useState("");
   const [businessName, setBusinessName] = useState("");
@@ -85,8 +88,8 @@ export default function Signup() {
   }
 
   // Signed in already — brief placeholder while the effect redirects, so a
-  // logged-in user never sees the sign-up form.
-  if (user) {
+  // logged-in user never sees the sign-up form. (Anonymous sessions excluded.)
+  if (signedIn) {
     return (
       <div className="min-h-screen bg-paper text-basalt">
         <SiteHeader />

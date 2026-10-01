@@ -15,6 +15,9 @@ import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 export default function Login() {
   const { signIn, resetPassword, user, loading: authLoading } = useAuth();
   const [, navigate] = useLocation();
+  // A support-chat visitor is signed in ANONYMOUSLY (no email) — that's not a real
+  // account, so the sign-in form must still show for them. Mirrors SiteHeader.
+  const signedIn = !!user && !((user as { is_anonymous?: boolean }).is_anonymous === true || !user.email);
   useDocumentMeta({
     title: "Sign in | Revamp Vacations",
     description: "Sign in to your Revamp Vacations account to book, save places, or manage your listings.",
@@ -25,10 +28,10 @@ export default function Login() {
   // ?redirect=, else home). This is the header-says-signed-in / page-says-
   // sign-in inconsistency fixed.
   useEffect(() => {
-    if (authLoading || !user) return;
+    if (authLoading || !signedIn) return;
     const redirect = new URLSearchParams(window.location.search).get("redirect");
     navigate(redirect && redirect.startsWith("/") ? redirect : "/");
-  }, [authLoading, user, navigate]);
+  }, [authLoading, signedIn, navigate]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -73,7 +76,8 @@ export default function Login() {
 
   // Signed in already — render a brief placeholder instead of the form while
   // the effect above redirects, so a logged-in user never sees "Sign in".
-  if (user) {
+  // (Anonymous support-chat sessions are NOT "signed in" here.)
+  if (signedIn) {
     return (
       <div className="min-h-screen bg-paper text-basalt">
         <SiteHeader />
