@@ -33,6 +33,11 @@ interface ArmeniaMapProps {
   onSelect?: (id: string) => void;
   className?: string;
   single?: boolean;
+  /** When true, selecting a listing pans + zooms the camera to it (map-led
+   * discovery surfaces like /map). Filter changes still frame the whole set;
+   * only an in-set selection moves the camera. Off by default so preview maps
+   * (home, tour detail) stay still on hover. */
+  focusOnSelect?: boolean;
 }
 
 const ARMENIA_CENTER = { lat: 40.18, lng: 44.51 };
@@ -78,7 +83,7 @@ function clusterIcon(count: number): google.maps.Icon {
   };
 }
 
-export function ArmeniaMap({ listings, selectedId, onSelect, className, single = false }: ArmeniaMapProps) {
+export function ArmeniaMap({ listings, selectedId, onSelect, className, single = false, focusOnSelect = false }: ArmeniaMapProps) {
   const { format } = useCurrency();
   const active = useMemo(() => listings.find((listing) => listing.id === selectedId) || listings[0], [listings, selectedId]);
   // Marker pill: eateries are free recommendations — show their price band (or a
@@ -92,6 +97,9 @@ export function ArmeniaMap({ listings, selectedId, onSelect, className, single =
   const markersRef = useRef<Map<string, google.maps.Marker>>(new Map());
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  // Tracks the current listing SET so the pan-on-select effect can tell a real
+  // selection apart from a filter change (which should re-frame, not pan).
+  const setKeyRef = useRef("");
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -201,6 +209,22 @@ export function ArmeniaMap({ listings, selectedId, onSelect, className, single =
       marker.setZIndex(isSelected ? 9_000 : 1);
     });
   }, [ready, selectedId, single, active, listings, format]);
+
+  // Pan + zoom to the selected listing (map-led surfaces, focusOnSelect). Skips
+  // the tick where the listing SET changed — a filter switch should re-frame the
+  // whole set (the effect above), and only a true in-set selection flies in.
+  useEffect(() => {
+    const map = mapRef.current;
+    const key = listings.map((l) => l.id).join("|");
+    const setChanged = key !== setKeyRef.current;
+    setKeyRef.current = key;
+    if (!ready || !map || single || !focusOnSelect || setChanged || !selectedId) return;
+    const sel = listings.find((l) => l.id === selectedId);
+    if (!sel) return;
+    map.panTo({ lat: sel.coordinates.lat, lng: sel.coordinates.lng });
+    const target = sel.city.trim().toLowerCase() === "yerevan" ? 14 : 12;
+    if ((map.getZoom() ?? 7) < target) map.setZoom(target);
+  }, [ready, selectedId, single, focusOnSelect, listings]);
 
   return (
     <div className={cn("atlas-map relative overflow-hidden bg-[#EDECE6]", className)}>
