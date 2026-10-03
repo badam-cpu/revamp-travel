@@ -281,7 +281,7 @@ export interface AhaCopyContext {
 export interface AhaCopyParams {
   field: "title" | "shortDescription" | "longDescription" | "highlights" | "neighborhood";
   mode: "generate" | "improve";
-  listingType: "stay" | "tour" | "experience" | "eat";
+  listingType: "stay" | "tour" | "experience" | "eat" | "place";
   current?: string;
   context: AhaCopyContext;
 }

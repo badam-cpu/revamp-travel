@@ -40,7 +40,7 @@ const ACTIVITY_THEMES: Theme[] = [
 
 /** Count, per theme, how many of `texts` mention it (>=1 keyword). Sorted desc.
  *  `kind` picks a theme vocabulary appropriate to the listing (stays vs activities). */
-export function computeMentions(texts: string[], kind: "stay" | "tour" | "experience" | "eat" = "stay"): Mention[] {
+export function computeMentions(texts: string[], kind: "stay" | "tour" | "experience" | "eat" | "place" = "stay"): Mention[] {
   const themes = kind === "stay" ? STAY_THEMES : ACTIVITY_THEMES;
   const lc = texts.map((t) => ` ${(t || "").toLowerCase()} `).filter((t) => t.trim());
   if (!lc.length) return [];

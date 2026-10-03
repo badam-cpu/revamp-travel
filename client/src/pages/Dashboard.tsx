@@ -261,6 +261,8 @@ const FACT_EXAMPLES: Record<ListingType, [string, string][]> = {
   tour: [["Duration", "6 hours"], ["Group", "Up to 8"], ["Level", "Easy"], ["Starts", "Yerevan"], ["Season", "May–Oct"], ["Languages", "EN / RU"]],
   experience: [["Duration", "3 hours"], ["Group size", "Up to 8"], ["Meeting point", "Republic Square"], ["Languages", "EN / RU / HY"], ["Skill level", "Beginner"], ["Ages", "12+"]],
   eat: [["Cuisine", "Modern Armenian"], ["Service", "Lunch & dinner"], ["Setting", "Garden courtyard"], ["Seats", "40"], ["Booking", "Recommended"], ["Signature", "Lamb khorovats"]],
+  // `place` is admin-curated (not editable here); present only so this map stays total over ListingType.
+  place: [["Hours", "10 AM – 6 PM"], ["Entry", "Free"], ["Best for", "An afternoon"], ["Good to know", "Café on site"]],
 };
 
 function ListingFormDialog({
@@ -930,6 +932,8 @@ const ICAL_SOURCE: Record<ListingType, { name: string; placeholder: string; help
     helpLabel: "How to get your Fresha calendar link",
   },
   eat: { name: "your booking platform", placeholder: "https://…/….ics" },
+  // `place` is admin-curated and non-bookable; present only to keep this map total over ListingType.
+  place: { name: "your booking platform", placeholder: "https://…/….ics" },
 };
 
 function AvailabilityRow({ listing }: { listing: LiveListing }) {

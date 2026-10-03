@@ -9,7 +9,33 @@
  * Edit this array only to change what a *fresh* install seeds with.
  */
 
-export type ListingType = "stay" | "eat" | "tour" | "experience";
+export type ListingType = "stay" | "eat" | "tour" | "experience" | "place";
+
+/** Types that are free, admin-curated recommendations (not bookable inventory):
+ * restaurants (`eat`) and other venues (`place`). They share the same card /
+ * detail treatment — website + Google link + reviews, a "rate on request"
+ * price, no booking panel — so UI branches should test this, not `=== "eat"`. */
+export const CURATED_TYPES: ListingType[] = ["eat", "place"];
+export const isCuratedType = (t: ListingType): boolean => CURATED_TYPES.includes(t);
+
+/** Venue sub-kinds for `type: "place"`. Adding one here is all it takes to offer
+ * a new kind — the DB stores it as free text (`category`). `slug` drives the
+ * /visit/:category hubs and filters; `label`/`plural` are display copy. */
+export const PLACE_CATEGORIES = [
+  { slug: "museum", label: "Museum", plural: "Museums" },
+  { slug: "gallery", label: "Gallery", plural: "Galleries" },
+  { slug: "library", label: "Library", plural: "Libraries" },
+  { slug: "coworking", label: "Coworking", plural: "Coworking spaces" },
+] as const;
+
+export type PlaceCategorySlug = (typeof PLACE_CATEGORIES)[number]["slug"];
+
+/** Human label for a stored place category slug (falls back to the raw value). */
+export function placeCategoryLabel(slug?: string | null): string {
+  if (!slug) return "Place";
+  const found = PLACE_CATEGORIES.find((c) => c.slug === slug);
+  return found ? found.label : slug.charAt(0).toUpperCase() + slug.slice(1);
+}
 
 /**
  * Per-listing cancellation policy the operator chooses (see refund logic in
@@ -134,7 +160,9 @@ export interface Listing {
   rooms?: ListingRoom[];
   /** Per-period nightly rate overrides (seasonal / date-range pricing). */
   seasonalRates?: SeasonalRate[];
-  // --- type: "eat" only (free, admin-curated recommendations) ---
+  // --- curated types ("eat" + "place") — free, admin-curated recommendations ---
+  /** Venue sub-kind for `type: "place"` — a PLACE_CATEGORIES slug (museum, gallery, …). */
+  category?: string;
   /** Standard venue type, e.g. "Restaurant", "Café / coffee shop", "Bar". */
   venueType?: string;
   /** Cuisine, e.g. "Armenian", "Italian", "Georgian". */
@@ -541,6 +569,7 @@ export const typeLabels: Record<ListingType, string> = {
   eat: "Eat",
   tour: "Tour",
   experience: "Experience",
+  place: "Visit",
 };
 
 export function findListingIn(list: Listing[], slug: string | undefined) {
@@ -617,7 +646,8 @@ export interface ListingInput {
   rooms?: ListingRoom[];
   /** Per-period nightly rate overrides (seasonal / date-range pricing). */
   seasonalRates?: SeasonalRate[];
-  // --- type: "eat" only (free, admin-curated recommendations) ---
+  // --- curated types ("eat" + "place") — free, admin-curated recommendations ---
+  category?: string;
   venueType?: string;
   cuisine?: string;
   priceBand?: "$" | "$$" | "$$$";

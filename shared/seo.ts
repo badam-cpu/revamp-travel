@@ -23,7 +23,25 @@ const SCHEMA_TYPE_BY_LISTING_TYPE: Record<ListingType, string> = {
   eat: "Restaurant",
   tour: "TouristTrip",
   experience: "Service",
+  place: "LocalBusiness",
 };
+
+/** More specific schema.org types per place category (better SEO/AEO than the
+ * generic LocalBusiness). Falls back to LocalBusiness for unlisted categories. */
+const SCHEMA_TYPE_BY_PLACE_CATEGORY: Record<string, string> = {
+  museum: "Museum",
+  gallery: "ArtGallery",
+  library: "Library",
+  coworking: "LocalBusiness",
+};
+
+/** schema.org @type for a listing — place rows refine by category. */
+export function schemaTypeFor(listing: { type: ListingType; category?: string }): string {
+  if (listing.type === "place" && listing.category) {
+    return SCHEMA_TYPE_BY_PLACE_CATEGORY[listing.category] ?? "LocalBusiness";
+  }
+  return SCHEMA_TYPE_BY_LISTING_TYPE[listing.type];
+}
 
 /** Structured data for one listing-detail page. */
 export function buildListingJsonLd(listing: Listing, origin: string): JsonLd {
@@ -32,7 +50,7 @@ export function buildListingJsonLd(listing: Listing, origin: string): JsonLd {
 
   const base: JsonLd = {
     "@context": "https://schema.org",
-    "@type": SCHEMA_TYPE_BY_LISTING_TYPE[listing.type],
+    "@type": schemaTypeFor(listing),
     name: listing.title,
     description: listing.shortDescription,
     image: images,

@@ -70,7 +70,7 @@ function HostReviewBlock({ label, source, reviews, show }: { label: string; sour
   );
 }
 
-export function ExternalReviews({ operatorId, listingId, kind = "stay", className = "" }: { operatorId: string; listingId?: string; kind?: "stay" | "tour" | "experience" | "eat"; className?: string }) {
+export function ExternalReviews({ operatorId, listingId, kind = "stay", className = "" }: { operatorId: string; listingId?: string; kind?: "stay" | "tour" | "experience" | "eat" | "place"; className?: string }) {
   const [google, setGoogle] = useState<GoogleReviewsResult | null>(null);
   const [host, setHost] = useState<HostReview[]>([]);
   const [translated, setTranslated] = useState<Map<string, string> | null>(null);

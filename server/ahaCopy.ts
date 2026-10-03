@@ -24,7 +24,7 @@ export function ahaCopyConfigured(): boolean {
 
 export type AhaField = "title" | "shortDescription" | "longDescription" | "highlights" | "neighborhood";
 export type AhaMode = "generate" | "improve";
-export type AhaListingType = "stay" | "tour" | "experience" | "eat";
+export type AhaListingType = "stay" | "tour" | "experience" | "eat" | "place";
 
 export interface AhaCopyInput {
   field: AhaField;
@@ -57,6 +57,7 @@ const TYPE_GUIDE: Record<AhaListingType, string> = {
   tour: "A guided tour / day trip. Lead with what you'll see and do and the route, then duration, group feel, and logistics (meeting point, languages). Active, vivid verbs.",
   experience: "A hands-on experience (class, tasting, craft). Lead with what the guest will actually do and take away, the host's expertise, and the atmosphere. Personal and sensory.",
   eat: "A restaurant/cafe recommendation. Lead with cuisine/venue type and neighbourhood, the vibe, and what it's known for. Editorial, not salesy — these are free picks.",
+  place: "A place to visit (museum, gallery, library, coworking space, etc.). Lead with what it is and where, what you'll see or do there, the atmosphere, and practical good-to-knows (hours, entry). Editorial, not salesy — these are free picks.",
 };
 
 const FIELD_GUIDE: Record<AhaField, string> = {
