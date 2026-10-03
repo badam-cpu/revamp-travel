@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { adminPlaceDetails, ApiError } from "@/lib/api";
+import { adminPlaceDetails, adminTripadvisorMatch, ApiError } from "@/lib/api";
 import { slugify } from "@/lib/slug";
 import { PLACE_CATEGORIES, placeCategoryLabel } from "@shared/listings";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,8 @@ const BLANK = {
   image: "", website: "", shortDescription: "", longDescription: "", address: "",
   googleRating: null as number | null, googleRatingCount: null as number | null,
   lat: null as number | null, lng: null as number | null,
+  tripadvisorLocationId: "", tripadvisorRating: null as number | null, tripadvisorRatingCount: null as number | null,
+  tripadvisorUrl: "", tripadvisorRatingImage: "",
   featured: false, editorRank: "" as string,
 };
 
@@ -47,6 +49,7 @@ export function AdminPlaces() {
   const [rows, setRows] = useState<PlaceRow[] | null>(null);
   const [f, setF] = useState({ ...BLANK });
   const [enriching, setEnriching] = useState(false);
+  const [taMatching, setTaMatching] = useState(false);
   const [saving, setSaving] = useState(false);
   const photosRef = useRef<PhotoUploaderHandle>(null);
   const [uploaderKey, setUploaderKey] = useState(0);
@@ -90,6 +93,29 @@ export function AdminPlaces() {
     }
   };
 
+  const matchTa = async () => {
+    if (!f.title.trim()) {
+      toast("Add the place name first.");
+      return;
+    }
+    setTaMatching(true);
+    try {
+      const m = await adminTripadvisorMatch(f.title.trim(), f.city.trim() || f.region.trim());
+      set({
+        tripadvisorLocationId: m.locationId,
+        tripadvisorRating: m.rating,
+        tripadvisorRatingCount: m.ratingCount,
+        tripadvisorUrl: m.url ?? "",
+        tripadvisorRatingImage: m.ratingImage ?? "",
+      });
+      toast(m.rating != null ? `Matched "${m.name}" on Tripadvisor — ${m.rating} (${m.ratingCount}).` : `Matched "${m.name}" on Tripadvisor.`);
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : "Couldn't match on Tripadvisor.");
+    } finally {
+      setTaMatching(false);
+    }
+  };
+
   const resetForm = () => {
     setEditingId(null);
     setF({ ...BLANK });
@@ -121,6 +147,11 @@ export function AdminPlaces() {
       googleRatingCount: data.google_rating_count ?? null,
       lat: data.lat ?? null,
       lng: data.lng ?? null,
+      tripadvisorLocationId: data.tripadvisor_location_id ?? "",
+      tripadvisorRating: data.tripadvisor_rating ?? null,
+      tripadvisorRatingCount: data.tripadvisor_rating_count ?? null,
+      tripadvisorUrl: data.tripadvisor_url ?? "",
+      tripadvisorRatingImage: data.tripadvisor_rating_image ?? "",
       featured: !!data.featured,
       editorRank: data.editor_rank == null ? "" : String(data.editor_rank),
     });
@@ -160,6 +191,11 @@ export function AdminPlaces() {
         google_place_id: f.placeId || null,
         google_rating: f.googleRating,
         google_rating_count: f.googleRatingCount,
+        tripadvisor_location_id: f.tripadvisorLocationId || null,
+        tripadvisor_rating: f.tripadvisorRating,
+        tripadvisor_rating_count: f.tripadvisorRatingCount,
+        tripadvisor_url: f.tripadvisorUrl || null,
+        tripadvisor_rating_image: f.tripadvisorRatingImage || null,
         neighborhood: f.neighborhood.trim() || null,
         featured: f.featured,
         editor_rank: f.editorRank.trim() === "" ? null : Math.max(0, Math.round(Number(f.editorRank) || 0)),
@@ -248,8 +284,12 @@ export function AdminPlaces() {
         <div className="flex flex-wrap items-center gap-3 border-t border-basalt/10 pt-4">
           <Button onClick={save} disabled={saving} className="rounded-none bg-apricot font-semibold text-white hover:bg-apricot/90">{saving ? "Saving…" : editingId ? "Save changes" : "Add to guide"}</Button>
           {editingId && <button type="button" onClick={resetForm} className="text-sm font-semibold text-basalt/50 hover:text-apricot">Cancel</button>}
+          <button type="button" onClick={matchTa} disabled={taMatching || !f.title.trim()} className="inline-flex items-center gap-1.5 border border-basalt/20 px-3 py-1.5 text-xs font-semibold text-basalt hover:border-apricot hover:text-apricot disabled:opacity-40">
+            {taMatching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Match on Tripadvisor
+          </button>
           <span className="flex items-center gap-3 text-xs text-basalt/55">
             {typeof f.googleRating === "number" && <span className="inline-flex items-center gap-1"><Star className="h-3.5 w-3.5 fill-apricot text-apricot" />{f.googleRating.toFixed(1)} ({f.googleRatingCount}) Google</span>}
+            {typeof f.tripadvisorRating === "number" && <span className="inline-flex items-center gap-1">{f.tripadvisorRatingImage ? <img src={f.tripadvisorRatingImage} alt="Tripadvisor rating" className="h-3" /> : null}{f.tripadvisorRating.toFixed(1)} ({f.tripadvisorRatingCount}) Tripadvisor</span>}
           </span>
         </div>
       </div>
