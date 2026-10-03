@@ -22,7 +22,6 @@ import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { TourCard } from "@/components/TourCard";
-import { CardCarousel, CARD_ITEM } from "@/components/CardCarousel";
 import { BookingPanel } from "@/components/BookingPanel";
 import { Button } from "@/components/ui/button";
 import { factValue, otherFacts } from "@/lib/tourFacts";
@@ -65,7 +64,7 @@ export function TourDetail({ listing }: { listing: Listing }) {
   const browseNoun = isExperience ? "experiences" : "tours";
 
   const relatedItems = useMemo(
-    () => listings.filter((item) => item.type === listing.type && item.id !== listing.id).slice(0, 12),
+    () => listings.filter((item) => item.type === listing.type && item.id !== listing.id).slice(0, 3),
     [listings, listing.id, listing.type],
   );
 
@@ -334,11 +333,11 @@ export function TourDetail({ listing }: { listing: Listing }) {
               View all {browseNoun}
             </Link>
           </div>
-          <CardCarousel label={`more ${browseNoun}`} className="mt-9">
+          <div className="mt-9 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {relatedItems.map((item) => (
-              <div key={item.id} className={CARD_ITEM}><TourCard listing={item} surface="related" /></div>
+              <TourCard key={item.id} listing={item} surface="related" />
             ))}
-          </CardCarousel>
+          </div>
         </section>
       )}
 
