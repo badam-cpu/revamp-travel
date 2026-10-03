@@ -2110,6 +2110,65 @@ export function registerApiRoutes(app: Express) {
     res.json({ venues, selectedId, summary });
   });
 
+  // POST /api/admin-prepaid — admin: manage a restaurant's prepaid balance.
+  // actions: topup (pay X for Y face → balance += face), adjust (manual +/- delta),
+  // active (enable/disable), threshold (low-balance warning line).
+  app.post("/api/admin-prepaid", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const listingId = String(b.listingId || "");
+    const action = String(b.action || "");
+    if (!listingId) return res.status(400).json({ error: "Pick a restaurant." });
+    const { data: listing } = await admin.from("listings").select("type").eq("id", listingId).maybeSingle();
+    if (!listing || (listing as { type: string }).type !== "eat") return res.status(400).json({ error: "Prepaid balances are for restaurants." });
+
+    // Ensure a row exists.
+    await admin.from("restaurant_prepaid").upsert({ listing_id: listingId }, { onConflict: "listing_id", ignoreDuplicates: true });
+    const { data: cur } = await admin.from("restaurant_prepaid").select("*").eq("listing_id", listingId).maybeSingle();
+    const row = (cur ?? { balance_cents: 0, total_paid_cents: 0, total_face_cents: 0, low_threshold_cents: 0, active: true }) as { balance_cents: number; total_paid_cents: number; total_face_cents: number; low_threshold_cents: number; active: boolean };
+
+    try {
+      if (action === "topup") {
+        const paid = Math.max(0, Math.round(Number(b.paidCents) || 0));
+        const face = Math.max(0, Math.round(Number(b.faceCents) || 0));
+        if (face <= 0) return res.status(400).json({ error: "Enter the face credit to add." });
+        await admin.from("restaurant_prepaid").update({
+          balance_cents: row.balance_cents + face,
+          total_paid_cents: row.total_paid_cents + paid,
+          total_face_cents: row.total_face_cents + face,
+          active: true,
+          topup_alerted_at: null, // reset so a future shortfall re-alerts
+          updated_at: new Date().toISOString(),
+        }).eq("listing_id", listingId);
+        await admin.from("restaurant_balance_events").insert({ listing_id: listingId, delta_cents: face, kind: "topup", note: `Top-up — paid ${Math.round(paid / 100)} for ${Math.round(face / 100)} face` });
+      } else if (action === "adjust") {
+        const delta = Math.round(Number(b.deltaCents) || 0);
+        if (!delta) return res.status(400).json({ error: "Enter a non-zero adjustment." });
+        await admin.from("restaurant_prepaid").update({ balance_cents: row.balance_cents + delta, updated_at: new Date().toISOString() }).eq("listing_id", listingId);
+        await admin.from("restaurant_balance_events").insert({ listing_id: listingId, delta_cents: delta, kind: "adjust", note: String(b.note || "Manual adjustment").slice(0, 200) });
+      } else if (action === "active") {
+        await admin.from("restaurant_prepaid").update({ active: !!b.active, updated_at: new Date().toISOString() }).eq("listing_id", listingId);
+      } else if (action === "threshold") {
+        await admin.from("restaurant_prepaid").update({ low_threshold_cents: Math.max(0, Math.round(Number(b.lowThresholdCents) || 0)), updated_at: new Date().toISOString() }).eq("listing_id", listingId);
+      } else {
+        return res.status(400).json({ error: "Unknown action." });
+      }
+      const { data: fresh } = await admin.from("restaurant_prepaid").select("*").eq("listing_id", listingId).maybeSingle();
+      res.json({ ok: true, prepaid: fresh });
+    } catch (err) {
+      console.error("[admin-prepaid]", err);
+      res.status(500).json({ error: "Couldn't update the balance." });
+    }
+  });
+
   // POST /api/admin-link-venue — admin: link/unlink an account (by email) to a
   // restaurant it manages, granting the /venue dashboard for that venue.
   app.post("/api/admin-link-venue", async (req: Request, res: Response) => {
@@ -2690,7 +2749,8 @@ export function registerApiRoutes(app: Express) {
     // Telegram broadcast: recipients are everyone who linked the bot (opt-in).
     if (parsed.data.channel === "telegram") {
       if (!telegramBroadcastConfigured()) return res.status(503).json({ error: "Telegram isn't configured (set TELEGRAM_BOT_TOKEN)." });
-      const { sent, failed, total } = await sendTelegramCampaign(admin, { subject: parsed.data.subject, markdown: parsed.data.body });
+      const tgSite = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
+      const { sent, failed, total } = await sendTelegramCampaign(admin, { subject: parsed.data.subject, markdown: parsed.data.body, siteUrl: tgSite });
       if (total === 0) return res.status(400).json({ error: "No one has linked Telegram yet." });
       await admin.from("email_campaigns").insert({
         subject: parsed.data.subject,

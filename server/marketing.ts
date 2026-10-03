@@ -275,6 +275,47 @@ function shell(bodyHtml: string, siteUrl: string, unsubUrl: string, nonce: strin
   </body></html>`;
 }
 
+// --- UTM tagging ----------------------------------------------------------
+
+/** A stable utm_campaign slug from the subject line. */
+function campaignSlug(subject: string): string {
+  return (subject || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "campaign";
+}
+
+/** Append utm_source/medium/campaign to a link that points at our own site
+ *  (absolute to the campaign host / revampvacations.com, or a relative path).
+ *  External links (PayLink, YouTube, etc.) and already-tagged links are left alone. */
+function addUtm(rawUrl: string, params: { source: string; medium: string; campaign: string }, siteHost: string): string {
+  const q = `utm_source=${params.source}&utm_medium=${params.medium}&utm_campaign=${encodeURIComponent(params.campaign)}`;
+  try {
+    if (rawUrl.startsWith("/")) {
+      if (/[?&]utm_source=/.test(rawUrl)) return rawUrl;
+      return rawUrl + (rawUrl.includes("?") ? "&" : "?") + q;
+    }
+    const u = new URL(rawUrl);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return rawUrl;
+    const host = u.hostname.replace(/^www\./, "");
+    const site = (siteHost || "").replace(/^www\./, "");
+    if (host !== site && host !== "revampvacations.com") return rawUrl;
+    if (u.searchParams.has("utm_source")) return rawUrl;
+    u.searchParams.set("utm_source", params.source);
+    u.searchParams.set("utm_medium", params.medium);
+    u.searchParams.set("utm_campaign", params.campaign);
+    return u.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
+/** Rewrite every Markdown link target with UTM params (in-site links only). */
+function tagMarkdownLinks(md: string, params: { source: string; medium: string; campaign: string }, siteHost: string): string {
+  return (md || "").replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, label, url) => `[${label}](${addUtm(url, params, siteHost)})`);
+}
+
+function hostOf(siteUrl: string): string {
+  try { return new URL(siteUrl).hostname; } catch { return "revampvacations.com"; }
+}
+
 // --- Telegram broadcast ---------------------------------------------------
 
 export function telegramBroadcastConfigured(): boolean {
@@ -318,12 +359,13 @@ export async function resolveTelegramRecipients(admin: SupabaseClient): Promise<
 /** Send a Telegram broadcast (subject as a first line + the plain-text body). */
 export async function sendTelegramCampaign(
   admin: SupabaseClient,
-  opts: { subject: string; markdown: string },
+  opts: { subject: string; markdown: string; siteUrl?: string },
 ): Promise<{ sent: number; failed: number; total: number }> {
   const recipients = await resolveTelegramRecipients(admin);
   let sent = 0;
   let failed = 0;
-  const bodyPlain = markdownToTelegram(opts.markdown);
+  const taggedMd = tagMarkdownLinks(opts.markdown, { source: "telegram", medium: "broadcast", campaign: campaignSlug(opts.subject) }, hostOf(opts.siteUrl || ""));
+  const bodyPlain = markdownToTelegram(taggedMd);
   for (const r of recipients) {
     const subject = personalize(opts.subject, { email: "", name: r.name }).trim();
     const body = personalize(bodyPlain, { email: "", name: r.name });
@@ -348,11 +390,13 @@ export async function sendCampaign(
   // won't collapse the repeated header/footer across campaigns in a thread.
   const nonce = `rv-${Date.now().toString(36)}-${crypto.randomBytes(4).toString("hex")}`;
   const sentLabel = `Sent ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`;
+  // Tag in-site links once for GA attribution (utm_source=email …).
+  const taggedMarkdown = tagMarkdownLinks(opts.markdown, { source: "email", medium: "campaign", campaign: campaignSlug(opts.subject) }, hostOf(opts.siteUrl));
   for (let i = 0; i < opts.recipients.length; i += 100) {
     const chunk = opts.recipients.slice(i, i + 100);
     const batch = chunk.map((r) => {
       const unsubUrl = `${opts.siteUrl}/api/email/unsubscribe?e=${encodeURIComponent(r.email)}&t=${unsubToken(r.email)}`;
-      const html = shell(styleEmailLinks(renderMarkdown(personalize(opts.markdown, r))), opts.siteUrl, unsubUrl, nonce, sentLabel);
+      const html = shell(styleEmailLinks(renderMarkdown(personalize(taggedMarkdown, r))), opts.siteUrl, unsubUrl, nonce, sentLabel);
       return { from, to: r.email, subject: personalize(opts.subject, r), html, headers: { "List-Unsubscribe": `<${unsubUrl}>` } };
     });
     try {

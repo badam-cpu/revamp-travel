@@ -45,6 +45,15 @@ export interface VenueSummary {
     payoutOwedCents: number; payoutSettledCents: number; currency: string;
   };
   redeemToken: string | null;
+  prepaid: {
+    active: boolean;
+    balanceCents: number;
+    totalPaidCents: number;
+    totalFaceCents: number;
+    lowThresholdCents: number;
+    currency: string;
+    events: { deltaCents: number; kind: string; note: string | null; createdAt: string }[];
+  } | null;
 }
 
 /** Full dashboard summary for one venue. Caller membership is verified upstream. */
@@ -53,10 +62,12 @@ export async function venueSummary(admin: SupabaseClient, listingId: string, win
   const days = dayList(windowDays);
   const dayIndex = new Map(days.map((d, i) => [d, i]));
 
-  const [analyticsRes, vouchersRes, offerRes] = await Promise.all([
+  const [analyticsRes, vouchersRes, offerRes, prepaidRes, eventsRes] = await Promise.all([
     admin.from("listing_analytics_daily").select("day, kind, count").eq("listing_id", listingId).gte("day", since),
     admin.from("restaurant_vouchers").select("status, face_cents, price_cents, commission_percent, currency, settled_at").eq("listing_id", listingId),
     admin.from("restaurant_voucher_offers").select("redeem_token").eq("listing_id", listingId).maybeSingle(),
+    admin.from("restaurant_prepaid").select("active, balance_cents, total_paid_cents, total_face_cents, low_threshold_cents").eq("listing_id", listingId).maybeSingle(),
+    admin.from("restaurant_balance_events").select("delta_cents, kind, note, created_at").eq("listing_id", listingId).order("created_at", { ascending: false }).limit(50),
   ]);
 
   const totals: Record<string, number> = {};
@@ -91,10 +102,26 @@ export async function venueSummary(admin: SupabaseClient, listingId: string, win
     }
   }
 
+  const pp = prepaidRes.data as { active: boolean; balance_cents: number; total_paid_cents: number; total_face_cents: number; low_threshold_cents: number } | null;
+  const prepaid = pp
+    ? {
+        active: pp.active,
+        balanceCents: pp.balance_cents,
+        totalPaidCents: pp.total_paid_cents,
+        totalFaceCents: pp.total_face_cents,
+        lowThresholdCents: pp.low_threshold_cents,
+        currency: v.currency,
+        events: ((eventsRes.data ?? []) as { delta_cents: number; kind: string; note: string | null; created_at: string }[]).map((e) => ({
+          deltaCents: e.delta_cents, kind: e.kind, note: e.note, createdAt: e.created_at,
+        })),
+      }
+    : null;
+
   return {
     windowDays,
     analytics: { totals, days, views, impressions },
     vouchers: v,
     redeemToken: (offerRes.data as { redeem_token: string | null } | null)?.redeem_token ?? null,
+    prepaid,
   };
 }

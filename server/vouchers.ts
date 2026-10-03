@@ -7,7 +7,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkPayment } from "./paylink.js";
-import { sendVoucherPurchased } from "./email.js";
+import { sendVoucherPurchased, sendPrepaidTopupAlert } from "./email.js";
 import { VOUCHER_VALID_MONTHS } from "../shared/vouchers.js";
 
 export interface VoucherRow {
@@ -81,7 +81,49 @@ async function activateVoucher(admin: SupabaseClient, row: VoucherRow, orderId: 
       console.error("[voucher activate] email", e);
     }
   }
+
+  // Prepaid: a newly-sold voucher may push outstanding credit past the restaurant's
+  // balance. Alert admins to top up (once per shortfall) so redemptions don't block.
+  await maybeAlertPrepaidShortfall(admin, row.listing_id);
   return true;
+}
+
+/**
+ * When a prepaid restaurant's OUTSTANDING (active, unredeemed) voucher face exceeds
+ * its remaining balance, email the admins once to top up. Deduped via
+ * topup_alerted_at (cleared on the next top-up). Best-effort — never throws.
+ */
+async function maybeAlertPrepaidShortfall(admin: SupabaseClient, listingId: string): Promise<void> {
+  try {
+    const { data: pp } = await admin.from("restaurant_prepaid").select("active, balance_cents, topup_alerted_at").eq("listing_id", listingId).maybeSingle();
+    const prepaid = pp as { active: boolean; balance_cents: number; topup_alerted_at: string | null } | null;
+    if (!prepaid?.active) return;
+    const { data: actives } = await admin.from("restaurant_vouchers").select("face_cents, currency").eq("listing_id", listingId).eq("status", "active");
+    const rows = (actives ?? []) as { face_cents: number; currency: string }[];
+    const outstanding = rows.reduce((s, r) => s + r.face_cents, 0);
+    if (outstanding <= prepaid.balance_cents) return; // balance still covers it
+    if (prepaid.topup_alerted_at) return; // already alerted since the last top-up
+
+    const currency = rows[0]?.currency ?? "AMD";
+    const { data: listing } = await admin.from("listings").select("title").eq("id", listingId).maybeSingle();
+    const emails = new Set<string>();
+    if (process.env.ADMIN_EMAIL) emails.add(process.env.ADMIN_EMAIL);
+    const { data: admins } = await admin.from("profiles").select("id").eq("role", "admin");
+    for (const a of admins ?? []) {
+      const { data: u } = await admin.auth.admin.getUserById((a as { id: string }).id);
+      if (u?.user?.email) emails.add(u.user.email);
+    }
+    if (emails.size === 0 && process.env.EMAIL_FROM) emails.add(process.env.EMAIL_FROM);
+    await Promise.all(Array.from(emails).map((email) => sendPrepaidTopupAlert(email, {
+      restaurantTitle: (listing?.title as string) ?? "a restaurant",
+      balanceCents: prepaid.balance_cents,
+      outstandingCents: outstanding,
+      currency,
+    })));
+    await admin.from("restaurant_prepaid").update({ topup_alerted_at: new Date().toISOString() }).eq("listing_id", listingId);
+  } catch (e) {
+    console.error("[voucher activate] prepaid shortfall alert", e);
+  }
 }
 
 export async function confirmVoucherRow(admin: SupabaseClient, row: VoucherRow): Promise<boolean> {
@@ -168,8 +210,31 @@ export async function redeemVoucherByCode(
   }
   if (v.status !== "active") return { ok: false, error: "This voucher isn't active." };
 
+  // Prepaid model: if this restaurant has an active prepaid balance, the redemption
+  // draws it down (Revamp paid upfront). Deduct the face atomically BEFORE marking
+  // the voucher redeemed; block when the balance can't cover it.
+  const { data: prepaid } = await admin.from("restaurant_prepaid").select("active").eq("listing_id", v.listing_id).maybeSingle();
+  const isPrepaid = !!prepaid?.active;
+  if (isPrepaid) {
+    const { data: newBalance, error: drawErr } = await admin.rpc("draw_prepaid_balance", { p_listing: v.listing_id, p_amount: v.face_cents });
+    if (drawErr || newBalance === null || newBalance === undefined) {
+      return { ok: false, error: "This venue's Revamp balance is used up — please contact Revamp to top it up." };
+    }
+  }
+
   const { data: upd } = await admin.from("restaurant_vouchers").update({ status: "redeemed", redeemed_at: new Date().toISOString() }).eq("id", v.id).eq("status", "active").select("id").maybeSingle();
-  if (!upd) return { ok: false, error: "This voucher was just redeemed." };
+  if (!upd) {
+    // Lost the race — refund the balance we just drew so it can't double-deduct.
+    if (isPrepaid) {
+      await admin.rpc("draw_prepaid_balance", { p_listing: v.listing_id, p_amount: -(v.face_cents as number) });
+    }
+    return { ok: false, error: "This voucher was just redeemed." };
+  }
+
+  // Log the draw-down in the ledger (best-effort).
+  if (isPrepaid) {
+    await admin.from("restaurant_balance_events").insert({ listing_id: v.listing_id, delta_cents: -(v.face_cents as number), kind: "redeem", voucher_id: v.id, note: "Voucher redeemed in-venue" });
+  }
 
   const { data: listing } = await admin.from("listings").select("title").eq("id", v.listing_id).maybeSingle();
   return { ok: true, restaurantTitle: (listing?.title as string) ?? "Restaurant", faceCents: v.face_cents as number, currency: v.currency as string };

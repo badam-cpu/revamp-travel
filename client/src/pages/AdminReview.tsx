@@ -30,6 +30,7 @@ import { AdminEateries } from "@/components/AdminEateries";
 import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
 import { AdminVoucherOffers } from "@/components/AdminVoucherOffers";
 import { AdminVenueManagers } from "@/components/AdminVenueManagers";
+import { AdminPrepaid } from "@/components/AdminPrepaid";
 import { AdminResponseTimes } from "@/components/AdminResponseTimes";
 import { AdminEmail } from "@/components/AdminEmail";
 import { AdminAccounts } from "@/components/AdminAccounts";
@@ -348,6 +349,7 @@ function AdminConsole() {
             {section === "vouchers" && (
               <div className="grid gap-6">
                 <AdminVoucherOffers />
+                <AdminPrepaid />
                 <AdminVenueManagers />
               </div>
             )}

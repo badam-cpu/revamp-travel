@@ -523,7 +523,28 @@ export interface VenueSummaryResponse {
       payoutOwedCents: number; payoutSettledCents: number; currency: string;
     };
     redeemToken: string | null;
+    prepaid: {
+      active: boolean;
+      balanceCents: number;
+      totalPaidCents: number;
+      totalFaceCents: number;
+      lowThresholdCents: number;
+      currency: string;
+      events: { deltaCents: number; kind: string; note: string | null; createdAt: string }[];
+    } | null;
   };
+}
+
+/** Admin: manage a restaurant's prepaid balance (top up / adjust / activate / threshold). */
+export async function adminPrepaid(input: { listingId: string; action: "topup" | "adjust" | "active" | "threshold"; paidCents?: number; faceCents?: number; deltaCents?: number; note?: string; active?: boolean; lowThresholdCents?: number }): Promise<{ ok: boolean; prepaid: unknown }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<{ ok: boolean; prepaid: unknown }>("/api/admin-prepaid", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(input),
+  });
 }
 
 /** Restaurant owner: their managed venue(s) + analytics/voucher summary. */

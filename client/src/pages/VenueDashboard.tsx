@@ -11,7 +11,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { BarChart3, Ticket, Copy, Loader2, Store } from "lucide-react";
+import { BarChart3, Ticket, Copy, Loader2, Store, Wallet, AlertTriangle } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { useAuth } from "@/contexts/AuthContext";
@@ -169,6 +169,50 @@ export default function VenueDashboard() {
               )}
             </div>
 
+            {/* Prepaid Revamp balance — decreases live as diners redeem */}
+            {s?.prepaid && (() => {
+              const p = s.prepaid;
+              const empty = p.balanceCents <= 0;
+              const low = !empty && p.lowThresholdCents > 0 && p.balanceCents <= p.lowThresholdCents;
+              const tone = empty || !p.active ? "border-red-300 bg-red-50/50" : low ? "border-amber-300 bg-amber-50/50" : "border-apricot/40 bg-apricot/5";
+              return (
+                <>
+                  <h2 className="mt-10 flex items-center gap-2 text-sm font-bold uppercase tracking-[0.12em] text-basalt/50"><Wallet className="h-4 w-4" /> Revamp balance</h2>
+                  <div className={`mt-3 border p-5 ${tone}`}>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-basalt/45">Remaining dining credit</p>
+                    <p className="mt-1 font-display text-5xl font-normal tabular-nums text-basalt">{format(p.balanceCents)}</p>
+                    <p className="mt-2 text-sm text-basalt/60">Revamp pre-paid you for {format(p.totalFaceCents)} of dining credit in total. It drops automatically as guests redeem their vouchers here.</p>
+                    {!p.active ? (
+                      <p className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-red-600"><AlertTriangle className="h-4 w-4" /> Paused by Revamp.</p>
+                    ) : empty ? (
+                      <p className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-red-600"><AlertTriangle className="h-4 w-4" /> Used up — redemptions are paused until Revamp tops it up.</p>
+                    ) : low ? (
+                      <p className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-amber-700"><AlertTriangle className="h-4 w-4" /> Running low — Revamp will top it up soon.</p>
+                    ) : null}
+                  </div>
+                  {p.events.length > 0 && (
+                    <div className="mt-3 overflow-hidden border border-basalt/10">
+                      <p className="border-b border-basalt/10 bg-chalk/40 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.08em] text-basalt/50">Balance history</p>
+                      <div className="max-h-64 overflow-y-auto">
+                        {p.events.map((e, i) => (
+                          <div key={i} className="flex items-center justify-between gap-3 border-b border-basalt/8 px-4 py-2.5 text-sm last:border-0">
+                            <div className="min-w-0">
+                              <p className="font-medium text-basalt">{e.kind === "topup" ? "Top-up" : e.kind === "redeem" ? "Voucher redeemed" : "Adjustment"}</p>
+                              {e.note && <p className="truncate text-xs text-basalt/45">{e.note}</p>}
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <span className={`font-semibold tabular-nums ${e.deltaCents >= 0 ? "text-emerald-600" : "text-basalt/70"}`}>{e.deltaCents >= 0 ? "+" : "−"}{format(Math.abs(e.deltaCents))}</span>
+                              <p className="text-[11px] text-basalt/40">{new Date(e.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+
             {/* Vouchers */}
             <h2 className="mt-10 flex items-center gap-2 text-sm font-bold uppercase tracking-[0.12em] text-basalt/50"><Ticket className="h-4 w-4" /> Dining vouchers</h2>
             {s && (s.vouchers.soldCount > 0 || redeemUrl) ? (
@@ -177,11 +221,19 @@ export default function VenueDashboard() {
                   <VoucherTile n={s.vouchers.soldCount} label="Sold" sub={format(s.vouchers.soldFaceCents)} subLabel="face value" />
                   <VoucherTile n={s.vouchers.redeemedCount} label="Redeemed" sub={format(s.vouchers.redeemedFaceCents)} subLabel="face value" />
                   <VoucherTile n={s.vouchers.outstandingCount} label="Outstanding" sub={format(s.vouchers.outstandingFaceCents)} subLabel="still to redeem" />
-                  <div className="border border-apricot/40 bg-apricot/5 p-4">
-                    <p className="font-display text-2xl font-normal tabular-nums text-basalt">{format(s.vouchers.payoutOwedCents)}</p>
-                    <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-apricot">Payout owed to you</p>
-                    <p className="mt-1 text-[11px] text-basalt/50">{format(s.vouchers.payoutSettledCents)} already settled</p>
-                  </div>
+                  {s.prepaid?.active ? (
+                    <div className="border border-basalt/10 bg-paper p-4">
+                      <p className="font-display text-2xl font-normal text-basalt">Prepaid</p>
+                      <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-basalt/45">Settlement</p>
+                      <p className="mt-1 text-[11px] text-basalt/50">Paid upfront — redemptions draw your Revamp balance above.</p>
+                    </div>
+                  ) : (
+                    <div className="border border-apricot/40 bg-apricot/5 p-4">
+                      <p className="font-display text-2xl font-normal tabular-nums text-basalt">{format(s.vouchers.payoutOwedCents)}</p>
+                      <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-apricot">Payout owed to you</p>
+                      <p className="mt-1 text-[11px] text-basalt/50">{format(s.vouchers.payoutSettledCents)} already settled</p>
+                    </div>
+                  )}
                 </div>
                 {redeemUrl && (
                   <div className="mt-4 border border-basalt/10 bg-chalk/50 p-4">

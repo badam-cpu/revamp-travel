@@ -373,6 +373,20 @@ export function sendGiftReceipt(to: string, opts: { amountCents: number; currenc
 }
 
 /** Alert an admin that a support chat needs a human reply. */
+export function sendPrepaidTopupAlert(to: string, opts: { restaurantTitle: string; balanceCents: number; outstandingCents: number; currency: string }) {
+  const site = SITE();
+  const money = (c: number) => `${opts.currency === "USD" ? "$" : "֏"}${Math.round(c / 100).toLocaleString("en-US")}`;
+  const html = shell(
+    "A restaurant's prepaid balance needs a top-up 💳",
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 10px;">Customers now hold more voucher credit at <strong>${esc(opts.restaurantTitle)}</strong> than its remaining Revamp balance — top it up so redemptions don't get blocked.</p>
+     <p style="margin:0 0 4px;font-size:14px;">Remaining balance: <strong>${money(opts.balanceCents)}</strong></p>
+     <p style="margin:0 0 16px;font-size:14px;">Outstanding voucher credit: <strong>${money(opts.outstandingCents)}</strong></p>
+     <p style="margin:0 0 8px;"><a href="${esc(site)}/admin" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Top up in Admin → Vouchers</a></p>`,
+    site,
+  );
+  return send(to, `Top up ${opts.restaurantTitle}'s prepaid balance`, html);
+}
+
 export function sendSupportAlert(to: string, opts: { travelerName: string; message: string }) {
   const site = SITE();
   const html = shell(
