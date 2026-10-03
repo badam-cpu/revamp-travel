@@ -12,13 +12,14 @@ import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ListingType, typeLabels } from "@/data/listings";
+import { isCuratedType } from "@shared/listings";
 import { useListings } from "@/contexts/ListingsContext";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { buildCollectionPageJsonLd } from "@shared/seo";
 import { cn } from "@/lib/utils";
 
-const validTypes = new Set(["all", "stay", "eat", "tour", "experience"]);
+const validTypes = new Set(["all", "stay", "eat", "tour", "experience", "place"]);
 
 // Canonicalize an Armenian region name so "Tavush" and "Tavush Province" (or
 // "…Marz") collapse to one filter option and still match listings either way.
@@ -106,7 +107,8 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
     return listings.filter((listing) => {
       // Eat listings live in their own free guide (/explore/eat), not the
       // bookable marketplace grid — keep them out of "All places".
-      const matchesType = type === "all" ? listing.type !== "eat" : listing.type === type;
+      // "All" = bookable inventory; the free curated guides (eat + place) have their own tabs.
+      const matchesType = type === "all" ? !isCuratedType(listing.type) : listing.type === type;
       const matchesRegion = region === "all" || normalizeRegion(listing.region).toLowerCase() === region.toLowerCase();
       const haystack = [listing.title, listing.city, listing.region, listing.type, listing.shortDescription, ...listing.tags].join(" ").toLowerCase();
       return matchesType && matchesRegion && (!needle || haystack.includes(needle)) && isAvailableForRange(listing);
@@ -160,7 +162,7 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
               <Button variant="ghost" size="sm" className="rounded-none text-xs" onClick={reset}><RotateCcw className="mr-2 h-3.5 w-3.5" /> Reset</Button>
             </div>
             <div className="flex flex-wrap gap-x-2 gap-y-3">
-              {["all", "stay", "eat", "tour", "experience"].map((value) => (
+              {["all", "stay", "eat", "place", "tour", "experience"].map((value) => (
                 <button
                   key={value}
                   onClick={() => {

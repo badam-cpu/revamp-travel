@@ -16,7 +16,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, BarChart3, BookOpen, Check, CreditCard, ExternalLink, Gift, Home, LayoutDashboard, ListChecks, Mail, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, Ticket, Timer, UserSearch, Users, Utensils, Wallet, X } from "lucide-react";
+import { AlertTriangle, BarChart3, BookOpen, Check, CreditCard, ExternalLink, Gift, Home, Landmark, LayoutDashboard, ListChecks, Mail, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, Ticket, Timer, UserSearch, Users, Utensils, Wallet, X } from "lucide-react";
 import { formatLocation } from "@/lib/region";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -28,6 +28,7 @@ import { AdminHub } from "@/components/AdminHub";
 import { Inbox } from "@/components/Inbox";
 import { AdminListings } from "@/components/AdminListings";
 import { AdminEateries } from "@/components/AdminEateries";
+import { AdminPlaces } from "@/components/AdminPlaces";
 import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
 import { AdminVoucherOffers } from "@/components/AdminVoucherOffers";
 import { AdminVenueManagers } from "@/components/AdminVenueManagers";
@@ -239,12 +240,13 @@ function StatTile({ n, label, onClick }: { n: number | string; label: string; on
   );
 }
 
-type AdminSection = "overview" | "reviews" | "listings" | "eateries" | "analytics" | "vouchers" | "users" | "accounts" | "giftcards" | "subscriptions" | "support" | "messages" | "response" | "email" | "payouts" | "blog" | "hub" | "site";
+type AdminSection = "overview" | "reviews" | "listings" | "eateries" | "places" | "analytics" | "vouchers" | "users" | "accounts" | "giftcards" | "subscriptions" | "support" | "messages" | "response" | "email" | "payouts" | "blog" | "hub" | "site";
 const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: typeof Home }[] = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
   { key: "reviews", label: "Reviews", icon: ListChecks },
   { key: "listings", label: "Listings", icon: Package },
   { key: "eateries", label: "Eat guide", icon: Utensils },
+  { key: "places", label: "Visit guide", icon: Landmark },
   { key: "analytics", label: "Analytics", icon: BarChart3 },
   { key: "vouchers", label: "Vouchers", icon: Ticket },
   { key: "users", label: "Users", icon: UserSearch },
@@ -346,6 +348,7 @@ function AdminConsole() {
             {section === "reviews" && <ReviewsPanel />}
             {section === "listings" && <AdminListings />}
             {section === "eateries" && <AdminEateries />}
+            {section === "places" && <AdminPlaces />}
             {section === "analytics" && <AnalyticsDashboard scope="admin" />}
             {section === "vouchers" && (
               <div className="grid gap-6">

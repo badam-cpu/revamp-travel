@@ -20,6 +20,7 @@ import { DiscountBadge } from "@/components/DiscountBadge";
 import { houseRuleIcon } from "@/lib/houseRules";
 import { nearbySights } from "@/lib/yerevanSights";
 import { findListing, typeLabels } from "@/data/listings";
+import { isCuratedType, placeCategoryLabel } from "@shared/listings";
 import { useListings } from "@/contexts/ListingsContext";
 import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
@@ -164,7 +165,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
           buildBreadcrumbJsonLd(window.location.origin, [
             { name: "Home", path: "/" },
             { name: "Explore", path: "/explore" },
-            { name: typeLabels[listing.type], path: listing.type === "stay" ? "/explore/stay" : listing.type === "eat" ? "/explore/eat" : listing.type === "experience" ? "/explore/experience" : "/explore/tour" },
+            { name: typeLabels[listing.type], path: listing.type === "stay" ? "/explore/stay" : listing.type === "eat" ? "/explore/eat" : listing.type === "place" ? "/explore/place" : listing.type === "experience" ? "/explore/experience" : "/explore/tour" },
             { name: listing.title, path: `/listing/${listing.slug}` },
           ]),
         ]
@@ -208,6 +209,11 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
 
   const live = listings.find((l) => l.id === listing.id);
   const isEat = listing.type === "eat";
+  // Curated, non-bookable recommendations (restaurants + places) share the
+  // "contact/visit" treatment: no booking panel, no cancellation policy, an
+  // external-links rail instead. Eat-specific bits (cuisine links, vouchers)
+  // stay gated on isEat.
+  const isCurated = isCuratedType(listing.type);
 
   // Tours and experiences get a dedicated GetYourGuide-style detail layout;
   // stays and restaurants keep the original shared template below.
@@ -254,9 +260,10 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   const selfCheckIn = houseRules.includes("Self check-in");
   const priceWord: Record<string, string> = { $: "Budget", $$: "Mid-range", $$$: "High-end" };
   const glance: { label: string; value: string; icon: typeof ShieldCheck }[] = [];
-  if (isEat) {
-    // Restaurants: descriptive facts in the inline strip; the panel keeps the
-    // rating + actions.
+  if (isCurated) {
+    // Restaurants + places: descriptive facts in the inline strip; the panel
+    // keeps the rating + actions.
+    if (listing.category) glance.push({ label: "Category", value: placeCategoryLabel(listing.category), icon: MapPin });
     if (listing.venueType) glance.push({ label: "Type", value: listing.venueType, icon: Utensils });
     if (listing.cuisine) glance.push({ label: "Cuisine", value: listing.cuisine, icon: Coffee });
     if (listing.priceBand) glance.push({ label: "Price", value: `${listing.priceBand} · ${priceWord[listing.priceBand]}`, icon: Wallet });
@@ -330,7 +337,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
               <p className="eyebrow">{listing.eyebrow}</p>
               <p className="mt-3 flex items-center gap-2 text-sm font-semibold"><MapPin className="h-4 w-4 text-apricot" /> {formatLocation(listing.city, listing.region)}</p>
 
-              {!isEat && <OperatorBrand operatorId={(listing as { operatorId?: string }).operatorId ?? ""} className="mt-5" />}
+              {!isCurated && <OperatorBrand operatorId={(listing as { operatorId?: string }).operatorId ?? ""} className="mt-5" />}
 
               {/* At a glance — a horizontal strip, not a narrow sidebar. */}
               {glance.length > 0 && (
@@ -447,7 +454,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
               </div>
             )}
 
-            {!isEat && (
+            {!isCurated && (
               <div className="border-t border-basalt/10 py-10">
                 <p className="eyebrow">Cancellation policy</p>
                 <p className="mt-4 flex items-start gap-3 text-base leading-7 text-basalt/70">
@@ -460,10 +467,10 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
           </div>
 
           <aside>
-            {live && isEat ? (
+            {live && isCurated ? (
               <div className="grid gap-6 lg:sticky lg:top-[104px] lg:max-h-[calc(100vh-124px)] lg:overflow-y-auto">
                 <EatGuidePanel listing={live} />
-                <RestaurantVoucherCard listing={{ id: live.id, title: live.title, slug: live.slug }} />
+                {live.type === "eat" && <RestaurantVoucherCard listing={{ id: live.id, title: live.title, slug: live.slug }} />}
               </div>
             ) : live ? (
               <BookingPanel listing={live} />

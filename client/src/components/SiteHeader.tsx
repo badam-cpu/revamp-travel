@@ -17,6 +17,7 @@ const baseLinks = [
   { href: "/explore/eat", label: "Eat" },
   { href: "/explore/tour", label: "Tour" },
   { href: "/explore/experience", label: "Experience" },
+  { href: "/explore/place", label: "Visit" },
   { href: "/map", label: "Map" },
   { href: "/plan", label: "AI Planner", accent: true },
 ];

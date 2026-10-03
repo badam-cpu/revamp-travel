@@ -11,6 +11,7 @@ import { imgAttrs } from "@/lib/responsiveImg";
 import { DiscountBadge } from "@/components/DiscountBadge";
 import { PhotoDots } from "@/components/PhotoDots";
 import { formatLocation } from "@/lib/region";
+import { isCuratedType, placeCategoryLabel } from "@shared/listings";
 import { useExternalRatings } from "@/hooks/useExternalRatings";
 import { useImpressionRef, trackListing } from "@/lib/track";
 import { usePromoBadges } from "@/hooks/usePromoBadges";
@@ -24,10 +25,12 @@ export function ListingCard({ listing, large = false, active = false, onHover, s
   const promoBadge = promoFor(listing.id, (listing as { operatorId?: string }).operatorId);
   const { format } = useCurrency();
   const isEat = listing.type === "eat";
+  const isCurated = isCuratedType(listing.type);
   const ratingFor = useExternalRatings();
   const external = ratingFor((listing as { operatorId?: string }).operatorId, listing.id);
-  // Eat = free recommendation: show its cached Google rating, not imported reviews.
-  const rating = isEat
+  // Curated recommendations (eat + place) = free picks: show the cached Google
+  // rating, not imported host reviews.
+  const rating = isCurated
     ? listing.googleRating
       ? { avg: listing.googleRating, count: listing.googleRatingCount ?? 0 }
       : null
@@ -141,6 +144,8 @@ export function ListingCard({ listing, large = false, active = false, onHover, s
               <span className="min-w-0 truncate">{[listing.venueType || listing.cuisine, listing.neighborhood || listing.city].filter(Boolean).join(" · ")}</span>
               {listing.priceBand && <span className="shrink-0 font-bold tracking-wide text-basalt/70">{listing.priceBand}</span>}
             </>
+          ) : listing.type === "place" ? (
+            <span className="min-w-0 truncate">{[placeCategoryLabel(listing.category), listing.neighborhood || listing.city].filter(Boolean).join(" · ")}</span>
           ) : (
             <>
               <span className="min-w-0 truncate">{listing.tags.slice(0, 2).join(" · ")}</span>

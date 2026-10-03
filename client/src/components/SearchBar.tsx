@@ -69,6 +69,7 @@ export function SearchBar({ compact = false, initialQuery = "", initialType = "a
               <SelectItem value="all">Everything</SelectItem>
               <SelectItem value="stay">Places to stay</SelectItem>
               <SelectItem value="eat">Restaurants</SelectItem>
+              <SelectItem value="place">Places to visit</SelectItem>
               <SelectItem value="tour">Tours</SelectItem>
               <SelectItem value="experience">Experiences</SelectItem>
             </SelectContent>

@@ -132,7 +132,9 @@ export function EatGuidePanel({ listing }: { listing: LiveListing }) {
 
       <p className="mt-5 border-t border-basalt/10 pt-4 text-xs leading-relaxed text-basalt/50">
         {hasOffer === false && "An independent Revamp pick — we don't earn from this recommendation. "}
-        This spot takes reservations directly; contact the venue to book a table.
+        {listing.type === "place"
+          ? "Check the venue's website or Google listing for opening hours and any entry details."
+          : "This spot takes reservations directly; contact the venue to book a table."}
       </p>
     </div>
   );
