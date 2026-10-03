@@ -9,6 +9,7 @@ import { useCurrency } from "@/contexts/CurrencyContext";
 import { nightlyPriceRange } from "@shared/bookings";
 import { imgAttrs } from "@/lib/responsiveImg";
 import { DiscountBadge } from "@/components/DiscountBadge";
+import { PhotoDots } from "@/components/PhotoDots";
 import { useExternalRatings } from "@/hooks/useExternalRatings";
 import { useImpressionRef, trackListing } from "@/lib/track";
 import { usePromoBadges } from "@/hooks/usePromoBadges";
@@ -121,11 +122,7 @@ export function ListingCard({ listing, large = false, active = false, onHover, s
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
-              <div className="pointer-events-none absolute bottom-[1.1rem] left-1/2 flex -translate-x-1/2 gap-1.5">
-                {images.map((_, i) => (
-                  <span key={i} className={cn("h-1.5 w-1.5 rounded-full bg-white/60 shadow transition-all", i === index && "w-3.5 bg-white")} />
-                ))}
-              </div>
+              <PhotoDots count={images.length} index={index} className="absolute bottom-[1.1rem] left-1/2 -translate-x-1/2" />
             </>
           )}
         </div>

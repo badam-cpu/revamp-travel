@@ -17,6 +17,7 @@ import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useExternalRatings } from "@/hooks/useExternalRatings";
 import { DiscountBadge } from "@/components/DiscountBadge";
+import { PhotoDots } from "@/components/PhotoDots";
 import { useImpressionRef, trackListing } from "@/lib/track";
 import { hasVideo } from "@/lib/video";
 
@@ -109,11 +110,7 @@ export function TourCard({ listing, surface = "tours" }: { listing: Listing; sur
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
-              <div className="absolute bottom-2.5 left-1/2 flex -translate-x-1/2 gap-1.5">
-                {images.map((_, i) => (
-                  <span key={i} className={cn("h-1.5 w-1.5 rounded-full bg-white/60 transition-all", i === index && "w-3.5 bg-white")} />
-                ))}
-              </div>
+              <PhotoDots count={images.length} index={index} className="absolute bottom-2.5 left-1/2 -translate-x-1/2" />
             </>
           )}
         </div>
