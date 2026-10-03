@@ -10,6 +10,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { setTrackingSuppressed } from "@/lib/track";
 
 // "admin" has no self-serve signup path (Signup.tsx only offers traveler/
 // operator) — it's granted by hand via SQL, see
@@ -109,6 +110,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     setProfile(data ? mapProfile(data) : null);
   }, []);
+
+  // Keep engagement tracking off for signed-in operators/admins so their own
+  // browsing never inflates the per-listing analytics shown to real users/owners.
+  // Travelers and signed-out visitors are tracked normally.
+  useEffect(() => {
+    setTrackingSuppressed(profile?.role === "operator" || profile?.role === "admin");
+  }, [profile?.role]);
 
   useEffect(() => {
     let active = true;

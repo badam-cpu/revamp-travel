@@ -29,6 +29,19 @@ const queue: QueuedEvent[] = [];
 const seenImpressions = new Set<string>(); // dedupe impressions per page-session
 let timer: ReturnType<typeof setTimeout> | null = null;
 
+// When true, no events are recorded at all. Flipped on by AuthContext for
+// signed-in operators/admins so their own browsing (dashboard, admin, QA,
+// previewing their listings) never inflates the per-listing engagement numbers
+// shown to real users/owners. Travelers and signed-out visitors are tracked
+// normally. There's no auth on /api/track (anonymous sendBeacon), so this
+// identity-aware exclusion has to happen here on the client.
+let suppressed = false;
+
+/** Enable/disable all engagement tracking (operators/admins → suppressed). */
+export function setTrackingSuppressed(value: boolean): void {
+  suppressed = value;
+}
+
 function flush() {
   if (timer) {
     clearTimeout(timer);
@@ -50,13 +63,14 @@ function flush() {
 
 /** Record a listing engagement event (batched). */
 export function trackListing(listingId: string, kind: ListingEventKind, surface = ""): void {
-  if (!listingId) return;
+  if (suppressed || !listingId) return;
   queue.push({ listingId, kind, surface });
   if (!timer) timer = setTimeout(flush, 1500);
 }
 
 /** Record an impression at most once per listing+surface per page-session. */
 export function trackImpressionOnce(listingId: string, surface = ""): void {
+  if (suppressed) return;
   const key = `${listingId}:${surface}`;
   if (seenImpressions.has(key)) return;
   seenImpressions.add(key);
