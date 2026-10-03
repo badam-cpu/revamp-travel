@@ -27,10 +27,29 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export type PhotoUploaderHandle = { getValue: () => string[]; getCoverFocus: () => string };
 
 const MAX_PHOTOS = 24;
+// Reject sources smaller than this on the long edge: the system can downscale a
+// big photo into the responsive ladder, but it can never add detail, so a small
+// source renders blurry on full-width/retina heroes. 2000px+ is ideal.
+const MIN_LONG_EDGE = 1280;
+
+/** Real pixel dimensions of an image file, or null if it can't be decoded here
+ * (e.g. HEIC) — in which case we let it through rather than block blindly. */
+async function measureImage(file: File): Promise<{ w: number; h: number } | null> {
+  if (!file.type.startsWith("image/")) return null;
+  try {
+    const bmp = await createImageBitmap(file);
+    const dims = { w: bmp.width, h: bmp.height };
+    bmp.close?.();
+    return dims;
+  } catch {
+    return null;
+  }
+}
 
 type Photo = { id: string; url: string };
 type Pending = { id: string; name: string; error?: string };
@@ -73,6 +92,14 @@ export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: st
     if (!user?.id) return;
     const id = crypto.randomUUID();
     setPending((prev) => [...prev, { id, name: file.name }]);
+    // Guard low-resolution uploads before they ever reach storage.
+    const dims = await measureImage(file);
+    if (dims && Math.max(dims.w, dims.h) < MIN_LONG_EDGE) {
+      const msg = `Too small (${dims.w}×${dims.h}px). Use a photo at least ${MIN_LONG_EDGE}px on the long edge — 2000px+ is ideal — so it stays sharp on large screens.`;
+      setPending((prev) => prev.map((p) => (p.id === id ? { ...p, error: msg } : p)));
+      toast.error("Photo not added — resolution too low", { description: msg });
+      return;
+    }
     try {
       const url = await uploadImage(file, user.id);
       setPhotos((prev) => [...prev, { id, url }]);
@@ -164,7 +191,7 @@ export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: st
           {atCapacity ? `Up to ${MAX_PHOTOS} photos` : "Drag & drop photos, or click to choose"}
         </p>
         <p className="text-xs text-basalt/45">
-          {canUpload ? `${photos.length}/${MAX_PHOTOS} added` : "Sign in as an operator to upload — or paste an image URL below."}
+          {canUpload ? `${photos.length}/${MAX_PHOTOS} added · use photos ${MIN_LONG_EDGE}px+ wide (2000px+ ideal)` : "Sign in as an operator to upload — or paste an image URL below."}
         </p>
         <input
           ref={inputRef}

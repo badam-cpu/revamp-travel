@@ -11,7 +11,8 @@
     "preview": "vite preview --host",
     "check": "tsc --noEmit",
     "format": "prettier --write .",
-    "seed:catalog": "tsx --env-file=.env scripts/seed-catalog.ts"
+    "seed:catalog": "tsx --env-file=.env scripts/seed-catalog.ts",
+    "audit:images": "tsx --env-file=.env scripts/audit-image-resolution.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
