@@ -141,12 +141,13 @@ export interface TripadvisorMatch {
 }
 
 /** Admin-only: match a restaurant on Tripadvisor by name (biased to a geo/city). */
-export async function adminTripadvisorMatch(name: string, geo?: string): Promise<TripadvisorMatch> {
+export async function adminTripadvisorMatch(name: string, geo?: string, category?: "RESTAURANT" | "ATTRACTION"): Promise<TripadvisorMatch> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new ApiError("Sign in.");
   const q = new URLSearchParams({ name });
   if (geo) q.set("geo", geo);
+  if (category) q.set("category", category);
   return request<TripadvisorMatch>(`/api/admin-tripadvisor?${q.toString()}`, {
     headers: { Authorization: `Bearer ${token}` },
   });

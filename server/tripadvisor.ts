@@ -67,13 +67,24 @@ async function parseOrThrow(res: Response): Promise<Record<string, unknown>> {
   return json;
 }
 
-/** Find the best-matching Terra Location for a name (Discover catalog search). */
-async function searchLocation(query: string, geoName?: string): Promise<TerraLocation | null> {
-  const params = new URLSearchParams({ version: "1", query, category: "RESTAURANT", search_type: "NAME", country_code: "AM", size: "10" });
-  if (geoName) params.set("geo_name", geoName);
-  const res = await fetch(`${BASE}/catalog/locations/search?${params.toString()}`, { headers: authHeaders() });
-  const json = (await parseOrThrow(res)) as { data?: { location?: TerraLocation }[] };
-  const locs = (json.data ?? []).map((d) => d.location).filter((l): l is TerraLocation => !!l?.id);
+/** Valid Terra search categories we use. Restaurants live under RESTAURANT;
+ * museums, galleries, wineries, landmarks, etc. live under ATTRACTION. */
+export type TripadvisorCategory = "RESTAURANT" | "ATTRACTION";
+
+/** Find the best-matching Terra Location for a name (Discover catalog search).
+ * Searches the given category first; if nothing matches, broadens to a
+ * category-less search so a venue filed under a different kind still turns up. */
+async function searchLocation(query: string, geoName?: string, category?: TripadvisorCategory): Promise<TerraLocation | null> {
+  const run = async (cat?: TripadvisorCategory): Promise<TerraLocation[]> => {
+    const params = new URLSearchParams({ version: "1", query, search_type: "NAME", country_code: "AM", size: "10" });
+    if (cat) params.set("category", cat);
+    if (geoName) params.set("geo_name", geoName);
+    const res = await fetch(`${BASE}/catalog/locations/search?${params.toString()}`, { headers: authHeaders() });
+    const json = (await parseOrThrow(res)) as { data?: { location?: TerraLocation }[] };
+    return (json.data ?? []).map((d) => d.location).filter((l): l is TerraLocation => !!l?.id);
+  };
+  let locs = await run(category);
+  if (!locs.length && category) locs = await run(undefined); // broaden: wrong/absent category filter
   if (!locs.length) return null;
   // Prefer an exact-ish name match, else the first result.
   const want = query.trim().toLowerCase();
@@ -98,9 +109,10 @@ async function locationDetails(id: number): Promise<TripadvisorMatch> {
   };
 }
 
-/** Search by name (+ optional geo/city) and return the best match's details. */
-export async function matchTripadvisor(query: string, geoName?: string): Promise<TripadvisorMatch | null> {
-  const hit = await searchLocation(query, geoName);
+/** Search by name (+ optional geo/city) and return the best match's details.
+ * `category` scopes the search — RESTAURANT for eateries, ATTRACTION for places. */
+export async function matchTripadvisor(query: string, geoName?: string, category: TripadvisorCategory = "RESTAURANT"): Promise<TripadvisorMatch | null> {
+  const hit = await searchLocation(query, geoName, category);
   if (!hit?.id) return null;
   return locationDetails(hit.id);
 }

@@ -100,7 +100,7 @@ export function AdminPlaces() {
     }
     setTaMatching(true);
     try {
-      const m = await adminTripadvisorMatch(f.title.trim(), f.city.trim() || f.region.trim());
+      const m = await adminTripadvisorMatch(f.title.trim(), f.city.trim() || f.region.trim(), "ATTRACTION");
       set({
         tripadvisorLocationId: m.locationId,
         tripadvisorRating: m.rating,

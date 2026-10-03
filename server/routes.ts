@@ -2284,8 +2284,11 @@ export function registerApiRoutes(app: Express) {
     const name = String(req.query.name || "").trim();
     if (!name) return res.status(400).json({ error: "Missing name." });
     const geo = String(req.query.geo || "").trim() || undefined;
+    // Restaurants search the RESTAURANT catalog; places (museums, galleries,
+    // wineries, …) are Tripadvisor "attractions".
+    const category = String(req.query.category || "").toUpperCase() === "ATTRACTION" ? "ATTRACTION" : "RESTAURANT";
     try {
-      const match = await matchTripadvisor(name, geo);
+      const match = await matchTripadvisor(name, geo, category);
       if (!match) return res.status(404).json({ error: "No Tripadvisor match found for that name." });
       res.json(match);
     } catch (err) {
