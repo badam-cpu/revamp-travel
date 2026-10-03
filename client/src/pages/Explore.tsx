@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ListingType, typeLabels } from "@/data/listings";
 import { isCuratedType } from "@shared/listings";
+import { slugify } from "@/lib/slug";
 import { useListings } from "@/contexts/ListingsContext";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
@@ -102,6 +103,15 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
     return out.sort();
   })();
 
+  // A region is "in play" via the filter OR a region-named search query — the home
+  // "Vayots Dzor" card routes to /explore?query=Vayots Dzor. When it is, the Eat
+  // tab should scope to that region's guide (/eat/:region), not dump to the whole
+  // Eat section.
+  const activeRegion =
+    region !== "all"
+      ? region
+      : regions.find((r) => normalizeRegion(r).toLowerCase() === normalizeRegion(query).toLowerCase()) ?? "";
+
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return listings.filter((listing) => {
@@ -167,7 +177,7 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
                   key={value}
                   onClick={() => {
                     if (value === "tour") navigate(`/explore/tour${query.trim() ? `?query=${encodeURIComponent(query.trim())}` : ""}`);
-                    else if (value === "eat") navigate(`/explore/eat${region !== "all" ? `?region=${encodeURIComponent(region)}` : ""}`);
+                    else if (value === "eat") navigate(activeRegion ? `/eat/${slugify(normalizeRegion(activeRegion))}` : "/explore/eat");
                     else setType(value);
                   }}
                   className={cn("filter-chip", type === value && "active")}
