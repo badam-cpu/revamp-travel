@@ -55,14 +55,15 @@ export default function EatGuide() {
     return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).map(([c]) => c);
   }, [eateries]);
 
-  // Distinct locations (city + its region) for the location filter.
+  // Distinct regions for the location filter (deduped by normalized region name,
+  // so "Vayots Dzor" shows once, not once per city/listing).
   const locations = useMemo(() => {
-    const seen = new Map<string, { city: string; region: string }>();
+    const seen = new Map<string, string>();
     eateries.forEach((l) => {
-      const city = l.city?.trim();
-      if (city && !seen.has(city.toLowerCase())) seen.set(city.toLowerCase(), { city, region: l.region?.trim() || "" });
+      const region = normalizeRegion(l.region || "").trim();
+      if (region && !seen.has(region.toLowerCase())) seen.set(region.toLowerCase(), region);
     });
-    return Array.from(seen.values()).sort((a, b) => a.city.localeCompare(b.city));
+    return Array.from(seen.values()).sort((a, b) => a.localeCompare(b));
   }, [eateries]);
 
   // Best available rating for a spot (Google preferred, else Tripadvisor).
@@ -73,7 +74,7 @@ export default function EatGuide() {
       eateries.filter(
         (l) =>
           (cuisine === "all" || (l.venueType?.trim() || OTHER) === cuisine) &&
-          (loc === "all" || l.city?.trim() === loc) &&
+          (loc === "all" || normalizeRegion(l.region || "").toLowerCase() === loc.toLowerCase()) &&
           (minRating === 0 || bestRating(l) >= minRating),
       ),
     [eateries, cuisine, loc, minRating],
@@ -122,8 +123,8 @@ export default function EatGuide() {
                       className="h-9 border border-basalt/15 bg-paper px-3 text-sm outline-none focus:border-apricot"
                     >
                       <option value="all">All of Armenia</option>
-                      {locations.map((l) => (
-                        <option key={l.city} value={l.city}>{l.region && l.region !== l.city ? `${l.city} · ${l.region}` : l.city}</option>
+                      {locations.map((region) => (
+                        <option key={region} value={region}>{region}</option>
                       ))}
                     </select>
                   </div>
