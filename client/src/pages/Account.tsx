@@ -21,6 +21,7 @@ import { Inbox } from "@/components/Inbox";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { ListingCard } from "@/components/ListingCard";
+import { CardCarousel, CARD_ITEM } from "@/components/CardCarousel";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -364,11 +365,11 @@ function SavedTab() {
   }
 
   return (
-    <div className="grid gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
+    <CardCarousel label="saved places">
       {saved.map((listing) => (
-        <ListingCard key={listing.id} listing={listing} />
+        <div key={listing.id} className={CARD_ITEM}><ListingCard listing={listing} /></div>
       ))}
-    </div>
+    </CardCarousel>
   );
 }
 

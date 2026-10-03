@@ -10,6 +10,7 @@ import { MapPin } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { ListingCard } from "@/components/ListingCard";
+import { CardCarousel, CARD_ITEM } from "@/components/CardCarousel";
 import { ListingCardSkeleton } from "@/components/ListingCardSkeleton";
 import { Button } from "@/components/ui/button";
 import { useListings } from "@/contexts/ListingsContext";
@@ -121,9 +122,9 @@ export default function Region({ slug }: { slug: string }) {
                   )}
                 </div>
                 <p className="mt-2 max-w-xl text-sm text-basalt/55">{s.sub}</p>
-                <div className="mt-7 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-                  {items.map((l) => <ListingCard key={l.id} listing={l} />)}
-                </div>
+                <CardCarousel label={s.heading} className="mt-7">
+                  {items.map((l) => <div key={l.id} className={CARD_ITEM}><ListingCard listing={l} /></div>)}
+                </CardCarousel>
               </section>
             );
           })

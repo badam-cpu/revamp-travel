@@ -7,6 +7,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { SearchBar } from "@/components/SearchBar";
 import { imgAttrs } from "@/lib/responsiveImg";
 import { ListingCard } from "@/components/ListingCard";
+import { CardCarousel, CARD_ITEM, CARD_ITEM_WIDE } from "@/components/CardCarousel";
 import { ListingCardSkeleton } from "@/components/ListingCardSkeleton";
 import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { Button } from "@/components/ui/button";
@@ -200,11 +201,11 @@ export default function Home() {
               <div><p className="eyebrow">{editEyebrow}</p><h2 className="mt-3 whitespace-pre-line font-display text-5xl tracking-[-0.04em] sm:text-6xl">{editTitle}</h2></div>
               <Link href="/explore" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.17em] text-apricot hover:text-basalt">See every place <ArrowRight className="h-4 w-4" /></Link>
             </div>
-            <div className="mt-12 grid gap-x-7 gap-y-12 md:grid-cols-2 lg:grid-cols-3">
+            <CardCarousel label="featured places" className="mt-12">
               {loading && featured.length === 0
-                ? Array.from({ length: 5 }).map((_, i) => <div key={i} className={i === 0 ? "md:col-span-2 lg:col-span-2" : ""}><ListingCardSkeleton large={i === 0} /></div>)
-                : featured.map((listing, index) => <div key={listing.id} className={index === 0 ? "md:col-span-2 lg:col-span-2" : ""}><ListingCard listing={listing} large={index === 0} /></div>)}
-            </div>
+                ? Array.from({ length: 5 }).map((_, i) => <div key={i} className={i === 0 ? CARD_ITEM_WIDE : CARD_ITEM}><ListingCardSkeleton large={i === 0} /></div>)
+                : featured.map((listing, index) => <div key={listing.id} className={index === 0 ? CARD_ITEM_WIDE : CARD_ITEM}><ListingCard listing={listing} large={index === 0} /></div>)}
+            </CardCarousel>
           </div>
         </section>
 

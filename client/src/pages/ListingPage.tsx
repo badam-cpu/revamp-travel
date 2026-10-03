@@ -6,6 +6,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { ListingCard } from "@/components/ListingCard";
+import { CardCarousel, CARD_ITEM } from "@/components/CardCarousel";
 import { TourDetail } from "@/components/TourDetail";
 import { BookingPanel } from "@/components/BookingPanel";
 import { EatGuidePanel } from "@/components/EatGuidePanel";
@@ -222,7 +223,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
     );
   }
 
-  const related = listings.filter((item) => item.id !== listing.id && (item.type === listing.type || item.region === listing.region)).slice(0, 3);
+  const related = listings.filter((item) => item.id !== listing.id && (item.type === listing.type || item.region === listing.region)).slice(0, 12);
 
   // Listing-page derived data: grouped amenities for the "all amenities" modal,
   // an inline-limited slice so a 30+ amenity listing doesn't flood the page,
@@ -539,7 +540,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
             <div><p className="eyebrow">Keep exploring</p><h2 className="mt-3 font-display text-5xl tracking-[-0.04em]">Follow the next thread.</h2></div>
             <Link href="/explore" className="hidden text-xs font-bold uppercase tracking-[0.15em] text-apricot sm:block">View all places</Link>
           </div>
-          <div className="mt-9 grid gap-9 md:grid-cols-3">{related.map((item) => <ListingCard key={item.id} listing={item} />)}</div>
+          <CardCarousel label="related places" className="mt-9">{related.map((item) => <div key={item.id} className={CARD_ITEM}><ListingCard listing={item} /></div>)}</CardCarousel>
         </section>
       </main>
 
