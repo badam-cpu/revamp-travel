@@ -21,6 +21,7 @@ import { Inbox } from "@/components/Inbox";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { ListingCard } from "@/components/ListingCard";
+import { formatLocation } from "@/lib/region";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -520,7 +521,7 @@ function TripsTab({ reloadKey }: { reloadKey: number }) {
               </h3>
               <p className="mt-1 text-sm text-basalt/55">
                 {fmtDate(t.start_date)} → {fmtDate(t.end_date)} · {t.guests} {t.guests === 1 ? "guest" : "guests"}
-                {t.listings ? ` · ${t.listings.city}, ${t.listings.region}` : ""}
+                {t.listings ? ` · ${formatLocation(t.listings.city, t.listings.region)}` : ""}
               </p>
             </div>
             <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end">

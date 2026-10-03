@@ -18,6 +18,7 @@ import { useCurrency } from "@/contexts/CurrencyContext";
 import { useExternalRatings } from "@/hooks/useExternalRatings";
 import { DiscountBadge } from "@/components/DiscountBadge";
 import { PhotoDots } from "@/components/PhotoDots";
+import { formatLocation } from "@/lib/region";
 import { useImpressionRef, trackListing } from "@/lib/track";
 import { hasVideo } from "@/lib/video";
 
@@ -117,7 +118,7 @@ export function TourCard({ listing, surface = "tours" }: { listing: Listing; sur
 
         <div className="flex flex-1 flex-col gap-2.5 p-4">
           <div className="flex items-center gap-1.5 text-xs text-basalt/50">
-            <MapPin className="h-3.5 w-3.5 shrink-0" /> {listing.city}, {listing.region}
+            <MapPin className="h-3.5 w-3.5 shrink-0" /> {formatLocation(listing.city, listing.region)}
           </div>
           <h3 className="line-clamp-2 font-display text-lg leading-snug tracking-[-0.01em] text-basalt transition-colors group-hover:text-apricot">
             {listing.title}

@@ -10,6 +10,7 @@ import { nightlyPriceRange } from "@shared/bookings";
 import { imgAttrs } from "@/lib/responsiveImg";
 import { DiscountBadge } from "@/components/DiscountBadge";
 import { PhotoDots } from "@/components/PhotoDots";
+import { formatLocation } from "@/lib/region";
 import { useExternalRatings } from "@/hooks/useExternalRatings";
 import { useImpressionRef, trackListing } from "@/lib/track";
 import { usePromoBadges } from "@/hooks/usePromoBadges";
@@ -96,7 +97,7 @@ export function ListingCard({ listing, large = false, active = false, onHover, s
             <Bookmark className={cn("h-4 w-4", saved && "fill-current")} />
           </button>
           <div className="absolute bottom-4 left-4 flex items-center gap-1.5 text-xs font-semibold text-white">
-            <MapPin className="h-3.5 w-3.5" /> {listing.city}, {listing.region}
+            <MapPin className="h-3.5 w-3.5" /> {formatLocation(listing.city, listing.region)}
           </div>
           {rating && (
             <div className="absolute bottom-4 right-4 inline-flex items-center gap-1 bg-paper/95 px-2 py-1 text-xs font-semibold text-basalt shadow-sm backdrop-blur-sm">

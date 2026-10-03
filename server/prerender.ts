@@ -287,7 +287,7 @@ function listingCardHtml(listing: PublicListing, origin: string): string {
 <h3><a href="${origin}/listing/${escapeHtml(listing.slug)}">${escapeHtml(listing.title)}</a></h3>
 <img src="${escapeHtml(imgUrl(listing.image, origin))}" alt="${escapeHtml(listing.title)}" />
 <p>${escapeHtml(listing.shortDescription)}</p>
-<p>${escapeHtml(listing.city)}, ${escapeHtml(listing.region)} — ${escapeHtml(listing.priceLabel)} / ${escapeHtml(listing.priceUnit)}</p>
+<p>${escapeHtml(listing.city)}, ${escapeHtml(normalizeRegionName(listing.region))} — ${escapeHtml(listing.priceLabel)} / ${escapeHtml(listing.priceUnit)}</p>
 </article>`;
 }
 
@@ -725,7 +725,7 @@ function renderListingDetail(listing: PublicListing, catalog: PublicListing[], o
 ${escapeHtml(listing.title)}
 </nav>
 <h1>${escapeHtml(listing.title)}</h1>
-<p>${escapeHtml(listing.eyebrow)} — ${escapeHtml(listing.city)}, ${escapeHtml(listing.region)}</p>
+<p>${escapeHtml(listing.eyebrow)} — ${escapeHtml(listing.city)}, ${escapeHtml(normalizeRegionName(listing.region))}</p>
 ${galleryHtml}
 <p>${escapeHtml(listing.shortDescription)}</p>
 <p>${escapeHtml(listing.longDescription).replace(/\n/g, "<br>")}</p>

@@ -22,6 +22,7 @@ import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { TourCard } from "@/components/TourCard";
+import { formatLocation } from "@/lib/region";
 import { BookingPanel } from "@/components/BookingPanel";
 import { Button } from "@/components/ui/button";
 import { factValue, otherFacts } from "@/lib/tourFacts";
@@ -134,7 +135,7 @@ export function TourDetail({ listing }: { listing: Listing }) {
           <p className="eyebrow">{listing.eyebrow}</p>
           <h1 className="mt-2 font-display text-4xl leading-[0.98] tracking-[-0.035em] sm:text-5xl">{listing.title}</h1>
           <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-basalt/70">
-            <MapPin className="h-4 w-4 text-apricot" /> {listing.city}, {listing.region}
+            <MapPin className="h-4 w-4 text-apricot" /> {formatLocation(listing.city, listing.region)}
           </p>
 
           {operatorId && <OperatorBrand operatorId={operatorId} className="mt-5" />}

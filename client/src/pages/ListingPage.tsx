@@ -6,6 +6,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { ListingCard } from "@/components/ListingCard";
+import { formatLocation, normalizeRegion } from "@/lib/region";
 import { TourDetail } from "@/components/TourDetail";
 import { BookingPanel } from "@/components/BookingPanel";
 import { EatGuidePanel } from "@/components/EatGuidePanel";
@@ -310,8 +311,8 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
           {isEat && (
             <div className="mt-3 flex flex-wrap gap-2 text-xs">
               {listing.region && (
-                <Link href={`/eat/${slugify(listing.region.replace(/\s+(province|marz)$/i, "").trim())}`} className="rounded-none border border-basalt/15 px-3 py-1.5 font-semibold hover:border-apricot hover:text-apricot">
-                  More places to eat in {listing.region}
+                <Link href={`/eat/${slugify(normalizeRegion(listing.region))}`} className="rounded-none border border-basalt/15 px-3 py-1.5 font-semibold hover:border-apricot hover:text-apricot">
+                  More places to eat in {normalizeRegion(listing.region)}
                 </Link>
               )}
               {listing.cuisine && (
@@ -327,7 +328,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
           <div>
             <div className="border-b border-basalt/10 pb-10">
               <p className="eyebrow">{listing.eyebrow}</p>
-              <p className="mt-3 flex items-center gap-2 text-sm font-semibold"><MapPin className="h-4 w-4 text-apricot" /> {listing.city}, {listing.region}</p>
+              <p className="mt-3 flex items-center gap-2 text-sm font-semibold"><MapPin className="h-4 w-4 text-apricot" /> {formatLocation(listing.city, listing.region)}</p>
 
               {!isEat && <OperatorBrand operatorId={(listing as { operatorId?: string }).operatorId ?? ""} className="mt-5" />}
 

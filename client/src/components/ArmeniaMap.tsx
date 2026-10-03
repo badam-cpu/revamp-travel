@@ -25,6 +25,7 @@ import { ensureMapsScript } from "@/lib/googleMaps";
 import { Listing } from "@/data/listings";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
+import { formatLocation, normalizeRegion } from "@/lib/region";
 
 interface ArmeniaMapProps {
   listings: Listing[];
@@ -207,7 +208,7 @@ export function ArmeniaMap({ listings, selectedId, onSelect, className, single =
       {failed && (
         <div className="absolute inset-0 grid place-items-center bg-chalk px-6 text-center">
           <div className="max-w-xs">
-            <p className="text-sm font-semibold text-basalt/70">{active ? `${active.city}, ${active.region}` : "Armenia"}</p>
+            <p className="text-sm font-semibold text-basalt/70">{active ? formatLocation(active.city, active.region) : "Armenia"}</p>
             <p className="mt-1 text-xs leading-5 text-basalt/45">Interactive map is temporarily unavailable.</p>
           </div>
         </div>
@@ -215,7 +216,7 @@ export function ArmeniaMap({ listings, selectedId, onSelect, className, single =
       {active && (
         <div className="pointer-events-none absolute bottom-4 left-4 z-[5] max-w-[220px] border-l-2 border-apricot bg-basalt px-4 py-3 text-paper shadow-xl">
           <p className="text-[8px] font-bold uppercase tracking-[0.18em] text-paper/45">
-            {active.city} · {active.region}
+            {active.city} · {normalizeRegion(active.region)}
           </p>
           <p className="mt-1 font-display text-lg leading-tight">{active.title}</p>
         </div>

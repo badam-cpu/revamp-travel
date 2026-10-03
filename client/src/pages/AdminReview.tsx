@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { AlertTriangle, BarChart3, BookOpen, Check, CreditCard, ExternalLink, Gift, Home, LayoutDashboard, ListChecks, Mail, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, Ticket, Timer, UserSearch, Users, Utensils, Wallet, X } from "lucide-react";
+import { formatLocation } from "@/lib/region";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { AdminSiteContent } from "@/components/AdminSiteContent";
@@ -124,7 +125,7 @@ function ReviewCard({ listing, onDecided }: { listing: PendingListing; onDecided
           </p>
         </div>
         <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-basalt/50">
-          <MapPin className="h-3.5 w-3.5 text-apricot" /> {listing.city}, {listing.region}
+          <MapPin className="h-3.5 w-3.5 text-apricot" /> {formatLocation(listing.city, listing.region)}
         </p>
         <p className="mt-3 text-sm leading-6 text-basalt/70">{listing.short_description}</p>
         {listing.tags.length > 0 && (
