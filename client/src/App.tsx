@@ -13,6 +13,7 @@ import { SavedPlacesProvider } from "./contexts/SavedPlacesContext";
 import { SiteSettingsProvider } from "./contexts/SiteSettingsContext";
 import { CurrencyProvider } from "./contexts/CurrencyContext";
 import { AnnouncementBanner } from "./components/AnnouncementBanner";
+import { CookieConsent } from "./components/CookieConsent";
 import { SupportWidget } from "./components/SupportWidget";
 import { OperatorAssistant } from "./components/OperatorAssistant";
 import Home from "./pages/Home";
@@ -129,6 +130,7 @@ function App() {
                     <Router />
                     <SupportWidget />
                     <OperatorAssistant />
+                    <CookieConsent />
                   </TooltipProvider>
                 </CurrencyProvider>
               </SiteSettingsProvider>

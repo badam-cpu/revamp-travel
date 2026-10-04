@@ -7,6 +7,7 @@ import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { useListings } from "@/contexts/ListingsContext";
 import { cn } from "@/lib/utils";
 import { slugify } from "@/lib/slug";
+import { PaymentMethods } from "@/components/PaymentMethods";
 
 const normalizeRegion = (r: string) => r.trim().replace(/\s+(province|marz)$/i, "").trim();
 
@@ -86,8 +87,12 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
         </div>
       )}
       <div className="border-t border-white/10">
-        <div className="container flex flex-col gap-3 py-5 text-[11px] text-paper/40 sm:flex-row sm:items-center sm:justify-between">
+        <div className="container flex flex-col gap-4 py-5 text-[11px] text-paper/40 sm:flex-row sm:items-center sm:justify-between">
           <span>© 2026 Revamp Hospitality.</span>
+          <div className="flex items-center gap-2">
+            <PaymentMethods note={false} />
+            <span className="whitespace-nowrap text-paper/40">Secured by PayLink</span>
+          </div>
           <div className="flex items-center gap-4">
             <Link href="/privacy" className="hover:text-white">Privacy Policy</Link>
             <Link href="/terms" className="hover:text-white">Terms of Service</Link>

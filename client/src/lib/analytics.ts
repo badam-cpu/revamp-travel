@@ -9,6 +9,8 @@
  * Measurement ID (G-XXXXXXXXXX), and set VITE_GA_MEASUREMENT_ID in the Netlify
  * build environment. No code change needed.
  */
+import { analyticsAllowed } from "./consent";
+
 const GA_ID = import.meta.env.VITE_GA_MEASUREMENT_ID as string | undefined;
 
 export const analyticsEnabled = Boolean(GA_ID);
@@ -16,7 +18,8 @@ export const analyticsEnabled = Boolean(GA_ID);
 let started = false;
 
 export function initAnalytics(): void {
-  if (started || !GA_ID || typeof window === "undefined") return;
+  // Never load GA without the visitor's analytics-cookie consent.
+  if (started || !GA_ID || typeof window === "undefined" || !analyticsAllowed()) return;
   started = true;
 
   const script = document.createElement("script");

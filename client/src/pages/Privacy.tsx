@@ -70,7 +70,8 @@ export default function Privacy() {
           </Section>
 
           <Section title="Cookies &amp; local storage">
-            <p>We use essential cookies and browser storage to keep you signed in and to remember preferences (for example, your display currency). These are necessary for the service to function; we do not use them for cross-site advertising.</p>
+            <p>We use <strong className="text-basalt">essential</strong> cookies and browser storage to keep you signed in and to remember preferences (for example, your display currency). These are necessary for the service to function.</p>
+            <p>With your consent, we also use <strong className="text-basalt">analytics</strong> cookies — Google Analytics — to understand how the site is used so we can improve it. You choose this in the cookie banner when you first visit, and analytics only load after you accept; choosing "Essential only" keeps them off. We do not use cookies for cross-site advertising.</p>
           </Section>
 
           <Section title="Data retention">

@@ -19,6 +19,7 @@ import { ArrowLeft, Minus, Plus } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { Button } from "@/components/ui/button";
+import { PaymentMethods } from "@/components/PaymentMethods";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -476,11 +477,14 @@ export default function Checkout({ slug }: { slug: string }) {
                   No charge now — the host confirms availability first, then emails you a secure link to pay via PayLink.
                 </p>
               ) : (
-                <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">
-                  You'll pay securely via{" "}
-                  <a href="https://paylink.am" target="_blank" rel="noreferrer" className="font-semibold text-basalt/55 underline underline-offset-2 hover:text-apricot">PayLink</a>
-                  . Your dates are confirmed once payment clears.{displayCurrency === "USD" ? " Charged in AMD; USD shown for reference." : ""}
-                </p>
+                <>
+                  <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">
+                    You'll pay securely via{" "}
+                    <a href="https://paylink.am" target="_blank" rel="noreferrer" className="font-semibold text-basalt/55 underline underline-offset-2 hover:text-apricot">PayLink</a>
+                    . Your dates are confirmed once payment clears.{displayCurrency === "USD" ? " Charged in AMD; USD shown for reference." : ""}
+                  </p>
+                  <PaymentMethods note={false} className="mt-3 justify-center" />
+                </>
               )}
             </div>
           </aside>
