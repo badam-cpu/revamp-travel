@@ -21,6 +21,7 @@ import Explore from "./pages/Explore";
 import Tours from "./pages/Tours";
 import EatGuide from "./pages/EatGuide";
 import EatLanding from "./pages/EatLanding";
+import RegionLanding from "./pages/RegionLanding";
 import MapPage from "./pages/MapPage";
 import ListingPage from "./pages/ListingPage";
 import Dashboard from "./pages/Dashboard";
@@ -79,6 +80,10 @@ function Router() {
       <Route path="/explore/eat" component={EatGuide} />
       <Route path="/eat/cuisine/:cuisine">{(params) => <EatLanding mode="cuisine" value={params.cuisine} />}</Route>
       <Route path="/eat/:region">{(params) => <EatLanding mode="region" value={params.region} />}</Route>
+      <Route path="/stay/:region">{(params) => <RegionLanding type="stay" region={params.region} />}</Route>
+      <Route path="/tour/:region">{(params) => <RegionLanding type="tour" region={params.region} />}</Route>
+      <Route path="/experience/:region">{(params) => <RegionLanding type="experience" region={params.region} />}</Route>
+      <Route path="/visit/:region">{(params) => <RegionLanding type="place" region={params.region} />}</Route>
       <Route path="/explore/:category">{(params) => <Explore initialType={params.category} />}</Route>
       <Route path="/explore">{() => <Explore />}</Route>
       <Route path="/map" component={MapPage} />

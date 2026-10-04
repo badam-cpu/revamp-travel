@@ -16,9 +16,15 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
   const { settings } = useSiteSettings();
   const { listings } = useListings();
 
-  // Regions that actually have restaurant picks → footer "Eat in {region}" links
-  // (site-wide crawl paths into the Eat landing pages). Deduped, capped.
-  const eatRegions = Array.from(new Set(listings.filter((l) => l.type === "eat").map((l) => normalizeRegion(l.region || "")).filter(Boolean))).slice(0, 6);
+  // Regions that actually have listings of each type → footer crawl paths into
+  // the per-region landing pages (SEO internal links). Deduped, capped. Only
+  // populated regions appear, so no links to empty/thin pages.
+  const regionsForType = (t: string) =>
+    Array.from(new Set(listings.filter((l) => l.type === t).map((l) => normalizeRegion(l.region || "")).filter(Boolean))).slice(0, 6);
+  const eatRegions = regionsForType("eat");
+  const stayRegions = regionsForType("stay");
+  const tourRegions = regionsForType("tour");
+  const visitRegions = regionsForType("place");
 
   // Slim footer for app surfaces (operator dashboard) — just the wordmark,
   // copyright, and legal links, without the tall marketing columns. `wide`
@@ -76,16 +82,23 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
           </div>
         </div>
       </div>
-      {eatRegions.length > 0 && (
-        <div className="border-t border-white/10">
-          <div className="container flex flex-wrap items-center gap-x-5 gap-y-2 py-5 text-[13px] text-paper/60">
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Where to eat</span>
-            {eatRegions.map((r) => (
-              <Link key={r} href={`/eat/${slugify(r)}`} className="hover:text-white">Eat in {r}</Link>
-            ))}
+      {[
+        { title: "Where to stay", regions: stayRegions, base: "/stay", verb: "Stay in" },
+        { title: "Where to eat", regions: eatRegions, base: "/eat", verb: "Eat in" },
+        { title: "Things to do", regions: tourRegions, base: "/tour", verb: "Tours in" },
+        { title: "Where to visit", regions: visitRegions, base: "/visit", verb: "Visit" },
+      ]
+        .filter((row) => row.regions.length > 0)
+        .map((row) => (
+          <div key={row.base} className="border-t border-white/10">
+            <div className="container flex flex-wrap items-center gap-x-5 gap-y-2 py-5 text-[13px] text-paper/60">
+              <span className="w-28 shrink-0 text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">{row.title}</span>
+              {row.regions.map((r) => (
+                <Link key={r} href={`${row.base}/${slugify(r)}`} className="hover:text-white">{row.verb} {r}</Link>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        ))}
       <div className="border-t border-white/10">
         <div className="container flex flex-col gap-4 py-5 text-[11px] text-paper/40 sm:flex-row sm:items-center sm:justify-between">
           <span>© 2026 Revamp Hospitality.</span>
