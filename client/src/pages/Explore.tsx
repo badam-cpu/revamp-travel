@@ -12,7 +12,7 @@ import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ListingType, typeLabels } from "@/data/listings";
-import { isCuratedType } from "@shared/listings";
+import { isCuratedType, PLACE_CATEGORIES, placeCategoryLabel } from "@shared/listings";
 import { slugify } from "@/lib/slug";
 import { useListings } from "@/contexts/ListingsContext";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
@@ -36,6 +36,8 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
   const [query, setQuery] = useState(params.get("query") || "");
   const [type, setType] = useState(validTypes.has(urlType) ? urlType : "all");
   const [region, setRegion] = useState(params.get("region") || "all");
+  // Visit (place) sub-filter: museum / gallery / coworking / … (from the data).
+  const [placeCat, setPlaceCat] = useState("all");
   const PAGE = 12;
   const [visible, setVisible] = useState(PAGE);
 
@@ -112,6 +114,15 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
       ? region
       : regions.find((r) => normalizeRegion(r).toLowerCase() === normalizeRegion(query).toLowerCase()) ?? "";
 
+  // Distinct Visit (place) categories present in the data, in the curated order
+  // (museum, gallery, library, coworking, …), for the sub-filter chips.
+  const placeCategories = useMemo(() => {
+    const present = new Set(listings.filter((l) => l.type === "place" && l.category).map((l) => l.category as string));
+    const ordered: string[] = PLACE_CATEGORIES.map((c) => c.slug).filter((s) => present.has(s));
+    const extras = Array.from(present).filter((s) => !ordered.includes(s)); // any custom categories
+    return [...ordered, ...extras];
+  }, [listings]);
+
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return listings.filter((listing) => {
@@ -120,14 +131,17 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
       // "All" = bookable inventory; the free curated guides (eat + place) have their own tabs.
       const matchesType = type === "all" ? !isCuratedType(listing.type) : listing.type === type;
       const matchesRegion = region === "all" || normalizeRegion(listing.region).toLowerCase() === region.toLowerCase();
+      const matchesCategory = type !== "place" || placeCat === "all" || listing.category === placeCat;
       const haystack = [listing.title, listing.city, listing.region, listing.type, listing.shortDescription, ...listing.tags].join(" ").toLowerCase();
-      return matchesType && matchesRegion && (!needle || haystack.includes(needle)) && isAvailableForRange(listing);
+      return matchesType && matchesRegion && matchesCategory && (!needle || haystack.includes(needle)) && isAvailableForRange(listing);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, type, region, listings, hasRange, checkin, checkout, bookedByListing]);
+  }, [query, type, region, placeCat, listings, hasRange, checkin, checkout, bookedByListing]);
 
   // Reset the visible window whenever the result set's filters change.
-  useEffect(() => setVisible(PAGE), [query, type, region, hasRange]);
+  useEffect(() => setVisible(PAGE), [query, type, region, placeCat, hasRange]);
+  // Leaving the Visit tab clears its category sub-filter.
+  useEffect(() => { if (type !== "place") setPlaceCat("all"); }, [type]);
   const shown = filtered.slice(0, visible);
 
   const reset = () => {
@@ -195,6 +209,14 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
                 <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter by place or interest" className="h-10 w-full border border-basalt/15 bg-paper pl-9 pr-3 text-sm outline-none placeholder:text-basalt/35 focus:border-apricot" />
               </label>
             </div>
+            {type === "place" && placeCategories.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-x-2 gap-y-3">
+                <button onClick={() => setPlaceCat("all")} className={cn("filter-chip", placeCat === "all" && "active")}>All types</button>
+                {placeCategories.map((c) => (
+                  <button key={c} onClick={() => setPlaceCat(c)} className={cn("filter-chip", placeCat === c && "active")}>{placeCategoryLabel(c)}</button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="mt-7 flex items-center justify-between">
