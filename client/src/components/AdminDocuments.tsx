@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { listDocuments, uploadDocument, getDocumentUrl, deleteDocument, DOC_CATEGORIES, type DocRow, type DocCategory } from "@/lib/documents";
 import { DocumentViewerDialog } from "@/components/DocumentViewerDialog";
+import { FileField } from "@/components/FileField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -120,7 +121,7 @@ export function AdminDocuments() {
             </div>
           )}
           <div className="grid gap-1.5 sm:col-span-2"><label className="text-xs font-semibold text-basalt/60">File (PDF, Word, or image · up to 25 MB)</label>
-            <input type="file" accept=".pdf,.doc,.docx,image/png,image/jpeg,image/webp" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-sm" />
+            <FileField file={file} onChange={setFile} accept=".pdf,.doc,.docx,image/png,image/jpeg,image/webp" />
           </div>
         </div>
         <div className="border-t border-basalt/10 pt-4">

@@ -10,6 +10,7 @@ import { FileText, Loader2, Trash2, Upload, Eye, Download } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { listDocuments, uploadDocument, getDocumentUrl, deleteDocument, DOC_CATEGORIES, type DocRow, type DocCategory } from "@/lib/documents";
 import { DocumentViewerDialog } from "@/components/DocumentViewerDialog";
+import { FileField } from "@/components/FileField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -125,7 +126,7 @@ export function OperatorDocuments() {
               </div>
               <div className="grid gap-1.5">
                 <label className="text-xs font-semibold text-basalt/60">File</label>
-                <input type="file" accept=".pdf,.doc,.docx,image/png,image/jpeg,image/webp" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-sm" />
+                <FileField file={file} onChange={setFile} accept=".pdf,.doc,.docx,image/png,image/jpeg,image/webp" />
               </div>
             </div>
             <Button onClick={submit} disabled={busy} className="mt-3 rounded-none bg-apricot font-semibold text-white hover:bg-apricot/90">
