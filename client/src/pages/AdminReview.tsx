@@ -16,7 +16,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, BarChart3, BookOpen, Check, CreditCard, ExternalLink, FileText, Gift, Home, Landmark, LayoutDashboard, ListChecks, Mail, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, Ticket, Timer, UserSearch, Users, Utensils, Wallet, X } from "lucide-react";
+import { AlertTriangle, BarChart3, BookOpen, Check, CreditCard, ExternalLink, FileText, Gift, Home, Landmark, LayoutDashboard, ListChecks, Mail, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, QrCode, Ticket, Timer, UserSearch, Users, Utensils, Wallet, X } from "lucide-react";
 import { formatLocation } from "@/lib/region";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -30,6 +30,7 @@ import { AdminListings } from "@/components/AdminListings";
 import { AdminEateries } from "@/components/AdminEateries";
 import { AdminPlaces } from "@/components/AdminPlaces";
 import { AdminDocuments } from "@/components/AdminDocuments";
+import { QrManager } from "@/components/QrManager";
 import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
 import { AdminVoucherOffers } from "@/components/AdminVoucherOffers";
 import { AdminVenueManagers } from "@/components/AdminVenueManagers";
@@ -241,7 +242,7 @@ function StatTile({ n, label, onClick }: { n: number | string; label: string; on
   );
 }
 
-type AdminSection = "overview" | "reviews" | "listings" | "eateries" | "places" | "analytics" | "vouchers" | "users" | "accounts" | "giftcards" | "subscriptions" | "support" | "messages" | "response" | "email" | "documents" | "payouts" | "blog" | "hub" | "site";
+type AdminSection = "overview" | "reviews" | "listings" | "eateries" | "places" | "analytics" | "vouchers" | "users" | "accounts" | "giftcards" | "subscriptions" | "support" | "messages" | "response" | "email" | "documents" | "qr" | "payouts" | "blog" | "hub" | "site";
 const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: typeof Home }[] = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
   { key: "reviews", label: "Reviews", icon: ListChecks },
@@ -261,6 +262,7 @@ const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: typeof Home }[] 
   { key: "payouts", label: "Payouts", icon: Wallet },
   { key: "blog", label: "Blog", icon: Newspaper },
   { key: "documents", label: "Documents", icon: FileText },
+  { key: "qr", label: "QR codes", icon: QrCode },
   { key: "hub", label: "Partner Hub", icon: BookOpen },
   { key: "site", label: "Site content", icon: Palette },
 ];
@@ -375,6 +377,7 @@ function AdminConsole() {
             {section === "payouts" && <AdminPayouts />}
             {section === "blog" && <AdminBlog />}
             {section === "documents" && <AdminDocuments />}
+            {section === "qr" && <QrManager scope="admin" />}
             {section === "hub" && <AdminHub />}
             {section === "site" && <AdminSiteContent />}
           </div>

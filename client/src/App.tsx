@@ -22,6 +22,7 @@ import Tours from "./pages/Tours";
 import EatGuide from "./pages/EatGuide";
 import EatLanding from "./pages/EatLanding";
 import RegionLanding from "./pages/RegionLanding";
+import QrLanding from "./pages/QrLanding";
 import MapPage from "./pages/MapPage";
 import ListingPage from "./pages/ListingPage";
 import Dashboard from "./pages/Dashboard";
@@ -112,6 +113,7 @@ function Router() {
       <Route path="/checkout/:slug">{(params) => <Checkout slug={params.slug} />}</Route>
       <Route path="/listing/:slug">{(params) => <ListingPage params={params} />}</Route>
       <Route path="/redeem/:token">{(params) => <RedeemStation token={params.token} />}</Route>
+      <Route path="/q/:code">{(params) => <QrLanding code={params.code} />}</Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

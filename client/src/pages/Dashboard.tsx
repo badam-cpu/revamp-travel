@@ -23,7 +23,7 @@
  */
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, CreditCard, FileText, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, Pencil, Plug, Plus, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, CreditCard, FileText, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, Pencil, Plug, Plus, QrCode, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
 import { Inbox } from "@/components/Inbox";
 import { PartnerHub } from "@/components/PartnerHub";
 import { PriceLabsConnect } from "@/components/PriceLabsConnect";
@@ -67,6 +67,7 @@ import { OperatorSubscription } from "@/components/OperatorSubscription";
 import { SessionScheduleEditor } from "@/components/SessionScheduleEditor";
 import { OperatorAnalytics } from "@/components/OperatorAnalytics";
 import { OperatorDocuments } from "@/components/OperatorDocuments";
+import { QrManager } from "@/components/QrManager";
 import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
 import { OperatorResponseStat } from "@/components/OperatorResponseStat";
 import { MessageTemplatesSettings } from "@/components/MessageTemplatesSettings";
@@ -1274,7 +1275,7 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
   );
 }
 
-type OperatorSection = "overview" | "listings" | "analytics" | "bookings" | "promos" | "messages" | "documents" | "hub" | "integrations" | "payouts" | "billing" | "settings";
+type OperatorSection = "overview" | "listings" | "analytics" | "bookings" | "promos" | "messages" | "documents" | "qr" | "hub" | "integrations" | "payouts" | "billing" | "settings";
 const OPERATOR_SECTIONS: { key: OperatorSection; label: string; icon: typeof Home }[] = [
   { key: "overview", label: "Dashboard", icon: LayoutDashboard },
   { key: "listings", label: "Listings", icon: List },
@@ -1283,6 +1284,7 @@ const OPERATOR_SECTIONS: { key: OperatorSection; label: string; icon: typeof Hom
   { key: "promos", label: "Promo codes", icon: Ticket },
   { key: "messages", label: "Messages", icon: MessageSquare },
   { key: "documents", label: "Documents", icon: FileText },
+  { key: "qr", label: "QR codes", icon: QrCode },
   { key: "hub", label: "Partner Hub", icon: BookOpen },
   { key: "integrations", label: "Integrations", icon: Plug },
   { key: "payouts", label: "Payouts", icon: Wallet },
@@ -1515,6 +1517,7 @@ function DashboardContent() {
             )}
 
             {section === "documents" && <OperatorDocuments />}
+            {section === "qr" && <QrManager scope="operator" />}
             {section === "hub" && <PartnerHub />}
 
             {section === "integrations" && (

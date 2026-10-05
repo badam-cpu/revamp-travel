@@ -521,6 +521,39 @@ export function registerApiRoutes(app: Express) {
     }
   });
 
+  // GET /api/qr-resolve?code= — public landing resolver for a dynamic QR code.
+  // Loads the active code (service role), counts the scan, and returns what the
+  // /q/<code> landing needs. No auth: guests scan these. Payment types return
+  // their config too (landing handles "coming soon" until payments ship).
+  app.get("/api/qr-resolve", async (req: Request, res: Response) => {
+    const code = String(req.query.code || "").trim();
+    if (!code) return res.status(400).json({ error: "Missing code." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available." });
+    try {
+      const { data: qr } = await admin
+        .from("qr_codes")
+        .select("id, name, type, config, listing_id, active")
+        .eq("slug", code)
+        .maybeSingle();
+      if (!qr || !qr.active) return res.status(404).json({ error: "This QR code isn't active." });
+      // Count the scan (best-effort read-modify-write; never blocks the response).
+      try {
+        const { data: cur } = await admin.from("qr_codes").select("scans").eq("id", qr.id).maybeSingle();
+        await admin.from("qr_codes").update({ scans: (cur?.scans ?? 0) + 1 }).eq("id", qr.id);
+      } catch { /* ignore scan-count failures */ }
+      let listingSlug: string | null = null;
+      if (qr.type === "listing" && qr.listing_id) {
+        const { data: l } = await admin.from("listings").select("slug").eq("id", qr.listing_id).maybeSingle();
+        listingSlug = l?.slug ?? null;
+      }
+      res.json({ type: qr.type, name: qr.name, config: qr.config ?? {}, listingSlug });
+    } catch (err) {
+      console.error("[qr-resolve]", err);
+      res.status(500).json({ error: "Couldn't open that code." });
+    }
+  });
+
   // Dynamic robots.txt / sitemap.xml. Registered at both the public path (for
   // the long-running server in server/index.ts, and local `pnpm start`) and
   // an /api-prefixed alias — on Netlify the CDN serves the SPA, so these are
