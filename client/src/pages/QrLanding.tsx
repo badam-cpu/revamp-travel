@@ -44,7 +44,7 @@ export default function QrLanding({ code }: { code: string }) {
     <div className="min-h-screen bg-chalk text-basalt">
       <div className="mx-auto flex min-h-screen max-w-md flex-col px-5 py-8">
         <header className="mb-6">
-          <span className="font-display text-xl font-bold tracking-[-0.02em]">revamp<span className="text-apricot">.</span></span>
+          <span className="font-display text-xl font-bold tracking-[-0.02em]">revamp.</span>
         </header>
 
         <main className="flex-1">
