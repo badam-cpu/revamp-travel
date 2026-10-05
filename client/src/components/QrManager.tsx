@@ -8,7 +8,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Loader2, QrCode, Trash2, Download, Copy, Check } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useListings } from "@/contexts/ListingsContext";
-import { listQrCodes, createQrCode, deleteQrCode, qrLandingUrl, qrPngDataUrl, downloadQrPng, downloadQrSvg, QR_TYPES, type QrRow, type QrType } from "@/lib/qr";
+import { listQrCodes, createQrCode, deleteQrCode, listQrPayments, qrLandingUrl, qrPngDataUrl, downloadQrPng, downloadQrSvg, QR_TYPES, type QrRow, type QrType } from "@/lib/qr";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -28,22 +29,38 @@ function QrThumb({ slug, size = 72 }: { slug: string; size?: number }) {
 export function QrManager({ scope = "operator" }: { scope?: "operator" | "admin" }) {
   const { user } = useAuth();
   const { listings } = useListings();
+  const { format } = useCurrency();
   const [codes, setCodes] = useState<QrRow[] | null>(null);
+  const [earnings, setEarnings] = useState<Map<string, { count: number; net: number }>>(new Map());
   const [copied, setCopied] = useState<string | null>(null);
 
   const [name, setName] = useState("");
-  const [type, setType] = useState<QrType>("listing");
+  const [type, setType] = useState<QrType>("tip");
   const [listingId, setListingId] = useState("");
   const [url, setUrl] = useState("");
   const [content, setContent] = useState("");
+  const [amountDram, setAmountDram] = useState("");          // service: fixed price
+  const [suggestions, setSuggestions] = useState("1000, 2000, 5000"); // tip: suggested amounts
   const [busy, setBusy] = useState(false);
 
   const myListings = listings.filter((l) => scope === "admin" || (l as { operatorId?: string }).operatorId === user?.id);
 
   const load = useCallback(async () => {
     try { setCodes(await listQrCodes()); } catch { setCodes([]); }
+    try {
+      const pays = await listQrPayments();
+      const m = new Map<string, { count: number; net: number }>();
+      for (const p of pays) {
+        const cur = m.get(p.qr_code_id) ?? { count: 0, net: 0 };
+        m.set(p.qr_code_id, { count: cur.count + 1, net: cur.net + p.net_cents });
+      }
+      setEarnings(m);
+    } catch { /* table may not exist yet */ }
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  const dramListToCents = (s: string): number[] =>
+    s.split(",").map((x) => Math.round(Number(x.trim()) * 100)).filter((n) => Number.isFinite(n) && n > 0);
 
   const submit = async () => {
     if (!user?.id) return;
@@ -51,17 +68,28 @@ export function QrManager({ scope = "operator" }: { scope?: "operator" | "admin"
     if (type === "listing" && !listingId) { toast("Pick the listing to link."); return; }
     if (type === "custom" && !url.trim()) { toast("Add the URL."); return; }
     if (type === "instructions" && !content.trim()) { toast("Add the instructions text."); return; }
+    const tipSuggestions = dramListToCents(suggestions);
+    if (type === "tip" && tipSuggestions.length === 0) { toast("Add at least one suggested amount."); return; }
+    const serviceCents = Math.round(Number(amountDram) * 100);
+    if (type === "service" && (!Number.isFinite(serviceCents) || serviceCents <= 0)) { toast("Set the price."); return; }
     setBusy(true);
     try {
+      const config =
+        type === "custom" ? { url: url.trim() }
+        : type === "instructions" ? { content: content.trim() }
+        : type === "tip" ? { amountMode: "choose" as const, suggestionsCents: tipSuggestions }
+        : type === "service" ? { amountMode: "fixed" as const, amountCents: serviceCents, description: content.trim() || undefined }
+        : {};
       await createQrCode({
         ownerId: user.id,
         name,
         type,
-        listingId: type === "listing" ? listingId : null,
-        config: type === "custom" ? { url: url.trim() } : type === "instructions" ? { content: content.trim() } : {},
+        // Payment + info codes can carry a listing as context; listing-type requires one.
+        listingId: listingId || null,
+        config,
       });
       toast("QR code created.");
-      setName(""); setUrl(""); setContent(""); setListingId("");
+      setName(""); setUrl(""); setContent(""); setListingId(""); setAmountDram("");
       load();
     } catch (e) {
       toast(e instanceof Error ? e.message : "Couldn't create.");
@@ -112,7 +140,34 @@ export function QrManager({ scope = "operator" }: { scope?: "operator" | "admin"
           {type === "instructions" && (
             <div className="grid gap-1.5 sm:col-span-2"><Label className="text-xs font-semibold text-basalt/60">Instructions</Label><Textarea rows={4} value={content} onChange={(e) => setContent(e.target.value)} placeholder={"Wi-Fi: …\nCheck-out: 11:00\nHeating: …"} className="rounded-none text-base" /></div>
           )}
+          {(type === "tip" || type === "service") && (
+            <div className="grid gap-1.5 sm:col-span-2"><Label className="text-xs font-semibold text-basalt/60">Property (optional)</Label>
+              <select value={listingId} onChange={(e) => setListingId(e.target.value)} className="h-10 rounded-none border border-basalt/20 bg-paper px-2 text-sm">
+                <option value="">No specific property</option>
+                {myListings.map((l) => <option key={l.id} value={l.id}>{l.title}</option>)}
+              </select>
+            </div>
+          )}
+          {type === "tip" && (
+            <div className="grid gap-1.5 sm:col-span-2"><Label className="text-xs font-semibold text-basalt/60">Suggested amounts (֏, comma-separated)</Label>
+              <Input value={suggestions} onChange={(e) => setSuggestions(e.target.value)} placeholder="1000, 2000, 5000" className="h-10 rounded-none" />
+              <p className="text-xs text-basalt/45">Guests pick one or enter their own. Revamp keeps a 12.5% commission; the rest is yours.</p>
+            </div>
+          )}
+          {type === "service" && (
+            <>
+              <div className="grid gap-1.5"><Label className="text-xs font-semibold text-basalt/60">Price (֏)</Label>
+                <Input value={amountDram} onChange={(e) => setAmountDram(e.target.value)} placeholder="8000" inputMode="numeric" className="h-10 rounded-none" />
+              </div>
+              <div className="grid gap-1.5"><Label className="text-xs font-semibold text-basalt/60">What is it? (optional)</Label>
+                <Input value={content} onChange={(e) => setContent(e.target.value)} placeholder="e.g. Late check-out until 3 PM" className="h-10 rounded-none" />
+              </div>
+            </>
+          )}
         </div>
+        {(type === "tip" || type === "service") && (
+          <p className="text-xs text-basalt/45">Guests pay by card via PayLink — no tax added. Earnings (net of 12.5%) show below once paid.</p>
+        )}
         <div className="border-t border-basalt/10 pt-4">
           <Button onClick={submit} disabled={busy} className="rounded-none bg-apricot font-semibold text-white hover:bg-apricot/90">
             {busy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating…</> : <><QrCode className="mr-2 h-4 w-4" /> Create QR code</>}
@@ -133,7 +188,7 @@ export function QrManager({ scope = "operator" }: { scope?: "operator" | "admin"
                 <QrThumb slug={c.slug} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold text-basalt">{c.name}</p>
-                  <p className="mt-0.5 text-xs text-basalt/50">{typeLabel(c.type)} · <span className="font-semibold text-basalt/70">{c.scans}</span> scan{c.scans === 1 ? "" : "s"}{!c.active ? " · inactive" : ""}</p>
+                  <p className="mt-0.5 text-xs text-basalt/50">{typeLabel(c.type)} · <span className="font-semibold text-basalt/70">{c.scans}</span> scan{c.scans === 1 ? "" : "s"}{(c.type === "tip" || c.type === "service") && earnings.get(c.id) ? <> · <span className="font-semibold text-apricot">{earnings.get(c.id)!.count}</span> paid · <span className="font-semibold text-basalt/70">{format(earnings.get(c.id)!.net)}</span> earned</> : null}{!c.active ? " · inactive" : ""}</p>
                   <button type="button" onClick={() => copyLink(c.slug)} className="mt-1 inline-flex items-center gap-1 text-xs text-apricot hover:underline">
                     {copied === c.slug ? <><Check className="h-3 w-3" /> Copied</> : <><Copy className="h-3 w-3" /> {qrLandingUrl(c.slug).replace(/^https?:\/\//, "")}</>}
                   </button>

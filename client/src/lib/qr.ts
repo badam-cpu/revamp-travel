@@ -10,6 +10,8 @@ import { nanoid } from "nanoid";
 import { supabase } from "@/lib/supabase";
 
 export const QR_TYPES = [
+  { value: "tip", label: "Leave a tip", blurb: "Guests tip your team — you set the suggested amounts." },
+  { value: "service", label: "Service payment", blurb: "Charge a fixed price for an add-on (late check-out, pickup)." },
   { value: "listing", label: "My Revamp listing", blurb: "Opens one of your listings — great for 'book your next stay'." },
   { value: "instructions", label: "Instructions / info", blurb: "A welcome page: wifi, check-out, house notes." },
   { value: "custom", label: "Custom URL", blurb: "Point the QR at any link you choose." },
@@ -83,6 +85,53 @@ export async function deleteQrCode(id: string): Promise<void> {
 export async function setQrActive(id: string, active: boolean): Promise<void> {
   const { error } = await supabase.from("qr_codes").update({ active, updated_at: new Date().toISOString() }).eq("id", id);
   if (error) throw new Error(error.message);
+}
+
+// --- payments (tip / service) -------------------------------------------------
+export interface QrPaymentRow {
+  id: string;
+  qr_code_id: string;
+  amount_cents: number;
+  commission_cents: number;
+  net_cents: number;
+  status: "pending_payment" | "paid" | "failed" | "expired";
+  kind: "tip" | "service";
+  created_at: string;
+}
+
+/** Paid QR payments visible to the caller (owner/admin) — for revenue totals. */
+export async function listQrPayments(): Promise<QrPaymentRow[]> {
+  const { data, error } = await supabase.from("qr_payments").select("*").eq("status", "paid").order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as QrPaymentRow[];
+}
+
+/** Start a guest payment for a tip/service code → returns the PayLink redirect. */
+export async function startQrPayment(code: string, amountCents: number, extra?: { note?: string; payerName?: string }): Promise<{ redirectUrl: string; paymentId: string }> {
+  const res = await fetch("/api/qr-payment/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, amountCents, ...extra }),
+  });
+  if (!res.ok) {
+    const e = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(e.error || "Couldn't start the payment.");
+  }
+  return res.json();
+}
+
+/** Verify a QR payment on the guest's return. */
+export async function confirmQrPayment(paymentId: string): Promise<{ status: "paid" | "pending"; amountCents: number }> {
+  const res = await fetch("/api/qr-payment/confirm", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paymentId }),
+  });
+  if (!res.ok) {
+    const e = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(e.error || "Couldn't confirm the payment.");
+  }
+  return res.json();
 }
 
 /** Resolve a code for the public landing page (counts the scan server-side). */

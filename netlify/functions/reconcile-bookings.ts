@@ -19,6 +19,7 @@ import { reconcileAllPendingBookings, requestReviewsForCompleted } from "../../s
 import { reconcileAllPendingGiftCards, expireOverdueGiftCards } from "../../server/giftcards.js";
 import { reconcileAllSubscriptions, reconcilePerListingAmounts } from "../../server/subscriptions.js";
 import { reconcileAllVouchers } from "../../server/vouchers.js";
+import { reconcileQrPayments } from "../../server/qrPayments.js";
 
 export const handler = async () => {
   if (!adminConfigured()) {
@@ -39,8 +40,10 @@ export const handler = async () => {
     // Apply per-listing amount changes (next-cycle) for operators whose count changed.
     const subAmounts = await reconcilePerListingAmounts(admin, { limit: 500 });
     const vouchers = await reconcileAllVouchers(admin, { limit: 200 });
-    console.log("[reconcile-bookings]", { ...result, reviewEmails: reviews.sent, gifts, giftExpiry, subs, subAmounts, vouchers });
-    return { statusCode: 200, body: JSON.stringify({ ...result, reviewEmails: reviews.sent, gifts, giftExpiry, subs, subAmounts, vouchers }) };
+    // Confirm QR tips/service payments (primary path — PayLink has no auto-redirect).
+    const qrPays = await reconcileQrPayments(admin, { limit: 200 });
+    console.log("[reconcile-bookings]", { ...result, reviewEmails: reviews.sent, gifts, giftExpiry, subs, subAmounts, vouchers, qrPays });
+    return { statusCode: 200, body: JSON.stringify({ ...result, reviewEmails: reviews.sent, gifts, giftExpiry, subs, subAmounts, vouchers, qrPays }) };
   } catch (err) {
     console.error("[reconcile-bookings] failed", err);
     return { statusCode: 500, body: JSON.stringify({ error: String(err).slice(0, 200) }) };

@@ -17,7 +17,7 @@ import { matchTripadvisor, tripadvisorConfigured } from "./tripadvisor.js";
 import { translateTexts } from "./translate.js";
 import { pricelabsListings, syncOperatorPrices } from "./pricelabs.js";
 import { supabaseAdmin, adminConfigured } from "./supabaseAdmin.js";
-import { paylinkConfigured, registerPayment } from "./paylink.js";
+import { paylinkConfigured, registerPayment, checkPayment } from "./paylink.js";
 import { reconcileUserBookings, logBookingEvent, finalizeConfirmedBooking } from "./bookings.js";
 import { startOperatorSubscription, reconcileOperatorSubscriptions, cancelOperatorSubscription, ensurePlanRegistered, type PlanRow } from "./subscriptions.js";
 import { syncListingSessions, reserveSeats, releaseSeats } from "./sessions.js";
@@ -42,7 +42,7 @@ import { isCrawlerUserAgent } from "./botDetect.js";
 import { randomUUID } from "crypto";
 import { formatSlotTime, slotLocalDate } from "../shared/sessions.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, promoDiscount, addonUnitCost, nightsBetween, type Addon, DEFAULT_CURRENCY } from "../shared/bookings.js";
+import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, promoDiscount, addonUnitCost, nightsBetween, type Addon, DEFAULT_CURRENCY, PLATFORM_COMMISSION_PERCENT } from "../shared/bookings.js";
 import { planTrip, PlannerError } from "./planner.js";
 import { fetchPrefill, PrefillError } from "./urlPrefill.js";
 import { fetchMergedBlockedRanges, buildIcalFeed, type IcalFeed } from "./ical.js";
@@ -551,6 +551,91 @@ export function registerApiRoutes(app: Express) {
     } catch (err) {
       console.error("[qr-resolve]", err);
       res.status(500).json({ error: "Couldn't open that code." });
+    }
+  });
+
+  // POST /api/qr-payment/start — public: a guest pays a tip/service QR code via
+  // PayLink (no account needed). Revamp takes a 12.5% commission; NO tax. The
+  // pending payment is recorded; it's marked paid on return (confirm) or by the
+  // reconcile sweep. Amount is guest-chosen for a tip, fixed for a service code.
+  app.post("/api/qr-payment/start", async (req: Request, res: Response) => {
+    if (!paylinkConfigured()) return res.status(503).json({ error: "Payments aren't available yet." });
+    if (rateLimited(giftPurchaseHits, `qrpay:${req.ip || "?"}`, 10)) return res.status(429).json({ error: "You're going a bit fast — try again in a moment." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Payments aren't available right now." });
+    const code = String(req.body?.code || "").trim();
+    let amountCents = Math.round(Number(req.body?.amountCents));
+    const note = typeof req.body?.note === "string" ? req.body.note.slice(0, 200) : null;
+    const payerName = typeof req.body?.payerName === "string" ? req.body.payerName.slice(0, 120) : null;
+    if (!code) return res.status(400).json({ error: "Missing code." });
+    try {
+      const { data: qr } = await admin.from("qr_codes").select("id, owner_id, type, name, active, config").eq("slug", code).maybeSingle();
+      if (!qr || !qr.active || (qr.type !== "tip" && qr.type !== "service")) return res.status(404).json({ error: "This payment code isn't active." });
+      // Service codes charge their configured fixed amount; tips use the guest's amount.
+      if (qr.type === "service") {
+        const fixed = Number((qr.config as { amountCents?: number } | null)?.amountCents);
+        if (Number.isFinite(fixed) && fixed > 0) amountCents = Math.round(fixed);
+      }
+      if (!Number.isFinite(amountCents) || amountCents < 10000 || amountCents > 100_000_000) {
+        return res.status(400).json({ error: "Enter an amount between ֏100 and ֏1,000,000." });
+      }
+      const commission = Math.round((amountCents * PLATFORM_COMMISSION_PERCENT) / 100);
+      const net = amountCents - commission;
+      const currency = process.env.PAYLINK_CURRENCY || DEFAULT_CURRENCY;
+      const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
+      const paymentId = crypto.randomUUID();
+      const pay = await registerPayment({
+        amount: currency === "AMD" ? Math.round(amountCents / 100) : amountCents / 100,
+        currency,
+        returnUrl: `${site}/q/${code}?pay=${paymentId}`,
+        info: `Revamp · ${qr.name}`.slice(0, 120),
+        allowAnonymous: true,
+      });
+      if (!pay.redirectUrl) return res.status(502).json({ error: "Couldn't start checkout." });
+      const { error } = await admin.from("qr_payments").insert({
+        id: paymentId,
+        qr_code_id: qr.id,
+        owner_id: qr.owner_id,
+        amount_cents: amountCents,
+        commission_cents: commission,
+        net_cents: net,
+        currency,
+        kind: qr.type,
+        payer_name: payerName,
+        note,
+        paylink_request_id: pay.requestId,
+      });
+      if (error) {
+        console.error("[qr-payment/start] insert", error.message);
+        return res.status(500).json({ error: "Couldn't start the payment." });
+      }
+      res.json({ redirectUrl: pay.redirectUrl, paymentId });
+    } catch (err) {
+      console.error("[qr-payment/start]", err);
+      res.status(502).json({ error: "Couldn't start checkout." });
+    }
+  });
+
+  // POST /api/qr-payment/confirm — public: server-verify a QR payment on the
+  // guest's return. Idempotent; the reconcile sweep also confirms stragglers.
+  app.post("/api/qr-payment/confirm", async (req: Request, res: Response) => {
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available." });
+    const id = String(req.body?.paymentId || "").trim();
+    if (!id) return res.status(400).json({ error: "Missing payment id." });
+    try {
+      const { data: row } = await admin.from("qr_payments").select("id, status, paylink_request_id, paylink_order_id, amount_cents").eq("id", id).maybeSingle();
+      if (!row) return res.status(404).json({ error: "Payment not found." });
+      if (row.status === "paid") return res.json({ status: "paid", amountCents: row.amount_cents });
+      const check = await checkPayment({ requestId: row.paylink_request_id, orderId: row.paylink_order_id });
+      if (check.approved) {
+        await admin.from("qr_payments").update({ status: "paid", paid_at: new Date().toISOString(), paylink_order_id: check.orderId ?? row.paylink_order_id }).eq("id", id).eq("status", "pending_payment");
+        return res.json({ status: "paid", amountCents: row.amount_cents });
+      }
+      res.json({ status: "pending", amountCents: row.amount_cents });
+    } catch (err) {
+      console.error("[qr-payment/confirm]", err);
+      res.status(500).json({ error: "Couldn't confirm the payment." });
     }
   });
 
