@@ -56,7 +56,7 @@ export default function RedeemStation({ token }: { token: string }) {
             </div>
           </div>
         ) : (
-          <p className="font-display text-2xl leading-none">revamp<span className="text-apricot">.</span></p>
+          <p className="font-display text-2xl leading-none">revamp.</p>
         )}
         <h1 className="mt-4 font-display text-xl">Redeem a voucher</h1>
         <p className="mt-1 text-sm text-basalt/55">Enter the code the guest shows you.</p>

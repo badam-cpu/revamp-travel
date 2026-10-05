@@ -2855,7 +2855,7 @@ export function registerApiRoutes(app: Express) {
     const email = String(req.query.e || "").trim().toLowerCase();
     const t = String(req.query.t || "");
     const page = (msg: string) =>
-      `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#F5F2EC;color:#212121;display:grid;place-items:center;min-height:100vh;margin:0;"><div style="max-width:420px;background:#fff;border:1px solid rgba(33,33,33,.1);border-radius:14px;padding:28px;text-align:center;"><p style="font-size:22px;font-weight:700;margin:0 0 10px;">revamp<span style="color:#F15822;">.</span></p><p style="font-size:15px;line-height:1.6;color:#4a463f;margin:0;">${msg}</p></div></body></html>`;
+      `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#F5F2EC;color:#212121;display:grid;place-items:center;min-height:100vh;margin:0;"><div style="max-width:420px;background:#fff;border:1px solid rgba(33,33,33,.1);border-radius:14px;padding:28px;text-align:center;"><p style="font-size:22px;font-weight:700;margin:0 0 10px;">revamp.</p><p style="font-size:15px;line-height:1.6;color:#4a463f;margin:0;">${msg}</p></div></body></html>`;
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     if (!email || !verifyUnsub(email, t)) return res.status(400).send(page("This unsubscribe link is invalid or expired."));
     const admin = supabaseAdmin();

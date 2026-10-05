@@ -51,7 +51,7 @@ export function openPayoutStatement(opts: { operatorName: string; payouts: Payou
   * { box-sizing: border-box; }
   body { font-family: -apple-system, Arial, sans-serif; color: #212121; margin: 0; padding: 40px; }
   .wm { font-weight: 800; font-size: 26px; letter-spacing: -.02em; }
-  .wm span { color: #F15822; }
+  .wm span { color: #212121; }
   .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #212121; padding-bottom: 16px; }
   .head h1 { font-size: 15px; text-transform: uppercase; letter-spacing: .14em; color: #857f76; margin: 6px 0 0; font-weight: 700; }
   .meta { text-align: right; font-size: 13px; color: #55514b; line-height: 1.6; }
