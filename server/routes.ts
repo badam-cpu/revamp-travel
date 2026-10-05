@@ -489,6 +489,38 @@ export function registerApiRoutes(app: Express) {
     res.status(204).end();
   });
 
+  // GET /api/document-url?id=&download=1 — a short-lived signed URL for an
+  // operator document. Access is checked against the documents table (admin, an
+  // all-operators doc, or the operator it's targeted to/owned by) so the bucket
+  // stays fully private. `download=1` forces a download; otherwise it opens inline.
+  app.get("/api/document-url", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId) return res.status(401).json({ error: "Sign in." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const id = String(req.query.id || "").trim();
+    if (!id) return res.status(400).json({ error: "Missing document id." });
+    try {
+      const { data: doc } = await admin.from("documents").select("file_path, file_name, file_type, audience, operator_id").eq("id", id).maybeSingle();
+      if (!doc) return res.status(404).json({ error: "Document not found." });
+      const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+      const isAdmin = me?.role === "admin";
+      const allowed = isAdmin || doc.audience === "all_operators" || doc.operator_id === userId;
+      if (!allowed) return res.status(403).json({ error: "You don't have access to this document." });
+      const download = req.query.download === "1";
+      const { data: signed, error } = await admin.storage
+        .from("operator-documents")
+        .createSignedUrl(doc.file_path, 300, download ? { download: doc.file_name || true } : undefined);
+      if (error || !signed) return res.status(500).json({ error: "Couldn't open that document." });
+      res.json({ url: signed.signedUrl, fileType: doc.file_type ?? null, fileName: doc.file_name ?? null });
+    } catch (err) {
+      console.error("[document-url]", err);
+      res.status(500).json({ error: "Couldn't open that document." });
+    }
+  });
+
   // Dynamic robots.txt / sitemap.xml. Registered at both the public path (for
   // the long-running server in server/index.ts, and local `pnpm start`) and
   // an /api-prefixed alias — on Netlify the CDN serves the SPA, so these are
