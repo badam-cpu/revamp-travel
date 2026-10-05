@@ -38,7 +38,7 @@ function shell(title: string, bodyHtml: string, siteUrl: string): string {
       <div style="max-width:544px;margin:0 auto;background:#ffffff;border:1px solid #e4ded3;border-radius:16px;overflow:hidden;">
         <div style="height:4px;background:#F15822;"></div>
         <div style="padding:30px 30px 0;">
-          <span style="font-weight:800;font-size:22px;letter-spacing:-.03em;color:#212121;">revamp</span><span style="font-weight:800;font-size:22px;letter-spacing:-.03em;color:#F15822;">.</span>
+          <span style="font-weight:800;font-size:22px;letter-spacing:-.03em;color:#212121;">revamp.</span>
         </div>
         <div style="padding:6px 30px 30px;color:#212121;">
           <h1 style="font-size:23px;line-height:1.22;letter-spacing:-.02em;margin:14px 0 16px;">${esc(title)}</h1>
