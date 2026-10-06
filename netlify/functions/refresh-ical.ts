@@ -106,7 +106,11 @@ export const handler = async () => {
   return { statusCode: 200, body: JSON.stringify(result) };
 };
 
-// Once a day. Netlify reads this export to schedule the function.
-export const config = { schedule: "@daily" };
+// Every 6 hours (00:00, 06:00, 12:00, 18:00 UTC). An explicit cron expression
+// is more reliable on Netlify than the "@daily" shorthand, and running 4×/day
+// instead of once keeps OTA availability fresh enough that a date blocked on
+// Airbnb/Booking.com propagates to Revamp within hours, not a full day —
+// shrinking the overbooking window. Netlify reads this export to schedule it.
+export const config = { schedule: "0 */6 * * *" };
 
 export default handler;
