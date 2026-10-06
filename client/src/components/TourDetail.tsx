@@ -15,7 +15,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, ArrowLeft, Backpack, Ban, Check, Clock, Gauge, Info, MapPin, Share2, Bookmark, Sparkles, Users, X } from "lucide-react";
 import { Link } from "wouter";
-import { toast } from "sonner";
+import { shareCurrentPage } from "@/lib/share";
 import { Listing } from "@/data/listings";
 import { useListings } from "@/contexts/ListingsContext";
 import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
@@ -89,10 +89,7 @@ export function TourDetail({ listing }: { listing: Listing }) {
             variant="outline"
             size="sm"
             className="rounded-none border-basalt/15 bg-paper"
-            onClick={async () => {
-              await navigator.clipboard?.writeText(window.location.href);
-              toast("Link copied to your clipboard.");
-            }}
+            onClick={() => shareCurrentPage(listing.title)}
           >
             <Share2 className="mr-2 h-4 w-4" /> Share
           </Button>

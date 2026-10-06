@@ -33,7 +33,7 @@ import { OperatorBrand } from "@/components/OperatorBrand";
 import { ExternalReviews } from "@/components/ExternalReviews";
 import { describeCancellationPolicy, nightlyPriceRange } from "@shared/bookings";
 import { buildBreadcrumbJsonLd, buildListingJsonLd } from "@shared/seo";
-import { toast } from "sonner";
+import { shareCurrentPage } from "@/lib/share";
 
 /** What every Revamp stay includes — a marketplace-wide baseline shown on stay
  * pages (a stated standard Revamp holds stay operators to, not a per-listing
@@ -293,7 +293,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
           <span className="absolute left-1/2 top-1/2 hidden h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full bg-apricot/18 md:block" />
           <Link href="/explore" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-basalt/55 hover:text-apricot"><ArrowLeft className="h-4 w-4" /> Back to places</Link>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="rounded-none border-basalt/15 bg-paper" onClick={async () => { await navigator.clipboard?.writeText(window.location.href); toast("Link copied to your clipboard."); }}><Share2 className="mr-2 h-4 w-4" /> Share</Button>
+            <Button variant="outline" size="sm" className="rounded-none border-basalt/15 bg-paper" onClick={() => shareCurrentPage(listing.title)}><Share2 className="mr-2 h-4 w-4" /> Share</Button>
             <Button variant="outline" size="sm" aria-pressed={saved} className={cn("rounded-none border-basalt/15 bg-paper", saved && "border-apricot text-apricot")} onClick={() => toggleSaved({ id: listing.id, title: listing.title })}><Bookmark className={cn("mr-2 h-4 w-4", saved && "fill-current")} /> {saved ? "Saved" : "Save"}</Button>
           </div>
         </div>
