@@ -101,3 +101,14 @@
   for = "/checkout/*"
   [headers.values]
     X-Robots-Tag = "noindex, nofollow"
+
+# PWA: the service worker must not be cached (so updates ship on the next visit),
+# and the manifest needs the right content type.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Content-Type = "application/manifest+json"
