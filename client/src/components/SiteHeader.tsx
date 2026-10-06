@@ -134,7 +134,7 @@ export function SiteHeader({ minimal = false, flush = false, wide = false }: { m
               <Menu className="h-5 w-5" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="right" className="w-[88vw] border-l-0 bg-basalt p-0 text-paper sm:max-w-sm">
+          <SheetContent side="right" className="w-[88vw] border-l-0 bg-basalt p-0 text-paper sm:max-w-sm [&>button]:hidden">
             <SheetTitle className="sr-only">Navigation</SheetTitle>
             <SheetDescription className="sr-only">Browse Revamp travel categories and the Armenia map.</SheetDescription>
             <div className="flex h-full flex-col p-7">
@@ -146,17 +146,17 @@ export function SiteHeader({ minimal = false, flush = false, wide = false }: { m
                   </Button>
                 </SheetClose>
               </div>
-              <nav className="mt-16 flex flex-col" aria-label="Mobile navigation">
+              <nav className="mt-8 flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="Mobile navigation">
                 {links.map((link, index) => (
                   <SheetClose key={link.href} asChild>
-                    <Link href={link.href} className="border-t border-white/15 py-5 font-display text-4xl tracking-tight">
+                    <Link href={link.href} className="border-t border-white/15 py-4 font-display text-[2rem] leading-tight tracking-tight">
                       <span className="mr-3 font-sans text-xs text-apricot">0{index + 1}</span>
                       {link.label}
                     </Link>
                   </SheetClose>
                 ))}
               </nav>
-              <div className="mt-auto border-t border-white/15 pt-6">
+              <div className="shrink-0 border-t border-white/15 pt-6">
                 {signedIn ? (
                   <div className="flex items-center justify-between text-sm text-paper/70">
                     <div className="flex flex-col gap-2">
