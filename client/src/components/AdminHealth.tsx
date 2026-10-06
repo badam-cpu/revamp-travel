@@ -69,6 +69,9 @@ const INTEGRATION_LABELS: Record<string, string> = {
 const CORE_KEYS = ["payments_paylink", "email_resend", "supabase_service_role", "anthropic_ai", "alert_recipient_admin_email"];
 
 function cronTone(c: AdminHealth["crons"][number]): { tone: Tone; label: string } {
+  // Never recorded a run, but not yet overdue (e.g. a 6-hourly job right after
+  // monitoring was enabled) — neutral, not an alarm.
+  if (c.neverRecorded && !c.stale) return { tone: "idle", label: "Awaiting first run" };
   if (c.neverRecorded) return { tone: "bad", label: "Never run" };
   if (c.stale) return { tone: "bad", label: "Stale" };
   if (c.ok === false || c.consecutiveFailures > 0) return { tone: "warn", label: "Failing" };
@@ -100,7 +103,7 @@ export function AdminHealth() {
   const issues = data
     ? [
         !data.db.ok && "database",
-        data.crons.some((c) => c.stale || c.neverRecorded) && "a scheduled job",
+        data.crons.some((c) => c.stale) && "a scheduled job",
         data.calendars.errored > 0 && "calendar errors",
         (data.bookings.pendingPayment > 0 || data.bookings.awaitingPayment > 0) && "unconfirmed payments",
       ].filter(Boolean)
@@ -129,7 +132,7 @@ export function AdminHealth() {
           <div className={cn("flex items-center gap-3 rounded-none border px-4 py-3", issues.length ? toneClasses.bad : toneClasses.ok)}>
             {issues.length ? <AlertTriangle className="h-5 w-5 shrink-0" /> : <CheckCircle2 className="h-5 w-5 shrink-0" />}
             <p className="text-sm font-semibold">
-              {issues.length ? `${issues.length} area${issues.length === 1 ? "" : "s"} need attention: ${issues.join(", ")}.` : "All systems operational."}
+              {issues.length ? `${issues.length} area${issues.length === 1 ? " needs" : "s need"} attention: ${issues.join(", ")}.` : "All systems operational."}
             </p>
           </div>
 

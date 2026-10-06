@@ -65,11 +65,24 @@ export async function collectHealth(admin: SupabaseClient): Promise<AdminHealth>
   // NEVER recorded a run still shows up (as missing), not just silently absent.
   const { data: cronRows } = await admin.from("cron_runs").select("*");
   const rows = (cronRows ?? []) as Array<Record<string, unknown>>;
+  // "System alive since" — the freshest success across ALL jobs. Used so a job
+  // that has never recorded a run is only treated as overdue once the system has
+  // otherwise been alive longer than that job's window (e.g. the 10-min reconcile
+  // has run, but the 6-hourly refresh simply hasn't hit its first slot yet). This
+  // mirrors the email-alert heuristic and avoids a false "never run" alarm right
+  // after monitoring is first enabled.
+  const newestSuccessAge = rows.reduce((min, r) => {
+    const t = typeof r.last_success_at === "string" ? Date.parse(r.last_success_at) : NaN;
+    return isNaN(t) ? min : Math.min(min, now - t);
+  }, Infinity);
   const crons: CronHealth[] = CRON_REGISTRY.map((spec) => {
     const row = rows.find((r) => r.job === spec.job);
     const lastSuccess = typeof row?.last_success_at === "string" ? Date.parse(row.last_success_at) : NaN;
     const hasSuccess = !isNaN(lastSuccess);
-    const stale = !hasSuccess || now - lastSuccess > spec.maxAgeMinutes * 60_000;
+    const maxAgeMs = spec.maxAgeMinutes * 60_000;
+    // Genuinely overdue: either its own last success is too old, OR it has never
+    // succeeded AND enough time has passed (per another job) that it should have.
+    const stale = hasSuccess ? now - lastSuccess > maxAgeMs : newestSuccessAge > maxAgeMs;
     return {
       job: spec.job,
       label: spec.label,
