@@ -16,7 +16,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, BarChart3, BookOpen, Check, CreditCard, ExternalLink, FileText, Gift, Home, Landmark, LayoutDashboard, ListChecks, Mail, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, QrCode, Ticket, Timer, UserSearch, Users, Utensils, Wallet, X } from "lucide-react";
+import { Activity, AlertTriangle, BarChart3, BookOpen, Check, CreditCard, ExternalLink, FileText, Gift, Home, Landmark, LayoutDashboard, ListChecks, Mail, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, QrCode, Ticket, Timer, UserSearch, Users, Utensils, Wallet, X } from "lucide-react";
 import { formatLocation } from "@/lib/region";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -41,6 +41,7 @@ import { AdminAccounts } from "@/components/AdminAccounts";
 import { AdminUsers } from "@/components/AdminUsers";
 import { AdminGiftCards } from "@/components/AdminGiftCards";
 import { AdminSubscriptions } from "@/components/AdminSubscriptions";
+import { AdminHealth } from "@/components/AdminHealth";
 import { useAuth } from "@/contexts/AuthContext";
 import { RequireRole } from "@/components/RequireRole";
 import { Button } from "@/components/ui/button";
@@ -242,9 +243,10 @@ function StatTile({ n, label, onClick }: { n: number | string; label: string; on
   );
 }
 
-type AdminSection = "overview" | "reviews" | "listings" | "eateries" | "places" | "analytics" | "vouchers" | "users" | "accounts" | "giftcards" | "subscriptions" | "support" | "messages" | "response" | "email" | "documents" | "qr" | "payouts" | "blog" | "hub" | "site";
+type AdminSection = "overview" | "health" | "reviews" | "listings" | "eateries" | "places" | "analytics" | "vouchers" | "users" | "accounts" | "giftcards" | "subscriptions" | "support" | "messages" | "response" | "email" | "documents" | "qr" | "payouts" | "blog" | "hub" | "site";
 const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: typeof Home }[] = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
+  { key: "health", label: "Health", icon: Activity },
   { key: "reviews", label: "Reviews", icon: ListChecks },
   { key: "listings", label: "Listings", icon: Package },
   { key: "eateries", label: "Eat guide", icon: Utensils },
@@ -349,6 +351,7 @@ function AdminConsole() {
 
           <div className="min-w-0">
             {section === "overview" && <OverviewPanel go={go} />}
+            {section === "health" && <AdminHealth />}
             {section === "reviews" && <ReviewsPanel />}
             {section === "listings" && <AdminListings />}
             {section === "eateries" && <AdminEateries />}

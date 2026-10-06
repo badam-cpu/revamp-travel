@@ -153,6 +153,41 @@ export async function adminTripadvisorMatch(name: string, geo?: string, category
   });
 }
 
+export interface AdminHealth {
+  time: string;
+  db: { ok: boolean; configured: boolean };
+  crons: {
+    job: string;
+    label: string;
+    lastRunAt: string | null;
+    lastSuccessAt: string | null;
+    ok: boolean | null;
+    consecutiveFailures: number;
+    detail: string | null;
+    stale: boolean;
+    maxAgeMinutes: number;
+    neverRecorded: boolean;
+  }[];
+  calendars: {
+    total: number;
+    stale: number;
+    errored: number;
+    items: { id: string; title: string; type: string; lastSyncedAt: string | null; error: string | null; blockedRanges: number; stale: boolean }[];
+  };
+  bookings: { pendingPayment: number; awaitingPayment: number };
+  integrations: Record<string, boolean>;
+}
+
+/** Admin-only: operational health snapshot (crons, calendar syncs, integrations). */
+export async function fetchAdminHealth(): Promise<AdminHealth> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<AdminHealth>("/api/admin-health", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export interface StartCheckoutParams {
   listingId: string;
   startDate: string;

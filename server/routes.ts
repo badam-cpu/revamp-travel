@@ -12,6 +12,7 @@
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { listPublishedForPlanner, verifyUser, userClient, getListingBusyRanges, getOperatorGooglePlaceId, pingDb } from "./supabase.js";
+import { collectHealth } from "./health.js";
 import { fetchPlaceReviews, fetchPlaceDetails, placesServerKeySet } from "./googlePlaces.js";
 import { matchTripadvisor, tripadvisorConfigured } from "./tripadvisor.js";
 import { translateTexts } from "./translate.js";
@@ -460,6 +461,26 @@ export function registerApiRoutes(app: Express) {
       db: db.ok ? "up" : db.configured ? "down" : "unconfigured",
       time: new Date().toISOString(),
     });
+  });
+
+  // GET /api/admin-health — admin-only operational snapshot for /admin → Health:
+  // cron heartbeats, per-listing calendar freshness, stuck payments, and which
+  // integrations are configured (booleans only, no secrets). Read-only.
+  app.get("/api/admin-health", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+    try {
+      res.json(await collectHealth(admin));
+    } catch (err) {
+      console.error("[admin-health]", err);
+      res.status(500).json({ error: "Couldn't load the health snapshot." });
+    }
   });
 
   // POST /api/track — anonymous, first-party engagement events (impressions,
