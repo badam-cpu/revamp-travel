@@ -24,13 +24,17 @@ import { recordCronRun, checkAndAlertStaleCrons } from "../../server/alerts.js";
 
 const JOB = "reconcile-bookings";
 
-export const handler = async () => {
+// Canonical Netlify scheduled-function form: a single default export plus the
+// `config.schedule` below. (Previously this also exported `const handler` and a
+// default alias — that mixed v1/v2 signature can stop Netlify registering the
+// schedule, which is why this cron never ran.)
+export default async (): Promise<Response> => {
   if (!adminConfigured()) {
     console.error("[reconcile-bookings] service role not configured — skipping");
-    return { statusCode: 200, body: JSON.stringify({ skipped: "not_configured" }) };
+    return Response.json({ skipped: "not_configured" });
   }
   const admin = supabaseAdmin();
-  if (!admin) return { statusCode: 200, body: JSON.stringify({ skipped: "no_client" }) };
+  if (!admin) return Response.json({ skipped: "no_client" });
   try {
     const result = await reconcileAllPendingBookings(admin, { limit: 200 });
     // Also email travelers whose trip has ended, asking for a review (once each).
@@ -50,12 +54,12 @@ export const handler = async () => {
     // watcher that notices the daily refresh-ical going silent.
     await recordCronRun(admin, JOB, true, `bookings ${result.confirmed ?? 0}c/${result.expired ?? 0}x`);
     await checkAndAlertStaleCrons(admin);
-    return { statusCode: 200, body: JSON.stringify({ ...result, reviewEmails: reviews.sent, gifts, giftExpiry, subs, subAmounts, vouchers, qrPays }) };
+    return Response.json({ ...result, reviewEmails: reviews.sent, gifts, giftExpiry, subs, subAmounts, vouchers, qrPays });
   } catch (err) {
     console.error("[reconcile-bookings] failed", err);
     await recordCronRun(admin, JOB, false, String(err).slice(0, 200));
     await checkAndAlertStaleCrons(admin);
-    return { statusCode: 500, body: JSON.stringify({ error: String(err).slice(0, 200) }) };
+    return Response.json({ error: String(err).slice(0, 200) }, { status: 500 });
   }
 };
 
@@ -68,5 +72,3 @@ export const handler = async () => {
 // flips paid holds to confirmed (and sends the emails), so it needs to be
 // prompt, not hourly. Cheap: it only polls bookings still in pending_payment.
 export const config = { schedule: "*/10 * * * *" };
-
-export default handler;

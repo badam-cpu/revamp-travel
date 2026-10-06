@@ -33,13 +33,17 @@ function feedsFor(row: { ical_url?: string | null; ical_feeds?: unknown }) {
   return feeds;
 }
 
-export const handler = async () => {
+// Canonical Netlify scheduled-function form: a single default export plus the
+// `config.schedule` below. (Previously this also exported `const handler` and a
+// default alias — that mixed v1/v2 signature can stop Netlify registering the
+// schedule, which is why this cron never ran.)
+export default async (): Promise<Response> => {
   if (!adminConfigured()) {
     console.error("[refresh-ical] service role not configured — skipping");
-    return { statusCode: 200, body: JSON.stringify({ skipped: "not_configured" }) };
+    return Response.json({ skipped: "not_configured" });
   }
   const admin = supabaseAdmin();
-  if (!admin) return { statusCode: 200, body: JSON.stringify({ skipped: "no_client" }) };
+  if (!admin) return Response.json({ skipped: "no_client" });
 
   // select("*") so a not-yet-run 0034 (ical_feeds) migration doesn't break the cron.
   const { data, error } = await admin.from("listings").select("*");
@@ -47,7 +51,7 @@ export const handler = async () => {
     console.error("[refresh-ical] failed to list listings", error);
     await recordCronRun(admin, JOB, false, `list_failed: ${error?.message ?? "no data"}`);
     await checkAndAlertStaleCrons(admin);
-    return { statusCode: 500, body: JSON.stringify({ error: "list_failed" }) };
+    return Response.json({ error: "list_failed" }, { status: 500 });
   }
 
   let refreshed = 0;
@@ -103,7 +107,7 @@ export const handler = async () => {
   await recordCronRun(admin, JOB, true, `refreshed ${refreshed}, failed ${failed}`);
   await checkAndAlertStaleCrons(admin);
 
-  return { statusCode: 200, body: JSON.stringify(result) };
+  return Response.json(result);
 };
 
 // Every 6 hours (00:00, 06:00, 12:00, 18:00 UTC). An explicit cron expression
@@ -112,5 +116,3 @@ export const handler = async () => {
 // Airbnb/Booking.com propagates to Revamp within hours, not a full day —
 // shrinking the overbooking window. Netlify reads this export to schedule it.
 export const config = { schedule: "0 */6 * * *" };
-
-export default handler;
