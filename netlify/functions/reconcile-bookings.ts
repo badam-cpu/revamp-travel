@@ -20,6 +20,9 @@ import { reconcileAllPendingGiftCards, expireOverdueGiftCards } from "../../serv
 import { reconcileAllSubscriptions, reconcilePerListingAmounts } from "../../server/subscriptions.js";
 import { reconcileAllVouchers } from "../../server/vouchers.js";
 import { reconcileQrPayments } from "../../server/qrPayments.js";
+import { recordCronRun, checkAndAlertStaleCrons } from "../../server/alerts.js";
+
+const JOB = "reconcile-bookings";
 
 export const handler = async () => {
   if (!adminConfigured()) {
@@ -43,9 +46,15 @@ export const handler = async () => {
     // Confirm QR tips/service payments (primary path — PayLink has no auto-redirect).
     const qrPays = await reconcileQrPayments(admin, { limit: 200 });
     console.log("[reconcile-bookings]", { ...result, reviewEmails: reviews.sent, gifts, giftExpiry, subs, subAmounts, vouchers, qrPays });
+    // Heartbeat + cron watchdog. This job runs every 10 min, so it's the primary
+    // watcher that notices the daily refresh-ical going silent.
+    await recordCronRun(admin, JOB, true, `bookings ${result.confirmed ?? 0}c/${result.expired ?? 0}x`);
+    await checkAndAlertStaleCrons(admin);
     return { statusCode: 200, body: JSON.stringify({ ...result, reviewEmails: reviews.sent, gifts, giftExpiry, subs, subAmounts, vouchers, qrPays }) };
   } catch (err) {
     console.error("[reconcile-bookings] failed", err);
+    await recordCronRun(admin, JOB, false, String(err).slice(0, 200));
+    await checkAndAlertStaleCrons(admin);
     return { statusCode: 500, body: JSON.stringify({ error: String(err).slice(0, 200) }) };
   }
 };

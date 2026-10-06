@@ -16,6 +16,9 @@ import { supabaseAdmin, adminConfigured } from "../../server/supabaseAdmin.js";
 import { fetchMergedBlockedRanges } from "../../server/ical.js";
 import { syncAllPricelabs } from "../../server/pricelabs.js";
 import { syncListingSessions, applyIcalToSessions } from "../../server/sessions.js";
+import { recordCronRun, checkAndAlertStaleCrons } from "../../server/alerts.js";
+
+const JOB = "refresh-ical";
 
 /** Legacy single `ical_url` → one Airbnb feed; otherwise use `ical_feeds`. */
 function feedsFor(row: { ical_url?: string | null; ical_feeds?: unknown }) {
@@ -42,6 +45,8 @@ export const handler = async () => {
   const { data, error } = await admin.from("listings").select("*");
   if (error || !data) {
     console.error("[refresh-ical] failed to list listings", error);
+    await recordCronRun(admin, JOB, false, `list_failed: ${error?.message ?? "no data"}`);
+    await checkAndAlertStaleCrons(admin);
     return { statusCode: 500, body: JSON.stringify({ error: "list_failed" }) };
   }
 
@@ -91,6 +96,13 @@ export const handler = async () => {
 
   const result = { total: data.length, refreshed, failed, sessionsClosed, pricelabs };
   console.log("[refresh-ical]", result);
+
+  // Heartbeat: the sweep completed (per-feed failures are tracked per listing in
+  // ical_error, so they don't mark the cron itself as failed). Then check every
+  // monitored cron and alert admins about any that have gone silent.
+  await recordCronRun(admin, JOB, true, `refreshed ${refreshed}, failed ${failed}`);
+  await checkAndAlertStaleCrons(admin);
+
   return { statusCode: 200, body: JSON.stringify(result) };
 };
 

@@ -30,6 +30,13 @@ function prettyDate(iso: string): string {
   return new Date(y, (m ?? 1) - 1, d ?? 1).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 }
 
+/** Full timestamp (date + time, UTC) for operational alerts, e.g. "Sep 19, 2026, 20:23 UTC". */
+function prettyDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" }) + " UTC";
+}
+
 // Brand tokens (inline — email clients don't share the app's CSS): apricot
 // #F15822, charcoal #212121, paper #FFFFFF, chalk #F6F3EC.
 function shell(title: string, bodyHtml: string, siteUrl: string): string {
@@ -397,4 +404,41 @@ export function sendSupportAlert(to: string, opts: { travelerName: string; messa
     site,
   );
   return send(to, "Support: a traveler needs a reply", html);
+}
+
+/**
+ * A scheduled job (cron) looks down: its last successful run is older than
+ * expected, or it has been failing. `reason` describes which. Sent to admins so
+ * a silently-stopped cron (e.g. the iCal availability refresh) gets noticed
+ * instead of leaving listings stale for weeks.
+ */
+export function sendCronAlert(
+  to: string,
+  opts: { job: string; reason: string; lastSuccessAt: string | null; lastError?: string | null },
+) {
+  const site = SITE();
+  const last = opts.lastSuccessAt ? prettyDateTime(opts.lastSuccessAt) : "never";
+  const html = shell(
+    "A background job looks stuck ⚠️",
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 10px;">The scheduled job <strong>${esc(opts.job)}</strong> isn't running as expected.</p>
+     <p style="margin:0 0 4px;font-size:14px;">What's wrong: <strong>${esc(opts.reason)}</strong></p>
+     <p style="margin:0 0 4px;font-size:14px;">Last successful run: <strong>${esc(last)}</strong></p>
+     ${opts.lastError ? `<p style="margin:0 0 12px;font-size:14px;">Last error: <span style="color:#b4451f;">${esc(opts.lastError)}</span></p>` : ""}
+     <p style="font-size:14px;line-height:1.6;margin:0 0 14px;color:#3f3b36;">Check the function's logs in Netlify (Logs → Functions → <em>${esc(opts.job)}</em>). If it's the iCal refresh, operator calendars (Airbnb/Booking.com availability) may be out of date until it runs again.</p>
+     <p style="margin:0 0 8px;"><a href="${esc(site)}/admin" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Open Admin</a></p>`,
+    site,
+  );
+  return send(to, `⚠️ Cron "${opts.job}" looks stuck`, html);
+}
+
+/** A previously-alerting cron has recovered — sent once when it comes back. */
+export function sendCronRecovered(to: string, opts: { job: string }) {
+  const site = SITE();
+  const html = shell(
+    "Background job recovered ✅",
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 14px;">The scheduled job <strong>${esc(opts.job)}</strong> is running again — it just completed successfully. No action needed.</p>
+     <p style="margin:0 0 8px;"><a href="${esc(site)}/admin" style="background:#212121;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Open Admin</a></p>`,
+    site,
+  );
+  return send(to, `✅ Cron "${opts.job}" recovered`, html);
 }
