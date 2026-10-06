@@ -23,7 +23,7 @@
  */
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, CreditCard, FileText, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, Pencil, Plug, Plus, QrCode, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, CreditCard, FileText, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, Pencil, Plug, Plus, QrCode, RefreshCw, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
 import { Inbox } from "@/components/Inbox";
 import { PartnerHub } from "@/components/PartnerHub";
 import { PriceLabsConnect } from "@/components/PriceLabsConnect";
@@ -972,6 +972,24 @@ function SingleCalendarSync({ listing }: { listing: LiveListing }) {
     }
   };
 
+  // Re-pull the ALREADY-SAVED calendar on demand (no URL edit needed). This is
+  // the operator's manual refresh — handy if the daily auto-refresh is delayed.
+  const resync = async () => {
+    setBusy(true);
+    setMsg(null);
+    setErr(null);
+    try {
+      const res = await syncIcal(listing.id);
+      setMsg(`Synced — ${res.count} blocked date ${res.count === 1 ? "range" : "ranges"}.`);
+      await refresh();
+    } catch (e) {
+      setErr(e instanceof ApiError || e instanceof Error ? e.message : "Couldn't sync that calendar.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const hasSaved = !!listing.icalUrl;
+
   // A successful sync (this session's msg, or a prior synced-at with no error)
   // reads green; a failure reads red; everything else is muted.
   const isError = !!err || (!msg && !!listing.icalError);
@@ -1013,6 +1031,11 @@ function SingleCalendarSync({ listing }: { listing: LiveListing }) {
         >
           {busy ? "Syncing…" : isSynced ? <><Check className="mr-1.5 h-3.5 w-3.5" /> Synced</> : url.trim() ? "Save & sync" : "Save"}
         </Button>
+        {hasSaved && (
+          <Button type="button" variant="ghost" size="sm" className="h-9 shrink-0 rounded-none text-xs text-basalt/60 hover:text-basalt" disabled={busy} onClick={resync} title="Re-pull the connected calendar now">
+            <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", busy && "animate-spin")} /> Re-sync
+          </Button>
+        )}
       </div>
       <p className={cn("mt-1.5 flex items-center gap-1.5 text-xs", isError ? "text-destructive" : isSynced ? "font-semibold text-green-700" : "text-basalt/45")}>
         {isSynced && <Check className="h-3.5 w-3.5 shrink-0" />}
@@ -1057,6 +1080,25 @@ function StayCalendarSync({ listing }: { listing: LiveListing }) {
     }
   };
 
+  // Re-pull the ALREADY-SAVED feeds on demand (no URL edit needed) — the
+  // operator's manual refresh, independent of the daily auto-refresh cron.
+  const resync = async () => {
+    setBusy(true);
+    setMsg(null);
+    setErr(null);
+    try {
+      const res = await syncIcal(listing.id);
+      const n = res.feeds ?? listing.icalFeeds.length;
+      setMsg(`Synced ${n} calendar${n === 1 ? "" : "s"} — ${res.count} blocked date ${res.count === 1 ? "range" : "ranges"}.${res.errors?.length ? ` Issues: ${res.errors.join("; ")}` : ""}`);
+      await refresh();
+    } catch (e) {
+      setErr(e instanceof ApiError || e instanceof Error ? e.message : "Couldn't sync those calendars.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const hasSaved = listing.icalFeeds.length > 0 || !!listing.icalUrl;
+
   const copy = async () => {
     try {
       await navigator.clipboard?.writeText(exportUrl);
@@ -1094,7 +1136,12 @@ function StayCalendarSync({ listing }: { listing: LiveListing }) {
           <Input type="url" value={booking} onChange={(e) => { setBooking(e.target.value); setMsg(null); setErr(null); }} placeholder="https://admin.booking.com/hotel/…/ical.html?…" className="h-9 min-w-0 flex-1 rounded-none text-xs" />
         </div>
       </div>
-      <div className="mt-2 flex justify-end">
+      <div className="mt-2 flex justify-end gap-2">
+        {hasSaved && (
+          <Button type="button" variant="ghost" size="sm" className="h-9 rounded-none text-xs text-basalt/60 hover:text-basalt" disabled={busy} onClick={resync} title="Re-pull the connected calendars now">
+            <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", busy && "animate-spin")} /> Re-sync
+          </Button>
+        )}
         <Button type="button" variant="outline" size="sm" className={cn("h-9 rounded-none border-basalt/15 text-xs", isSynced && "border-green-600/40 bg-green-600/10 text-green-700 hover:bg-green-600/15")} disabled={busy} onClick={save}>
           {busy ? "Syncing…" : isSynced ? <><Check className="mr-1.5 h-3.5 w-3.5" /> Synced</> : "Save & sync"}
         </Button>
