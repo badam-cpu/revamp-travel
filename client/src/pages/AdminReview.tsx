@@ -247,7 +247,7 @@ type AdminSection = "overview" | "health" | "reviews" | "listings" | "eateries" 
 const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: typeof Home }[] = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
   { key: "health", label: "Health", icon: Activity },
-  { key: "reviews", label: "Reviews", icon: ListChecks },
+  { key: "reviews", label: "Approvals", icon: ListChecks },
   { key: "listings", label: "Listings", icon: Package },
   { key: "eateries", label: "Eat guide", icon: Utensils },
   { key: "places", label: "Visit guide", icon: Landmark },
@@ -285,7 +285,7 @@ function OverviewPanel({ go }: { go: (s: AdminSection) => void }) {
     <div>
       <SectionHead title="Admin overview." sub="A snapshot of what needs your attention. Jump into any area from here." />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <StatTile n={pending ?? "—"} label="Pending reviews" onClick={() => go("reviews")} />
+        <StatTile n={pending ?? "—"} label="Pending approvals" onClick={() => go("reviews")} />
         <StatTile n={published ?? "—"} label="Published listings" onClick={() => go("reviews")} />
         <StatTile n={drafts ?? "—"} label="Blog drafts" onClick={() => go("blog")} />
       </div>
