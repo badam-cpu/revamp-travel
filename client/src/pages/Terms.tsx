@@ -9,7 +9,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 
-const UPDATED = "September 16, 2026";
+const UPDATED = "October 7, 2026";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -60,6 +60,12 @@ export default function Terms() {
 
           <Section title="Operator terms">
             <p>Operators are solely responsible for the accuracy of their listings, their availability, and delivering the booked service safely and as described. Revamp charges a commission on each confirmed booking and pays operators the remainder on a schedule (stays the day after check-in; tours and experiences monthly). Operators are responsible for their own taxes and for issuing refunds due under their cancellation policy.</p>
+          </Section>
+
+          <Section title="Referral program">
+            <p>Operators may invite other prospective operators to join Revamp using a personal referral link or code. The referral program is open to operator accounts only. When a host you referred joins through your link or code and their <strong className="text-basalt">first booking is confirmed</strong>, you earn referral credit in the amount shown in your dashboard at the time it is earned.</p>
+            <p>Each new operator can be referred only once (the first valid referral applies), you cannot refer yourself, and referrals between accounts under common control are not eligible. Referral credit is funded by Revamp — it does not reduce the referred host's payout or change what any traveler is charged. Earned credit is paid out to you by Revamp, typically alongside your regular payouts; it has no cash value except as paid under these terms and is not transferable.</p>
+            <p>Revamp may set, change, or discontinue the reward amount and the program at any time; changes apply going forward. We may withhold or void referral credit, and suspend participation, where we reasonably believe the program is being abused — including fake or duplicate accounts, self-referral, bookings created to trigger rewards, or other fraudulent or manipulative activity. Referrals linked to an account that is later closed for a terms violation may be voided.</p>
           </Section>
 
           <Section title="Acceptable use">

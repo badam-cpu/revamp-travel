@@ -431,6 +431,22 @@ export function sendCronAlert(
   return send(to, `⚠️ Cron "${opts.job}" looks stuck`, html);
 }
 
+/**
+ * A referral the operator made just qualified — their referred host got their
+ * first booking, so the referrer earned credit. Referrer-only reward.
+ */
+export function sendReferralReward(to: string, opts: { rewardCents: number; currency: string }) {
+  const site = SITE();
+  const html = shell(
+    "You earned a referral reward 🎉",
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 10px;">Great news — a host you referred to Revamp just got their first confirmed booking. You've earned <strong>${money(opts.rewardCents, opts.currency)}</strong> in referral credit.</p>
+     <p style="font-size:14px;line-height:1.6;margin:0 0 14px;color:#3f3b36;">It's now showing in your dashboard. Keep inviting great hosts — every one who makes their first booking earns you more.</p>
+     <p style="margin:0 0 8px;"><a href="${esc(site)}/dashboard?section=referrals" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">See your referrals</a></p>`,
+    site,
+  );
+  return send(to, "You earned a Revamp referral reward", html);
+}
+
 /** A previously-alerting cron has recovered — sent once when it comes back. */
 export function sendCronRecovered(to: string, opts: { job: string }) {
   const site = SITE();

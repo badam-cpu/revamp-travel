@@ -5,6 +5,7 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch, useLocation } from "wouter";
 import { useEffect } from "react";
 import { initAnalytics, trackPageView } from "./lib/analytics";
+import { storeReferralCode } from "./lib/referrals";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -73,10 +74,22 @@ function ScrollToTop() {
   return null;
 }
 
+/** /r/:code — a host's referral link. Stashes the code, then sends the visitor
+ *  to signup (operator pre-selected) so attribution survives the account flow. */
+function ReferralCapture({ code }: { code: string }) {
+  const [, navigate] = useLocation();
+  useEffect(() => {
+    storeReferralCode(code);
+    navigate(`/signup?ref=${encodeURIComponent(code)}`, { replace: true });
+  }, [code, navigate]);
+  return null;
+}
+
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/r/:code">{(params) => <ReferralCapture code={params.code} />}</Route>
       <Route path="/explore/tour" component={Tours} />
       <Route path="/explore/eat" component={EatGuide} />
       <Route path="/eat/cuisine/:cuisine">{(params) => <EatLanding mode="cuisine" value={params.cuisine} />}</Route>

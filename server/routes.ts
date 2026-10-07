@@ -13,6 +13,7 @@ import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { listPublishedForPlanner, verifyUser, userClient, getListingBusyRanges, getOperatorGooglePlaceId, pingDb } from "./supabase.js";
 import { collectHealth } from "./health.js";
+import { getReferralSummary, attachReferral, listAllReferrals, markReferralPaid, setReferralConfig } from "./referrals.js";
 import { fetchPlaceReviews, fetchPlaceDetails, placesServerKeySet } from "./googlePlaces.js";
 import { matchTripadvisor, tripadvisorConfigured } from "./tripadvisor.js";
 import { translateTexts } from "./translate.js";
@@ -480,6 +481,96 @@ export function registerApiRoutes(app: Express) {
     } catch (err) {
       console.error("[admin-health]", err);
       res.status(500).json({ error: "Couldn't load the health snapshot." });
+    }
+  });
+
+  // ── Referral program (operators refer operators) ───────────────────────────
+  // GET /api/referral/me — the signed-in operator's code, link, stats, and list.
+  app.get("/api/referral/me", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "operator") return res.status(403).json({ error: "Operators only." });
+    try {
+      res.json(await getReferralSummary(admin, userId));
+    } catch (err) {
+      console.error("[referral/me]", err);
+      res.status(500).json({ error: "Couldn't load your referrals." });
+    }
+  });
+
+  // POST /api/referral/attach — link the signed-in new operator to a referral
+  // code (called right after signup). Guard rails live in attachReferral().
+  app.post("/api/referral/attach", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const code = typeof req.body?.code === "string" ? req.body.code : "";
+    if (!code.trim()) return res.status(400).json({ error: "Missing code." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const result = await attachReferral(admin, userId, code);
+    // Soft-fail: a bad/duplicate code is not an error the user needs to see as a
+    // 500 — report ok:false with the reason so the client can decide quietly.
+    res.json(result);
+  });
+
+  // GET /api/referral/admin — admin: all referrals + config + totals.
+  app.get("/api/referral/admin", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+    try {
+      res.json(await listAllReferrals(admin));
+    } catch (err) {
+      console.error("[referral/admin]", err);
+      res.status(500).json({ error: "Couldn't load referrals." });
+    }
+  });
+
+  // POST /api/referral/admin-pay — admin: mark a qualified referral paid.
+  app.post("/api/referral/admin-pay", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const referralId = typeof req.body?.referralId === "string" ? req.body.referralId : "";
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+    const ok = await markReferralPaid(admin, referralId);
+    res.json({ ok });
+  });
+
+  // POST /api/referral/admin-settings — admin: toggle program / set reward.
+  app.post("/api/referral/admin-settings", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+    const enabled = typeof req.body?.enabled === "boolean" ? req.body.enabled : undefined;
+    const rewardCents = typeof req.body?.rewardCents === "number" ? req.body.rewardCents : undefined;
+    try {
+      await setReferralConfig(admin, { enabled, rewardCents });
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[referral/admin-settings]", err);
+      res.status(500).json({ error: "Couldn't save settings." });
     }
   });
 

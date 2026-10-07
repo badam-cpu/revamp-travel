@@ -23,7 +23,7 @@
  */
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, CreditCard, FileText, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, Pencil, Plug, Plus, QrCode, RefreshCw, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, CreditCard, FileText, Gift, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, Pencil, Plug, Plus, QrCode, RefreshCw, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
 import { Inbox } from "@/components/Inbox";
 import { PartnerHub } from "@/components/PartnerHub";
 import { PriceLabsConnect } from "@/components/PriceLabsConnect";
@@ -44,6 +44,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import type { ListingInput, ListingType } from "@shared/listings";
 import { LISTING_LIMITS } from "@shared/listings";
 import { ApiError, importListingPrefill, syncIcal } from "@/lib/api";
+import { attachReferral, getStoredReferralCode, clearStoredReferralCode } from "@/lib/referrals";
 import { cn } from "@/lib/utils";
 import { PlaceAutocomplete } from "@/components/PlaceAutocomplete";
 import { geocodeQuery } from "@/lib/googleMaps";
@@ -62,6 +63,7 @@ import { OperatorBookings } from "@/components/OperatorBookings";
 import { PricingCalendar } from "@/components/PricingCalendar";
 import { OperatorBookingsTimeline } from "@/components/OperatorBookingsTimeline";
 import { PromoCodes } from "@/components/PromoCodes";
+import { OperatorReferrals } from "@/components/OperatorReferrals";
 import { OperatorPayouts } from "@/components/OperatorPayouts";
 import { OperatorSubscription } from "@/components/OperatorSubscription";
 import { SessionScheduleEditor } from "@/components/SessionScheduleEditor";
@@ -1322,7 +1324,7 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
   );
 }
 
-type OperatorSection = "overview" | "listings" | "analytics" | "bookings" | "promos" | "messages" | "documents" | "qr" | "hub" | "integrations" | "payouts" | "billing" | "settings";
+type OperatorSection = "overview" | "listings" | "analytics" | "bookings" | "promos" | "messages" | "documents" | "qr" | "hub" | "integrations" | "payouts" | "billing" | "referrals" | "settings";
 const OPERATOR_SECTIONS: { key: OperatorSection; label: string; icon: typeof Home }[] = [
   { key: "overview", label: "Dashboard", icon: LayoutDashboard },
   { key: "listings", label: "Listings", icon: List },
@@ -1336,6 +1338,7 @@ const OPERATOR_SECTIONS: { key: OperatorSection; label: string; icon: typeof Hom
   { key: "integrations", label: "Integrations", icon: Plug },
   { key: "payouts", label: "Payouts", icon: Wallet },
   { key: "billing", label: "Billing", icon: CreditCard },
+  { key: "referrals", label: "Refer & earn", icon: Gift },
   { key: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -1451,6 +1454,20 @@ function DashboardContent() {
     canonicalPath: "/dashboard",
     noindex: true,
   });
+
+  // Referral attribution: if this operator signed up through a host's invite
+  // link, attach the pending referral now (once). Best-effort — a bad/duplicate
+  // code soft-fails server-side; we only keep the code to retry on a network error.
+  useEffect(() => {
+    if (profile?.role !== "operator" || !user?.id) return;
+    const code = getStoredReferralCode();
+    if (!code) return;
+    attachReferral(code)
+      .then(() => clearStoredReferralCode())
+      .catch(() => {
+        /* network error — leave the code to retry next load */
+      });
+  }, [profile?.role, user?.id]);
 
   // Section is driven by ?section= so it's deep-linkable (and the header's
   // "Dashboard" link lands on the overview).
@@ -1591,6 +1608,8 @@ function DashboardContent() {
                 <OperatorSubscription />
               </div>
             )}
+
+            {section === "referrals" && <OperatorReferrals />}
 
             {section === "settings" && (
               <div>

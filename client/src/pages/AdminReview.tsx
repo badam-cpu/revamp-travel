@@ -42,6 +42,7 @@ import { AdminUsers } from "@/components/AdminUsers";
 import { AdminGiftCards } from "@/components/AdminGiftCards";
 import { AdminSubscriptions } from "@/components/AdminSubscriptions";
 import { AdminHealth } from "@/components/AdminHealth";
+import { AdminReferrals } from "@/components/AdminReferrals";
 import { useAuth } from "@/contexts/AuthContext";
 import { RequireRole } from "@/components/RequireRole";
 import { Button } from "@/components/ui/button";
@@ -243,7 +244,7 @@ function StatTile({ n, label, onClick }: { n: number | string; label: string; on
   );
 }
 
-type AdminSection = "overview" | "health" | "reviews" | "listings" | "eateries" | "places" | "analytics" | "vouchers" | "users" | "accounts" | "giftcards" | "subscriptions" | "support" | "messages" | "response" | "email" | "documents" | "qr" | "payouts" | "blog" | "hub" | "site";
+type AdminSection = "overview" | "health" | "reviews" | "listings" | "eateries" | "places" | "analytics" | "vouchers" | "users" | "accounts" | "giftcards" | "subscriptions" | "referrals" | "support" | "messages" | "response" | "email" | "documents" | "qr" | "payouts" | "blog" | "hub" | "site";
 const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: typeof Home }[] = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
   { key: "health", label: "Health", icon: Activity },
@@ -257,6 +258,7 @@ const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: typeof Home }[] 
   { key: "accounts", label: "Accounts", icon: Users },
   { key: "giftcards", label: "Gift cards", icon: Gift },
   { key: "subscriptions", label: "Subscriptions", icon: CreditCard },
+  { key: "referrals", label: "Referrals", icon: Gift },
   { key: "support", label: "Support", icon: MessageSquare },
   { key: "messages", label: "All messages", icon: MessagesSquare },
   { key: "response", label: "Response metrics", icon: Timer },
@@ -368,6 +370,7 @@ function AdminConsole() {
             {section === "accounts" && <AdminAccounts />}
             {section === "giftcards" && <AdminGiftCards />}
             {section === "subscriptions" && <AdminSubscriptions />}
+            {section === "referrals" && <AdminReferrals />}
             {section === "support" && <AdminSupportInbox />}
             {section === "email" && <AdminEmail />}
             {section === "messages" && (

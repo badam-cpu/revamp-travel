@@ -15,6 +15,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkPayment } from "./paylink.js";
 import { sendTravelerConfirmation, sendOperatorNewBooking, sendReviewRequest, type BookingEmailInfo } from "./email.js";
 import { notifyBooking } from "./notify.js";
+import { qualifyReferralForOperator } from "./referrals.js";
 import { payoutDueDate } from "../shared/payouts.js";
 import { computeBookingCharge, DEFAULT_CURRENCY } from "../shared/bookings.js";
 import type { ListingType } from "../shared/listings.js";
@@ -89,6 +90,11 @@ async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promi
     },
     { onConflict: "booking_id", ignoreDuplicates: true },
   );
+
+  // Referral program: if this operator was referred by another host, their first
+  // confirmed booking earns the referrer credit. Best-effort, never throws, and
+  // deliberately independent of the payout above.
+  await qualifyReferralForOperator(admin, listing.operator_id, row.id);
 
   // Notify both sides (best-effort).
   const info: BookingEmailInfo = {

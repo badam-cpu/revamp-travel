@@ -17,6 +17,7 @@ import { PasswordInput } from "@/components/PasswordInput";
 import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 import { useAuth, UserRole } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { getStoredReferralCode, storeReferralCode } from "@/lib/referrals";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { cn } from "@/lib/utils";
 
@@ -37,7 +38,20 @@ export default function Signup() {
     if (authLoading || !signedIn) return;
     navigate("/");
   }, [authLoading, signedIn, navigate]);
-  const [role, setRole] = useState<UserRole>("traveler");
+  // Referral capture: a ?ref= param (or a code stashed by the /r/:code link)
+  // means a host invited them — pre-select the operator role and keep the code
+  // for Dashboard to attach once the account exists.
+  const [refCode] = useState(() => {
+    let code = "";
+    try {
+      code = new URLSearchParams(window.location.search).get("ref") || getStoredReferralCode() || "";
+    } catch {
+      /* ignore */
+    }
+    if (code) storeReferralCode(code);
+    return code;
+  });
+  const [role, setRole] = useState<UserRole>(refCode ? "operator" : "traveler");
   const [displayName, setDisplayName] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [email, setEmail] = useState("");
@@ -108,6 +122,11 @@ export default function Signup() {
         <div className="w-full max-w-md">
           <p className="eyebrow">Join Revamp</p>
           <h1 className="mt-3 font-display text-4xl tracking-[-0.03em]">Create an account.</h1>
+          {refCode && (
+            <p className="mt-3 rounded-none border border-apricot/30 bg-apricot/8 px-3 py-2 text-sm text-basalt/70">
+              🎉 You've been invited to host on Revamp. Create an <strong>operator</strong> account to list your place.
+            </p>
+          )}
 
           <div className="mt-8">
             <GoogleSignInButton label="Sign up with Google" />
