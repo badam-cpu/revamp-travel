@@ -68,7 +68,10 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
             <Link href="/gift-cards" className="hover:text-white">Gift cards</Link>
             <Link href="/faq" className="hover:text-white">FAQ</Link>
             {profile?.role === "operator" ? (
-              <Link href="/dashboard" className="hover:text-white">Your dashboard</Link>
+              <>
+                <Link href="/dashboard" className="hover:text-white">Your dashboard</Link>
+                <Link href="/dashboard?section=referrals" className="hover:text-white">Refer &amp; earn</Link>
+              </>
             ) : (
               <Link href="/host" className="hover:text-white">Become an operator</Link>
             )}
