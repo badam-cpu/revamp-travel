@@ -1,9 +1,9 @@
 /**
  * "Secured payments" trust row — the card networks PayLink accepts (Visa,
- * Mastercard, ArCa, Apple Pay) shown as self-hosted inline SVG marks, plus a
- * "secured by PayLink" note. Shown in the footer and at checkout. Marks are
+ * Mastercard, ArCa, Apple Pay, Google Pay) shown as self-hosted inline SVG marks,
+ * plus a "secured by PayLink" note. Shown in the footer and at checkout. Marks are
  * nominative "we accept" usage; keep this list in sync with what PayLink's hosted
- * checkout actually offers (Google Pay is deliberately excluded — not supported).
+ * checkout actually offers.
  */
 import { cn } from "@/lib/utils";
 
@@ -56,6 +56,16 @@ function ArCa() {
   );
 }
 
+function GooglePay() {
+  return (
+    <svg viewBox="0 0 44 18" className="h-3.5 w-auto" aria-hidden="true">
+      {/* "G" in Google blue + "Pay" wordmark */}
+      <text x="3" y="14" fontFamily="Arial, Helvetica, sans-serif" fontSize="14" fontWeight="700" fill="#4285F4">G</text>
+      <text x="15" y="14" fontFamily="Arial, Helvetica, sans-serif" fontSize="12" fontWeight="600" fill="#3C4043">Pay</text>
+    </svg>
+  );
+}
+
 export function PaymentMethods({ className, note = true }: { className?: string; note?: boolean }) {
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)}>
@@ -63,6 +73,7 @@ export function PaymentMethods({ className, note = true }: { className?: string;
       <Chip label="Mastercard"><Mastercard /></Chip>
       <Chip label="ArCa"><ArCa /></Chip>
       <Chip label="Apple Pay"><ApplePay /></Chip>
+      <Chip label="Google Pay"><GooglePay /></Chip>
       {note && <span className="text-xs text-basalt/45">Secured by PayLink</span>}
     </div>
   );
