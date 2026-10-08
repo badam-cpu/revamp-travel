@@ -89,21 +89,30 @@ export type CancellationPolicy = "flexible" | "non_refundable";
  * ("Space type"), so no schema change. */
 export const STAY_SPACE_TYPES = ["Entire place", "Private room", "Shared room", "Hotel room"] as const;
 
+/** Room-based lodging where a guest books one room, not the whole building —
+ * used to infer an Airbnb-style label when the operator hasn't set a space type. */
+const ROOM_BASED_PROPERTY_TYPES = ["hotel", "boutique hotel", "hostel", "guesthouse", "guest house", "bed & breakfast", "bed and breakfast", "b&b"];
+
 /** Compose an Airbnb-style stay type from the space type + property type, e.g.
  * ("Private room","Guesthouse") → "Private room in guesthouse",
  * ("Hotel room","Hotel") → "Room in hotel", ("Entire place","Villa") → "Entire villa".
- * Falls back to the property type (or `fallback`) when no space type is set, so
- * existing listings read exactly as before. */
+ * When no space type is set, infers one from the property type — room-based
+ * lodging (hotel/guesthouse/hostel/B&B) reads "Room in …", whole units read
+ * "Entire …" — so existing listings get a sensible label automatically. Falls
+ * back to `fallback` only when there's no property type at all. */
 export function formatStayType(spaceType?: string | null, propertyType?: string | null, fallback = "Stay"): string {
   const prop = (propertyType || "").trim();
   const propLower = prop.toLowerCase();
   const s = (spaceType || "").trim().toLowerCase();
-  if (!s) return prop || fallback;
-  if (s.startsWith("entire")) return prop ? `Entire ${propLower}` : "Entire place";
-  if (s.startsWith("private")) return prop ? `Private room in ${propLower}` : "Private room";
-  if (s.startsWith("shared")) return prop ? `Shared room in ${propLower}` : "Shared room";
-  if (s.startsWith("hotel") || s.startsWith("room")) return prop ? `Room in ${propLower}` : "Hotel room";
-  return prop || fallback;
+  if (s) {
+    if (s.startsWith("entire")) return prop ? `Entire ${propLower}` : "Entire place";
+    if (s.startsWith("private")) return prop ? `Private room in ${propLower}` : "Private room";
+    if (s.startsWith("shared")) return prop ? `Shared room in ${propLower}` : "Shared room";
+    if (s.startsWith("hotel") || s.startsWith("room")) return prop ? `Room in ${propLower}` : "Hotel room";
+  }
+  if (!prop) return fallback;
+  // No explicit space type → infer from the property type.
+  return ROOM_BASED_PROPERTY_TYPES.includes(propLower) ? `Room in ${propLower}` : `Entire ${propLower}`;
 }
 
 export interface ListingFact {
