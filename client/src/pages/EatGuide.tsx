@@ -45,15 +45,30 @@ export default function EatGuide() {
     return all.filter((l) => normalizeRegion(l.region || "").toLowerCase() === want);
   }, [listings, regionParam]);
 
+  // Canonical display label per venue type, matched CASE-INSENSITIVELY so
+  // "Fast food" and "Fast Food" are one cuisine (one chip, one group). The first
+  // spelling seen wins, which keeps acronyms like "BBQ" intact rather than
+  // title-casing them.
+  const venueTypeLabels = useMemo(() => {
+    const labels = new Map<string, string>();
+    eateries.forEach((l) => {
+      const raw = l.venueType?.trim();
+      if (!raw) return;
+      const key = raw.toLowerCase();
+      if (!labels.has(key)) labels.set(key, raw);
+    });
+    return labels;
+  }, [eateries]);
+
   // Venue-type facets present in the data (for the filter chips), most common first.
   const types = useMemo(() => {
     const counts = new Map<string, number>();
     eateries.forEach((l) => {
-      const c = l.venueType?.trim();
-      if (c) counts.set(c, (counts.get(c) ?? 0) + 1);
+      const key = l.venueType?.trim().toLowerCase();
+      if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
     });
-    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).map(([c]) => c);
-  }, [eateries]);
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).map(([key]) => venueTypeLabels.get(key) ?? key);
+  }, [eateries, venueTypeLabels]);
 
   // Distinct regions for the location filter (deduped by normalized region name,
   // so "Vayots Dzor" shows once, not once per city/listing).
@@ -73,25 +88,29 @@ export default function EatGuide() {
     () =>
       eateries.filter(
         (l) =>
-          (cuisine === "all" || (l.venueType?.trim() || OTHER) === cuisine) &&
+          (cuisine === "all" || (l.venueType?.trim() || OTHER).toLowerCase() === cuisine.toLowerCase()) &&
           (loc === "all" || normalizeRegion(l.region || "").toLowerCase() === loc.toLowerCase()) &&
           (minRating === 0 || bestRating(l) >= minRating),
       ),
     [eateries, cuisine, loc, minRating],
   );
 
-  // Group by venue type; within each group, best-rated first.
+  // Group by venue type (CASE-INSENSITIVE, canonical label); within each group,
+  // best-rated first.
   const groups = useMemo(() => {
-    const map = new Map<string, LiveListing[]>();
+    const map = new Map<string, { label: string; items: LiveListing[] }>();
     shown.forEach((l) => {
-      const key = l.venueType?.trim() || OTHER;
-      const arr = map.get(key) ?? [];
-      arr.push(l);
-      map.set(key, arr);
+      const raw = l.venueType?.trim() || OTHER;
+      const key = raw.toLowerCase();
+      const entry = map.get(key) ?? { label: venueTypeLabels.get(key) ?? raw, items: [] };
+      entry.items.push(l);
+      map.set(key, entry);
     });
-    map.forEach((arr) => arr.sort((a, b) => bestRating(b) - bestRating(a)));
-    return Array.from(map.entries()).sort((a, b) => b[1].length - a[1].length);
-  }, [shown]);
+    map.forEach((e) => e.items.sort((a, b) => bestRating(b) - bestRating(a)));
+    return Array.from(map.values())
+      .sort((a, b) => b.items.length - a.items.length)
+      .map((e) => [e.label, e.items] as [string, LiveListing[]]);
+  }, [shown, venueTypeLabels]);
 
   return (
     <div className="min-h-screen bg-paper text-basalt">
