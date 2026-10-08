@@ -12,7 +12,7 @@ import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ListingType, typeLabels } from "@/data/listings";
-import { isCuratedType, PLACE_CATEGORIES, PLACE_GROUPS, placeCategoryLabel } from "@shared/listings";
+import { isCuratedType, PLACE_CATEGORIES, PLACE_GROUPS, placeCategoryLabel, placeGroupForCategory } from "@shared/listings";
 import { slugify } from "@/lib/slug";
 import { useListings } from "@/contexts/ListingsContext";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
@@ -36,8 +36,11 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
   const [query, setQuery] = useState(params.get("query") || "");
   const [type, setType] = useState(validTypes.has(urlType) ? urlType : "all");
   const [region, setRegion] = useState(params.get("region") || "all");
-  // Visit (place) sub-filter: museum / gallery / coworking / … (from the data).
-  const [placeCat, setPlaceCat] = useState("all");
+  // Visit (place) sub-filter: "all", a category slug (museum / pharmacy / …), or
+  // a whole group as "g:<groupSlug>" (e.g. g:everyday). Deep-linkable via
+  // ?cat=<slug> or ?group=<slug> so the guide can land on Everyday essentials.
+  const initialPlaceCat = params.get("group") ? `g:${params.get("group")}` : params.get("cat") || "all";
+  const [placeCat, setPlaceCat] = useState(initialPlaceCat);
   const PAGE = 12;
   const [visible, setVisible] = useState(PAGE);
 
@@ -50,6 +53,7 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
     setType(validTypes.has(t) ? t : "all");
     setQuery(p.get("query") || "");
     setRegion(p.get("region") || "all");
+    setPlaceCat(p.get("group") ? `g:${p.get("group")}` : p.get("cat") || "all");
   }, [searchStr, initialType]);
   const [selectedId, setSelectedId] = useState<string | undefined>();
   // Stay-availability filter: when a date range is searched, hide stays whose
@@ -138,7 +142,10 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
       // "All" = bookable inventory; the free curated guides (eat + place) have their own tabs.
       const matchesType = type === "all" ? !isCuratedType(listing.type) : listing.type === type;
       const matchesRegion = region === "all" || normalizeRegion(listing.region).toLowerCase() === region.toLowerCase();
-      const matchesCategory = type !== "place" || placeCat === "all" || listing.category === placeCat;
+      const matchesCategory =
+        type !== "place" ||
+        placeCat === "all" ||
+        (placeCat.startsWith("g:") ? placeGroupForCategory(listing.category) === placeCat.slice(2) : listing.category === placeCat);
       const haystack = [listing.title, listing.city, listing.region, listing.type, listing.shortDescription, ...listing.tags].join(" ").toLowerCase();
       return matchesType && matchesRegion && matchesCategory && (!needle || haystack.includes(needle)) && isAvailableForRange(listing);
     });
@@ -223,7 +230,12 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
                 </div>
                 {placeCategoryGroups.map((g) => (
                   <div key={g.key} className="flex flex-wrap items-center gap-2">
-                    <span className="mr-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-basalt/35">{g.label}</span>
+                    <button
+                      onClick={() => setPlaceCat(`g:${g.key}`)}
+                      className={cn("mr-0.5 text-[10px] font-bold uppercase tracking-[0.12em] transition-colors", placeCat === `g:${g.key}` ? "text-apricot" : "text-basalt/35 hover:text-basalt/60")}
+                    >
+                      {g.label}
+                    </button>
                     {g.categories.map((c) => (
                       <button key={c} onClick={() => setPlaceCat(c)} className={cn("filter-chip", placeCat === c && "active")}>{placeCategoryLabel(c)}</button>
                     ))}

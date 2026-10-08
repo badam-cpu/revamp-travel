@@ -108,6 +108,17 @@ export default function Guide({ slug }: { slug?: string }) {
               );
             })}
           </div>
+
+          {/* Cross-link to the Visit guide's Everyday essentials (pharmacies,
+              supermarkets, ATMs, clinics) — practical venues a traveler reading
+              "know before you go" will want to locate. */}
+          <Link href="/explore/place?group=everyday" className="group mt-5 flex flex-wrap items-center justify-between gap-3 rounded-none border border-basalt/12 bg-chalk/50 p-6 transition-colors hover:border-apricot">
+            <div className="max-w-xl">
+              <h2 className="font-display text-2xl tracking-[-0.02em]">Everyday essentials</h2>
+              <p className="mt-1 text-sm text-basalt/60">Find pharmacies, supermarkets, ATMs and clinics near you on the Visit map — handy once you've landed.</p>
+            </div>
+            <span className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-[0.12em] text-apricot">Open the map <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" /></span>
+          </Link>
         </main>
         <SiteFooter />
       </div>

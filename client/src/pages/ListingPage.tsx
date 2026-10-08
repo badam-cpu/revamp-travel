@@ -1,5 +1,5 @@
 /** Revamp brandbook: detail pages combine rounded imagery, bold sans hierarchy, concise facts, white space, and orange actions. */
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowLeft, BedDouble, Bookmark, CalendarRange, Check, ChevronLeft, ChevronRight, Clock, Coffee, Home, KeyRound, LayoutGrid, LogOut, MapPin, Navigation, Share2, ShieldCheck, Sparkles, SprayCan, Star, Users, Utensils, Wallet, Wifi, X } from "lucide-react";
 import { Link } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -18,9 +18,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { groupAmenitiesForDisplay } from "@/components/AmenityPicker";
 import { DiscountBadge } from "@/components/DiscountBadge";
 import { houseRuleIcon } from "@/lib/houseRules";
-import { nearbySights } from "@/lib/yerevanSights";
+import { nearbySights, distanceMeters } from "@/lib/yerevanSights";
 import { findListing, typeLabels } from "@/data/listings";
-import { isCuratedType, placeCategoryLabel } from "@shared/listings";
+import { isCuratedType, placeCategoryLabel, placeGroupForCategory } from "@shared/listings";
 import { useListings } from "@/contexts/ListingsContext";
 import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
@@ -242,6 +242,19 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   // Major central-Yerevan sights closest to this listing (curated list, English
   // names, distances computed here) — empty for listings outside that radius.
   const nearby = nearbySights(listing.coordinates.lat, listing.coordinates.lng);
+  // Nearby "Everyday" essentials — the closest admin-curated Visit venues in the
+  // everyday group (pharmacy, supermarket, ATM, clinic). Uses the live catalog
+  // (no API call). Shown on bookable listings, where a traveler actually needs
+  // to know what's close; not on a place page itself.
+  const nearbyEssentials = useMemo(() => {
+    if (listing.type === "place") return [];
+    return listings
+      .filter((l) => l.type === "place" && placeGroupForCategory(l.category) === "everyday" && l.coordinates)
+      .map((l) => ({ id: l.id, slug: l.slug, title: l.title, category: l.category, distanceM: Math.round(distanceMeters(listing.coordinates.lat, listing.coordinates.lng, l.coordinates.lat, l.coordinates.lng)) }))
+      .filter((l) => l.distanceM <= 3000)
+      .sort((a, b) => a.distanceM - b.distanceM)
+      .slice(0, 5);
+  }, [listings, listing.type, listing.coordinates.lat, listing.coordinates.lng]);
   // Multi-branch eat listings: extra locations shown as a list + map pins.
   const branches = isEat && Array.isArray(listing.branches) ? listing.branches : [];
   const mapListings = branches.length
@@ -528,6 +541,25 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
                             {place.distanceM < 1000 ? `${place.distanceM} m` : `${(place.distanceM / 1000).toFixed(1)} km`}
                           </span>
                         )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {nearbyEssentials.length > 0 && (
+                <div className="mt-7">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/40">Everyday essentials nearby</p>
+                  <ul className="mt-3 grid gap-2">
+                    {nearbyEssentials.map((place) => (
+                      <li key={place.id} className="flex items-start gap-3 text-sm text-basalt/75">
+                        <Navigation className="mt-[3px] h-3.5 w-3.5 shrink-0 text-apricot" strokeWidth={2} />
+                        <span className="min-w-0 flex-1 leading-5">
+                          <Link href={`/listing/${place.slug}`} className="font-medium text-basalt hover:text-apricot">{place.title}</Link>
+                          {place.category && <span className="text-basalt/45"> · {placeCategoryLabel(place.category)}</span>}
+                        </span>
+                        <span className="mt-[1px] shrink-0 text-xs tabular-nums text-basalt/45">
+                          {place.distanceM < 1000 ? `${place.distanceM} m` : `${(place.distanceM / 1000).toFixed(1)} km`}
+                        </span>
                       </li>
                     ))}
                   </ul>
