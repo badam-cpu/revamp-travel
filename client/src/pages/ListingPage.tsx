@@ -258,7 +258,9 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   // names, distances computed here) — empty for listings outside that radius.
   const nearby = nearbySights(listing.coordinates.lat, listing.coordinates.lng);
   // Multi-branch eat listings: extra locations shown as a list + map pins.
-  const branches = isEat && Array.isArray(listing.branches) ? listing.branches : [];
+  // Multi-branch chains apply to curated listings (restaurants AND places like
+  // supermarket/pharmacy/bank chains) — one card, every branch on the map.
+  const branches = isCurated && Array.isArray(listing.branches) ? listing.branches : [];
   const mapListings = branches.length
     ? [listing, ...branches.map((b, i) => ({ ...listing, id: `${listing.id}-b${i}`, title: b.label || listing.title, coordinates: { lat: b.lat, lng: b.lng } }))]
     : [listing];

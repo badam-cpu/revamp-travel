@@ -42,6 +42,7 @@ const BLANK = {
   tripadvisorLocationId: "", tripadvisorRating: null as number | null, tripadvisorRatingCount: null as number | null,
   tripadvisorUrl: "", tripadvisorRatingImage: "",
   featured: false, editorRank: "" as string,
+  branches: [] as { label: string; address: string; coords: string }[],
 };
 
 export function AdminPlaces() {
@@ -68,6 +69,28 @@ export function AdminPlaces() {
   useEffect(() => { load(); }, [load]);
 
   const set = (patch: Partial<typeof BLANK>) => setF((prev) => ({ ...prev, ...patch }));
+
+  // Branch helpers — multi-location chains (supermarkets, pharmacies, …). Same
+  // pattern as AdminEateries: one guide card, every branch shows on the map.
+  type BranchRow = { label: string; address: string; coords: string };
+  const [branchBusy, setBranchBusy] = useState<number | null>(null);
+  const setBranch = (i: number, patch: Partial<BranchRow>) =>
+    setF((prev) => ({ ...prev, branches: prev.branches.map((x, j) => (j === i ? { ...x, ...patch } : x)) }));
+  const addBranch = () => setF((prev) => ({ ...prev, branches: [...prev.branches, { label: "", address: "", coords: "" }] }));
+  const removeBranch = (i: number) => setF((prev) => ({ ...prev, branches: prev.branches.filter((_, j) => j !== i) }));
+  const pullBranch = async (i: number, r: { id: string; name: string }) => {
+    setBranch(i, { label: r.name });
+    setBranchBusy(i);
+    try {
+      const d = await adminPlaceDetails(r.id);
+      setBranch(i, { label: r.name || d.name || "", address: d.address ?? "", coords: d.lat != null && d.lng != null ? `${d.lat}, ${d.lng}` : "" });
+      toast(`Pulled "${d.name}" from Google.`);
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : "Couldn't fetch that branch — enter its coordinates manually.");
+    } finally {
+      setBranchBusy(null);
+    }
+  };
 
   const onFound = async (r: { id: string; name: string }) => {
     set({ title: r.name, placeId: r.id });
@@ -154,6 +177,9 @@ export function AdminPlaces() {
       tripadvisorRatingImage: data.tripadvisor_rating_image ?? "",
       featured: !!data.featured,
       editorRank: data.editor_rank == null ? "" : String(data.editor_rank),
+      branches: Array.isArray(data.branches)
+        ? (data.branches as { label?: string; address?: string; lat?: number; lng?: number }[]).map((b) => ({ label: b.label ?? "", address: b.address ?? "", coords: b.lat != null && b.lng != null ? `${b.lat}, ${b.lng}` : "" }))
+        : [],
     });
     setGalleryDefault(Array.isArray(data.gallery) && data.gallery.length ? data.gallery : data.image ? [data.image] : []);
     setFocusDefault(data.cover_focus ?? "50% 50%");
@@ -199,6 +225,12 @@ export function AdminPlaces() {
         neighborhood: f.neighborhood.trim() || null,
         featured: f.featured,
         editor_rank: f.editorRank.trim() === "" ? null : Math.max(0, Math.round(Number(f.editorRank) || 0)),
+        branches: f.branches
+          .map((b) => {
+            const [latS, lngS] = b.coords.split(",").map((s) => s.trim());
+            return { label: b.label.trim(), address: b.address.trim(), lat: Number(latS), lng: Number(lngS) };
+          })
+          .filter((b) => (b.address || b.label) && Number.isFinite(b.lat) && Number.isFinite(b.lng)),
       };
       if (editingId) {
         const { error } = await supabase.from("listings").update(payload).eq("id", editingId);
@@ -282,6 +314,28 @@ export function AdminPlaces() {
           </Field>
           <div className="sm:col-span-2"><Field label="Short description"><Textarea rows={2} value={f.shortDescription} onChange={(e) => set({ shortDescription: e.target.value })} placeholder="One-line teaser shown on the card and as the lead." className="rounded-none text-base" /></Field></div>
           <div className="sm:col-span-2"><Field label="Long description"><Textarea rows={4} value={f.longDescription} onChange={(e) => set({ longDescription: e.target.value })} placeholder="Fuller write-up shown on the place page (optional)." className="rounded-none text-base" /></Field></div>
+          <div className="sm:col-span-2">
+            <Field label="Other locations (branches)">
+              <div className="grid gap-3">
+                {f.branches.map((b, i) => (
+                  <div key={i} className="grid gap-2 border border-basalt/12 bg-chalk/40 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase tracking-[0.1em] text-basalt/45">{b.label ? b.label : `Branch ${i + 1}`}{branchBusy === i ? " · pulling…" : ""}</span>
+                      <button type="button" onClick={() => removeBranch(i)} className="text-xs font-semibold text-basalt/45 hover:text-destructive">Remove</button>
+                    </div>
+                    <GooglePlaceFinder onFound={(r) => pullBranch(i, r)} />
+                    {(b.address || b.coords) && <p className="text-xs text-basalt/55">{b.address}{b.coords ? ` · ${b.coords}` : ""}</p>}
+                    <div className="grid gap-2 sm:grid-cols-[1fr_1fr]">
+                      <Input placeholder="Label (e.g. Dalma Garden Mall)" value={b.label} onChange={(e) => setBranch(i, { label: e.target.value })} className="h-9 rounded-none" />
+                      <Input placeholder="lat, lng" value={b.coords} onChange={(e) => setBranch(i, { coords: e.target.value })} className="h-9 rounded-none" />
+                    </div>
+                  </div>
+                ))}
+                <button type="button" onClick={addBranch} className="justify-self-start text-sm font-semibold text-apricot hover:underline">+ Add a branch</button>
+              </div>
+              <p className="mt-1 text-xs text-basalt/45">For chains (supermarkets, pharmacies, banks…). Search each location on Google to pull its address + coordinates automatically. One card in the guide; every branch shows on the place page and its map.</p>
+            </Field>
+          </div>
           <div className="sm:col-span-2"><PhotoUploader key={uploaderKey} ref={photosRef} defaultValue={galleryDefault} defaultFocus={focusDefault} /></div>
         </div>
 
