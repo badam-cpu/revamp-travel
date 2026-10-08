@@ -86,10 +86,12 @@ function clusterIcon(count: number): google.maps.Icon {
 export function ArmeniaMap({ listings, selectedId, onSelect, className, single = false, focusOnSelect = false }: ArmeniaMapProps) {
   const { format } = useCurrency();
   const active = useMemo(() => listings.find((listing) => listing.id === selectedId) || listings[0], [listings, selectedId]);
-  // Marker pill: eateries are free recommendations — show their price band (or a
-  // dot), never a bookable price / "Rate on request".
+  // Marker pill: curated venues are free, non-transactional recommendations —
+  // eateries show their price band (or a dot); places (museums, supermarkets,
+  // pharmacies, …) have no price at all, so a plain dot — never a bookable price
+  // or "Rate on request".
   const markerLabel = (l: (typeof listings)[number]) =>
-    l.type === "eat" ? l.priceBand || "•" : l.price > 0 ? format(Math.round(l.price * 100)) : l.priceLabel;
+    l.type === "eat" ? l.priceBand || "•" : l.type === "place" ? "•" : l.price > 0 ? format(Math.round(l.price * 100)) : l.priceLabel;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
