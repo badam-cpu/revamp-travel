@@ -42,7 +42,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useListings, LiveListing } from "@/contexts/ListingsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import type { ListingInput, ListingType } from "@shared/listings";
-import { LISTING_LIMITS } from "@shared/listings";
+import { LISTING_LIMITS, STAY_SPACE_TYPES } from "@shared/listings";
 import { ApiError, importListingPrefill, syncIcal } from "@/lib/api";
 import { attachReferral, getStoredReferralCode, clearStoredReferralCode } from "@/lib/referrals";
 import { cn } from "@/lib/utils";
@@ -133,6 +133,7 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
   // over any same-label quick fact.
   const minStayN = parseInt(get("fact_minstay"), 10);
   const dedicatedFacts = [
+    { label: "Space type", value: get("fact_spacetype").trim() },
     { label: "Property type", value: get("fact_propertytype").trim() },
     { label: "Duration", value: get("tourDuration").trim() },
     { label: "Languages", value: get("tourLanguages").trim() },
@@ -237,7 +238,7 @@ const FIELD = "h-12 rounded-none text-base";
 const PROPERTY_TYPES = [
   "Apartment", "Condo", "House", "Villa", "Guesthouse", "Cottage", "Cabin",
   "Studio", "Loft", "Hotel", "Boutique hotel", "Bed & breakfast", "Hostel",
-  "Private room", "Chalet", "Farm stay", "Townhouse",
+  "Chalet", "Farm stay", "Townhouse",
 ];
 
 /**
@@ -329,6 +330,7 @@ function ListingFormDialog({
     priceUnit: fieldValue("priceUnit"),
     amenities: amenitiesRef.current?.getValue() ?? [],
     facts: [
+      { label: "Space type", value: fieldValue("fact_spacetype") },
       { label: "Property type", value: fieldValue("fact_propertytype") },
       { label: "Duration", value: fieldValue("tourDuration") },
       { label: "Languages", value: fieldValue("tourLanguages") },
@@ -654,17 +656,32 @@ function ListingFormDialog({
 
                 {/* Stay-only sleeping arrangement, seasonal rates + house rules. */}
                 {draft.type === "stay" && (
-                  <div className="grid gap-2 sm:max-w-xs">
-                    <Label htmlFor="fact_propertytype" className="text-sm font-semibold">Property type</Label>
-                    <select
-                      id="fact_propertytype"
-                      name="fact_propertytype"
-                      defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "property type")?.value ?? ""}
-                      className="h-12 rounded-none border border-basalt/15 bg-paper px-3 text-base focus:border-apricot focus:outline-none"
-                    >
-                      <option value="">Select a type…</option>
-                      {PROPERTY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                    </select>
+                  <div className="grid gap-4 sm:max-w-md sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="fact_spacetype" className="text-sm font-semibold">Space type</Label>
+                      <select
+                        id="fact_spacetype"
+                        name="fact_spacetype"
+                        defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "space type")?.value ?? ""}
+                        className="h-12 rounded-none border border-basalt/15 bg-paper px-3 text-base focus:border-apricot focus:outline-none"
+                      >
+                        <option value="">Select…</option>
+                        {STAY_SPACE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <p className="text-xs text-basalt/45">What the guest books — shows as e.g. “Room in guesthouse”.</p>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="fact_propertytype" className="text-sm font-semibold">Property type</Label>
+                      <select
+                        id="fact_propertytype"
+                        name="fact_propertytype"
+                        defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "property type")?.value ?? ""}
+                        className="h-12 rounded-none border border-basalt/15 bg-paper px-3 text-base focus:border-apricot focus:outline-none"
+                      >
+                        <option value="">Select a type…</option>
+                        {PROPERTY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
                   </div>
                 )}
                 {draft.type === "stay" && <RoomsEditor ref={roomsRef} defaultValue={draft.rooms ?? []} />}

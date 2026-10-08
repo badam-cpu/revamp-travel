@@ -20,7 +20,7 @@ import { DiscountBadge } from "@/components/DiscountBadge";
 import { houseRuleIcon } from "@/lib/houseRules";
 import { nearbySights, distanceMeters } from "@/lib/yerevanSights";
 import { findListing, typeLabels } from "@/data/listings";
-import { isCuratedType, placeCategoryLabel, placeGroupForCategory } from "@shared/listings";
+import { isCuratedType, placeCategoryLabel, placeGroupForCategory, formatStayType } from "@shared/listings";
 import { useListings } from "@/contexts/ListingsContext";
 import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
@@ -193,6 +193,21 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
     }
   }, [listing?.id]);
 
+  // Nearby "Everyday" essentials — the closest admin-curated Visit venues in the
+  // everyday group (pharmacy, supermarket, ATM, clinic). MUST stay above the
+  // early returns below (rules of hooks), so it's null-safe while the catalog
+  // is still loading. Uses the live catalog, no API call.
+  const nearbyEssentials = useMemo(() => {
+    if (!listing || listing.type === "place" || !listing.coordinates) return [];
+    const { lat, lng } = listing.coordinates;
+    return listings
+      .filter((l) => l.type === "place" && placeGroupForCategory(l.category) === "everyday" && l.coordinates)
+      .map((l) => ({ id: l.id, slug: l.slug, title: l.title, category: l.category, distanceM: Math.round(distanceMeters(lat, lng, l.coordinates.lat, l.coordinates.lng)) }))
+      .filter((l) => l.distanceM <= 3000)
+      .sort((a, b) => a.distanceM - b.distanceM)
+      .slice(0, 5);
+  }, [listings, listing?.type, listing?.coordinates?.lat, listing?.coordinates?.lng]);
+
   if (!listing) {
     // While the catalog is still loading (e.g. a hard refresh on this page,
     // before the Supabase fetch resolves), don't flash the not-found state —
@@ -242,19 +257,6 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   // Major central-Yerevan sights closest to this listing (curated list, English
   // names, distances computed here) — empty for listings outside that radius.
   const nearby = nearbySights(listing.coordinates.lat, listing.coordinates.lng);
-  // Nearby "Everyday" essentials — the closest admin-curated Visit venues in the
-  // everyday group (pharmacy, supermarket, ATM, clinic). Uses the live catalog
-  // (no API call). Shown on bookable listings, where a traveler actually needs
-  // to know what's close; not on a place page itself.
-  const nearbyEssentials = useMemo(() => {
-    if (listing.type === "place") return [];
-    return listings
-      .filter((l) => l.type === "place" && placeGroupForCategory(l.category) === "everyday" && l.coordinates)
-      .map((l) => ({ id: l.id, slug: l.slug, title: l.title, category: l.category, distanceM: Math.round(distanceMeters(listing.coordinates.lat, listing.coordinates.lng, l.coordinates.lat, l.coordinates.lng)) }))
-      .filter((l) => l.distanceM <= 3000)
-      .sort((a, b) => a.distanceM - b.distanceM)
-      .slice(0, 5);
-  }, [listings, listing.type, listing.coordinates.lat, listing.coordinates.lng]);
   // Multi-branch eat listings: extra locations shown as a list + map pins.
   const branches = isEat && Array.isArray(listing.branches) ? listing.branches : [];
   const mapListings = branches.length
@@ -292,10 +294,12 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
     if (checkOutTime) glance.push({ label: "Checkout", value: checkOutTime, icon: LogOut });
     const minStay = factVal("Minimum stay");
     if (minStay) glance.push({ label: "Minimum stay", value: minStay, icon: CalendarRange });
-    // For stays, show the specific property type (Apartment, Guesthouse, …) the
-    // operator set, in place of the generic "Stay".
+    // For stays, show an Airbnb-style type combining the space type with the
+    // property type ("Room in guesthouse", "Entire villa", "Room in hotel"),
+    // falling back to the property type (or generic "Stay") when unset.
     const propertyType = factVal("Property type");
-    glance.push({ label: "Type", value: propertyType || typeLabels[listing.type], icon: Home });
+    const spaceType = factVal("Space type");
+    glance.push({ label: "Type", value: formatStayType(spaceType, propertyType, typeLabels[listing.type]), icon: Home });
   }
 
   return (
