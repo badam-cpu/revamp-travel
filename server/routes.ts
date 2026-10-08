@@ -751,6 +751,74 @@ export function registerApiRoutes(app: Express) {
     }
   });
 
+  // GET /api/qr-earnings — admin: QR payment earnings owed to each operator
+  // (paid, not yet settled) + settled totals. Revamp is merchant of record and
+  // pays operators their net (gross − 12.5%) via this settlement.
+  app.get("/api/qr-earnings", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+    try {
+      const { data } = await admin
+        .from("qr_payments")
+        .select("owner_id, net_cents, currency, settled_at, profiles:owner_id(display_name, business_name)")
+        .eq("status", "paid");
+      type Prof = { display_name: string | null; business_name: string | null };
+      const rows = (data ?? []) as Array<{ owner_id: string; net_cents: number; currency: string; settled_at: string | null; profiles: Prof | Prof[] | null }>;
+      const byOp = new Map<string, { operatorId: string; name: string; currency: string; owedCents: number; owedCount: number; paidCents: number }>();
+      let owedTotal = 0;
+      let paidTotal = 0;
+      for (const r of rows) {
+        const key = r.owner_id;
+        const prof = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles;
+        const entry = byOp.get(key) ?? { operatorId: key, name: (prof?.business_name || prof?.display_name || "Operator").trim(), currency: r.currency, owedCents: 0, owedCount: 0, paidCents: 0 };
+        if (r.settled_at) { entry.paidCents += r.net_cents; paidTotal += r.net_cents; }
+        else { entry.owedCents += r.net_cents; entry.owedCount += 1; owedTotal += r.net_cents; }
+        byOp.set(key, entry);
+      }
+      const operators = Array.from(byOp.values()).sort((a, b) => b.owedCents - a.owedCents);
+      res.json({ operators, totals: { owedCents: owedTotal, paidCents: paidTotal } });
+    } catch (err) {
+      console.error("[qr-earnings]", err);
+      res.status(500).json({ error: "Couldn't load QR earnings." });
+    }
+  });
+
+  // POST /api/qr-earnings/settle — admin: mark an operator's owed QR earnings
+  // paid out (sets settled_at on their paid, not-yet-settled rows).
+  app.post("/api/qr-earnings/settle", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const operatorId = typeof req.body?.operatorId === "string" ? req.body.operatorId : "";
+    if (!operatorId) return res.status(400).json({ error: "Missing operator." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+    try {
+      const { data, error } = await admin
+        .from("qr_payments")
+        .update({ settled_at: new Date().toISOString(), settled_by: userId })
+        .eq("owner_id", operatorId)
+        .eq("status", "paid")
+        .is("settled_at", null)
+        .select("net_cents");
+      if (error) throw new Error(error.message);
+      const settled = (data ?? []) as Array<{ net_cents: number }>;
+      res.json({ ok: true, count: settled.length, amountCents: settled.reduce((s, r) => s + r.net_cents, 0) });
+    } catch (err) {
+      console.error("[qr-earnings/settle]", err);
+      res.status(500).json({ error: "Couldn't settle these earnings." });
+    }
+  });
+
   // Dynamic robots.txt / sitemap.xml. Registered at both the public path (for
   // the long-running server in server/index.ts, and local `pnpm start`) and
   // an /api-prefixed alias — on Netlify the CDN serves the SPA, so these are

@@ -97,6 +97,7 @@ export interface QrPaymentRow {
   status: "pending_payment" | "paid" | "failed" | "expired";
   kind: "tip" | "service";
   created_at: string;
+  settled_at: string | null; // null = earned, owed to the operator; set = paid out
 }
 
 /** Paid QR payments visible to the caller (owner/admin) — for revenue totals. */
@@ -104,6 +105,37 @@ export async function listQrPayments(): Promise<QrPaymentRow[]> {
   const { data, error } = await supabase.from("qr_payments").select("*").eq("status", "paid").order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as QrPaymentRow[];
+}
+
+/* ── Admin: QR earnings settlement (Revamp pays operators their net) ───────── */
+export interface QrEarningsOperator {
+  operatorId: string;
+  name: string;
+  currency: string;
+  owedCents: number;
+  owedCount: number;
+  paidCents: number;
+}
+export interface QrEarningsData {
+  operators: QrEarningsOperator[];
+  totals: { owedCents: number; paidCents: number };
+}
+
+async function authedQr<T>(path: string, init?: RequestInit): Promise<T> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new Error("Sign in.");
+  const res = await fetch(path, { ...init, headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(init?.headers || {}) } });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((body as { error?: string })?.error || "Something went wrong.");
+  return body as T;
+}
+
+export function adminListQrEarnings(): Promise<QrEarningsData> {
+  return authedQr<QrEarningsData>("/api/qr-earnings");
+}
+export function adminSettleQrEarnings(operatorId: string): Promise<{ ok: boolean; count: number; amountCents: number }> {
+  return authedQr<{ ok: boolean; count: number; amountCents: number }>("/api/qr-earnings/settle", { method: "POST", body: JSON.stringify({ operatorId }) });
 }
 
 /** Start a guest payment for a tip/service code → returns the PayLink redirect. */

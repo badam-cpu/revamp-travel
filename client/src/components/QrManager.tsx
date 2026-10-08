@@ -32,6 +32,7 @@ export function QrManager({ scope = "operator" }: { scope?: "operator" | "admin"
   const { format } = useCurrency();
   const [codes, setCodes] = useState<QrRow[] | null>(null);
   const [earnings, setEarnings] = useState<Map<string, { count: number; net: number }>>(new Map());
+  const [totals, setTotals] = useState<{ owed: number; paidOut: number }>({ owed: 0, paidOut: 0 });
   const [copied, setCopied] = useState<string | null>(null);
 
   const [name, setName] = useState("");
@@ -50,11 +51,15 @@ export function QrManager({ scope = "operator" }: { scope?: "operator" | "admin"
     try {
       const pays = await listQrPayments();
       const m = new Map<string, { count: number; net: number }>();
+      let owed = 0;
+      let paidOut = 0;
       for (const p of pays) {
         const cur = m.get(p.qr_code_id) ?? { count: 0, net: 0 };
         m.set(p.qr_code_id, { count: cur.count + 1, net: cur.net + p.net_cents });
+        if (p.settled_at) paidOut += p.net_cents; else owed += p.net_cents;
       }
       setEarnings(m);
+      setTotals({ owed, paidOut });
     } catch { /* table may not exist yet */ }
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -115,8 +120,16 @@ export function QrManager({ scope = "operator" }: { scope?: "operator" | "admin"
       <div className="mb-6">
         <p className="eyebrow">QR codes</p>
         <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">Revamp QR codes.</h2>
-        <p className="mt-2 max-w-xl text-sm text-basalt/55">Create a code, print it, and place it in the room or on a flyer. Every scan opens a Revamp-powered page — link guests to your listing, share house info, or point them anywhere. Payment codes (tips &amp; add-ons) are coming next.</p>
+        <p className="mt-2 max-w-xl text-sm text-basalt/55">Create a code, print it, and place it in the room or on a flyer. Every scan opens a Revamp-powered page — link guests to your listing, share house info, collect tips, or charge for an add-on. Payment earnings (net of 12.5%) are paid out by the Revamp team.</p>
       </div>
+
+      {(totals.owed > 0 || totals.paidOut > 0) && (
+        <div className="mb-6 flex flex-wrap gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-none border border-apricot/30 bg-apricot/10 px-3 py-1.5 text-sm font-semibold text-apricot">Owed to you: {format(totals.owed)}</span>
+          <span className="inline-flex items-center gap-1.5 rounded-none border border-basalt/15 bg-basalt/5 px-3 py-1.5 text-sm font-semibold text-basalt/60">Paid out: {format(totals.paidOut)}</span>
+          <span className="self-center text-xs text-basalt/45">QR payment earnings are disbursed by the Revamp team.</span>
+        </div>
+      )}
 
       <div className="grid gap-3 border border-basalt/12 bg-paper p-5">
         <div className="grid gap-3 sm:grid-cols-2">

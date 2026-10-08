@@ -43,6 +43,7 @@ import { AdminGiftCards } from "@/components/AdminGiftCards";
 import { AdminSubscriptions } from "@/components/AdminSubscriptions";
 import { AdminHealth } from "@/components/AdminHealth";
 import { AdminReferrals } from "@/components/AdminReferrals";
+import { AdminQrEarnings } from "@/components/AdminQrEarnings";
 import { useAuth } from "@/contexts/AuthContext";
 import { RequireRole } from "@/components/RequireRole";
 import { Button } from "@/components/ui/button";
@@ -380,7 +381,12 @@ function AdminConsole() {
               </div>
             )}
             {section === "response" && <AdminResponseTimes />}
-            {section === "payouts" && <AdminPayouts />}
+            {section === "payouts" && (
+              <>
+                <AdminPayouts />
+                <AdminQrEarnings />
+              </>
+            )}
             {section === "blog" && <AdminBlog />}
             {section === "documents" && <AdminDocuments />}
             {section === "qr" && <QrManager scope="admin" />}
