@@ -110,9 +110,8 @@ export default async (): Promise<Response> => {
   return Response.json(result);
 };
 
-// Every 6 hours (00:00, 06:00, 12:00, 18:00 UTC). An explicit cron expression
-// is more reliable on Netlify than the "@daily" shorthand, and running 4×/day
-// instead of once keeps OTA availability fresh enough that a date blocked on
-// Airbnb/Booking.com propagates to Revamp within hours, not a full day —
+// Every hour (on the hour). An explicit cron expression is more reliable on
+// Netlify than the "@daily" shorthand, and hourly keeps OTA availability fresh
+// so a date blocked on Airbnb/Booking.com propagates to Revamp within ~an hour,
 // shrinking the overbooking window. Netlify reads this export to schedule it.
-export const config = { schedule: "0 */6 * * *" };
+export const config = { schedule: "0 * * * *" };

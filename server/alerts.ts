@@ -44,8 +44,8 @@ export interface CronJobSpec {
  * (with generous headroom so a single slow/skipped run isn't a false alarm).
  */
 export const CRON_REGISTRY: CronJobSpec[] = [
-  // Schedule: @daily → allow a full extra run's worth of slack (30h).
-  { job: "refresh-ical", label: "iCal availability refresh", maxAgeMinutes: 30 * 60 },
+  // Schedule: hourly → alert if no success in ~3h (several missed runs).
+  { job: "refresh-ical", label: "iCal availability refresh", maxAgeMinutes: 180 },
   // Schedule: */10 * * * * → should run constantly; 60 min means several misses.
   { job: "reconcile-bookings", label: "Booking & payment reconcile", maxAgeMinutes: 60 },
 ];
