@@ -21,11 +21,36 @@ export const isCuratedType = (t: ListingType): boolean => CURATED_TYPES.includes
 /** Venue sub-kinds for `type: "place"`. Adding one here is all it takes to offer
  * a new kind — the DB stores it as free text (`category`). `slug` drives the
  * /visit/:category hubs and filters; `label`/`plural` are display copy. */
+/** Top-level groupings for Visit (`place`) sub-kinds. A `category` row's `group`
+ * points here — the UI shows chips/pickers grouped by these, so the list of
+ * categories can grow (new subcategories) without adding new top-level buckets.
+ * Order here is the display order. */
+export const PLACE_GROUPS = [
+  { slug: "culture", label: "Culture & sights" },
+  { slug: "everyday", label: "Everyday" },
+  { slug: "work", label: "Work" },
+] as const;
+
+export type PlaceGroupSlug = (typeof PLACE_GROUPS)[number]["slug"];
+
+/** Venue sub-kinds for `type: "place"`, each tagged with its parent `group`.
+ * Adding one here is all it takes to offer a new kind — the DB stores it as free
+ * text (`category`); no schema change. `slug` drives the /visit/:category hubs
+ * and filters; `label`/`plural` are display copy; `group` places it under a
+ * PLACE_GROUPS bucket in the UI. Existing rows (museum/gallery/library/coworking)
+ * map onto their group automatically. */
 export const PLACE_CATEGORIES = [
-  { slug: "museum", label: "Museum", plural: "Museums" },
-  { slug: "gallery", label: "Gallery", plural: "Galleries" },
-  { slug: "library", label: "Library", plural: "Libraries" },
-  { slug: "coworking", label: "Coworking", plural: "Coworking spaces" },
+  { slug: "museum", label: "Museum", plural: "Museums", group: "culture" },
+  { slug: "gallery", label: "Gallery", plural: "Galleries", group: "culture" },
+  { slug: "library", label: "Library", plural: "Libraries", group: "culture" },
+  { slug: "theater", label: "Theater", plural: "Theaters", group: "culture" },
+  { slug: "cinema", label: "Cinema", plural: "Cinemas", group: "culture" },
+  { slug: "landmark", label: "Landmark", plural: "Landmarks", group: "culture" },
+  { slug: "supermarket", label: "Supermarket", plural: "Supermarkets", group: "everyday" },
+  { slug: "pharmacy", label: "Pharmacy", plural: "Pharmacies", group: "everyday" },
+  { slug: "atm", label: "ATM / Bank", plural: "ATMs & banks", group: "everyday" },
+  { slug: "clinic", label: "Clinic", plural: "Clinics", group: "everyday" },
+  { slug: "coworking", label: "Coworking", plural: "Coworking spaces", group: "work" },
 ] as const;
 
 export type PlaceCategorySlug = (typeof PLACE_CATEGORIES)[number]["slug"];
@@ -35,6 +60,19 @@ export function placeCategoryLabel(slug?: string | null): string {
   if (!slug) return "Place";
   const found = PLACE_CATEGORIES.find((c) => c.slug === slug);
   return found ? found.label : slug.charAt(0).toUpperCase() + slug.slice(1);
+}
+
+/** Human label for a place group slug (falls back to the raw value). */
+export function placeGroupLabel(slug?: string | null): string {
+  if (!slug) return "Other";
+  const found = PLACE_GROUPS.find((g) => g.slug === slug);
+  return found ? found.label : slug.charAt(0).toUpperCase() + slug.slice(1);
+}
+
+/** The parent group slug for a category slug, or null if it's a custom/unknown one. */
+export function placeGroupForCategory(slug?: string | null): PlaceGroupSlug | null {
+  const found = PLACE_CATEGORIES.find((c) => c.slug === slug);
+  return found ? (found.group as PlaceGroupSlug) : null;
 }
 
 /**

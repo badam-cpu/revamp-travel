@@ -12,7 +12,7 @@ import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ListingType, typeLabels } from "@/data/listings";
-import { isCuratedType, PLACE_CATEGORIES, placeCategoryLabel } from "@shared/listings";
+import { isCuratedType, PLACE_CATEGORIES, PLACE_GROUPS, placeCategoryLabel } from "@shared/listings";
 import { slugify } from "@/lib/slug";
 import { useListings } from "@/contexts/ListingsContext";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
@@ -114,13 +114,20 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
       ? region
       : regions.find((r) => normalizeRegion(r).toLowerCase() === normalizeRegion(query).toLowerCase()) ?? "";
 
-  // Distinct Visit (place) categories present in the data, in the curated order
-  // (museum, gallery, library, coworking, …), for the sub-filter chips.
-  const placeCategories = useMemo(() => {
+  // Visit (place) sub-filter chips, grouped by parent (Culture / Everyday / Work)
+  // and limited to the categories actually present in the data. Any custom
+  // category not in the curated list falls into an "Other" group.
+  const placeCategoryGroups = useMemo(() => {
     const present = new Set(listings.filter((l) => l.type === "place" && l.category).map((l) => l.category as string));
-    const ordered: string[] = PLACE_CATEGORIES.map((c) => c.slug).filter((s) => present.has(s));
-    const extras = Array.from(present).filter((s) => !ordered.includes(s)); // any custom categories
-    return [...ordered, ...extras];
+    const groups = PLACE_GROUPS.map((g) => ({
+      key: g.slug as string,
+      label: g.label as string,
+      categories: PLACE_CATEGORIES.filter((c) => c.group === g.slug && present.has(c.slug)).map((c) => c.slug as string),
+    })).filter((g) => g.categories.length > 0);
+    const known = new Set(PLACE_CATEGORIES.map((c) => c.slug as string));
+    const extras = Array.from(present).filter((s) => !known.has(s));
+    if (extras.length) groups.push({ key: "other", label: "Other", categories: extras });
+    return groups;
   }, [listings]);
 
   const filtered = useMemo(() => {
@@ -209,11 +216,18 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
                 <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter by place or interest" className="h-10 w-full border border-basalt/15 bg-paper pl-9 pr-3 text-sm outline-none placeholder:text-basalt/35 focus:border-apricot" />
               </label>
             </div>
-            {type === "place" && placeCategories.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-x-2 gap-y-3">
-                <button onClick={() => setPlaceCat("all")} className={cn("filter-chip", placeCat === "all" && "active")}>All types</button>
-                {placeCategories.map((c) => (
-                  <button key={c} onClick={() => setPlaceCat(c)} className={cn("filter-chip", placeCat === c && "active")}>{placeCategoryLabel(c)}</button>
+            {type === "place" && placeCategoryGroups.length > 0 && (
+              <div className="mt-3 flex flex-col gap-2.5">
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => setPlaceCat("all")} className={cn("filter-chip", placeCat === "all" && "active")}>All types</button>
+                </div>
+                {placeCategoryGroups.map((g) => (
+                  <div key={g.key} className="flex flex-wrap items-center gap-2">
+                    <span className="mr-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-basalt/35">{g.label}</span>
+                    {g.categories.map((c) => (
+                      <button key={c} onClick={() => setPlaceCat(c)} className={cn("filter-chip", placeCat === c && "active")}>{placeCategoryLabel(c)}</button>
+                    ))}
+                  </div>
                 ))}
               </div>
             )}

@@ -12,7 +12,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { adminPlaceDetails, adminTripadvisorMatch, ApiError } from "@/lib/api";
 import { slugify } from "@/lib/slug";
-import { PLACE_CATEGORIES, placeCategoryLabel } from "@shared/listings";
+import { PLACE_CATEGORIES, PLACE_GROUPS, placeCategoryLabel } from "@shared/listings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -260,7 +260,11 @@ export function AdminPlaces() {
           <Field label="Name"><Input value={f.title} onChange={(e) => set({ title: e.target.value })} className="h-10 rounded-none" /></Field>
           <Field label="Category">
             <select value={f.category} onChange={(e) => set({ category: e.target.value })} className="h-10 w-full rounded-none border border-basalt/20 bg-paper px-2 text-sm">
-              {PLACE_CATEGORIES.map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
+              {PLACE_GROUPS.map((g) => (
+                <optgroup key={g.slug} label={g.label}>
+                  {PLACE_CATEGORIES.filter((c) => c.group === g.slug).map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
+                </optgroup>
+              ))}
             </select>
           </Field>
           <Field label="City"><Input value={f.city} onChange={(e) => set({ city: e.target.value })} className="h-10 rounded-none" /></Field>
