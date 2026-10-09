@@ -14,7 +14,7 @@ import { z } from "zod";
 import { listPublishedForPlanner, verifyUser, userClient, getListingBusyRanges, getOperatorGooglePlaceId, pingDb } from "./supabase.js";
 import { collectHealth } from "./health.js";
 import { getReferralSummary, attachReferral, listAllReferrals, markReferralPaid, setReferralConfig } from "./referrals.js";
-import { handlePublicMcp, mcpInfo } from "./mcp.js";
+import { handlePublicMcp } from "./mcp.js";
 import { fetchPlaceReviews, fetchPlaceDetails, placesServerKeySet } from "./googlePlaces.js";
 import { matchTripadvisor, tripadvisorConfigured } from "./tripadvisor.js";
 import { translateTexts } from "./translate.js";
@@ -836,17 +836,23 @@ export function registerApiRoutes(app: Express) {
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Mcp-Session-Id, Mcp-Protocol-Version, Authorization");
     res.setHeader("Access-Control-Expose-Headers", "Mcp-Session-Id, Mcp-Protocol-Version");
   };
+  const MCP_PROTOCOL_VERSION = "2025-06-18";
   for (const mcpPath of ["/mcp", "/api/mcp"]) {
     app.options(mcpPath, (_req: Request, res: Response) => {
       mcpCors(res);
       res.status(204).end();
     });
+    // No server-initiated SSE stream (stateless JSON mode) — a compliant MCP
+    // server answers GET with 405 so clients fall back to POST-only. (Returning
+    // a 200 JSON page here breaks the MCP client's notification-stream probe.)
     app.get(mcpPath, (_req: Request, res: Response) => {
       mcpCors(res);
-      res.json(mcpInfo()); // humans/discovery; MCP clients POST
+      res.setHeader("Allow", "POST, OPTIONS");
+      res.status(405).json({ jsonrpc: "2.0", error: { code: -32000, message: "Method Not Allowed: use POST for MCP requests." }, id: null });
     });
     app.post(mcpPath, async (req: Request, res: Response) => {
       mcpCors(res);
+      res.setHeader("Mcp-Protocol-Version", MCP_PROTOCOL_VERSION);
       try {
         await handlePublicMcp(req, res);
       } catch (err) {

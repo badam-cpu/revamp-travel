@@ -170,26 +170,24 @@ function createPublicServer(): McpServer {
 }
 
 /**
- * Express handler for the public MCP endpoint. Stateless: a fresh McpServer per
- * request, driven through an IN-MEMORY transport (not the HTTP Streamable
- * transport) and dispatched to JSON ourselves. This deliberately avoids the
- * SDK's Node HTTP transport, whose header parsing (via @hono/node-server) mises
- * the Content-Type when running under serverless-http inside the Netlify
- * Function (it works in raw Express, 415s in the Function). Express has already
- * parsed the JSON body, so we just pass the JSON-RPC message(s) to the server
- * and return the response(s). CORS is set by the caller (server/routes.ts).
+ * Dispatch an MCP request to a (fresh) McpServer and write the JSON response.
+ * Stateless: driven through an IN-MEMORY transport, not the SDK's Node HTTP
+ * Streamable transport — that transport reads headers via @hono/node-server's
+ * Web Request, which doesn't see Content-Type under serverless-http inside the
+ * Netlify Function (works in raw Express, 415s deployed). Express has already
+ * parsed the JSON body, so we pass the JSON-RPC message(s) straight to the
+ * server and return the response(s). Shared by the public + admin endpoints.
  */
-export async function handlePublicMcp(req: Request, res: Response): Promise<void> {
+export async function dispatchMcp(server: McpServer, req: Request, res: Response): Promise<void> {
   const body = req.body as unknown;
   if (!body || typeof body !== "object") {
+    await server.close().catch(() => {});
     res.status(400).json({ jsonrpc: "2.0", error: { code: -32700, message: "Parse error: expected a JSON-RPC message" }, id: null });
     return;
   }
   const messages = (Array.isArray(body) ? body : [body]) as JSONRPCMessage[];
-  // Count request messages (have a method + a non-null id) — notifications get no response.
   const expected = messages.filter((m) => m && typeof m === "object" && "method" in m && "id" in m && (m as { id?: unknown }).id != null).length;
 
-  const server = createPublicServer();
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   await server.connect(serverSide);
   const responses: JSONRPCMessage[] = [];
@@ -207,7 +205,7 @@ export async function handlePublicMcp(req: Request, res: Response): Promise<void
         if (responses.length >= expected) finish();
       };
       clientSide.onclose = finish;
-      setTimeout(finish, 28_000); // safety net under the function timeout
+      setTimeout(finish, 28_000);
       void clientSide
         .start()
         .then(async () => {
@@ -225,6 +223,11 @@ export async function handlePublicMcp(req: Request, res: Response): Promise<void
     await server.close().catch(() => {});
     await clientSide.close().catch(() => {});
   }
+}
+
+/** Express handler for the public MCP endpoint (read-only, no auth). */
+export async function handlePublicMcp(req: Request, res: Response): Promise<void> {
+  await dispatchMcp(createPublicServer(), req, res);
 }
 
 /** Human/discovery info for a GET on the MCP endpoint (clients use POST). */
