@@ -892,10 +892,25 @@ export function registerApiRoutes(app: Express) {
   // connector that probes these tries to parse HTML as auth metadata and fails
   // with "Couldn't reach". Reached via the netlify.toml /.well-known/oauth-*
   // redirects (and directly at /api/wk-oauth after the function normalizer).
-  app.all(["/api/wk-oauth", "/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/*", "/.well-known/oauth-authorization-server", "/.well-known/oauth-authorization-server/*"], (_req: Request, res: Response) => {
-    mcpCors(res);
-    res.status(404).json({ error: "not_found", message: "This server does not use OAuth." });
-  });
+  app.all(
+    [
+      "/api/wk-oauth",
+      // Bare paths (local self-host / direct hits) and the /api-prefixed form the
+      // Netlify function normalizer produces for the same incoming request.
+      "/.well-known/oauth-protected-resource",
+      "/.well-known/oauth-protected-resource/*",
+      "/.well-known/oauth-authorization-server",
+      "/.well-known/oauth-authorization-server/*",
+      "/api/.well-known/oauth-protected-resource",
+      "/api/.well-known/oauth-protected-resource/*",
+      "/api/.well-known/oauth-authorization-server",
+      "/api/.well-known/oauth-authorization-server/*",
+    ],
+    (_req: Request, res: Response) => {
+      mcpCors(res);
+      res.status(404).json({ error: "not_found", message: "This server does not use OAuth." });
+    },
+  );
 
   app.get("/robots.txt", robotsTxtHandler);
   app.get("/api/robots.txt", robotsTxtHandler);
