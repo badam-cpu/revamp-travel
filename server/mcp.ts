@@ -10,6 +10,7 @@
  * request, JSON responses) so it works inside the Netlify Function. Wired at
  * POST /mcp (and /api/mcp) in server/routes.ts.
  */
+import { randomUUID } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
@@ -187,6 +188,15 @@ export async function dispatchMcp(server: McpServer, req: Request, res: Response
   }
   const messages = (Array.isArray(body) ? body : [body]) as JSONRPCMessage[];
   const expected = messages.filter((m) => m && typeof m === "object" && "method" in m && "id" in m && (m as { id?: unknown }).id != null).length;
+
+  // Issue a session id on initialize. We run statelessly (a fresh server per
+  // request), so we never actually track sessions — but some MCP clients (the
+  // claude.ai remote connector among them) treat the absence of Mcp-Session-Id
+  // as a half-open connection and report "Server not responding" after the
+  // handshake. Handing back an id satisfies them; we accept (and ignore) it on
+  // every later request. The id is exposed via CORS in the route's mcpCors().
+  const isInitialize = messages.some((m) => m && typeof m === "object" && (m as { method?: string }).method === "initialize");
+  if (isInitialize && !res.headersSent) res.setHeader("Mcp-Session-Id", randomUUID());
 
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   await server.connect(serverSide);

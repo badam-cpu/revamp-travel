@@ -833,7 +833,7 @@ export function registerApiRoutes(app: Express) {
   // open because MCP clients connect cross-origin.
   const mcpCors = (res: Response) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Mcp-Session-Id, Mcp-Protocol-Version, Authorization");
     res.setHeader("Access-Control-Expose-Headers", "Mcp-Session-Id, Mcp-Protocol-Version");
   };
@@ -848,8 +848,15 @@ export function registerApiRoutes(app: Express) {
     // a 200 JSON page here breaks the MCP client's notification-stream probe.)
     app.get(mcpPath, (_req: Request, res: Response) => {
       mcpCors(res);
-      res.setHeader("Allow", "POST, OPTIONS");
+      res.setHeader("Allow", "POST, DELETE, OPTIONS");
       res.status(405).json({ jsonrpc: "2.0", error: { code: -32000, message: "Method Not Allowed: use POST for MCP requests." }, id: null });
+    });
+    // Stateless server — a session has nothing to tear down. Acknowledge the
+    // client's end-of-session DELETE so it completes cleanly instead of hitting
+    // the SPA catch-all.
+    app.delete(mcpPath, (_req: Request, res: Response) => {
+      mcpCors(res);
+      res.status(204).end();
     });
     app.post(mcpPath, async (req: Request, res: Response) => {
       mcpCors(res);
@@ -871,8 +878,12 @@ export function registerApiRoutes(app: Express) {
     });
     app.get(adminPath, (_req: Request, res: Response) => {
       mcpCors(res);
-      res.setHeader("Allow", "POST, OPTIONS");
+      res.setHeader("Allow", "POST, DELETE, OPTIONS");
       res.status(405).json({ jsonrpc: "2.0", error: { code: -32000, message: "Method Not Allowed: use POST for MCP requests." }, id: null });
+    });
+    app.delete(adminPath, (_req: Request, res: Response) => {
+      mcpCors(res);
+      res.status(204).end();
     });
     app.post(adminPath, async (req: Request, res: Response) => {
       mcpCors(res);
