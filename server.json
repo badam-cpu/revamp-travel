@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "com.revampvacations/revamp",
+  "description": "Search Revamp Vacations' live Armenia travel catalog — stays, tours, experiences, restaurants and places to visit — check availability, and plan trips. Read-only, no authentication.",
+  "status": "active",
+  "version": "1.0.0",
+  "websiteUrl": "https://revampvacations.com/developers",
+  "repository": {
+    "url": "https://github.com/badam-cpu/revamp-travel",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.revampvacations.com/mcp"
+    }
+  ]
+}

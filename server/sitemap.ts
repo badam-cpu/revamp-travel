@@ -13,7 +13,7 @@ import { GUIDES } from "../shared/guides.js";
 import { HOST_PAGES } from "../shared/hostLanding.js";
 import { slugify } from "../shared/slug.js";
 
-const STATIC_ROUTES = ["/", "/explore", "/explore/stay", "/explore/eat", "/explore/tour", "/explore/experience", "/map", "/plan", "/faq", "/partners", "/gift-cards", "/blog", "/guide", "/host", "/login", "/signup", ...REGION_GUIDES.map((g) => `/region/${g.slug}`), ...GUIDES.map((g) => `/guide/${g.slug}`), ...HOST_PAGES.map((p) => `/host/${p.type}`)];
+const STATIC_ROUTES = ["/", "/explore", "/explore/stay", "/explore/eat", "/explore/tour", "/explore/experience", "/map", "/plan", "/faq", "/partners", "/gift-cards", "/blog", "/guide", "/host", "/developers", "/login", "/signup", ...REGION_GUIDES.map((g) => `/region/${g.slug}`), ...GUIDES.map((g) => `/guide/${g.slug}`), ...HOST_PAGES.map((p) => `/host/${p.type}`)];
 
 const normalizeRegionName = (r: string) => r.trim().replace(/\s+(province|marz)$/i, "").trim();
 

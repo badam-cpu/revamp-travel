@@ -47,6 +47,7 @@ import Guide from "./pages/Guide";
 import Host from "./pages/Host";
 import RedeemStation from "./pages/RedeemStation";
 import Plan from "./pages/Plan";
+import Developers from "./pages/Developers";
 
 /** Loads GA4 (if configured) and reports a page view on every route change. */
 function AnalyticsTracker() {
@@ -114,6 +115,7 @@ function Router() {
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
       <Route path="/faq" component={Faq} />
+      <Route path="/developers" component={Developers} />
       <Route path="/partners" component={Partners} />
       <Route path="/gift-cards" component={GiftCards} />
       <Route path="/region/:slug">{(params) => <Region slug={params.slug} />}</Route>
