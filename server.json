@@ -1,7 +1,7 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "com.revampvacations/revamp",
-  "description": "Search Revamp Vacations' live Armenia travel catalog — stays, tours, experiences, restaurants and places to visit — check availability, and plan trips. Read-only, no authentication.",
+  "description": "Search Revamp's live Armenia catalog: stays, tours, restaurants; check availability; plan trips.",
   "status": "active",
   "version": "1.0.0",
   "websiteUrl": "https://revampvacations.com/developers",
