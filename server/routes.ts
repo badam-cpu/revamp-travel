@@ -14,6 +14,7 @@ import { z } from "zod";
 import { listPublishedForPlanner, verifyUser, userClient, getListingBusyRanges, getOperatorGooglePlaceId, pingDb } from "./supabase.js";
 import { collectHealth } from "./health.js";
 import { getReferralSummary, attachReferral, listAllReferrals, markReferralPaid, setReferralConfig } from "./referrals.js";
+import { handlePublicMcp, mcpInfo } from "./mcp.js";
 import { fetchPlaceReviews, fetchPlaceDetails, placesServerKeySet } from "./googlePlaces.js";
 import { matchTripadvisor, tripadvisorConfigured } from "./tripadvisor.js";
 import { translateTexts } from "./translate.js";
@@ -825,6 +826,36 @@ export function registerApiRoutes(app: Express) {
   // reached only via the function, whose path normalizer forces everything
   // under /api (see netlify/functions/api.ts + the /robots.txt, /sitemap.xml
   // redirects in netlify.toml).
+  // ── Public MCP server (read-only) — Streamable HTTP, stateless. Registered at
+  // both /mcp (bare path, via the netlify.toml redirect + server/index.ts) and
+  // /api/mcp (the Netlify function normalizes everything under /api). CORS is
+  // open because MCP clients connect cross-origin.
+  const mcpCors = (res: Response) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Mcp-Session-Id, Mcp-Protocol-Version, Authorization");
+    res.setHeader("Access-Control-Expose-Headers", "Mcp-Session-Id, Mcp-Protocol-Version");
+  };
+  for (const mcpPath of ["/mcp", "/api/mcp"]) {
+    app.options(mcpPath, (_req: Request, res: Response) => {
+      mcpCors(res);
+      res.status(204).end();
+    });
+    app.get(mcpPath, (_req: Request, res: Response) => {
+      mcpCors(res);
+      res.json(mcpInfo()); // humans/discovery; MCP clients POST
+    });
+    app.post(mcpPath, async (req: Request, res: Response) => {
+      mcpCors(res);
+      try {
+        await handlePublicMcp(req, res);
+      } catch (err) {
+        console.error("[mcp]", err);
+        if (!res.headersSent) res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal server error" }, id: null });
+      }
+    });
+  }
+
   app.get("/robots.txt", robotsTxtHandler);
   app.get("/api/robots.txt", robotsTxtHandler);
   app.get("/sitemap.xml", sitemapHandler);

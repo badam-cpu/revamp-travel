@@ -348,15 +348,24 @@ export async function getSitePartners(): Promise<{ name: string; blurb: string; 
 }
 
 export async function getListingBusyRanges(id: string): Promise<{ title: string; ranges: { start: string; end: string }[] } | null> {
+  return busyRangesWhere("id", id);
+}
+
+/** Same as getListingBusyRanges but keyed by the public slug (used by the MCP server). */
+export async function getListingBusyRangesBySlug(slug: string): Promise<{ title: string; ranges: { start: string; end: string }[] } | null> {
+  return busyRangesWhere("slug", slug);
+}
+
+async function busyRangesWhere(column: "id" | "slug", value: string): Promise<{ title: string; ranges: { start: string; end: string }[] } | null> {
   if (!client) return null;
   const { data: listing } = await client
     .from("listings")
-    .select("title, status, blocked_ranges, manual_blocked_ranges")
-    .eq("id", id)
+    .select("id, title, status, blocked_ranges, manual_blocked_ranges")
+    .eq(column, value)
     .eq("status", "published")
     .maybeSingle();
   if (!listing) return null;
-  const { data: booked } = await client.from("listing_booked_ranges").select("start_date, end_date").eq("listing_id", id);
+  const { data: booked } = await client.from("listing_booked_ranges").select("start_date, end_date").eq("listing_id", listing.id);
   const arr = (v: unknown) => (Array.isArray(v) ? (v as { start: string; end: string }[]) : []);
   const ranges = [
     ...arr(listing.blocked_ranges),

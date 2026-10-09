@@ -76,6 +76,14 @@
   status = 200
   force = true
 
+# Public MCP server (read-only Streamable HTTP) served by the Express app inside
+# the Function. force = true so it wins over the SPA catch-all.
+[[redirects]]
+  from = "/mcp"
+  to = "/.netlify/functions/api/mcp"
+  status = 200
+  force = true
+
 # SPA fallback: client-side routing is done by wouter, so every non-file,
 # non-API path must return the app shell. Not forced, so real static assets in
 # dist/public (JS, CSS, images) are served directly before this catch-all.
