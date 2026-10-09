@@ -16,6 +16,7 @@ import { collectHealth } from "./health.js";
 import { getReferralSummary, attachReferral, listAllReferrals, markReferralPaid, setReferralConfig } from "./referrals.js";
 import { handlePublicMcp } from "./mcp.js";
 import { handleAdminMcp } from "./mcpAdmin.js";
+import { mcpStreamingEnabled, handlePublicMcpStreaming, handleAdminMcpStreaming } from "./mcpStreaming.js";
 import { fetchPlaceReviews, fetchPlaceDetails, placesServerKeySet } from "./googlePlaces.js";
 import { matchTripadvisor, tripadvisorConfigured } from "./tripadvisor.js";
 import { translateTexts } from "./translate.js";
@@ -843,26 +844,38 @@ export function registerApiRoutes(app: Express) {
       mcpCors(res);
       res.status(204).end();
     });
-    // No server-initiated SSE stream (stateless JSON mode) — a compliant MCP
-    // server answers GET with 405 so clients fall back to POST-only. (Returning
-    // a 200 JSON page here breaks the MCP client's notification-stream probe.)
-    app.get(mcpPath, (_req: Request, res: Response) => {
+    // GET is the server→client notification stream. In streaming mode (a
+    // persistent host, MCP_STREAMING=1) it's held open by the SDK transport —
+    // this is what the claude.ai connector subscribes to. On the stateless
+    // Netlify path a function can't hold it, so answer 405 (clients fall back to
+    // POST-only; a 200 JSON page here breaks the connector's stream probe).
+    app.get(mcpPath, async (req: Request, res: Response) => {
       mcpCors(res);
+      if (mcpStreamingEnabled()) {
+        try { await handlePublicMcpStreaming(req, res); }
+        catch (err) { console.error("[mcp]", err); if (!res.headersSent) res.status(500).end(); }
+        return;
+      }
       res.setHeader("Allow", "POST, DELETE, OPTIONS");
       res.status(405).json({ jsonrpc: "2.0", error: { code: -32000, message: "Method Not Allowed: use POST for MCP requests." }, id: null });
     });
-    // Stateless server — a session has nothing to tear down. Acknowledge the
-    // client's end-of-session DELETE so it completes cleanly instead of hitting
-    // the SPA catch-all.
-    app.delete(mcpPath, (_req: Request, res: Response) => {
+    // End-of-session DELETE: tears down the streaming session; on the stateless
+    // path there's nothing to tear down, so just acknowledge it.
+    app.delete(mcpPath, async (req: Request, res: Response) => {
       mcpCors(res);
+      if (mcpStreamingEnabled()) {
+        try { await handlePublicMcpStreaming(req, res); }
+        catch (err) { console.error("[mcp]", err); if (!res.headersSent) res.status(500).end(); }
+        return;
+      }
       res.status(204).end();
     });
     app.post(mcpPath, async (req: Request, res: Response) => {
       mcpCors(res);
       res.setHeader("Mcp-Protocol-Version", MCP_PROTOCOL_VERSION);
       try {
-        await handlePublicMcp(req, res);
+        if (mcpStreamingEnabled()) await handlePublicMcpStreaming(req, res);
+        else await handlePublicMcp(req, res);
       } catch (err) {
         console.error("[mcp]", err);
         if (!res.headersSent) res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal server error" }, id: null });
@@ -876,20 +889,31 @@ export function registerApiRoutes(app: Express) {
       mcpCors(res);
       res.status(204).end();
     });
-    app.get(adminPath, (_req: Request, res: Response) => {
+    app.get(adminPath, async (req: Request, res: Response) => {
       mcpCors(res);
+      if (mcpStreamingEnabled()) {
+        try { await handleAdminMcpStreaming(req, res); }
+        catch (err) { console.error("[mcp-admin]", err); if (!res.headersSent) res.status(500).end(); }
+        return;
+      }
       res.setHeader("Allow", "POST, DELETE, OPTIONS");
       res.status(405).json({ jsonrpc: "2.0", error: { code: -32000, message: "Method Not Allowed: use POST for MCP requests." }, id: null });
     });
-    app.delete(adminPath, (_req: Request, res: Response) => {
+    app.delete(adminPath, async (req: Request, res: Response) => {
       mcpCors(res);
+      if (mcpStreamingEnabled()) {
+        try { await handleAdminMcpStreaming(req, res); }
+        catch (err) { console.error("[mcp-admin]", err); if (!res.headersSent) res.status(500).end(); }
+        return;
+      }
       res.status(204).end();
     });
     app.post(adminPath, async (req: Request, res: Response) => {
       mcpCors(res);
       res.setHeader("Mcp-Protocol-Version", MCP_PROTOCOL_VERSION);
       try {
-        await handleAdminMcp(req, res);
+        if (mcpStreamingEnabled()) await handleAdminMcpStreaming(req, res);
+        else await handleAdminMcp(req, res);
       } catch (err) {
         console.error("[mcp-admin]", err);
         if (!res.headersSent) res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal server error" }, id: null });

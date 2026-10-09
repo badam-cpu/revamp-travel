@@ -57,7 +57,7 @@ function detail(l: PublicListing) {
 
 const TEXT = (data: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] });
 
-function createPublicServer(): McpServer {
+export function createPublicServer(): McpServer {
   const server = new McpServer({ name: "revamp-vacations", version: "1.0.0" });
 
   server.registerTool(

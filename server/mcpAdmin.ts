@@ -25,7 +25,7 @@ const one = <T>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? 
 type Prof = { display_name: string | null; business_name: string | null };
 const opName = (p: Prof | null) => (p?.business_name || p?.display_name || "Operator").trim();
 
-function createAdminServer(admin: SupabaseClient): McpServer {
+export function createAdminServer(admin: SupabaseClient): McpServer {
   const server = new McpServer({ name: "revamp-vacations-admin", version: "1.0.0" });
 
   server.registerTool(
