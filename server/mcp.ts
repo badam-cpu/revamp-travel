@@ -11,7 +11,8 @@
  * POST /mcp (and /api/mcp) in server/routes.ts.
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import type { Request, Response } from "express";
 import { getPublishedCatalog, listPublishedForPlanner, getListingBusyRangesBySlug, type PublicListing } from "./supabase.js";
@@ -169,19 +170,61 @@ function createPublicServer(): McpServer {
 }
 
 /**
- * Express handler for the public MCP endpoint. Stateless: one McpServer +
- * transport per request, JSON responses (no SSE session) so it runs in the
- * Netlify Function. CORS is set by the caller (server/routes.ts).
+ * Express handler for the public MCP endpoint. Stateless: a fresh McpServer per
+ * request, driven through an IN-MEMORY transport (not the HTTP Streamable
+ * transport) and dispatched to JSON ourselves. This deliberately avoids the
+ * SDK's Node HTTP transport, whose header parsing (via @hono/node-server) mises
+ * the Content-Type when running under serverless-http inside the Netlify
+ * Function (it works in raw Express, 415s in the Function). Express has already
+ * parsed the JSON body, so we just pass the JSON-RPC message(s) to the server
+ * and return the response(s). CORS is set by the caller (server/routes.ts).
  */
 export async function handlePublicMcp(req: Request, res: Response): Promise<void> {
+  const body = req.body as unknown;
+  if (!body || typeof body !== "object") {
+    res.status(400).json({ jsonrpc: "2.0", error: { code: -32700, message: "Parse error: expected a JSON-RPC message" }, id: null });
+    return;
+  }
+  const messages = (Array.isArray(body) ? body : [body]) as JSONRPCMessage[];
+  // Count request messages (have a method + a non-null id) — notifications get no response.
+  const expected = messages.filter((m) => m && typeof m === "object" && "method" in m && "id" in m && (m as { id?: unknown }).id != null).length;
+
   const server = createPublicServer();
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-  res.on("close", () => {
-    void transport.close();
-    void server.close();
-  });
-  await server.connect(transport);
-  await transport.handleRequest(req, res, req.body);
+  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+  await server.connect(serverSide);
+  const responses: JSONRPCMessage[] = [];
+  try {
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (!settled) {
+          settled = true;
+          resolve();
+        }
+      };
+      clientSide.onmessage = (msg) => {
+        responses.push(msg);
+        if (responses.length >= expected) finish();
+      };
+      clientSide.onclose = finish;
+      setTimeout(finish, 28_000); // safety net under the function timeout
+      void clientSide
+        .start()
+        .then(async () => {
+          for (const m of messages) await clientSide.send(m);
+          if (expected === 0) finish();
+        })
+        .catch(finish);
+    });
+    if (expected === 0 || responses.length === 0) {
+      res.status(202).end();
+      return;
+    }
+    res.json(Array.isArray(body) ? responses : responses[0]);
+  } finally {
+    await server.close().catch(() => {});
+    await clientSide.close().catch(() => {});
+  }
 }
 
 /** Human/discovery info for a GET on the MCP endpoint (clients use POST). */
