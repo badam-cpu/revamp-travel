@@ -13,7 +13,10 @@ WORKDIR /app
 RUN corepack enable
 
 # Install deps first (cached layer) — needs the full dep set to build.
+# The patches/ dir must be present before install: pnpm hashes the patch files
+# referenced by pnpm.patchedDependencies (wouter) during a --frozen-lockfile run.
 COPY package.json pnpm-lock.yaml ./
+COPY patches ./patches
 RUN pnpm install --frozen-lockfile
 
 # Build the client + the server bundle (dist/index.js, dist/public).
