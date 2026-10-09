@@ -30,6 +30,9 @@ export async function llmsTxtHandler(req: Request, res: Response): Promise<void>
   L.push(`- [AI trip planner](${origin}/plan): generates a day-by-day Armenia itinerary from the live catalog`);
   L.push(`- [Blog](${origin}/blog): guides and stories about traveling in Armenia`);
   L.push("");
+  L.push("## For AI assistants (MCP)");
+  L.push(`Revamp offers a public, read-only Model Context Protocol (MCP) server so AI assistants can search and use the live catalog directly: ${origin}/mcp (Streamable HTTP, no authentication). Tools: search_listings, get_listing, check_availability, plan_trip.`);
+  L.push("");
 
   const byType = (t: string) => catalog.filter((l) => l.type === t);
   const line = (l: (typeof catalog)[number]) => {

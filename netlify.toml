@@ -76,8 +76,15 @@
   status = 200
   force = true
 
-# Public MCP server (read-only Streamable HTTP) served by the Express app inside
-# the Function. force = true so it wins over the SPA catch-all.
+# MCP servers (Streamable HTTP) served by the Express app inside the Function.
+# force = true so they win over the SPA catch-all. The admin (team) endpoint is
+# listed first and is API-key gated inside the app.
+[[redirects]]
+  from = "/mcp/admin"
+  to = "/.netlify/functions/api/mcp/admin"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/mcp"
   to = "/.netlify/functions/api/mcp"

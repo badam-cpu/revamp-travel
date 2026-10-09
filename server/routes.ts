@@ -15,6 +15,7 @@ import { listPublishedForPlanner, verifyUser, userClient, getListingBusyRanges, 
 import { collectHealth } from "./health.js";
 import { getReferralSummary, attachReferral, listAllReferrals, markReferralPaid, setReferralConfig } from "./referrals.js";
 import { handlePublicMcp } from "./mcp.js";
+import { handleAdminMcp } from "./mcpAdmin.js";
 import { fetchPlaceReviews, fetchPlaceDetails, placesServerKeySet } from "./googlePlaces.js";
 import { matchTripadvisor, tripadvisorConfigured } from "./tripadvisor.js";
 import { translateTexts } from "./translate.js";
@@ -857,6 +858,29 @@ export function registerApiRoutes(app: Express) {
         await handlePublicMcp(req, res);
       } catch (err) {
         console.error("[mcp]", err);
+        if (!res.headersSent) res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal server error" }, id: null });
+      }
+    });
+  }
+
+  // Internal (team) MCP — API-key gated; private business data. Same transport.
+  for (const adminPath of ["/mcp/admin", "/api/mcp/admin"]) {
+    app.options(adminPath, (_req: Request, res: Response) => {
+      mcpCors(res);
+      res.status(204).end();
+    });
+    app.get(adminPath, (_req: Request, res: Response) => {
+      mcpCors(res);
+      res.setHeader("Allow", "POST, OPTIONS");
+      res.status(405).json({ jsonrpc: "2.0", error: { code: -32000, message: "Method Not Allowed: use POST for MCP requests." }, id: null });
+    });
+    app.post(adminPath, async (req: Request, res: Response) => {
+      mcpCors(res);
+      res.setHeader("Mcp-Protocol-Version", MCP_PROTOCOL_VERSION);
+      try {
+        await handleAdminMcp(req, res);
+      } catch (err) {
+        console.error("[mcp-admin]", err);
         if (!res.headersSent) res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal server error" }, id: null });
       }
     });
