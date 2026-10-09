@@ -886,6 +886,17 @@ export function registerApiRoutes(app: Express) {
     });
   }
 
+  // OAuth discovery probes (RFC 9728 / RFC 8414) for the MCP endpoints. Neither
+  // MCP server uses OAuth — the public one is open, the admin one uses a static
+  // bearer key — so answer with a clean 404 (not the SPA's 200 HTML). Otherwise a
+  // connector that probes these tries to parse HTML as auth metadata and fails
+  // with "Couldn't reach". Reached via the netlify.toml /.well-known/oauth-*
+  // redirects (and directly at /api/wk-oauth after the function normalizer).
+  app.all(["/api/wk-oauth", "/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/*", "/.well-known/oauth-authorization-server", "/.well-known/oauth-authorization-server/*"], (_req: Request, res: Response) => {
+    mcpCors(res);
+    res.status(404).json({ error: "not_found", message: "This server does not use OAuth." });
+  });
+
   app.get("/robots.txt", robotsTxtHandler);
   app.get("/api/robots.txt", robotsTxtHandler);
   app.get("/sitemap.xml", sitemapHandler);

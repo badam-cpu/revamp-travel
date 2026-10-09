@@ -76,6 +76,30 @@
   status = 200
   force = true
 
+# OAuth discovery probes for the MCP endpoints → the Express app, which returns
+# a clean 404 (neither MCP server uses OAuth). Without this they hit the SPA
+# catch-all (200 HTML) and break MCP connectors' auth discovery.
+[[redirects]]
+  from = "/.well-known/oauth-protected-resource"
+  to = "/.netlify/functions/api/wk-oauth"
+  status = 200
+  force = true
+[[redirects]]
+  from = "/.well-known/oauth-protected-resource/*"
+  to = "/.netlify/functions/api/wk-oauth"
+  status = 200
+  force = true
+[[redirects]]
+  from = "/.well-known/oauth-authorization-server"
+  to = "/.netlify/functions/api/wk-oauth"
+  status = 200
+  force = true
+[[redirects]]
+  from = "/.well-known/oauth-authorization-server/*"
+  to = "/.netlify/functions/api/wk-oauth"
+  status = 200
+  force = true
+
 # MCP servers (Streamable HTTP) served by the Express app inside the Function.
 # force = true so they win over the SPA catch-all. The admin (team) endpoint is
 # listed first and is API-key gated inside the app.
