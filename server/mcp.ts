@@ -218,7 +218,21 @@ export async function dispatchMcp(server: McpServer, req: Request, res: Response
       res.status(202).end();
       return;
     }
-    res.json(Array.isArray(body) ? responses : responses[0]);
+    // Reply the way the reference Streamable-HTTP transport does: if the client
+    // accepts text/event-stream, frame the response(s) as SSE (what some MCP
+    // clients require); otherwise plain JSON. One buffered write either way —
+    // fine for a single request/response under the Netlify Function.
+    const accept = (req.get("accept") || "").toLowerCase();
+    if (accept.includes("text/event-stream")) {
+      res.status(200);
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("Connection", "keep-alive");
+      for (const r of responses) res.write(`event: message\ndata: ${JSON.stringify(r)}\n\n`);
+      res.end();
+    } else {
+      res.json(Array.isArray(body) ? responses : responses[0]);
+    }
   } finally {
     await server.close().catch(() => {});
     await clientSide.close().catch(() => {});
