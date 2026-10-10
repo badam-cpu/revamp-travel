@@ -34,13 +34,13 @@ const FOOTER_COMPANY: [string, string][] = [
 ];
 
 // revampstay footer groups — stay/relocation categories, not restaurants/tours.
-// Offer-filtered Rent/Buy pages land with the Explore work; for now they route
-// to the stay catalog so there are no dead links.
+// Rent/Buy route to the offer-filtered Explore (?offer=…) built with the
+// viewing-request flow.
 const FOOTER_STAY_RENT: [string, string][] = [
   ["/explore/stay", "Browse homes"],
-  ["/explore/stay", "Long-term rentals"],
-  ["/explore/stay", "Short stays"],
-  ["/explore/stay", "For sale"],
+  ["/explore/stay?offer=monthly", "Long-term rentals"],
+  ["/explore/stay?offer=nightly", "Short stays"],
+  ["/explore/stay?offer=sale", "For sale"],
 ];
 const FOOTER_STAY_HOSTS: [string, string][] = [
   ["/host", "List your place"],

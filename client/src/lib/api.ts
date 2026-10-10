@@ -670,6 +670,43 @@ export async function ensureListingInquiryThread(
   return res.conversationId;
 }
 
+/**
+ * revampstay — request a viewing of a monthly rental or a property for sale.
+ * Records a structured lead AND drops the details in the host's inbox. No
+ * account needed (the caller can be an anonymous session). Returns the inbox
+ * conversation id so the prospect can follow up.
+ */
+export interface ViewingRequestInput {
+  listingId: string;
+  offerType: "nightly" | "monthly" | "sale";
+  mode?: "in_person" | "video";
+  preferredTimes?: string[];
+  message?: string;
+  guestName?: string;
+  guestEmail?: string;
+  guestPhone?: string;
+}
+export async function requestViewing(input: ViewingRequestInput): Promise<string> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Couldn't send your request — please try again.");
+  const res = await request<{ conversationId: string }>("/api/viewing-request", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      listingId: input.listingId,
+      offerType: input.offerType,
+      mode: input.mode || "in_person",
+      preferredTimes: input.preferredTimes || [],
+      message: input.message || "",
+      guestName: input.guestName || "",
+      guestEmail: input.guestEmail || "",
+      guestPhone: input.guestPhone || "",
+    }),
+  });
+  return res.conversationId;
+}
+
 /** Telegram opt-in — get a one-time deep link to connect the account's Telegram. */
 export async function telegramConnect(): Promise<{ url: string; username: string }> {
   const { data } = await supabase.auth.getSession();

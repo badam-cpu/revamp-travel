@@ -12,15 +12,24 @@ import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ListingType, typeLabels } from "@/data/listings";
-import { isCuratedType, PLACE_CATEGORIES, PLACE_GROUPS, placeCategoryLabel, placeGroupForCategory } from "@shared/listings";
+import { isCuratedType, PLACE_CATEGORIES, PLACE_GROUPS, placeCategoryLabel, placeGroupForCategory, hasOffer, type OfferType } from "@shared/listings";
 import { slugify } from "@/lib/slug";
 import { useListings } from "@/contexts/ListingsContext";
+import { useSite } from "@/contexts/SiteContext";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { buildCollectionPageJsonLd } from "@shared/seo";
 import { cn } from "@/lib/utils";
 
 const validTypes = new Set(["all", "stay", "eat", "tour", "experience", "place"]);
+const validOffers = new Set(["all", "nightly", "monthly", "sale"]);
+// revampstay offer tabs — short stays (nightly), long-term (monthly), for sale.
+const OFFER_CHIPS: { value: string; label: string }[] = [
+  { value: "all", label: "All homes" },
+  { value: "nightly", label: "Short stays" },
+  { value: "monthly", label: "Long-term" },
+  { value: "sale", label: "For sale" },
+];
 
 // Canonicalize an Armenian region name so "Tavush" and "Tavush Province" (or
 // "…Marz") collapse to one filter option and still match listings either way.
@@ -41,6 +50,12 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
   // ?cat=<slug> or ?group=<slug> so the guide can land on Everyday essentials.
   const initialPlaceCat = params.get("group") ? `g:${params.get("group")}` : params.get("cat") || "all";
   const [placeCat, setPlaceCat] = useState(initialPlaceCat);
+  const site = useSite();
+  // revampstay offer filter (Short stays / Long-term / For sale). Deep-linkable
+  // via ?offer=nightly|monthly|sale. "all" = no offer constraint — the default
+  // everywhere, so it never affects the vacations site.
+  const urlOffer = params.get("offer") || "all";
+  const [offer, setOffer] = useState(validOffers.has(urlOffer) ? urlOffer : "all");
   const PAGE = 12;
   const [visible, setVisible] = useState(PAGE);
 
@@ -54,6 +69,8 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
     setQuery(p.get("query") || "");
     setRegion(p.get("region") || "all");
     setPlaceCat(p.get("group") ? `g:${p.get("group")}` : p.get("cat") || "all");
+    const o = p.get("offer") || "all";
+    setOffer(validOffers.has(o) ? o : "all");
   }, [searchStr, initialType]);
   const [selectedId, setSelectedId] = useState<string | undefined>();
   // Stay-availability filter: when a date range is searched, hide stays whose
@@ -146,14 +163,16 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
         type !== "place" ||
         placeCat === "all" ||
         (placeCat.startsWith("g:") ? placeGroupForCategory(listing.category) === placeCat.slice(2) : listing.category === placeCat);
+      // revampstay offer filter — only constrains stays; "all" is a no-op.
+      const matchesOffer = offer === "all" || (listing.type === "stay" && hasOffer(listing, offer as OfferType));
       const haystack = [listing.title, listing.city, listing.region, listing.type, listing.shortDescription, ...listing.tags].join(" ").toLowerCase();
-      return matchesType && matchesRegion && matchesCategory && (!needle || haystack.includes(needle)) && isAvailableForRange(listing);
+      return matchesType && matchesRegion && matchesCategory && matchesOffer && (!needle || haystack.includes(needle)) && isAvailableForRange(listing);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, type, region, placeCat, listings, hasRange, checkin, checkout, bookedByListing]);
+  }, [query, type, region, placeCat, offer, listings, hasRange, checkin, checkout, bookedByListing]);
 
   // Reset the visible window whenever the result set's filters change.
-  useEffect(() => setVisible(PAGE), [query, type, region, placeCat, hasRange]);
+  useEffect(() => setVisible(PAGE), [query, type, region, placeCat, offer, hasRange]);
   // Leaving the Visit tab clears its category sub-filter.
   useEffect(() => { if (type !== "place") setPlaceCat("all"); }, [type]);
   const shown = filtered.slice(0, visible);
@@ -162,6 +181,7 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
     setQuery("");
     setType("all");
     setRegion("all");
+    setOffer("all");
   };
 
   const pageLabel = type === "all" ? "All listings" : typeLabels[type as ListingType];
@@ -200,19 +220,25 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
               <Button variant="ghost" size="sm" className="rounded-none text-xs" onClick={reset}><RotateCcw className="mr-2 h-3.5 w-3.5" /> Reset</Button>
             </div>
             <div className="flex flex-wrap gap-x-2 gap-y-3">
-              {["all", "stay", "eat", "place", "tour", "experience"].map((value) => (
-                <button
-                  key={value}
-                  onClick={() => {
-                    if (value === "tour") navigate(`/explore/tour${query.trim() ? `?query=${encodeURIComponent(query.trim())}` : ""}`);
-                    else if (value === "eat") navigate(activeRegion ? `/eat/${slugify(normalizeRegion(activeRegion))}` : "/explore/eat");
-                    else setType(value);
-                  }}
-                  className={cn("filter-chip", type === value && "active")}
-                >
-                  {value === "all" ? "All places" : typeLabels[value as ListingType]}
-                </button>
-              ))}
+              {site === "stay"
+                ? OFFER_CHIPS.map(({ value, label }) => (
+                    <button key={value} onClick={() => setOffer(value)} className={cn("filter-chip", offer === value && "active")}>
+                      {label}
+                    </button>
+                  ))
+                : ["all", "stay", "eat", "place", "tour", "experience"].map((value) => (
+                    <button
+                      key={value}
+                      onClick={() => {
+                        if (value === "tour") navigate(`/explore/tour${query.trim() ? `?query=${encodeURIComponent(query.trim())}` : ""}`);
+                        else if (value === "eat") navigate(activeRegion ? `/eat/${slugify(normalizeRegion(activeRegion))}` : "/explore/eat");
+                        else setType(value);
+                      }}
+                      className={cn("filter-chip", type === value && "active")}
+                    >
+                      {value === "all" ? "All places" : typeLabels[value as ListingType]}
+                    </button>
+                  ))}
               <span className="mx-1 hidden h-9 w-px bg-basalt/10 sm:block" />
               <select value={region} onChange={(event) => setRegion(event.target.value)} className="h-10 border border-basalt/15 bg-paper px-3 text-xs font-bold uppercase tracking-[0.12em] outline-none focus:border-apricot">
                 <option value="all">Every region</option>

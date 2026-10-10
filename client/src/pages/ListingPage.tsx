@@ -9,6 +9,7 @@ import { ListingCard } from "@/components/ListingCard";
 import { formatLocation, normalizeRegion } from "@/lib/region";
 import { TourDetail } from "@/components/TourDetail";
 import { BookingPanel } from "@/components/BookingPanel";
+import { RequestViewingPanel } from "@/components/RequestViewingPanel";
 import { EatGuidePanel } from "@/components/EatGuidePanel";
 import { ListingVideo } from "@/components/ListingVideo";
 import { RestaurantVoucherCard } from "@/components/RestaurantVoucherCard";
@@ -20,7 +21,7 @@ import { DiscountBadge } from "@/components/DiscountBadge";
 import { houseRuleIcon } from "@/lib/houseRules";
 import { nearbySights, distanceMeters } from "@/lib/yerevanSights";
 import { findListing, typeLabels } from "@/data/listings";
-import { isCuratedType, placeCategoryLabel, placeGroupForCategory, formatStayType } from "@shared/listings";
+import { isCuratedType, placeCategoryLabel, placeGroupForCategory, formatStayType, hasOffer } from "@shared/listings";
 import { useListings } from "@/contexts/ListingsContext";
 import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
@@ -491,6 +492,8 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
                 <EatGuidePanel listing={live} />
                 {live.type === "eat" && <RestaurantVoucherCard listing={{ id: live.id, title: live.title, slug: live.slug }} />}
               </div>
+            ) : live && live.type === "stay" && !hasOffer(live, "nightly") ? (
+              <RequestViewingPanel listing={live} />
             ) : live ? (
               <BookingPanel listing={live} />
             ) : (

@@ -29,6 +29,8 @@ const baseLinks: NavLink[] = [
 // for now browse routes to the stay catalog so there are no dead links.
 const stayLinks: NavLink[] = [
   { href: "/explore/stay", label: "Homes" },
+  { href: "/explore/stay?offer=monthly", label: "Rent" },
+  { href: "/explore/stay?offer=sale", label: "Buy" },
   { href: "/map", label: "Map" },
   { href: "/host", label: "List your place" },
 ];

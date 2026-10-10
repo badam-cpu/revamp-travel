@@ -219,6 +219,20 @@ const listingInquirySchema = z.object({
   guestEmail: z.string().trim().max(200).optional().default(""),
 });
 
+// revampstay: a monthly-rental or sale viewing request. Records a structured
+// row (viewing_requests, migration 0091) AND drops the details into the host's
+// unified inbox, reusing the listing_inquiry conversation.
+const viewingRequestSchema = z.object({
+  listingId: z.string().uuid(),
+  offerType: z.enum(["nightly", "monthly", "sale"]),
+  mode: z.enum(["in_person", "video"]).optional().default("in_person"),
+  preferredTimes: z.array(z.string().trim().max(200)).max(5).optional().default([]),
+  message: z.string().trim().max(2000).optional().default(""),
+  guestName: z.string().trim().max(120).optional().default(""),
+  guestEmail: z.string().trim().max(200).optional().default(""),
+  guestPhone: z.string().trim().max(40).optional().default(""),
+});
+
 const messageSendSchema = z.object({
   conversationId: z.string().uuid(),
   body: z.string().trim().min(1).max(4000),
@@ -2218,6 +2232,139 @@ export function registerApiRoutes(app: Express) {
     } catch (err) {
       console.error("[listing-inquiry-thread]", err);
       res.status(500).json({ error: "Couldn't open the conversation. Please try again." });
+    }
+  });
+
+  // POST /api/viewing-request — revampstay lead primitive. A prospect asks to
+  // VIEW a monthly rental or a property for sale (no booking/checkout — these
+  // listings have no nightly offer). Records a structured viewing_requests row
+  // (0091) AND lands the details in the host's unified inbox, reusing the
+  // listing_inquiry conversation so the host answers in one place. Anonymous
+  // callers are allowed (same silent-guest pattern as the inquiry thread), so a
+  // prospect never needs an account to enquire. The operator is always derived
+  // from the listing, never client-supplied.
+  app.post("/api/viewing-request", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in to request a viewing." });
+
+    const parsed = viewingRequestSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Viewing requests aren't available right now." });
+
+    const { listingId, offerType, mode, preferredTimes, message } = parsed.data;
+    const guestName = parsed.data.guestName.trim();
+    const guestEmail = parsed.data.guestEmail.trim();
+    const guestPhone = parsed.data.guestPhone.trim();
+
+    try {
+      const { data: listing } = await admin
+        .from("listings")
+        .select("id, operator_id, status, title, type, offer_types")
+        .eq("id", listingId)
+        .maybeSingle();
+      if (!listing || listing.status !== "published") return res.status(404).json({ error: "Listing not found." });
+      if (listing.operator_id === userId) return res.status(400).json({ error: "That's your own listing." });
+      // Guard: the chosen offer must actually be advertised on the listing.
+      const offers = (listing as { offer_types?: string[] | null }).offer_types ?? ["nightly"];
+      if (!offers.includes(offerType)) return res.status(400).json({ error: "That option isn't available on this listing." });
+
+      // Show the host who's asking: an anonymous guest's profile is "Guest", so
+      // adopt the name they gave (never overwrite a real traveler's name).
+      if (guestName) {
+        const { data: u } = await admin.auth.admin.getUserById(userId);
+        if (u?.user?.is_anonymous) await admin.from("profiles").update({ display_name: guestName }).eq("id", userId);
+      }
+
+      // Find-or-create the (listing, traveler) inquiry thread — same shape as
+      // /api/listing-inquiry-thread so a prospect's viewing request and any
+      // follow-up chat share one conversation.
+      const { data: candidates } = await admin
+        .from("conversations")
+        .select("id")
+        .eq("kind", "listing_inquiry")
+        .eq("listing_id", listing.id);
+      const ids = (candidates ?? []).map((c) => c.id as string);
+      let conversationId: string | null = null;
+      if (ids.length) {
+        const { data: mine } = await admin
+          .from("conversation_participants")
+          .select("conversation_id")
+          .eq("user_id", userId)
+          .in("conversation_id", ids)
+          .maybeSingle();
+        if (mine) conversationId = mine.conversation_id as string;
+      }
+      if (conversationId) {
+        if (guestEmail || guestName) await admin.from("conversations").update({ guest_email: guestEmail || null, guest_name: guestName || null }).eq("id", conversationId);
+      } else {
+        const { data: convo, error: cErr } = await admin
+          .from("conversations")
+          .insert({ kind: "listing_inquiry", listing_id: listing.id, guest_email: guestEmail || null, guest_name: guestName || null })
+          .select("id")
+          .single();
+        if (cErr || !convo) throw new Error(cErr?.message || "conversation create failed");
+        conversationId = convo.id as string;
+        const { error: pErr } = await admin.from("conversation_participants").insert([
+          { conversation_id: conversationId, user_id: userId, role: "traveler" },
+          { conversation_id: conversationId, user_id: listing.operator_id, role: "operator" },
+        ]);
+        if (pErr) throw new Error(pErr.message);
+      }
+
+      // Record the structured lead.
+      const { error: vErr } = await admin.from("viewing_requests").insert({
+        listing_id: listing.id,
+        requester_id: userId,
+        guest_name: guestName || null,
+        guest_email: guestEmail || null,
+        guest_phone: guestPhone || null,
+        offer_type: offerType,
+        mode,
+        preferred_times: preferredTimes,
+        message: message || null,
+        conversation_id: conversationId,
+      });
+      if (vErr) throw new Error(vErr.message);
+
+      // Mirror the request into the inbox as a message from the prospect, so the
+      // host sees it (and gets the new-message email) exactly like any inquiry.
+      const offerLabel = offerType === "sale" ? "Property for sale" : offerType === "monthly" ? "Long-term rental" : "Short stay";
+      const modeLabel = mode === "video" ? "Video call" : "In person";
+      const lines = [
+        `📅 Viewing request — ${offerLabel}`,
+        `Format: ${modeLabel}`,
+        `Preferred times: ${preferredTimes.length ? preferredTimes.join(", ") : "Flexible / to be arranged"}`,
+      ];
+      const contact = [guestPhone && `phone ${guestPhone}`, guestEmail && `email ${guestEmail}`].filter(Boolean).join(", ");
+      if (contact) lines.push(`Contact: ${contact}`);
+      if (message) lines.push("", message);
+      const body = lines.join("\n");
+
+      const { flagged } = scanMessage(body);
+      await admin.from("messages").insert({ conversation_id: conversationId, sender_id: userId, sender_role: "traveler", body, flagged });
+      const nowIso = new Date().toISOString();
+      await admin.from("conversations").update({ last_message_at: nowIso, first_guest_at: nowIso }).eq("id", conversationId).is("first_guest_at", null);
+      await admin.from("conversations").update({ last_message_at: nowIso }).eq("id", conversationId);
+
+      res.json({ conversationId });
+
+      // Best-effort: email the host that a viewing was requested (fire-and-forget
+      // after responding, mirroring /api/message-send).
+      try {
+        const senderName = guestName || "A prospective guest";
+        const { data: u } = await admin.auth.admin.getUserById(listing.operator_id);
+        const to = u?.user?.email || null;
+        if (to) await sendNewMessage(to, { fromName: senderName, listingTitle: (listing as { title?: string }).title, snippet: `${offerLabel} — ${modeLabel} viewing requested`, recipientRole: "operator" });
+      } catch (emailErr) {
+        console.error("[viewing-request] notify failed", emailErr);
+      }
+    } catch (err) {
+      console.error("[viewing-request]", err);
+      res.status(500).json({ error: "Couldn't send your viewing request. Please try again." });
     }
   });
 
