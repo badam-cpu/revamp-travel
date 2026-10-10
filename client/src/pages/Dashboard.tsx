@@ -42,7 +42,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useListings, LiveListing } from "@/contexts/ListingsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import type { ListingInput, ListingType } from "@shared/listings";
-import { LISTING_LIMITS, STAY_SPACE_TYPES } from "@shared/listings";
+import { LISTING_LIMITS, STAY_SPACE_TYPES, listingOffers } from "@shared/listings";
 import { ApiError, importListingPrefill, syncIcal } from "@/lib/api";
 import { attachReferral, getStoredReferralCode, clearStoredReferralCode } from "@/lib/referrals";
 import { cn } from "@/lib/utils";
@@ -202,6 +202,42 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
     rooms,
     seasonalRates,
     neighborhood: get("neighborhood").trim() || undefined,
+    // revampstay offers (0091): stays only, and ONLY when the "How do you want
+    // to offer it?" block is actually in the form (its nightly checkbox exists).
+    // Otherwise return {} so offerColumns() sends no offer columns at all —
+    // tours/experiences and every other path are byte-for-byte unchanged.
+    ...(() => {
+      const box = (name: string) => form.elements.namedItem(name) as HTMLInputElement | null;
+      if (draft.type !== "stay" || !box("offer_nightly")) return {};
+      const offerTypes: ListingInput["offerTypes"] = [];
+      if (box("offer_nightly")?.checked) offerTypes.push("nightly");
+      if (box("offer_monthly")?.checked) offerTypes.push("monthly");
+      if (box("offer_sale")?.checked) offerTypes.push("sale");
+      const num = (name: string) => (get(name).trim() === "" ? undefined : Number(get(name)));
+      const cents = (name: string) => (num(name) !== undefined && Number(num(name)) > 0 ? Math.round(Number(num(name)) * 100) : undefined);
+      const monthly = offerTypes.includes("monthly");
+      const sale = offerTypes.includes("sale");
+      const furnishedRaw = get("furnished").trim();
+      const furnished = furnishedRaw === "furnished" || furnishedRaw === "semi" || furnishedRaw === "unfurnished" ? furnishedRaw : undefined;
+      const saleStatusRaw = get("saleStatus").trim();
+      const saleStatus = saleStatusRaw === "available" || saleStatusRaw === "under_offer" || saleStatusRaw === "sold" ? saleStatusRaw : undefined;
+      return {
+        offerTypes: offerTypes.length ? offerTypes : (["nightly"] as ListingInput["offerTypes"]),
+        monthlyRentCents: monthly ? cents("monthlyRent") : undefined,
+        depositCents: monthly ? cents("deposit") : undefined,
+        minLeaseMonths: monthly && num("minLeaseMonths") !== undefined && Number(num("minLeaseMonths")) >= 1 ? Math.round(Number(num("minLeaseMonths"))) : undefined,
+        furnished: monthly ? furnished : undefined,
+        utilitiesIncluded: monthly ? box("utilitiesIncluded")?.checked || false : undefined,
+        availableFrom: monthly ? get("availableFrom").trim() || undefined : undefined,
+        salePriceCents: sale ? cents("salePrice") : undefined,
+        areaM2: sale && num("areaM2") !== undefined && Number(num("areaM2")) > 0 ? Number(num("areaM2")) : undefined,
+        floor: sale && num("floor") !== undefined ? Math.round(Number(num("floor"))) : undefined,
+        totalFloors: sale && num("totalFloors") !== undefined ? Math.round(Number(num("totalFloors"))) : undefined,
+        yearBuilt: sale && num("yearBuilt") !== undefined ? Math.round(Number(num("yearBuilt"))) : undefined,
+        ownershipType: sale ? get("ownershipType").trim() || undefined : undefined,
+        saleStatus: sale ? saleStatus ?? "available" : undefined,
+      };
+    })(),
   };
 }
 
@@ -299,6 +335,12 @@ function ListingFormDialog({
   const notSuitableForRef = useRef<SearchableMultiSelectHandle>(null);
   // Ordered tour/experience itinerary (stored in `highlights`).
   const [itinerary, setItinerary] = useState<string[]>(draft?.highlights ?? []);
+  // revampstay offers (stays only). Checkbox state drives which price blocks
+  // show; the actual values are read uncontrolled in toInputPayload at submit.
+  // Seeded so editing a listing keeps its offers; a new stay defaults to nightly.
+  const seededOffers = listingOffers({ offerTypes: draft?.offerTypes });
+  const [offerMonthly, setOfferMonthly] = useState(seededOffers.includes("monthly"));
+  const [offerSale, setOfferSale] = useState(seededOffers.includes("sale"));
   const draftId = draft?.id;
   // Reset to the first step whenever the dialog (re)opens or a different draft loads.
   useEffect(() => {
@@ -321,6 +363,7 @@ function ListingFormDialog({
 
   const fieldValue = (name: string) =>
     ((formRef.current?.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement | null)?.value ?? "").trim();
+  const fieldChecked = (name: string) => !!(formRef.current?.elements.namedItem(name) as HTMLInputElement | null)?.checked;
 
   // Draft context Aha uses to write/improve copy (reads the live form values).
   const ahaContext = (): AhaCopyContext => ({
@@ -357,7 +400,18 @@ function ListingFormDialog({
       if (lat < 38 || lat > 42 || lng < 43 || lng > 47) return fail("Coordinates must be inside Armenia (lat 38–42, lng 43–47).");
     }
     if (s === 2 && (!fieldValue("shortDescription") || !fieldValue("longDescription"))) return fail("Add a short and a full description.");
-    if (s === 3 && !(Number(fieldValue("price")) > 0)) return fail("Set a price greater than ֏0.");
+    if (s === 3) {
+      // A stay with the offer block picks which prices are required; everything
+      // else (and a stay offered nightly) still requires the nightly price.
+      const hasOfferBlock = draft.type === "stay" && !!formRef.current?.elements.namedItem("offer_nightly");
+      const needNightly = !hasOfferBlock || fieldChecked("offer_nightly");
+      if (needNightly && !(Number(fieldValue("price")) > 0)) return fail("Set a nightly price greater than ֏0 (or turn off ‘Nightly stays’).");
+      if (hasOfferBlock) {
+        if (!fieldChecked("offer_nightly") && !fieldChecked("offer_monthly") && !fieldChecked("offer_sale")) return fail("Pick at least one way to offer this place.");
+        if (fieldChecked("offer_monthly") && !(Number(fieldValue("monthlyRent")) > 0)) return fail("Set a monthly rent for the long-term rental.");
+        if (fieldChecked("offer_sale") && !(Number(fieldValue("salePrice")) > 0)) return fail("Set an asking price for the sale.");
+      }
+    }
     setStepError(null);
     return true;
   };
@@ -745,6 +799,93 @@ function ListingFormDialog({
                       <Label htmlFor="importantInfo" className="text-sm font-semibold">Important info <span className="font-normal text-basalt/45">(optional)</span></Label>
                       <Textarea id="importantInfo" name="importantInfo" rows={2} placeholder="Age restrictions, accessibility notes, cancellation policy…" defaultValue={draft.importantInfo} className="rounded-none text-base" />
                     </div>
+                  </div>
+                )}
+
+                {/* revampstay — "How do you want to offer it?" (stays only).
+                    Nightly is always on (the price field below); monthly and
+                    sale reveal their own blocks. Shown here because listing on
+                    revampstay only needs the extra fields an operator opts into. */}
+                {draft.type === "stay" && (
+                  <div className="rounded-none border border-basalt/15 bg-chalk/40 p-5">
+                    <p className="text-sm font-semibold">How do you want to offer it?</p>
+                    <p className="mt-1 text-sm text-basalt/55">Pick one or more. Nightly stays show on revampvacations; monthly rentals and sales show on revampstay.</p>
+                    <div className="mt-4 flex flex-col gap-2.5 sm:flex-row sm:gap-6">
+                      <label className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" name="offer_nightly" defaultChecked className="h-4 w-4 accent-apricot" /> Nightly stays
+                      </label>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" name="offer_monthly" defaultChecked={offerMonthly} onChange={(e) => setOfferMonthly(e.currentTarget.checked)} className="h-4 w-4 accent-apricot" /> Long-term rental
+                      </label>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" name="offer_sale" defaultChecked={offerSale} onChange={(e) => setOfferSale(e.currentTarget.checked)} className="h-4 w-4 accent-apricot" /> For sale
+                      </label>
+                    </div>
+
+                    {offerMonthly && (
+                      <div className="mt-5 grid gap-4 border-t border-basalt/10 pt-5 sm:grid-cols-2">
+                        <div className="grid gap-2">
+                          <Label htmlFor="monthlyRent" className="text-sm font-semibold">Monthly rent in AMD</Label>
+                          <Input id="monthlyRent" name="monthlyRent" type="number" min={0} placeholder="e.g. 420000" defaultValue={draft.monthlyRentCents ? draft.monthlyRentCents / 100 : ""} className={FIELD} />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="deposit" className="text-sm font-semibold">Deposit in AMD <span className="font-normal text-basalt/45">(optional)</span></Label>
+                          <Input id="deposit" name="deposit" type="number" min={0} placeholder="e.g. 420000" defaultValue={draft.depositCents ? draft.depositCents / 100 : ""} className={FIELD} />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="minLeaseMonths" className="text-sm font-semibold">Minimum lease <span className="font-normal text-basalt/45">(months)</span></Label>
+                          <Input id="minLeaseMonths" name="minLeaseMonths" type="number" min={1} max={36} placeholder="e.g. 3" defaultValue={draft.minLeaseMonths || ""} className={FIELD} />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="furnished" className="text-sm font-semibold">Furnishing</Label>
+                          <Select name="furnished" defaultValue={draft.furnished ?? "furnished"}>
+                            <SelectTrigger id="furnished" className="h-12 rounded-none text-base"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="furnished">Furnished</SelectItem>
+                              <SelectItem value="semi">Semi-furnished</SelectItem>
+                              <SelectItem value="unfurnished">Unfurnished</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="availableFrom" className="text-sm font-semibold">Available from <span className="font-normal text-basalt/45">(optional)</span></Label>
+                          <Input id="availableFrom" name="availableFrom" type="date" defaultValue={draft.availableFrom ?? ""} className={FIELD} />
+                        </div>
+                        <label className="flex items-center gap-2 self-end pb-3 text-sm">
+                          <input type="checkbox" name="utilitiesIncluded" defaultChecked={draft.utilitiesIncluded ?? false} className="h-4 w-4 accent-apricot" /> Utilities included
+                        </label>
+                      </div>
+                    )}
+
+                    {offerSale && (
+                      <div className="mt-5 grid gap-4 border-t border-basalt/10 pt-5 sm:grid-cols-2">
+                        <div className="grid gap-2 sm:col-span-2">
+                          <Label htmlFor="salePrice" className="text-sm font-semibold">Asking price in AMD</Label>
+                          <Input id="salePrice" name="salePrice" type="number" min={0} placeholder="e.g. 85000000" defaultValue={draft.salePriceCents ? draft.salePriceCents / 100 : ""} className={FIELD} />
+                          <p className="text-xs text-basalt/45">Sales are listed for inquiry only — buyers request a viewing; no payment is taken on Revamp.</p>
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="areaM2" className="text-sm font-semibold">Area (m²)</Label>
+                          <Input id="areaM2" name="areaM2" type="number" min={0} step="0.1" placeholder="e.g. 72" defaultValue={draft.areaM2 || ""} className={FIELD} />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="yearBuilt" className="text-sm font-semibold">Year built <span className="font-normal text-basalt/45">(optional)</span></Label>
+                          <Input id="yearBuilt" name="yearBuilt" type="number" min={1800} max={2100} placeholder="e.g. 2015" defaultValue={draft.yearBuilt || ""} className={FIELD} />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="floor" className="text-sm font-semibold">Floor <span className="font-normal text-basalt/45">(optional)</span></Label>
+                          <Input id="floor" name="floor" type="number" placeholder="e.g. 4" defaultValue={draft.floor || ""} className={FIELD} />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="totalFloors" className="text-sm font-semibold">Total floors <span className="font-normal text-basalt/45">(optional)</span></Label>
+                          <Input id="totalFloors" name="totalFloors" type="number" placeholder="e.g. 9" defaultValue={draft.totalFloors || ""} className={FIELD} />
+                        </div>
+                        <div className="grid gap-2 sm:col-span-2">
+                          <Label htmlFor="ownershipType" className="text-sm font-semibold">Ownership <span className="font-normal text-basalt/45">(optional)</span></Label>
+                          <Input id="ownershipType" name="ownershipType" placeholder="e.g. private, new build" defaultValue={draft.ownershipType ?? ""} className={FIELD} />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
