@@ -13,7 +13,7 @@
  * without changes.
  */
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import type { Listing, ListingInput, ListingType } from "@shared/listings";
+import type { Listing, ListingInput, ListingType, OfferType, Furnished, SaleStatus } from "@shared/listings";
 import type { SessionSchedule } from "@shared/sessions";
 import { seedListings, placeholderImage } from "@shared/listings";
 import { supabase } from "@/lib/supabase";
@@ -142,6 +142,22 @@ interface ListingRow {
   category: string | null;
   cover_focus: string | null;
   video_url: string | null;
+  // revampstay offers (0091) — absent (undefined) on a client that selects "*"
+  // before the migration runs; mapListingRow defaults every one of them.
+  offer_types: OfferType[] | null;
+  monthly_rent_cents: number | null;
+  deposit_cents: number | null;
+  min_lease_months: number | null;
+  furnished: Furnished | null;
+  utilities_included: boolean | null;
+  available_from: string | null;
+  sale_price_cents: number | null;
+  area_m2: number | string | null;
+  floor: number | null;
+  total_floors: number | null;
+  year_built: number | null;
+  ownership_type: string | null;
+  sale_status: SaleStatus | null;
   session_schedule: SessionSchedule | null;
   booking_mode: "instant" | "request" | null;
   cuisine: string | null;
@@ -221,6 +237,22 @@ function mapListingRow(row: ListingRow): LiveListing {
     rooms: Array.isArray(row.rooms) ? row.rooms : [],
     coverFocus: row.cover_focus ?? undefined,
     videoUrl: row.video_url ?? undefined,
+    // revampstay offers (0091): all null-safe — undefined pre-migration, which
+    // listingOffers() reads as ["nightly"], so revampvacations is unchanged.
+    offerTypes: Array.isArray(row.offer_types) && row.offer_types.length ? row.offer_types : undefined,
+    monthlyRentCents: row.monthly_rent_cents ?? undefined,
+    depositCents: row.deposit_cents ?? undefined,
+    minLeaseMonths: row.min_lease_months ?? undefined,
+    furnished: row.furnished ?? undefined,
+    utilitiesIncluded: row.utilities_included ?? undefined,
+    availableFrom: row.available_from ?? undefined,
+    salePriceCents: row.sale_price_cents ?? undefined,
+    areaM2: row.area_m2 != null ? Number(row.area_m2) : undefined,
+    floor: row.floor ?? undefined,
+    totalFloors: row.total_floors ?? undefined,
+    yearBuilt: row.year_built ?? undefined,
+    ownershipType: row.ownership_type ?? undefined,
+    saleStatus: row.sale_status ?? undefined,
     sessionSchedule: row.session_schedule ?? null,
     bookingMode: row.booking_mode ?? "instant",
     venueType: row.venue_type ?? undefined,
@@ -240,6 +272,34 @@ function mapListingRow(row: ListingRow): LiveListing {
     isPartner: row.is_partner ?? false,
     claimedBy: row.claimed_by ?? null,
   };
+}
+
+/**
+ * revampstay offer columns (0091). Kept separate so they are only sent when the
+ * form actually provides them — the current listing form never sets these, so
+ * it never touches these columns, and nothing can hit an unknown column before
+ * the migration runs. Zero change for revampvacations.
+ */
+function offerColumns(input: ListingInput): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const put = (key: string, value: unknown) => {
+    if (value !== undefined) out[key] = value;
+  };
+  put("offer_types", input.offerTypes);
+  put("monthly_rent_cents", input.monthlyRentCents);
+  put("deposit_cents", input.depositCents);
+  put("min_lease_months", input.minLeaseMonths);
+  put("furnished", input.furnished);
+  put("utilities_included", input.utilitiesIncluded);
+  put("available_from", input.availableFrom || undefined);
+  put("sale_price_cents", input.salePriceCents);
+  put("area_m2", input.areaM2);
+  put("floor", input.floor);
+  put("total_floors", input.totalFloors);
+  put("year_built", input.yearBuilt);
+  put("ownership_type", input.ownershipType?.trim() || undefined);
+  put("sale_status", input.saleStatus);
+  return out;
 }
 
 function toRow(input: ListingInput) {
@@ -305,6 +365,7 @@ function toRow(input: ListingInput) {
     tripadvisor_menu_url: input.tripadvisorMenuUrl?.trim() || null,
     is_partner: input.isPartner ?? false,
     claimed_by: input.claimedBy ?? null,
+    ...offerColumns(input),
   };
 }
 

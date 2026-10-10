@@ -230,6 +230,27 @@ export interface Listing {
   rooms?: ListingRoom[];
   /** Per-period nightly rate overrides (seasonal / date-range pricing). */
   seasonalRates?: SeasonalRate[];
+  // --- revampstay offers (migration 0091) — a `stay` can be offered nightly
+  // (today's price/priceUnit), monthly (long-term rent), and/or for sale.
+  // ALL optional: absent on pre-migration rows and on every non-stay type.
+  /** Which offers this property carries; treat absent as ["nightly"] (see listingOffers()). */
+  offerTypes?: OfferType[];
+  /** Long-term rent, AMD cents per month. Required when "monthly" is offered. */
+  monthlyRentCents?: number;
+  depositCents?: number;
+  minLeaseMonths?: number;
+  furnished?: Furnished;
+  utilitiesIncluded?: boolean;
+  /** Earliest move-in, YYYY-MM-DD. */
+  availableFrom?: string;
+  /** Asking price, AMD cents. Required when "sale" is offered. Lead-gen only — never charged. */
+  salePriceCents?: number;
+  areaM2?: number;
+  floor?: number;
+  totalFloors?: number;
+  yearBuilt?: number;
+  ownershipType?: string;
+  saleStatus?: SaleStatus;
   // --- curated types ("eat" + "place") — free, admin-curated recommendations ---
   /** Venue sub-kind for `type: "place"` — a PLACE_CATEGORIES slug (museum, gallery, …). */
   category?: string;
@@ -256,6 +277,35 @@ export interface Listing {
   /** Dormant Phase-2 fields: an owner-claimed / paid-partner restaurant. */
   isPartner?: boolean;
   claimedBy?: string | null;
+}
+
+// --- revampstay offers (migration 0091) -------------------------------------
+export const OFFER_TYPES = ["nightly", "monthly", "sale"] as const;
+export type OfferType = (typeof OFFER_TYPES)[number];
+export type Furnished = "furnished" | "semi" | "unfurnished";
+export type SaleStatus = "available" | "under_offer" | "sold";
+
+/**
+ * A listing's offers, defaulting to ["nightly"] when unset. Pre-migration rows
+ * and legacy data all read as nightly, so nothing changes shape or behaviour.
+ */
+export function listingOffers(l: { offerTypes?: OfferType[] | null }): OfferType[] {
+  return l.offerTypes && l.offerTypes.length > 0 ? l.offerTypes : ["nightly"];
+}
+export function hasOffer(l: { offerTypes?: OfferType[] | null }, offer: OfferType): boolean {
+  return listingOffers(l).includes(offer);
+}
+/**
+ * Site visibility. revampvacations keeps TODAY's behaviour exactly: every
+ * non-stay type is always visible, and a stay is visible iff it carries the
+ * nightly offer — which every existing row does by default. revampstay shows
+ * every stay regardless of offer. Only `stay` rows ever carry offers.
+ */
+export function visibleOnVacations(l: { type: ListingType; offerTypes?: OfferType[] | null }): boolean {
+  return l.type !== "stay" || hasOffer(l, "nightly");
+}
+export function visibleOnStay(l: { type: ListingType }): boolean {
+  return l.type === "stay";
 }
 
 // Deployment note: this fork replaces the Manus-managed `/manus-storage/...`
@@ -716,6 +766,21 @@ export interface ListingInput {
   rooms?: ListingRoom[];
   /** Per-period nightly rate overrides (seasonal / date-range pricing). */
   seasonalRates?: SeasonalRate[];
+  // --- revampstay offers (migration 0091); see the same fields on Listing ---
+  offerTypes?: OfferType[];
+  monthlyRentCents?: number;
+  depositCents?: number;
+  minLeaseMonths?: number;
+  furnished?: Furnished;
+  utilitiesIncluded?: boolean;
+  availableFrom?: string;
+  salePriceCents?: number;
+  areaM2?: number;
+  floor?: number;
+  totalFloors?: number;
+  yearBuilt?: number;
+  ownershipType?: string;
+  saleStatus?: SaleStatus;
   // --- curated types ("eat" + "place") — free, admin-curated recommendations ---
   category?: string;
   venueType?: string;

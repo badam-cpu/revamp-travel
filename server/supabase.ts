@@ -12,7 +12,7 @@
  * client/src/contexts/ListingsContext.tsx).
  */
 import { createClient } from "@supabase/supabase-js";
-import type { Listing, ListingType } from "../shared/listings.js";
+import type { Listing, ListingType, OfferType, Furnished, SaleStatus } from "../shared/listings.js";
 import type { CatalogEntry } from "./planner.js";
 
 const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -74,6 +74,21 @@ interface CatalogRow {
   google_rating: number | null;
   tripadvisor_rating: number | null;
   branches: { label?: string; address?: string; lat?: number; lng?: number }[] | null;
+  // revampstay offers (0091) — absent before the migration (select "*"); mapped null-safe.
+  offer_types: OfferType[] | null;
+  monthly_rent_cents: number | null;
+  deposit_cents: number | null;
+  min_lease_months: number | null;
+  furnished: Furnished | null;
+  utilities_included: boolean | null;
+  available_from: string | null;
+  sale_price_cents: number | null;
+  area_m2: number | string | null;
+  floor: number | null;
+  total_floors: number | null;
+  year_built: number | null;
+  ownership_type: string | null;
+  sale_status: SaleStatus | null;
 }
 
 function mapCatalogRow(row: CatalogRow): PublicListing {
@@ -114,6 +129,22 @@ function mapCatalogRow(row: CatalogRow): PublicListing {
     googleRating: row.google_rating ?? undefined,
     tripadvisorRating: row.tripadvisor_rating ?? undefined,
     branches: Array.isArray(row.branches) ? (row.branches as { label?: string; address: string; lat: number; lng: number }[]) : undefined,
+    // revampstay offers (0091), null-safe: undefined pre-migration, which
+    // listingOffers() reads as ["nightly"] — revampvacations output unchanged.
+    offerTypes: Array.isArray(row.offer_types) && row.offer_types.length ? row.offer_types : undefined,
+    monthlyRentCents: row.monthly_rent_cents ?? undefined,
+    depositCents: row.deposit_cents ?? undefined,
+    minLeaseMonths: row.min_lease_months ?? undefined,
+    furnished: row.furnished ?? undefined,
+    utilitiesIncluded: row.utilities_included ?? undefined,
+    availableFrom: row.available_from ?? undefined,
+    salePriceCents: row.sale_price_cents ?? undefined,
+    areaM2: row.area_m2 != null ? Number(row.area_m2) : undefined,
+    floor: row.floor ?? undefined,
+    totalFloors: row.total_floors ?? undefined,
+    yearBuilt: row.year_built ?? undefined,
+    ownershipType: row.ownership_type ?? undefined,
+    saleStatus: row.sale_status ?? undefined,
   };
 }
 
@@ -134,9 +165,13 @@ export async function getPublishedCatalog(): Promise<PublicListing[]> {
   if (!client) return [];
   const { data, error } = await client
     .from("listings")
-    .select(
-      "slug, type, title, eyebrow, city, region, lat, lng, image, gallery, short_description, long_description, price_cents, price_unit, tags, facts, amenities, accent, updated_at, highlights, not_included, what_to_bring, important_info, not_suitable_for, max_guests, venue_type, cuisine, featured, editor_rank, google_rating, tripadvisor_rating, branches",
-    )
+    // Select "*" for the same reason the client's ROW_COLUMNS does: a server
+    // deployed before a migration runs must not request a column that doesn't
+    // exist yet — that would fail the query and (see `rows = []` below) silently
+    // empty the crawler/sitemap/MCP catalog. "*" returns whatever exists;
+    // mapCatalogRow defaults the rest and still projects only the public
+    // fields, so nothing extra is ever exposed.
+    .select("*")
     .eq("status", "published");
   const rows = error || !data ? [] : (data as CatalogRow[]).map(mapCatalogRow);
   catalogCache = { data: rows, expiresAt: Date.now() + CATALOG_TTL_MS };
