@@ -40,6 +40,7 @@ import {
   isBookableType,
   describeBookingBasis,
   describeCancellationPolicy,
+  extraGuestFeeCentsTotal,
   TAX_PERCENT,
 } from "@shared/bookings";
 import { formatSlotTime } from "@shared/sessions";
@@ -125,10 +126,18 @@ export default function Checkout({ slug }: { slug: string }) {
               cancellationPolicy: listing.cancellationPolicy,
               nonrefundableDiscountPercent: listing.nonrefundableDiscountPercent,
               seasonalRates: listing.seasonalRates,
+              guestsIncluded: listing.guestsIncluded,
+              extraGuestFeeCents: listing.extraGuestFeeCents,
             },
         { startDate, endDate, guests },
       )
     : 0;
+  // Extra-guest portion (shown as its own breakdown line). Hotel rooms have no
+  // extra-guest fee in v1, so it's 0 when a room is set.
+  const extraGuestCents = listing && !room
+    ? extraGuestFeeCentsTotal({ priceUnit: listing.priceUnit, guestsIncluded: listing.guestsIncluded, extraGuestFeeCents: listing.extraGuestFeeCents }, { nights, guests })
+    : 0;
+  const roomCents = accommodationCents - extraGuestCents;
   const promo = listing ? promoDiscount(accommodationCents, listing, startDate) : { active: false, discountCents: 0, netCents: 0 };
   const cleaningCents = accommodationCents > 0 ? listing?.cleaningFeeCents ?? 0 : 0;
   const preTaxBase = promo.netCents + cleaningCents;
@@ -440,9 +449,15 @@ export default function Checkout({ slug }: { slug: string }) {
 
               <div className="mt-4 grid gap-1.5 border-t border-basalt/10 pt-4 text-sm">
                 <div className="flex items-center justify-between text-basalt/55">
-                  <span>{describeBookingBasis(listing!, { startDate, endDate, guests }, format(nights > 0 ? Math.round(accommodationCents / nights) : Math.round(listing!.price * 100)))}</span>
-                  <span>{format(accommodationCents)}</span>
+                  <span>{describeBookingBasis(listing!, { startDate, endDate, guests }, format(nights > 0 ? Math.round(roomCents / nights) : Math.round(listing!.price * 100)))}</span>
+                  <span>{format(roomCents)}</span>
                 </div>
+                {extraGuestCents > 0 && (
+                  <div className="flex items-center justify-between text-basalt/55">
+                    <span>Extra guests ({guests - (listing!.guestsIncluded ?? 0)} × {nights} {nights === 1 ? "night" : "nights"})</span>
+                    <span>{format(extraGuestCents)}</span>
+                  </div>
+                )}
                 {promo.active && (
                   <div className="flex items-center justify-between font-semibold text-apricot">
                     <span>Discount{listing!.discountType === "percent" ? ` (${listing!.discountValue}% off)` : " (sale)"}</span>
