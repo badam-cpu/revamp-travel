@@ -10,6 +10,10 @@ import { formatLocation, normalizeRegion } from "@/lib/region";
 import { TourDetail } from "@/components/TourDetail";
 import { BookingPanel } from "@/components/BookingPanel";
 import { RequestViewingPanel } from "@/components/RequestViewingPanel";
+import { RoomTypeList } from "@/components/RoomTypeCard";
+import { RoomDetailDialog } from "@/components/RoomDetailDialog";
+import { HotelBookingPanel, type HotelStay } from "@/components/HotelBooking";
+import { useRoomAvailability, useRoomTypes } from "@/hooks/useRoomTypes";
 import { EatGuidePanel } from "@/components/EatGuidePanel";
 import { ListingVideo } from "@/components/ListingVideo";
 import { RestaurantVoucherCard } from "@/components/RestaurantVoucherCard";
@@ -209,6 +213,17 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
       .slice(0, 5);
   }, [listings, listing?.type, listing?.coordinates?.lat, listing?.coordinates?.lng]);
 
+  // Multi-room property (hotel, 0092): load its room types and track which one
+  // the guest picked — the booking panel books that room. Above the early
+  // returns (rules of hooks); a no-op for every ordinary listing.
+  const isHotel = listing?.type === "stay" && !!listing?.multiRoom;
+  const { rooms: roomTypes } = useRoomTypes(listing?.id, isHotel);
+  const roomAvailability = useRoomAvailability(roomTypes);
+  // The dates + party the guest is shopping for (shared by the side panel, the
+  // room cards and the room dialog), and which room's dialog is open.
+  const [hotelStay, setHotelStay] = useState<HotelStay>({ start: null, end: null, guests: 1 });
+  const [openRoomId, setOpenRoomId] = useState<string | null>(null);
+
   if (!listing) {
     // While the catalog is still loading (e.g. a hard refresh on this page,
     // before the Supabase fetch resolves), don't flash the not-found state —
@@ -303,7 +318,12 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
     const propertyType = factVal("Property type");
     const spaceType = factVal("Space type");
     glance.push({ label: "Type", value: formatStayType(spaceType, propertyType, typeLabels[listing.type]), icon: Home });
+    if (isHotel && roomTypes.length > 0) glance.push({ label: "Rooms", value: `${roomTypes.length} room type${roomTypes.length === 1 ? "" : "s"}`, icon: BedDouble });
   }
+
+  // Hotel: the side panel's "Choose room" jumps to the room list.
+  const scrollToRooms = () => document.getElementById("rooms")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const openRoom = roomTypes.find((r) => r.id === openRoomId) ?? null;
 
   return (
     <div className="min-h-screen bg-paper text-basalt">
@@ -404,7 +424,21 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
               })()}
             </div>
 
-            {rooms.length > 0 && (
+            {isHotel && (
+              <div id="rooms" className="scroll-mt-28 border-b border-basalt/10 py-10">
+                <p className="eyebrow">Rooms</p>
+                <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">Choose your room</h2>
+                <div className="mt-6">
+                  {roomTypes.length > 0 && live ? (
+                    <RoomTypeList listing={live} rooms={roomTypes} stay={hotelStay} availability={roomAvailability} onOpen={setOpenRoomId} />
+                  ) : (
+                    <p className="text-sm text-basalt/50">Loading rooms…</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {!isHotel && rooms.length > 0 && (
               <div className="border-b border-basalt/10 py-10">
                 <p className="eyebrow">Where you'll sleep</p>
                 <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -494,6 +528,8 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
               </div>
             ) : live && live.type === "stay" && !hasOffer(live, "nightly") ? (
               <RequestViewingPanel listing={live} />
+            ) : live && isHotel ? (
+              <HotelBookingPanel listing={live} rooms={roomTypes} stay={hotelStay} onStayChange={setHotelStay} onChooseRoom={scrollToRooms} />
             ) : live ? (
               <BookingPanel listing={live} />
             ) : (
@@ -593,14 +629,24 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
       </main>
 
       <div className={cn("fixed inset-x-0 bottom-0 z-40 items-center justify-between border-t border-basalt/10 bg-paper/95 px-4 py-3 shadow-[0_-10px_30px_rgba(35,35,33,0.08)] backdrop-blur lg:hidden", showMobileBar ? "flex" : "hidden")}>
-        <p>{priceVaries && <span className="text-xs text-basalt/45">from </span>}<strong className="font-display text-2xl font-normal">{priceLabel}</strong> {listing.price > 0 && <span className="text-xs text-basalt/45">/ {listing.priceUnit}</span>}</p>
+        <p>{(priceVaries || isHotel) && <span className="text-xs text-basalt/45">from </span>}<strong className="font-display text-2xl font-normal">{priceLabel}</strong> {listing.price > 0 && <span className="text-xs text-basalt/45">/ {listing.priceUnit}</span>}</p>
         <Button
-          onClick={() => document.getElementById("book")?.scrollIntoView({ behavior: "smooth", block: "center" })}
+          onClick={() => (isHotel ? scrollToRooms() : document.getElementById("book")?.scrollIntoView({ behavior: "smooth", block: "center" }))}
           className="h-11 rounded-none bg-apricot px-6 text-white hover:bg-apricot/90"
         >
-          Book
+          {isHotel ? "Choose room" : "Book"}
         </Button>
       </div>
+      {isHotel && live && (
+        <RoomDetailDialog
+          listing={live}
+          room={openRoom}
+          booked={openRoom ? roomAvailability.get(openRoom.id) ?? [] : []}
+          stay={hotelStay}
+          onStayChange={setHotelStay}
+          onClose={() => setOpenRoomId(null)}
+        />
+      )}
       {/* Full-screen single-photo viewer (one at a time, ‹ › + counter). */}
       {lightbox !== null && (() => {
         const photos = Array.from(new Set([listing.image, ...(listing.gallery ?? [])].filter(Boolean))) as string[];

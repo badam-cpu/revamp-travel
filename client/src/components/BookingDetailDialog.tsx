@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { BookingStatus } from "@shared/bookings";
+import { fetchBookingRoomNames, withRoomName } from "@/lib/roomTypes";
 
 interface AddonSnap { id: string; name: string; unit?: string; qty: number; amountCents: number; onRequest?: boolean }
 interface FullBooking {
@@ -108,8 +109,14 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
       .eq("id", bookingId)
       .maybeSingle()
       .then(({ data }) => {
-        setBooking((data as unknown as FullBooking) ?? null);
+        const loaded = (data as unknown as FullBooking) ?? null;
+        setBooking(loaded);
         setLoading(false);
+        // Hotel booking: show which room (separate, failure-tolerant query).
+        if (loaded)
+          fetchBookingRoomNames([loaded.id]).then((names) => {
+            if (names.size) setBooking((prev) => (prev ? withRoomName([prev], names)[0] : prev));
+          });
       });
     // History log — degrades to empty if the table isn't there yet.
     supabase

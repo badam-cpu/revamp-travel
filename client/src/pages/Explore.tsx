@@ -56,6 +56,9 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
   // everywhere, so it never affects the vacations site.
   const urlOffer = params.get("offer") || "all";
   const [offer, setOffer] = useState(validOffers.has(urlOffer) ? urlOffer : "all");
+  // Stay sub-filter: all stays vs multi-room properties (hotels, 0092).
+  // Deep-linkable via ?stay=hotels; "all" is a no-op.
+  const [stayKind, setStayKind] = useState(params.get("stay") === "hotels" ? "hotels" : "all");
   const PAGE = 12;
   const [visible, setVisible] = useState(PAGE);
 
@@ -71,6 +74,7 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
     setPlaceCat(p.get("group") ? `g:${p.get("group")}` : p.get("cat") || "all");
     const o = p.get("offer") || "all";
     setOffer(validOffers.has(o) ? o : "all");
+    setStayKind(p.get("stay") === "hotels" ? "hotels" : "all");
   }, [searchStr, initialType]);
   const [selectedId, setSelectedId] = useState<string | undefined>();
   // Stay-availability filter: when a date range is searched, hide stays whose
@@ -165,14 +169,17 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
         (placeCat.startsWith("g:") ? placeGroupForCategory(listing.category) === placeCat.slice(2) : listing.category === placeCat);
       // revampstay offer filter — only constrains stays; "all" is a no-op.
       const matchesOffer = offer === "all" || (listing.type === "stay" && hasOffer(listing, offer as OfferType));
+      const matchesStayKind = type !== "stay" || stayKind === "all" || !!listing.multiRoom;
       const haystack = [listing.title, listing.city, listing.region, listing.type, listing.shortDescription, ...listing.tags].join(" ").toLowerCase();
-      return matchesType && matchesRegion && matchesCategory && matchesOffer && (!needle || haystack.includes(needle)) && isAvailableForRange(listing);
+      return matchesType && matchesRegion && matchesCategory && matchesOffer && matchesStayKind && (!needle || haystack.includes(needle)) && isAvailableForRange(listing);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, type, region, placeCat, offer, listings, hasRange, checkin, checkout, bookedByListing]);
+  }, [query, type, region, placeCat, offer, stayKind, listings, hasRange, checkin, checkout, bookedByListing]);
+  // Only offer the Hotels chip when there's at least one hotel to show.
+  const hasHotels = useMemo(() => listings.some((l) => l.type === "stay" && l.multiRoom), [listings]);
 
   // Reset the visible window whenever the result set's filters change.
-  useEffect(() => setVisible(PAGE), [query, type, region, placeCat, offer, hasRange]);
+  useEffect(() => setVisible(PAGE), [query, type, region, placeCat, offer, stayKind, hasRange]);
   // Leaving the Visit tab clears its category sub-filter.
   useEffect(() => { if (type !== "place") setPlaceCat("all"); }, [type]);
   const shown = filtered.slice(0, visible);
@@ -182,6 +189,7 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
     setType("all");
     setRegion("all");
     setOffer("all");
+    setStayKind("all");
   };
 
   const pageLabel = type === "all" ? "All listings" : typeLabels[type as ListingType];
@@ -249,6 +257,12 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
                 <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter by place or interest" className="h-10 w-full border border-basalt/15 bg-paper pl-9 pr-3 text-sm outline-none placeholder:text-basalt/35 focus:border-apricot" />
               </label>
             </div>
+            {type === "stay" && site !== "stay" && hasHotels && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button onClick={() => setStayKind("all")} className={cn("filter-chip", stayKind === "all" && "active")}>All stays</button>
+                <button onClick={() => setStayKind("hotels")} className={cn("filter-chip", stayKind === "hotels" && "active")}>Hotels</button>
+              </div>
+            )}
             {type === "place" && placeCategoryGroups.length > 0 && (
               <div className="mt-3 flex flex-col gap-2.5">
                 <div className="flex flex-wrap gap-2">

@@ -69,8 +69,13 @@ export function ListingCard({ listing, large = false, active = false, onHover, s
             />
           ))}
           <div className="absolute inset-0 bg-gradient-to-t from-basalt/55 via-transparent to-transparent" />
-          <span className="absolute left-4 top-4 bg-paper px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.17em] text-basalt">
-            {typeLabels[listing.type]}
+          <span
+            className={cn(
+              "absolute left-4 top-4 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.17em]",
+              listing.multiRoom ? "bg-apricot text-white" : "bg-paper text-basalt",
+            )}
+          >
+            {listing.multiRoom ? "Hotel" : typeLabels[listing.type]}
           </span>
           <DiscountBadge listing={listing} className="absolute left-4 top-14" />
           {promoBadge && (
@@ -149,7 +154,7 @@ export function ListingCard({ listing, large = false, active = false, onHover, s
           ) : (
             <>
               <span className="min-w-0 truncate">{listing.tags.slice(0, 2).join(" · ")}</span>
-              <span className="shrink-0 whitespace-nowrap">{priceRange.varies && listing.price > 0 ? "from " : ""}<strong className="text-sm text-basalt">{priceLabel}</strong>{listing.price > 0 ? ` / ${listing.priceUnit}` : ""}</span>
+              <span className="shrink-0 whitespace-nowrap">{(priceRange.varies || listing.multiRoom) && listing.price > 0 ? "from " : ""}<strong className="text-sm text-basalt">{priceLabel}</strong>{listing.price > 0 ? ` / ${listing.priceUnit}` : ""}</span>
             </>
           )}
         </div>

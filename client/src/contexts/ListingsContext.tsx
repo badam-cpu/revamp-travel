@@ -13,10 +13,11 @@
  * without changes.
  */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import type { Listing, ListingInput, ListingType, OfferType, Furnished, SaleStatus } from "@shared/listings";
+import type { Listing, ListingInput, ListingType, OfferType, Furnished, SaleStatus, RoomTypeInput } from "@shared/listings";
 import type { SessionSchedule } from "@shared/sessions";
 import { seedListings, placeholderImage, visibleOnVacations, visibleOnStay } from "@shared/listings";
 import { supabase } from "@/lib/supabase";
+import { persistRoomTypes } from "@/lib/roomTypes";
 import { slugify } from "@/lib/slug";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSite } from "@/contexts/SiteContext";
@@ -81,6 +82,8 @@ interface ListingsContextType {
   setManualBlocks: (id: string, ranges: BlockedRange[]) => Promise<LiveListing>;
   /** Save a listing's facts array (content-only; status untouched). */
   setListingFacts: (id: string, facts: { label: string; value: string }[]) => Promise<LiveListing>;
+  /** Save a hotel's room types (0092) and re-read the listing (its "From" price is trigger-maintained). */
+  saveRoomTypes: (listingId: string, rooms: RoomTypeInput[]) => Promise<LiveListing | null>;
 }
 
 const ListingsContext = createContext<ListingsContextType | undefined>(undefined);
@@ -146,6 +149,8 @@ interface ListingRow {
   discount_start: string | null;
   discount_end: string | null;
   rooms: { name: string; beds: { type: string; count: number }[] }[] | null;
+  // Multi-room property (0092) — absent pre-migration; mapped as false.
+  multi_room: boolean | null;
   venue_type: string | null;
   category: string | null;
   cover_focus: string | null;
@@ -243,6 +248,7 @@ function mapListingRow(row: ListingRow): LiveListing {
     discountStart: row.discount_start ?? undefined,
     discountEnd: row.discount_end ?? undefined,
     rooms: Array.isArray(row.rooms) ? row.rooms : [],
+    multiRoom: row.multi_room === true,
     coverFocus: row.cover_focus ?? undefined,
     videoUrl: row.video_url ?? undefined,
     // revampstay offers (0091): all null-safe — undefined pre-migration, which
@@ -307,6 +313,9 @@ function offerColumns(input: ListingInput): Record<string, unknown> {
   put("year_built", input.yearBuilt);
   put("ownership_type", input.ownershipType?.trim() || undefined);
   put("sale_status", input.saleStatus);
+  // Multi-room flag (0092) — same rule: only sent when the form sets it, so an
+  // ordinary save never touches the column.
+  put("multi_room", input.multiRoom);
   return out;
 }
 
@@ -571,8 +580,19 @@ export function ListingsProvider({ children }: { children: React.ReactNode }) {
     return listing;
   }, []);
 
+  // Save a hotel's room types, then re-read the listing so its trigger-
+  // maintained "From" price (cheapest room) is current in the catalog.
+  const saveRoomTypes = useCallback(async (listingId: string, rooms: RoomTypeInput[]): Promise<LiveListing | null> => {
+    await persistRoomTypes(listingId, rooms);
+    const { data, error } = await supabase.from("listings").select(ROW_COLUMNS).eq("id", listingId).maybeSingle();
+    if (error || !data) return null;
+    const listing = mapListingRow(data);
+    setListings((prev) => prev.map((item) => (item.id === listingId ? listing : item)));
+    return listing;
+  }, []);
+
   return (
-    <ListingsContext.Provider value={{ listings, publicListings, loading, offline, refresh, createListing, updateListing, deleteListing, setIcalUrl, setIcalFeeds, setSeasonalRates, setManualBlocks, setListingFacts }}>
+    <ListingsContext.Provider value={{ listings, publicListings, loading, offline, refresh, createListing, updateListing, deleteListing, setIcalUrl, setIcalFeeds, setSeasonalRates, setManualBlocks, setListingFacts, saveRoomTypes }}>
       {children}
     </ListingsContext.Provider>
   );

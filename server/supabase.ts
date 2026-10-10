@@ -12,7 +12,7 @@
  * client/src/contexts/ListingsContext.tsx).
  */
 import { createClient } from "@supabase/supabase-js";
-import type { Listing, ListingType, OfferType, Furnished, SaleStatus } from "../shared/listings.js";
+import type { Listing, ListingType, OfferType, Furnished, SaleStatus, RoomBed, RoomType } from "../shared/listings.js";
 import type { CatalogEntry } from "./planner.js";
 
 const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -89,6 +89,8 @@ interface CatalogRow {
   year_built: number | null;
   ownership_type: string | null;
   sale_status: SaleStatus | null;
+  // Multi-room property (0092) — absent pre-migration; mapped as false.
+  multi_room: boolean | null;
 }
 
 function mapCatalogRow(row: CatalogRow): PublicListing {
@@ -132,6 +134,7 @@ function mapCatalogRow(row: CatalogRow): PublicListing {
     // revampstay offers (0091), null-safe: undefined pre-migration, which
     // listingOffers() reads as ["nightly"] — revampvacations output unchanged.
     offerTypes: Array.isArray(row.offer_types) && row.offer_types.length ? row.offer_types : undefined,
+    multiRoom: row.multi_room === true,
     monthlyRentCents: row.monthly_rent_cents ?? undefined,
     depositCents: row.deposit_cents ?? undefined,
     minLeaseMonths: row.min_lease_months ?? undefined,
@@ -208,6 +211,50 @@ let postsCache: { data: PublicPost[]; expiresAt: number } | null = null;
  * cached like the catalog. Degrades to [] if the `posts` table isn't there yet
  * (migration 0030 not run) so the site never errors before it's applied.
  */
+/**
+ * A published hotel's room types (0092), for the bot prerender + JSON-LD.
+ * Anon client, so RLS limits it to published listings. Empty on any error
+ * (including before 0092 runs) — the page then renders as before.
+ */
+export async function getRoomTypesBySlug(slug: string): Promise<RoomType[]> {
+  if (!client) return [];
+  const { data, error } = await client
+    .from("room_types")
+    .select("id, name, description, beds, max_guests, size_m2, price_cents, price_unit, quantity, image, gallery, sort_order, listings!inner(slug)")
+    .eq("listings.slug", slug)
+    .order("sort_order");
+  if (error || !data) return [];
+  return (data as unknown as {
+    id: string;
+    name: string;
+    description: string | null;
+    beds: RoomBed[] | null;
+    max_guests: number;
+    size_m2: number | null;
+    price_cents: number;
+    price_unit: string | null;
+    quantity: number;
+    image: string | null;
+    gallery: string[] | null;
+    sort_order: number | null;
+  }[]).map((r) => ({
+    id: r.id,
+    listingId: slug,
+    name: r.name,
+    description: r.description ?? undefined,
+    beds: Array.isArray(r.beds) ? r.beds : [],
+    maxGuests: r.max_guests,
+    sizeM2: r.size_m2 ?? undefined,
+    priceCents: r.price_cents,
+    priceUnit: r.price_unit || "night",
+    quantity: r.quantity,
+    image: r.image ?? undefined,
+    gallery: Array.isArray(r.gallery) ? r.gallery : [],
+    amenities: [],
+    sortOrder: r.sort_order ?? 0,
+  }));
+}
+
 export async function getPublishedPosts(): Promise<PublicPost[]> {
   if (postsCache && postsCache.expiresAt > Date.now()) return postsCache.data;
   if (!client) return [];

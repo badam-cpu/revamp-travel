@@ -47,7 +47,7 @@ import { isCrawlerUserAgent } from "./botDetect.js";
 import { randomUUID } from "crypto";
 import { formatSlotTime, slotLocalDate } from "../shared/sessions.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, promoDiscount, addonUnitCost, nightsBetween, type Addon, DEFAULT_CURRENCY, PLATFORM_COMMISSION_PERCENT } from "../shared/bookings.js";
+import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, promoDiscount, addonUnitCost, nightsBetween, maxNightlyOccupancy, type Addon, DEFAULT_CURRENCY, PLATFORM_COMMISSION_PERCENT } from "../shared/bookings.js";
 import { planTrip, PlannerError } from "./planner.js";
 import { fetchPrefill, PrefillError } from "./urlPrefill.js";
 import { fetchMergedBlockedRanges, buildIcalFeed, type IcalFeed } from "./ical.js";
@@ -98,6 +98,8 @@ const startCheckoutSchema = z.object({
   guests: z.number().int().min(1).max(50),
   // Slot booking (tour/experience with a time-slot schedule): the chosen session.
   sessionId: z.string().uuid().optional(),
+  // Multi-room property (hotel, 0092): the room type being booked.
+  roomTypeId: z.string().uuid().optional(),
   // Guest checkout: a signed-out traveler books anonymously and gives contact
   // details here (optional — signed-in travelers omit them).
   guestName: z.string().trim().max(120).optional(),
@@ -1274,6 +1276,27 @@ export function registerApiRoutes(app: Express) {
       }
     }
 
+    // ── Multi-room property (hotel, 0092) ─────────────────────────────────────
+    // The guest books ONE room type: it must belong to this listing and fit the
+    // party; price and availability below come from the room, not the listing.
+    // `multi_room` is undefined before 0092 runs, so ordinary stays never enter.
+    let room: { id: string; max_guests: number; price_cents: number; price_unit: string | null; quantity: number } | null = null;
+    if (listing.multi_room === true && listing.type === "stay") {
+      const roomAdmin = supabaseAdmin();
+      if (!roomAdmin) return res.status(503).json({ error: "Booking isn't available right now." });
+      if (!parsed.data.roomTypeId) return res.status(400).json({ error: "Choose a room first." });
+      const { data: rt } = await roomAdmin
+        .from("room_types")
+        .select("id, listing_id, max_guests, price_cents, price_unit, quantity")
+        .eq("id", parsed.data.roomTypeId)
+        .maybeSingle();
+      if (!rt || rt.listing_id !== listingId) return res.status(404).json({ error: "That room wasn't found." });
+      if (guests > rt.max_guests) return res.status(400).json({ error: `This room fits up to ${rt.max_guests} ${rt.max_guests === 1 ? "guest" : "guests"}.` });
+      room = rt;
+    } else if (parsed.data.roomTypeId) {
+      return res.status(400).json({ error: "This listing doesn't have separate rooms." });
+    }
+
     // Enforce the operator's minimum stay (stays only; stored in facts).
     if (listing.type === "stay") {
       const facts = Array.isArray(listing.facts) ? (listing.facts as { label?: string; value?: string }[]) : [];
@@ -1288,15 +1311,24 @@ export function registerApiRoutes(app: Express) {
     // discount); base = accommodation + the flat cleaning fee; the guest is
     // then charged base + tax on top.
     const accommodationCents = computeBookingAmountCents(
-      {
-        priceCents: listing.price_cents,
-        priceUnit: listing.price_unit,
-        cancellationPolicy: listing.cancellation_policy ?? "flexible",
-        nonrefundableDiscountPercent: listing.nonrefundable_discount_percent ?? 0,
-        seasonalRates: Array.isArray(listing.seasonal_rates) ? listing.seasonal_rates : [],
-        guestsIncluded: listing.guests_included ?? undefined,
-        extraGuestFeeCents: listing.extra_guest_fee_cents ?? undefined,
-      },
+      room
+        ? {
+            // A room is flat nightly in v1 (no seasonal rates / extra-guest fees).
+            priceCents: room.price_cents,
+            priceUnit: room.price_unit || "night",
+            cancellationPolicy: listing.cancellation_policy ?? "flexible",
+            nonrefundableDiscountPercent: listing.nonrefundable_discount_percent ?? 0,
+            seasonalRates: [],
+          }
+        : {
+            priceCents: listing.price_cents,
+            priceUnit: listing.price_unit,
+            cancellationPolicy: listing.cancellation_policy ?? "flexible",
+            nonrefundableDiscountPercent: listing.nonrefundable_discount_percent ?? 0,
+            seasonalRates: Array.isArray(listing.seasonal_rates) ? listing.seasonal_rates : [],
+            guestsIncluded: listing.guests_included ?? undefined,
+            extraGuestFeeCents: listing.extra_guest_fee_cents ?? undefined,
+          },
       { startDate, endDate, guests },
     );
     if (accommodationCents <= 0) return res.status(400).json({ error: "This listing is rate-on-request — contact the operator to book." });
@@ -1336,12 +1368,36 @@ export function registerApiRoutes(app: Express) {
 
     // Availability: reject if the dates clash with the listing's iCal blocked
     // ranges, an existing confirmed booking, or a live (recent) pending hold.
+    // A hotel room instead checks its own room type: full only when, on some
+    // night, confirmed + live holds reach its quantity (the whole-listing check
+    // would wrongly count bookings of OTHER rooms). The hotel's iCal blocks
+    // don't gate individual rooms in v1.
     const blocked: { start: string; end: string }[] = Array.isArray(listing.blocked_ranges) ? listing.blocked_ranges : [];
-    const overlapsBlocked = blocked.some((r) => r.start < endDate && r.end > startDate);
+    const overlapsBlocked = !room && blocked.some((r) => r.start < endDate && r.end > startDate);
     if (overlapsBlocked) return res.status(409).json({ error: "Those dates aren't available." });
 
     const admin = supabaseAdmin();
-    if (admin) {
+    if (room) {
+      if (!admin) return res.status(503).json({ error: "Booking isn't available right now." });
+      const { data: roomClashes, error: roomClashErr } = await admin
+        .from("bookings")
+        .select("status, created_at, start_date, end_date")
+        .eq("room_type_id", room.id)
+        .in("status", ["confirmed", "pending_payment"])
+        .lt("start_date", endDate)
+        .gt("end_date", startDate);
+      if (roomClashErr) {
+        console.error("[start-checkout] room availability read failed", roomClashErr.message);
+        return res.status(503).json({ error: "Booking isn't available right now." });
+      }
+      const holdCutoff = Date.now() - 15 * 60_000;
+      const live = (roomClashes ?? [])
+        .filter((c) => c.status === "confirmed" || Date.parse(c.created_at) > holdCutoff)
+        .map((c) => ({ start: c.start_date as string, end: c.end_date as string }));
+      if (maxNightlyOccupancy(live, startDate, endDate) >= room.quantity) {
+        return res.status(409).json({ error: "That room just sold out for those dates. Try other dates or another room." });
+      }
+    } else if (admin) {
       // Overlap = existing.start < new.end AND existing.end > new.start.
       const { data: clashes } = await admin
         .from("bookings")
@@ -1408,19 +1464,43 @@ export function registerApiRoutes(app: Express) {
       baseRow.guest_phone = guestPhone || null;
     }
     baseRow.messaging_consent = messagingConsent;
+    // Only hotel bookings carry the column, so every other insert is unchanged.
+    if (room) baseRow.room_type_id = room.id;
 
     // Fully covered by the gift card → no PayLink charge; confirm server-side now.
     if (remainingCents <= 0 && giftId && adminClient) {
-      const { data: created, error: insErr } = await adminClient
-        .from("bookings")
-        .insert({ ...baseRow, status: "confirmed", provider: "gift", paid_at: new Date().toISOString() })
-        .select("id")
-        .single();
-      if (insErr) {
-        await releaseGift(adminClient, giftId, giftApplied);
-        if ((insErr as { code?: string }).code === "23P01") return res.status(409).json({ error: "Those dates were just taken. Try different dates." });
-        console.error("[start-checkout] gift-covered insert failed", insErr.message);
-        return res.status(500).json({ error: "Couldn't record your booking." });
+      let created: { id: string } | null = null;
+      if (room) {
+        // A room can't be inserted straight as confirmed — that would skip the
+        // capacity check. Hold it, then confirm through confirm_room_booking.
+        const { data: held, error: holdErr } = await adminClient.from("bookings").insert({ ...baseRow, status: "pending_payment", provider: "gift" }).select("id").single();
+        if (holdErr || !held) {
+          await releaseGift(adminClient, giftId, giftApplied);
+          console.error("[start-checkout] gift-covered room hold failed", holdErr?.message);
+          return res.status(500).json({ error: "Couldn't record your booking." });
+        }
+        const { data: outcome, error: rpcErr } = await adminClient.rpc("confirm_room_booking", { p_booking_id: held.id });
+        if (rpcErr || outcome !== "confirmed") {
+          await adminClient.from("bookings").update({ status: "cancelled" }).eq("id", held.id);
+          await releaseGift(adminClient, giftId, giftApplied);
+          if (outcome === "capacity") return res.status(409).json({ error: "That room just sold out for those dates. Try other dates or another room." });
+          console.error("[start-checkout] gift-covered room confirm failed", rpcErr?.message ?? outcome);
+          return res.status(500).json({ error: "Couldn't record your booking." });
+        }
+        created = held;
+      } else {
+        const { data: inserted, error: insErr } = await adminClient
+          .from("bookings")
+          .insert({ ...baseRow, status: "confirmed", provider: "gift", paid_at: new Date().toISOString() })
+          .select("id")
+          .single();
+        if (insErr || !inserted) {
+          await releaseGift(adminClient, giftId, giftApplied);
+          if ((insErr as { code?: string } | null)?.code === "23P01") return res.status(409).json({ error: "Those dates were just taken. Try different dates." });
+          console.error("[start-checkout] gift-covered insert failed", insErr?.message);
+          return res.status(500).json({ error: "Couldn't record your booking." });
+        }
+        created = inserted;
       }
       await logGiftEvent(adminClient, giftId, "redeemed", { amountCents: giftApplied, balanceAfter: giftBalanceAfter, bookingId: created.id, detail: `Fully covered booking · ${listing.title}` });
       try {

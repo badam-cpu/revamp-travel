@@ -18,9 +18,9 @@
  * the JSON-LD block gets its own separate escaping (see jsonLdScript()).
  */
 import type { PublicListing } from "./supabase.js";
-import { getPublishedCatalog, getPublishedPosts, getPublishedPostBySlug, getSiteFaq, getPartnerOperators, getSitePartners, type PublicPost } from "./supabase.js";
+import { getPublishedCatalog, getPublishedPosts, getPublishedPostBySlug, getSiteFaq, getPartnerOperators, getSitePartners, getRoomTypesBySlug, type PublicPost } from "./supabase.js";
 import { filterForSite, siteFromHost } from "./site.js";
-import { regions, typeLabels, ARMENIA_REGIONS } from "../shared/listings.js";
+import { regions, typeLabels, ARMENIA_REGIONS, formatBeds, type RoomType } from "../shared/listings.js";
 import { slugify } from "../shared/slug.js";
 import { compareEatListings } from "../shared/eat.js";
 import { GUIDES, GUIDE_HUB, findGuide, type Guide } from "../shared/guides.js";
@@ -173,7 +173,9 @@ export async function renderForBot(pathname: string, origin: string): Promise<Re
     case "listing-detail": {
       const listing = catalog.find((item) => item.slug === route.slug);
       if (!listing) return { status: 404, body: renderNotFound(origin) };
-      return { status: 200, body: renderListingDetail(listing, catalog, origin) };
+      // A hotel's room types (0092) — only fetched for multi-room listings.
+      const rooms = listing.multiRoom ? await getRoomTypesBySlug(listing.slug) : [];
+      return { status: 200, body: renderListingDetail(listing, catalog, origin, rooms) };
     }
     case "blog": {
       const posts = await getPublishedPosts();
@@ -697,7 +699,7 @@ function renderAuthPage(origin: string, kind: "login" | "signup"): string {
   });
 }
 
-function renderListingDetail(listing: PublicListing, catalog: PublicListing[], origin: string): string {
+function renderListingDetail(listing: PublicListing, catalog: PublicListing[], origin: string, rooms: RoomType[] = []): string {
   const canonicalPath = `/listing/${listing.slug}`;
   const title = `${listing.title} — ${typeLabels[listing.type]} in ${listing.city} | Revamp Vacations`;
   const categoryPath = listing.type === "stay" ? "/explore/stay" : listing.type === "eat" ? "/explore/eat" : listing.type === "experience" ? "/explore/experience" : "/explore/tour";
@@ -726,6 +728,21 @@ function renderListingDetail(listing: PublicListing, catalog: PublicListing[], o
         .map((b) => `<li>${escapeHtml(b.label || listing.title)}${b.address ? ` — ${escapeHtml(b.address)}` : ""} <a href="https://www.google.com/maps?q=${b.lat},${b.lng}">Directions</a></li>`)
         .join("")}</ul>`
     : "";
+  // Hotel (0092): its room types — every operator field escaped (stored-XSS
+  // surface; see the Bot prerendering rule).
+  const roomsHtml = rooms.length
+    ? `<h2>Choose your room</h2><ul>${rooms
+        .map((r) => {
+          const facts = [formatBeds(r.beds), `${r.maxGuests} ${r.maxGuests === 1 ? "guest" : "guests"}`, r.sizeM2 ? `${r.sizeM2} m²` : ""].filter(Boolean).join(" · ");
+          const price = r.priceCents > 0 ? ` — ֏${Math.round(r.priceCents / 100).toLocaleString()} / night` : "";
+          return `<li><strong>${escapeHtml(r.name)}</strong>: ${escapeHtml(facts)}${escapeHtml(price)}${r.description ? `<br>${escapeHtml(r.description)}` : ""}</li>`;
+        })
+        .join("")}</ul>`
+    : "";
+  const priceLine =
+    listing.price > 0
+      ? `${listing.multiRoom ? "From " : ""}${escapeHtml(listing.priceLabel)} / ${escapeHtml(listing.priceUnit)}`
+      : escapeHtml(listing.priceLabel);
 
   const bodyHtml = `
 <nav aria-label="Breadcrumb">
@@ -739,8 +756,9 @@ ${escapeHtml(listing.title)}
 ${galleryHtml}
 <p>${escapeHtml(listing.shortDescription)}</p>
 <p>${escapeHtml(listing.longDescription).replace(/\n/g, "<br>")}</p>
-<p>${listing.price > 0 ? `${escapeHtml(listing.priceLabel)} / ${escapeHtml(listing.priceUnit)}` : escapeHtml(listing.priceLabel)}</p>
+<p>${priceLine}</p>
 ${factsHtml}
+${roomsHtml}
 ${highlightsHtml}
 <h2>What's part of the experience</h2>
 ${amenitiesHtml}
@@ -763,7 +781,7 @@ ${
     canonical: `${origin}${canonicalPath}`,
     ogImage: listingOg(listing.image, origin),
     jsonLd: [
-      buildListingJsonLd(listing, origin),
+      buildListingJsonLd(listing, origin, rooms),
       buildBreadcrumbJsonLd(origin, [
         { name: "Home", path: "/" },
         { name: "Explore", path: "/explore" },

@@ -41,8 +41,11 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useListings, LiveListing } from "@/contexts/ListingsContext";
 import { useAuth } from "@/contexts/AuthContext";
-import type { ListingInput, ListingType } from "@shared/listings";
+import type { ListingInput, ListingType, RoomType } from "@shared/listings";
 import { LISTING_LIMITS, STAY_SPACE_TYPES, listingOffers } from "@shared/listings";
+import { Switch } from "@/components/ui/switch";
+import { RoomTypesEditor, RoomTypesEditorHandle, validateRoomTypes } from "@/components/RoomTypesEditor";
+import { fetchRoomTypes } from "@/lib/roomTypes";
 import { ApiError, importListingPrefill, syncIcal } from "@/lib/api";
 import { attachReferral, getStoredReferralCode, clearStoredReferralCode } from "@/lib/referrals";
 import { cn } from "@/lib/utils";
@@ -317,7 +320,7 @@ function ListingFormDialog({
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
 }) {
-  const { createListing, updateListing } = useListings();
+  const { createListing, updateListing, saveRoomTypes } = useListings();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState(0);
@@ -341,6 +344,12 @@ function ListingFormDialog({
   const seededOffers = listingOffers({ offerTypes: draft?.offerTypes });
   const [offerMonthly, setOfferMonthly] = useState(seededOffers.includes("monthly"));
   const [offerSale, setOfferSale] = useState(seededOffers.includes("sale"));
+  // Multi-room property (hotel, 0092): guests book a specific room type, so the
+  // listing-level nightly price/guest fields give way to the room-type editor.
+  const roomTypesRef = useRef<RoomTypesEditorHandle>(null);
+  const [multiRoom, setMultiRoom] = useState(!!draft?.multiRoom);
+  // Existing room types load async; the editor (uncontrolled) mounts once they're in.
+  const [roomTypes, setRoomTypes] = useState<RoomType[] | null>(null);
   const draftId = draft?.id;
   // Reset to the first step whenever the dialog (re)opens or a different draft loads.
   useEffect(() => {
@@ -348,6 +357,17 @@ function ListingFormDialog({
     setStepError(null);
     setError(null);
     setItinerary(draft?.highlights ?? []);
+    setMultiRoom(!!draft?.multiRoom);
+  }, [open, draftId]);
+  useEffect(() => {
+    let alive = true;
+    setRoomTypes(null);
+    if (draftId && draft?.multiRoom) fetchRoomTypes(draftId).then((r) => alive && setRoomTypes(r));
+    else setRoomTypes([]);
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, draftId]);
   if (!draft) return null;
   const isEdit = Boolean(draft.id);
@@ -400,7 +420,11 @@ function ListingFormDialog({
       if (lat < 38 || lat > 42 || lng < 43 || lng > 47) return fail("Coordinates must be inside Armenia (lat 38–42, lng 43–47).");
     }
     if (s === 2 && (!fieldValue("shortDescription") || !fieldValue("longDescription"))) return fail("Add a short and a full description.");
-    if (s === 3) {
+    if (s === 3 && draft.type === "stay" && multiRoom) {
+      // A hotel is priced per room type — the rooms carry the required prices.
+      const roomError = validateRoomTypes(roomTypesRef.current?.getValue() ?? []);
+      if (roomError) return fail(roomError);
+    } else if (s === 3) {
       // A stay with the offer block picks which prices are required; everything
       // else (and a stay offered nightly) still requires the nightly price.
       const hasOfferBlock = draft.type === "stay" && !!formRef.current?.elements.namedItem("offer_nightly");
@@ -495,13 +519,42 @@ function ListingFormDialog({
         const geo = await geocodeQuery(`${payload.city}, ${payload.region}, Armenia`);
         if (geo) payload.coordinates = geo;
       }
-      if (isEdit && draft.id) {
-        await updateListing(draft.id, payload, submitForReview);
-        toast(submitForReview ? `${payload.title} submitted for review.` : `${payload.title} saved as a draft.`);
-      } else {
-        await createListing(payload, submitForReview);
-        toast(submitForReview ? `${payload.title} submitted for review.` : `${payload.title} saved as a draft.`);
+
+      // Hotel (0092): the listing's own price/guests derive from its rooms —
+      // price = cheapest room ("From ֏X"; a DB trigger keeps it in sync after
+      // later room edits), max guests = the roomiest type. Nightly-only in v1.
+      // Turning the flag off is sent explicitly; an ordinary stay never sends it.
+      const hotelRooms = draft.type === "stay" && multiRoom ? (roomTypesRef.current?.getValue() ?? []) : null;
+      if (hotelRooms) {
+        const minCents = Math.min(...hotelRooms.map((r) => r.priceCents));
+        payload.multiRoom = true;
+        payload.price = minCents / 100;
+        payload.priceLabel = `֏${Math.round(minCents / 100).toLocaleString()}`;
+        payload.priceUnit = "night";
+        payload.maxGuests = Math.max(...hotelRooms.map((r) => r.maxGuests));
+        payload.guestsIncluded = undefined;
+        payload.extraGuestFeeCents = undefined;
+        payload.offerTypes = ["nightly"];
+      } else if (draft.multiRoom) {
+        payload.multiRoom = false;
       }
+
+      const saved = isEdit && draft.id ? await updateListing(draft.id, payload, submitForReview) : await createListing(payload, submitForReview);
+      if (hotelRooms) {
+        // Two-step save: the rooms reference the listing, so they're written
+        // once the listing row exists.
+        try {
+          await saveRoomTypes(saved.id, hotelRooms);
+        } catch (roomErr) {
+          // The listing exists now, so close (a retry here would create a
+          // duplicate) and point the operator at editing it.
+          console.error("[dashboard] room types save failed", roomErr);
+          toast.error(`${payload.title} was saved, but its rooms weren't. Edit the listing and save again to add them.`);
+          onSaved();
+          return;
+        }
+      }
+      toast(submitForReview ? `${payload.title} submitted for review.` : `${payload.title} saved as a draft.`);
       onSaved();
     } catch (err) {
       setError(err instanceof ApiError || err instanceof Error ? err.message : "Couldn't save this listing. Please try again.");
@@ -738,7 +791,28 @@ function ListingFormDialog({
                     </div>
                   </div>
                 )}
-                {draft.type === "stay" && <RoomsEditor ref={roomsRef} defaultValue={draft.rooms ?? []} />}
+                {draft.type === "stay" && (
+                  <div className="grid gap-5">
+                    <div className="flex items-start gap-4 border border-basalt/15 bg-chalk/40 p-5">
+                      <Switch id="multiRoom" checked={multiRoom} onCheckedChange={setMultiRoom} className="mt-0.5" />
+                      <div>
+                        <Label htmlFor="multiRoom" className="text-sm font-semibold">This is a multi-room property (hotel)</Label>
+                        <p className="mt-1 text-sm text-basalt/55">For hotels, guesthouses and hostels. Guests pick a specific room on your page; you set a price and a room count per room type.</p>
+                      </div>
+                    </div>
+                    {multiRoom &&
+                      (roomTypes === null ? (
+                        <p className="text-sm text-basalt/50">Loading your room types…</p>
+                      ) : (
+                        <RoomTypesEditor ref={roomTypesRef} defaultValue={roomTypes} />
+                      ))}
+                  </div>
+                )}
+                {draft.type === "stay" && (
+                  <div hidden={multiRoom}>
+                    <RoomsEditor ref={roomsRef} defaultValue={draft.rooms ?? []} />
+                  </div>
+                )}
                 {draft.type === "stay" && <RatesEditor ref={ratesRef} defaultValue={draft.seasonalRates ?? []} rate={siteSettings.usdToAmdRate} />}
                 {draft.type === "stay" && (
                   <div className="grid gap-3">
@@ -806,7 +880,7 @@ function ListingFormDialog({
                     Nightly is always on (the price field below); monthly and
                     sale reveal their own blocks. Shown here because listing on
                     revampstay only needs the extra fields an operator opts into. */}
-                {draft.type === "stay" && (
+                {draft.type === "stay" && !multiRoom && (
                   <div className="rounded-none border border-basalt/15 bg-chalk/40 p-5">
                     <p className="text-sm font-semibold">How do you want to offer it?</p>
                     <p className="mt-1 text-sm text-basalt/55">Pick one or more. Nightly stays show on revampvacations; monthly rentals and sales show on revampstay.</p>
@@ -890,15 +964,16 @@ function ListingFormDialog({
                 )}
 
                 <div className="grid gap-6 sm:grid-cols-3">
-                  <div className="grid gap-2">
+                  {/* A hotel's price, unit and guest caps come from its room types. */}
+                  <div className="grid gap-2" hidden={multiRoom}>
                     <Label htmlFor="price" className="text-sm font-semibold">Price in AMD ({draft.type === "stay" ? "per night" : "per person"})</Label>
                     <Input id="price" name="price" type="number" min={1} placeholder="e.g. 45000" defaultValue={draft.price || ""} className={FIELD} />
                   </div>
-                  <div className="grid gap-2">
+                  <div className="grid gap-2" hidden={multiRoom}>
                     <Label htmlFor="priceUnit" className="text-sm font-semibold">Price unit label</Label>
                     <Input id="priceUnit" name="priceUnit" placeholder={draft.type === "stay" ? "night" : "person"} defaultValue={draft.priceUnit} className={FIELD} />
                   </div>
-                  <div className="grid gap-2">
+                  <div className="grid gap-2" hidden={multiRoom}>
                     <Label htmlFor="maxGuests" className="text-sm font-semibold">Max guests</Label>
                     <Input id="maxGuests" name="maxGuests" type="number" min={1} max={50} placeholder={draft.type === "stay" ? "e.g. 4" : "e.g. 8"} defaultValue={draft.maxGuests || ""} className={FIELD} />
                   </div>
@@ -906,7 +981,7 @@ function ListingFormDialog({
                     <Label htmlFor="cleaningFee" className="text-sm font-semibold">Cleaning fee in AMD <span className="font-normal text-basalt/45">(optional, per booking)</span></Label>
                     <Input id="cleaningFee" name="cleaningFee" type="number" min={0} placeholder="e.g. 10000" defaultValue={draft.cleaningFeeCents ? draft.cleaningFeeCents / 100 : ""} className={FIELD} />
                   </div>
-                  {draft.type === "stay" && (
+                  {draft.type === "stay" && !multiRoom && (
                     <>
                       <div className="grid gap-2">
                         <Label htmlFor="guestsIncluded" className="text-sm font-semibold">Guests included in price <span className="font-normal text-basalt/45">(optional)</span></Label>

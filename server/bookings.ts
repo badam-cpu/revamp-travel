@@ -62,6 +62,13 @@ async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promi
     .maybeSingle();
   if (!listing) return;
 
+  // Hotel room booking (0092): name the room everywhere this booking is shown
+  // (emails, inbox, SMS, payout) so the host knows which room was booked.
+  // Failure-tolerant lookup — a non-room booking (or pre-0092 DB) keeps the title.
+  const { data: roomRef } = await admin.from("bookings").select("room_type_id, room_types(name)").eq("id", row.id).maybeSingle();
+  const roomName = (roomRef as { room_types?: { name?: string } | null } | null)?.room_types?.name;
+  if (roomName) listing.title = `${listing.title} · ${roomName}`;
+
   // Read a loosely-typed fact by label (meeting point / duration / languages).
   const facts = (Array.isArray(listing.facts) ? listing.facts : []) as { label?: string; value?: string }[];
   const fact = (...labels: string[]) => facts.find((f) => f.label && labels.includes(f.label.toLowerCase()))?.value || undefined;
@@ -213,6 +220,41 @@ export async function confirmBookingRow(admin: SupabaseClient, row: BookingRow):
       return { granted: false, status: "payment_failed" };
     }
     return { granted: false, status: check.status };
+  }
+
+  // Hotel room booking (0092): capacity can't be a DB exclusion ("up to N
+  // rooms"), so confirm through confirm_room_booking(), which locks the room
+  // type and checks the busiest night in one transaction. Looked up separately
+  // (and failure-tolerant) so BOOKING_COLS never names room_type_id — an
+  // unknown column there would break every confirm before 0092 runs.
+  const { data: roomRef } = await admin.from("bookings").select("room_type_id").eq("id", row.id).maybeSingle();
+  const roomTypeId = (roomRef as { room_type_id?: string | null } | null)?.room_type_id ?? null;
+  if (roomTypeId) {
+    const { data: outcome, error: rpcErr } = await admin.rpc("confirm_room_booking", {
+      p_booking_id: row.id,
+      p_order_id: check.orderId ?? row.paylink_order_id,
+    });
+    if (rpcErr) {
+      console.error("[bookings] room confirm failed", row.id, rpcErr.message);
+      return { granted: false, status: "unconfirmed" };
+    }
+    if (outcome === "capacity") {
+      // Paid, but the last room went to someone else mid-payment. Same handling
+      // as the exclusion conflict below: left pending for a manual refund,
+      // never a silent overbooking.
+      console.error("[bookings] room confirm capacity conflict", row.id);
+      return { granted: false, status: "conflict", conflict: true };
+    }
+    if (outcome !== "confirmed") {
+      const { data: now } = await admin.from("bookings").select("status").eq("id", row.id).maybeSingle();
+      return now?.status === "confirmed" ? { granted: true, status: "confirmed", already: true } : { granted: false, status: now?.status ?? "unconfirmed" };
+    }
+    try {
+      await onBookingConfirmed(admin, row);
+    } catch (err) {
+      console.error("[bookings] post-confirm (payout/email) failed", row.id, err);
+    }
+    return { granted: true, status: "confirmed" };
   }
 
   // Approved → flip to confirmed, but only if still payable (guards a concurrent

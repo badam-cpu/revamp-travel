@@ -141,6 +141,39 @@ export interface ListingRoom {
   beds: RoomBed[];
 }
 
+/** "1 King · 2 Singles" — the shared bed summary for rooms and room types. */
+export function formatBeds(beds: RoomBed[]): string {
+  return beds
+    .filter((b) => b.count > 0 && b.type)
+    .map((b) => `${b.count} ${b.type}${b.count > 1 ? "s" : ""}`)
+    .join(" · ");
+}
+
+/**
+ * A bookable room type of a multi-room property (hotel, guesthouse, hostel —
+ * migration 0092). A hotel listing (`multiRoom`) owns many; each is booked on
+ * its own, and up to `quantity` identical rooms can be booked for the same
+ * dates. Priced flat per night in v1 (AMD cents).
+ */
+export interface RoomType {
+  id: string;
+  listingId: string;
+  name: string;
+  description?: string;
+  beds: RoomBed[];
+  maxGuests: number;
+  sizeM2?: number;
+  priceCents: number;
+  priceUnit: string;
+  quantity: number;
+  image?: string;
+  gallery: string[];
+  amenities: string[];
+  sortOrder: number;
+}
+/** What the room-type editor saves; `id` is present when editing an existing room. */
+export type RoomTypeInput = Omit<RoomType, "id" | "listingId"> & { id?: string };
+
 /** A per-period nightly rate override (a season or a specific date range).
  * `start`/`end` are inclusive night dates (YYYY-MM-DD); `priceCents` is AMD. */
 export interface SeasonalRate {
@@ -228,6 +261,9 @@ export interface Listing {
   discountEnd?: string;
   /** Stay sleeping arrangement — rooms and the beds in each. */
   rooms?: ListingRoom[];
+  /** A multi-room property (hotel): booked per room type (see RoomType, 0092).
+   * When true, the listing price is the cheapest room ("From ֏X"). */
+  multiRoom?: boolean;
   /** Per-period nightly rate overrides (seasonal / date-range pricing). */
   seasonalRates?: SeasonalRate[];
   // --- revampstay offers (migration 0091) — a `stay` can be offered nightly
@@ -764,6 +800,9 @@ export interface ListingInput {
   discountEnd?: string;
   /** Stay sleeping arrangement — rooms and the beds in each. */
   rooms?: ListingRoom[];
+  /** A multi-room property (hotel): booked per room type (see RoomType, 0092).
+   * When true, the listing price is the cheapest room ("From ֏X"). */
+  multiRoom?: boolean;
   /** Per-period nightly rate overrides (seasonal / date-range pricing). */
   seasonalRates?: SeasonalRate[];
   // --- revampstay offers (migration 0091); see the same fields on Listing ---

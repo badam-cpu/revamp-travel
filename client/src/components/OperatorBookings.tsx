@@ -18,6 +18,7 @@ import type { BookingStatus } from "@shared/bookings";
 import { formatSlotTime } from "@shared/sessions";
 import { BookingDetailDialog } from "@/components/BookingDetailDialog";
 import { toast } from "sonner";
+import { fetchBookingRoomNames, withRoomName } from "@/lib/roomTypes";
 
 interface IncomingBooking {
   id: string;
@@ -127,7 +128,13 @@ export function OperatorBookings() {
           setRows([]);
           return;
         }
-        setRows((data ?? []) as unknown as IncomingBooking[]);
+        const loaded = (data ?? []) as unknown as IncomingBooking[];
+        setRows(loaded);
+        // Hotel bookings: add the booked room to the title (separate query, so
+        // the list above never depends on it).
+        fetchBookingRoomNames(loaded.map((b) => b.id)).then((names) => {
+          if (active && names.size) setRows((prev) => (prev ? withRoomName(prev, names) : prev));
+        });
       });
     return () => {
       active = false;

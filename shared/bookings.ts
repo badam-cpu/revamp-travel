@@ -93,6 +93,8 @@ export interface Booking {
   paylinkOrderId: string | null;
   paidAt: string | null;
   createdAt: string;
+  /** The room type booked at a multi-room property (0092); null = whole listing. */
+  roomTypeId?: string | null;
 }
 
 /** What the client sends to POST /api/start-checkout. */
@@ -101,6 +103,8 @@ export interface StartCheckoutParams {
   startDate: string;
   endDate: string;
   guests: number;
+  /** Required for a multi-room property: the room type being booked. */
+  roomTypeId?: string;
 }
 
 /**
@@ -134,6 +138,22 @@ export function nightsBetween(startDate: string, endDate: string): number {
 /** Shift a YYYY-MM-DD date by whole days (may be negative), returning YYYY-MM-DD. */
 export function addDaysIso(iso: string, days: number): string {
   return new Date(Date.parse(iso + "T00:00:00Z") + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * Multi-room availability (0092). A room type has `quantity` identical rooms;
+ * a night is sold out when that many bookings cover it. Ranges are
+ * [start, end) — `end` is the check-out date and isn't a booked night.
+ */
+export function nightOccupancy(ranges: { start: string; end: string }[], night: string): number {
+  return ranges.reduce((n, r) => (r.start <= night && night < r.end ? n + 1 : n), 0);
+}
+
+/** The busiest single night of [startDate, endDate) — what capacity is checked against. */
+export function maxNightlyOccupancy(ranges: { start: string; end: string }[], startDate: string, endDate: string): number {
+  let max = 0;
+  for (let d = startDate; d < endDate; d = addDaysIso(d, 1)) max = Math.max(max, nightOccupancy(ranges, d));
+  return max;
 }
 
 /**

@@ -45,6 +45,7 @@ import {
 import { formatSlotTime } from "@shared/sessions";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useRoomTypes } from "@/hooks/useRoomTypes";
 
 const ADDONS_PREVIEW = 3; // show this many, then "Show more"
 
@@ -72,6 +73,12 @@ export default function Checkout({ slug }: { slug: string }) {
 
   const listing = useMemo(() => listings.find((l) => l.slug === slug) ?? null, [listings, slug]);
   const isStay = listing?.type === "stay";
+  // Multi-room property (hotel, 0092): the booking is for one room type, priced
+  // from that room. A hotel can't be checked out without one.
+  const roomId = params.get("room") || undefined;
+  const isHotel = isStay && !!listing?.multiRoom;
+  const { rooms, loading: roomsLoading } = useRoomTypes(listing?.id, isHotel);
+  const room = isHotel ? rooms.find((r) => r.id === roomId) : undefined;
   // Request-to-book: the host approves before the guest pays (per-listing setting).
   const isRequest = !!sessionId && listing?.bookingMode === "request";
 
@@ -94,18 +101,26 @@ export default function Checkout({ slug }: { slug: string }) {
   const [promoApplying, setPromoApplying] = useState(false);
 
   // --- pricing (mirrors BookingPanel / the server) --------------------------
-  const valid = !!listing && isBookableType(listing.type) && !!startDate && !!endDate && listing.price > 0;
+  const valid = !!listing && isBookableType(listing.type) && !!startDate && !!endDate && listing.price > 0 && (!isHotel || (!!room && guests <= room.maxGuests));
   const nights = startDate && endDate ? nightsBetween(startDate, endDate) : 1;
 
   const accommodationCents = listing
     ? computeBookingAmountCents(
-        {
-          priceCents: Math.round(listing.price * 100),
-          priceUnit: listing.priceUnit,
-          cancellationPolicy: listing.cancellationPolicy,
-          nonrefundableDiscountPercent: listing.nonrefundableDiscountPercent,
-          seasonalRates: listing.seasonalRates,
-        },
+        room
+          ? {
+              priceCents: room.priceCents,
+              priceUnit: room.priceUnit,
+              cancellationPolicy: listing.cancellationPolicy,
+              nonrefundableDiscountPercent: listing.nonrefundableDiscountPercent,
+              seasonalRates: [],
+            }
+          : {
+              priceCents: Math.round(listing.price * 100),
+              priceUnit: listing.priceUnit,
+              cancellationPolicy: listing.cancellationPolicy,
+              nonrefundableDiscountPercent: listing.nonrefundableDiscountPercent,
+              seasonalRates: listing.seasonalRates,
+            },
         { startDate, endDate, guests },
       )
     : 0;
@@ -129,7 +144,7 @@ export default function Checkout({ slug }: { slug: string }) {
   }, [listing?.id, valid]);
 
   // --- guards ----------------------------------------------------------------
-  if (!listing && !offline && listings.length === 0) {
+  if ((!listing && !offline && listings.length === 0) || (isHotel && roomsLoading)) {
     // listings still loading
     return (
       <div className="min-h-screen bg-paper">
@@ -226,6 +241,7 @@ export default function Checkout({ slug }: { slug: string }) {
         endDate,
         guests,
         ...(sessionId ? { sessionId } : {}),
+        ...(room ? { roomTypeId: room.id } : {}),
         ...(addonSel.length ? { addons: addonSel } : {}),
         ...(giftBalance != null && giftCode.trim() ? { giftCode: giftCode.trim() } : {}),
         ...(promoInfo && promoCode.trim() ? { promoCode: promoCode.trim() } : {}),
@@ -399,6 +415,12 @@ export default function Checkout({ slug }: { slug: string }) {
               </div>
 
               <div className="mt-4 grid gap-1.5 text-sm">
+                {room && (
+                  <div className="flex items-center justify-between gap-4 text-basalt/55">
+                    <span>Room</span>
+                    <span className="truncate text-right font-medium text-basalt">{room.name}</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between text-basalt/55">
                   <span>{isStay ? "Dates" : slotIso ? "When" : "Date"}</span>
                   <span className="font-medium text-basalt">{fmtDate(startDate)}{isStay ? ` → ${fmtDate(endDate)}` : slotIso ? ` · ${formatSlotTime(slotIso)}` : ""}</span>

@@ -14,7 +14,7 @@
  * fields because a search engine's rich-result docs mention it, don't —
  * it would be inventing a customer rating.
  */
-import type { Listing, ListingType } from "./listings.js";
+import type { Listing, ListingType, RoomType } from "./listings.js";
 
 type JsonLd = Record<string, unknown>;
 
@@ -35,16 +35,21 @@ const SCHEMA_TYPE_BY_PLACE_CATEGORY: Record<string, string> = {
   coworking: "LocalBusiness",
 };
 
-/** schema.org @type for a listing — place rows refine by category. */
-export function schemaTypeFor(listing: { type: ListingType; category?: string }): string {
+/** schema.org @type for a listing — place rows refine by category; a multi-room stay is a Hotel. */
+export function schemaTypeFor(listing: { type: ListingType; category?: string; multiRoom?: boolean }): string {
   if (listing.type === "place" && listing.category) {
     return SCHEMA_TYPE_BY_PLACE_CATEGORY[listing.category] ?? "LocalBusiness";
   }
+  if (listing.type === "stay" && listing.multiRoom) return "Hotel";
   return SCHEMA_TYPE_BY_LISTING_TYPE[listing.type];
 }
 
-/** Structured data for one listing-detail page. */
-export function buildListingJsonLd(listing: Listing, origin: string): JsonLd {
+/**
+ * Structured data for one listing-detail page. `rooms` (a hotel's room types,
+ * 0092) adds each room as a HotelRoom with its own nightly offer — facts the
+ * operator entered, never ratings or availability claims.
+ */
+export function buildListingJsonLd(listing: Listing, origin: string, rooms: RoomType[] = []): JsonLd {
   const url = `${origin}/listing/${listing.slug}`;
   const images = [listing.image, ...listing.gallery].filter((src, index, all) => all.indexOf(src) === index).map((src) => absoluteUrl(src, origin));
 
@@ -100,6 +105,25 @@ export function buildListingJsonLd(listing: Listing, origin: string): JsonLd {
     if (checkin) base.checkinTime = checkin;
     if (checkout) base.checkoutTime = checkout;
     if (listing.maxGuests) base.occupancy = { "@type": "QuantitativeValue", maxValue: listing.maxGuests };
+  }
+
+  // Hotel: the listing price is the cheapest room, so publish it as a "from"
+  // price (AggregateOffer.lowPrice), plus each room type as a HotelRoom.
+  if (listing.type === "stay" && listing.multiRoom && listing.price > 0) {
+    base.offers = { "@type": "AggregateOffer", lowPrice: Math.round(listing.price), priceCurrency: "AMD", url };
+    const priced = rooms.filter((r) => r.priceCents > 0);
+    if (priced.length) {
+      base.offers = { ...(base.offers as JsonLd), highPrice: Math.round(Math.max(...priced.map((r) => r.priceCents)) / 100), offerCount: priced.length };
+      base.containsPlace = priced.slice(0, 30).map((r) => ({
+        "@type": "HotelRoom",
+        name: r.name,
+        ...(r.description ? { description: r.description } : {}),
+        occupancy: { "@type": "QuantitativeValue", maxValue: r.maxGuests },
+        ...(r.sizeM2 ? { floorSize: { "@type": "QuantitativeValue", value: r.sizeM2, unitCode: "MTK" } } : {}),
+        ...(r.beds.length ? { bed: r.beds.map((b) => ({ "@type": "BedDetails", typeOfBed: b.type, numberOfBeds: b.count })) } : {}),
+        offers: { "@type": "Offer", price: Math.round(r.priceCents / 100), priceCurrency: "AMD", unitText: "night" },
+      }));
+    }
   }
 
   // Tours/experiences: publish the itinerary/highlights as an ordered list.
