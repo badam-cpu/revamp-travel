@@ -53,7 +53,7 @@ function proseList(items: string[]): string {
 const sameRegion = (l: LiveListing, label: string) => normalizeRegion(l.region || "").toLowerCase() === normalizeRegion(label).toLowerCase();
 
 export default function RegionLanding({ type, region }: { type: LandingType; region: string }) {
-  const { listings, loading } = useListings();
+  const { publicListings: listings, loading } = useListings();
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const label = resolveRegion(region);
   const copy = COPY[type];

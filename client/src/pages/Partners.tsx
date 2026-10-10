@@ -31,7 +31,7 @@ interface OperatorCard {
 }
 
 export default function Partners() {
-  const { listings } = useListings();
+  const { publicListings: listings } = useListings();
   const { settings } = useSiteSettings();
   const [profiles, setProfiles] = useState<Record<string, { name: string; logo: string | null; role: string | null }>>({});
 

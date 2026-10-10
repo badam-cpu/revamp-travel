@@ -35,7 +35,7 @@ import { ListingVideo } from "@/components/ListingVideo";
 import { ExternalReviews } from "@/components/ExternalReviews";
 
 export function TourDetail({ listing }: { listing: Listing }) {
-  const { listings } = useListings();
+  const { publicListings: listings } = useListings();
   const { isSaved, toggleSaved } = useSavedPlaces();
   const { format } = useCurrency();
   const priceLabel = listing.price > 0 ? format(Math.round(listing.price * 100)) : "Rate on request";

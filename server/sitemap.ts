@@ -8,6 +8,7 @@
  */
 import type { Request, Response } from "express";
 import { getPublishedCatalog, getPublishedPosts } from "./supabase.js";
+import { filterForSite, siteFromHost } from "./site.js";
 import { REGION_GUIDES } from "../shared/regionGuides.js";
 import { GUIDES } from "../shared/guides.js";
 import { HOST_PAGES } from "../shared/hostLanding.js";
@@ -19,7 +20,11 @@ const normalizeRegionName = (r: string) => r.trim().replace(/\s+(province|marz)$
 
 export async function sitemapHandler(req: Request, res: Response): Promise<void> {
   const origin = `${req.protocol}://${req.get("host")}`;
-  const [catalog, posts] = await Promise.all([getPublishedCatalog(), getPublishedPosts()]);
+  // Per-site catalog (domain alias): revampvacations lists nightly stays
+  // exactly as today; revampstay lists every stay. Decided by the request host.
+  const site = siteFromHost(req.get("host"));
+  const [catalogAll, posts] = await Promise.all([getPublishedCatalog(), getPublishedPosts()]);
+  const catalog = filterForSite(site, catalogAll);
 
   const staticUrls = STATIC_ROUTES.map((path) => `<url><loc>${origin}${path}</loc></url>`);
   const listingUrls = catalog.map((listing) => {

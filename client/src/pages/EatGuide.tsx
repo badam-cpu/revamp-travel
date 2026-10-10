@@ -23,7 +23,7 @@ const OTHER = "More spots";
 const normalizeRegion = (r: string) => r.trim().replace(/\s+(province|marz)$/i, "").trim();
 
 export default function EatGuide() {
-  const { listings, loading } = useListings();
+  const { publicListings: listings, loading } = useListings();
   const search = useSearch();
   const regionParam = new URLSearchParams(search).get("region");
   const [cuisine, setCuisine] = useState("all");

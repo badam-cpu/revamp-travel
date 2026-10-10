@@ -11,7 +11,7 @@ import { buildCollectionPageJsonLd } from "@shared/seo";
 import { cn } from "@/lib/utils";
 
 export default function MapPage() {
-  const { listings } = useListings();
+  const { publicListings: listings } = useListings();
   const [type, setType] = useState("all");
   const [selectedId, setSelectedId] = useState(listings[0]?.id);
   const filtered = useMemo(() => listings.filter((listing) => type === "all" || listing.type === type), [type, listings]);

@@ -130,7 +130,7 @@ function HeroCarousel({ photos, title, onOpen, badge, coverFocus }: { photos: st
 }
 
 export default function ListingPage({ params }: { params: { slug: string } }) {
-  const { listings, loading } = useListings();
+  const { publicListings: listings, loading } = useListings();
   const { isSaved, toggleSaved } = useSavedPlaces();
   const { format } = useCurrency();
   const [amenitiesOpen, setAmenitiesOpen] = useState(false);

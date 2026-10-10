@@ -40,7 +40,7 @@ const DURATION_BUCKETS: { key: string; label: string; test: (hours: number) => b
 ];
 
 export default function Tours() {
-  const { listings, loading } = useListings();
+  const { publicListings: listings, loading } = useListings();
   const tours = useMemo(() => listings.filter((listing) => listing.type === "tour"), [listings]);
   const initialQuery = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("query") || "" : "";
 

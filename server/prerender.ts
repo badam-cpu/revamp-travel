@@ -19,6 +19,7 @@
  */
 import type { PublicListing } from "./supabase.js";
 import { getPublishedCatalog, getPublishedPosts, getPublishedPostBySlug, getSiteFaq, getPartnerOperators, getSitePartners, type PublicPost } from "./supabase.js";
+import { filterForSite, siteFromHost } from "./site.js";
 import { regions, typeLabels, ARMENIA_REGIONS } from "../shared/listings.js";
 import { slugify } from "../shared/slug.js";
 import { compareEatListings } from "../shared/eat.js";
@@ -108,7 +109,16 @@ export interface RenderResult {
 
 export async function renderForBot(pathname: string, origin: string): Promise<RenderResult> {
   const route = matchRoute(pathname);
-  const catalog = await getPublishedCatalog();
+  // Per-site catalog, decided by the request origin's host (both domains hit
+  // this same app). revampvacations keeps today's output exactly; a stay that
+  // isn't visible on this site also falls through to the real 404 below.
+  let host = "";
+  try {
+    host = new URL(origin).host;
+  } catch {
+    host = "";
+  }
+  const catalog = filterForSite(siteFromHost(host), await getPublishedCatalog());
 
   switch (route.kind) {
     case "home":

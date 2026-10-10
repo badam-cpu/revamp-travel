@@ -35,7 +35,7 @@ const FOOTER_COMPANY: [string, string][] = [
 export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolean; wide?: boolean } = {}) {
   const { profile } = useAuth();
   const { settings } = useSiteSettings();
-  const { listings } = useListings();
+  const { publicListings: listings } = useListings();
 
   // Regions that actually have listings of each type → footer crawl paths into
   // the per-region landing pages (SEO internal links). Deduped, capped. Only

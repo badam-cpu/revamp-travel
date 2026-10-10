@@ -54,7 +54,7 @@ function proseList(items: string[]): string {
 const PAGE_SIZE = 12;
 
 export default function EatLanding({ mode, value }: { mode: "region" | "cuisine"; value: string }) {
-  const { listings, loading } = useListings();
+  const { publicListings: listings, loading } = useListings();
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const [visible, setVisible] = useState(PAGE_SIZE);
 

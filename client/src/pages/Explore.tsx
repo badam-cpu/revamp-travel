@@ -29,7 +29,7 @@ const normalizeRegion = (r: string) => r.trim().replace(/\s+(province|marz)$/i, 
 export default function Explore({ initialType = "" }: { initialType?: string }) {
   const [, navigate] = useLocation();
   const searchStr = useSearch(); // live query string — re-renders when the URL changes
-  const { listings, loading } = useListings();
+  const { publicListings: listings, loading } = useListings();
   const { settings } = useSiteSettings();
   const params = new URLSearchParams(searchStr);
   const urlType = params.get("type") || initialType;

@@ -26,7 +26,7 @@ const SECTIONS: { type: "stay" | "tour" | "experience" | "eat"; heading: string;
 ];
 
 export default function Region({ slug }: { slug: string }) {
-  const { listings, loading } = useListings();
+  const { publicListings: listings, loading } = useListings();
   const guide = findRegionGuide(slug);
   const origin = typeof window !== "undefined" ? window.location.origin : "";
 

@@ -35,7 +35,7 @@ const categories = [
 ];
 
 export default function Home() {
-  const { listings, loading } = useListings();
+  const { publicListings: listings, loading } = useListings();
   const { settings } = useSiteSettings();
   const { format } = useCurrency();
 

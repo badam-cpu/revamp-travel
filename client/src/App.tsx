@@ -48,6 +48,7 @@ import Host from "./pages/Host";
 import RedeemStation from "./pages/RedeemStation";
 import Plan from "./pages/Plan";
 import Developers from "./pages/Developers";
+import { SiteProvider } from "@/contexts/SiteContext";
 
 /** Loads GA4 (if configured) and reports a page view on every route change. */
 function AnalyticsTracker() {
@@ -140,6 +141,7 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">
         <AuthProvider>
+          <SiteProvider>
           <ListingsProvider>
             <SavedPlacesProvider>
               <SiteSettingsProvider>
@@ -158,6 +160,7 @@ function App() {
               </SiteSettingsProvider>
             </SavedPlacesProvider>
           </ListingsProvider>
+          </SiteProvider>
         </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>

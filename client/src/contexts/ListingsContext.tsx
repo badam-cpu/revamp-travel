@@ -12,13 +12,14 @@
  * TourCard.tsx, TourDetail.tsx, ListingPage.tsx, Home.tsx) keeps working
  * without changes.
  */
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { Listing, ListingInput, ListingType, OfferType, Furnished, SaleStatus } from "@shared/listings";
 import type { SessionSchedule } from "@shared/sessions";
-import { seedListings, placeholderImage } from "@shared/listings";
+import { seedListings, placeholderImage, visibleOnVacations, visibleOnStay } from "@shared/listings";
 import { supabase } from "@/lib/supabase";
 import { slugify } from "@/lib/slug";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSite } from "@/contexts/SiteContext";
 
 /** The live catalog carries a couple of fields the static seed type never needed: who owns a row, whether it's published, and (once submitted) any admin review feedback. Every existing consumer only reads the base `Listing` fields, so this is a superset, not a breaking change. */
 export interface BlockedRange {
@@ -55,6 +56,13 @@ export type LiveListing = Listing & {
 
 interface ListingsContextType {
   listings: LiveListing[];
+  /**
+   * `listings` filtered to what THIS site shows (revampvacations: non-stay
+   * types + stays with the nightly offer = today's exact set; revampstay:
+   * every stay). Public surfaces read this; operator/admin tools keep reading
+   * the raw `listings` so an owner never loses sight of their own rows.
+   */
+  publicListings: LiveListing[];
   loading: boolean;
   /** Set when Supabase couldn't be reached — the app is showing the static seed instead. */
   offline: boolean;
@@ -397,6 +405,16 @@ export function ListingsProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [offline, setOffline] = useState(false);
 
+  // Site-filtered view for public surfaces (see the context type). Same array
+  // order as `listings`; on revampvacations the filter is an identity for every
+  // row that exists today (all stays default to the nightly offer), so this is
+  // a zero-regression change until an operator opts a listing out of nightly.
+  const site = useSite();
+  const publicListings = useMemo(
+    () => (site === "stay" ? listings.filter(visibleOnStay) : listings.filter(visibleOnVacations)),
+    [listings, site],
+  );
+
   const refresh = useCallback(async () => {
     try {
       const { data, error } = await supabase.from("listings").select(ROW_COLUMNS).order("created_at", { ascending: true });
@@ -554,7 +572,7 @@ export function ListingsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <ListingsContext.Provider value={{ listings, loading, offline, refresh, createListing, updateListing, deleteListing, setIcalUrl, setIcalFeeds, setSeasonalRates, setManualBlocks, setListingFacts }}>
+    <ListingsContext.Provider value={{ listings, publicListings, loading, offline, refresh, createListing, updateListing, deleteListing, setIcalUrl, setIcalFeeds, setSeasonalRates, setManualBlocks, setListingFacts }}>
       {children}
     </ListingsContext.Provider>
   );
