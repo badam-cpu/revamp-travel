@@ -9,6 +9,7 @@ import { useState } from "react";
 import { Calendar, ChevronRight, Minus, Plus, Users } from "lucide-react";
 import type { BlockedRange, LiveListing } from "@/contexts/ListingsContext";
 import type { RoomType } from "@shared/listings";
+import { typeFromCents } from "@shared/rooms";
 import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
 import { AskHostButton } from "@/components/AskHostButton";
 import { Button } from "@/components/ui/button";
@@ -128,7 +129,7 @@ export function HotelBookingPanel({
 }) {
   const { format } = useCurrency();
   const [datesOpen, setDatesOpen] = useState(false);
-  const fromCents = rooms.length ? Math.min(...rooms.map((r) => r.priceCents)) : Math.round(listing.price * 100);
+  const fromCents = rooms.length ? Math.min(...rooms.map(typeFromCents)) : Math.round(listing.price * 100);
   const maxGuests = rooms.length ? Math.max(...rooms.map((r) => r.maxGuests)) : listing.maxGuests ?? 8;
 
   return (

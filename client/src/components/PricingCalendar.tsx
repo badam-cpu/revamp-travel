@@ -18,8 +18,13 @@ import { useListings, type LiveListing, type BlockedRange } from "@/contexts/Lis
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import type { RoomType, RoomUnit, SeasonalRate } from "@shared/listings";
+import { roomUnitLabel, unitBaseCents } from "@shared/rooms";
+import { fetchRoomTypes, updateRoomUnitCalendar } from "@/lib/roomTypes";
 
 const DAY_MS = 86_400_000;
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -44,8 +49,25 @@ function collapse(set: Set<string>): BlockedRange[] {
   return out;
 }
 
-export function PricingCalendar({ listing }: { listing: LiveListing }) {
+/** A hotel room being edited (0092): its type, the room itself, and a callback with the saved room. */
+export interface PricingCalendarRoom {
+  type: RoomType;
+  unit: RoomUnit;
+  onSaved: (unit: RoomUnit) => void;
+}
+
+export function PricingCalendar({ listing, room }: { listing: LiveListing; room?: PricingCalendarRoom }) {
   const { setSeasonalRates, setManualBlocks, setListingFacts } = useListings();
+  // Room mode edits ONE hotel room's prices and blocked dates (room_units);
+  // without it, this is the single-unit listing calendar, unchanged.
+  const saveRates = async (rates: SeasonalRate[]) => {
+    if (room) room.onSaved(await updateRoomUnitCalendar(room.unit.id, { seasonalRates: rates }));
+    else await setSeasonalRates(listing.id, rates);
+  };
+  const saveBlocks = async (ranges: BlockedRange[]) => {
+    if (room) room.onSaved(await updateRoomUnitCalendar(room.unit.id, { manualBlockedRanges: ranges }));
+    else await setManualBlocks(listing.id, ranges);
+  };
   const { format } = useCurrency();
   const [month, setMonth] = useState(() => {
     const d = new Date();
@@ -64,26 +86,29 @@ export function PricingCalendar({ listing }: { listing: LiveListing }) {
   const [minStayInput, setMinStayInput] = useState(String(currentMinStay));
   const [savingMin, setSavingMin] = useState(false);
 
-  // Confirmed/pending bookings for this listing (to mark booked days).
+  // Confirmed/pending bookings for this listing — or, in room mode, this room —
+  // to mark booked days.
+  const unitId = room?.unit.id;
   useEffect(() => {
     supabase
       .from("bookings")
       .select("start_date, end_date")
-      .eq("listing_id", listing.id)
+      .eq(unitId ? "room_unit_id" : "listing_id", unitId ?? listing.id)
       .in("status", ["pending_payment", "confirmed", "completed"])
       .then(({ data }) => setBooked((data ?? []).map((r) => ({ start: r.start_date as string, end: r.end_date as string }))));
-  }, [listing.id]);
+  }, [listing.id, unitId]);
 
   const isStay = listing.type === "stay";
-  const base = Math.round(listing.price * 100);
-  const rates = listing.seasonalRates ?? [];
-  const manual = listing.manualBlockedRanges ?? [];
+  const base = room ? unitBaseCents(room.type, room.unit) : Math.round(listing.price * 100);
+  const rates = room ? room.unit.seasonalRates : listing.seasonalRates ?? [];
+  const manual = room ? room.unit.manualBlockedRanges : listing.manualBlockedRanges ?? [];
   const priceForDate = (d: string) => {
     const match = rates.filter((r) => r.start <= d && d <= r.end).pop();
     return match ? match.priceCents : base;
   };
   const isBooked = (d: string) => booked.some((b) => b.start <= d && d < b.end);
-  const isExternal = (d: string) => (listing.blockedRanges ?? []).some((b) => b.start <= d && d < b.end);
+  // The hotel's synced calendar doesn't apply to individual rooms (v1).
+  const isExternal = (d: string) => !room && (listing.blockedRanges ?? []).some((b) => b.start <= d && d < b.end);
   const isManual = (d: string) => manual.some((b) => b.start <= d && d < b.end);
 
   // Month grid: leading blanks + each day.
@@ -136,7 +161,7 @@ export function PricingCalendar({ listing }: { listing: LiveListing }) {
     setSaving(true);
     try {
       const kept = rates.filter((r) => !(r.start >= selStart && r.end <= selEnd));
-      await setSeasonalRates(listing.id, [...kept, { start: selStart, end: selEnd, priceCents: amd * 100 }]);
+      await saveRates([...kept, { start: selStart, end: selEnd, priceCents: amd * 100 }]);
       toast(`Price set for ${selNights} day${selNights === 1 ? "" : "s"}.`);
       clearSel();
     } catch (e) {
@@ -151,7 +176,7 @@ export function PricingCalendar({ listing }: { listing: LiveListing }) {
     setSaving(true);
     try {
       const kept = rates.filter((r) => r.end < selStart || r.start > selEnd);
-      await setSeasonalRates(listing.id, kept);
+      await saveRates(kept);
       toast("Reset to base price.");
       clearSel();
     } catch (e) {
@@ -167,7 +192,7 @@ export function PricingCalendar({ listing }: { listing: LiveListing }) {
     try {
       const set = expand(manual);
       for (let d = selStart; d <= selEnd; d = addDaysIso(d, 1)) (block ? set.add(d) : set.delete(d));
-      await setManualBlocks(listing.id, collapse(set));
+      await saveBlocks(collapse(set));
       toast(`${block ? "Blocked" : "Opened"} ${selNights} day${selNights === 1 ? "" : "s"}.`);
       clearSel();
     } catch (e) {
@@ -192,7 +217,7 @@ export function PricingCalendar({ listing }: { listing: LiveListing }) {
     }
   };
 
-  const unit = listing.priceUnit ? ` / ${listing.priceUnit}` : "";
+  const unit = room ? " / night" : listing.priceUnit ? ` / ${listing.priceUnit}` : "";
   // Does the selection contain any manually-blocked day (→ offer "Open")?
   const selHasBlocked = Boolean(selStart && selEnd && manual.some((r) => !(r.end <= selStart! || r.start > selEnd!)));
 
@@ -205,7 +230,10 @@ export function PricingCalendar({ listing }: { listing: LiveListing }) {
           <button type="button" onClick={() => setMonth((m) => (m.m === 11 ? { y: m.y + 1, m: 0 } : { y: m.y, m: m.m + 1 }))} aria-label="Next month" className="grid h-8 w-8 place-items-center border border-basalt/15 hover:border-apricot hover:text-apricot"><ChevronRight className="h-4 w-4" /></button>
         </div>
         <p className="font-display text-xl">{monthLabel}</p>
-        <span className="ml-auto text-xs text-basalt/45">{base > 0 ? `Base rate ${format(base)}${unit}` : "Rate on request"}</span>
+        <span className="ml-auto text-xs text-basalt/45">
+          {base > 0 ? `Base rate ${format(base)}${unit}` : "Rate on request"}
+          {room && room.unit.priceCents == null && " (room type default)"}
+        </span>
       </div>
 
       {/* Legend */}
@@ -281,18 +309,106 @@ export function PricingCalendar({ listing }: { listing: LiveListing }) {
           </div>
         </div>
       )}
-      <p className="mt-3 text-xs text-basalt/45">Click a day or drag across several, then set a price (AMD) or block/open those dates. Prices are per {listing.priceUnit || "booking"}. Confirmed bookings and externally-synced days can't be changed here.</p>
+      <p className="mt-3 text-xs text-basalt/45">
+        {room
+          ? `Click a day or drag across several, then set this room's price (AMD per night) or block/open those dates — e.g. when the room is under repair. Confirmed bookings can't be changed here.`
+          : `Click a day or drag across several, then set a price (AMD) or block/open those dates. Prices are per ${listing.priceUnit || "booking"}. Confirmed bookings and externally-synced days can't be changed here.`}
+      </p>
 
       {/* Minimum stay (stays only) — a per-listing setting, saved to facts. */}
       {isStay && (
         <div className="mt-4 flex flex-wrap items-center gap-2 border border-basalt/12 bg-chalk px-3 py-2 text-sm">
-          <span className="font-semibold">Minimum stay</span>
+          <span className="font-semibold">{room ? "Minimum stay (whole property)" : "Minimum stay"}</span>
           <Input type="number" min={1} max={365} value={minStayInput} onChange={(e) => setMinStayInput(e.target.value)} className="h-9 w-20 rounded-none" />
           <span className="text-basalt/55">night{Number(minStayInput) === 1 ? "" : "s"}</span>
           <Button size="sm" variant="outline" disabled={savingMin} onClick={saveMinStay} className="ml-1 rounded-none">{savingMin ? "Saving…" : "Save"}</Button>
           <span className="text-xs text-basalt/45">Guests must book at least this many nights. Set 1 for no minimum.</span>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Hotel calendar (multi-room property, 0092): pick a room type, then one of
+ * its rooms, and price / block that room exactly like a single-unit listing.
+ * Rooms are added in the listing form; this only edits their dates.
+ */
+export function HotelPricingCalendar({ listing }: { listing: LiveListing }) {
+  const { format } = useCurrency();
+  const [types, setTypes] = useState<RoomType[] | null>(null);
+  const [typeId, setTypeId] = useState<string>("");
+  const [unitId, setUnitId] = useState<string>("");
+
+  useEffect(() => {
+    let alive = true;
+    setTypes(null);
+    fetchRoomTypes(listing.id).then((t) => {
+      if (!alive) return;
+      setTypes(t);
+      const first = t.find((x) => x.units.length) ?? t[0];
+      setTypeId(first?.id ?? "");
+      setUnitId(first?.units[0]?.id ?? "");
+    });
+    return () => {
+      alive = false;
+    };
+  }, [listing.id]);
+
+  if (types === null) return <p className="text-sm text-basalt/50">Loading your rooms…</p>;
+  const withRooms = types.filter((t) => t.units.length);
+  if (withRooms.length === 0) {
+    return (
+      <p className="border border-dashed border-basalt/20 bg-chalk px-4 py-6 text-sm text-basalt/60">
+        This property has no rooms yet. Edit the listing and add rooms under each room type — then price and block them here.
+      </p>
+    );
+  }
+
+  const type = types.find((t) => t.id === typeId) ?? withRooms[0];
+  const unit = type.units.find((u) => u.id === unitId) ?? type.units[0];
+  // Keep the edited room in local state so the calendar shows saved changes at once.
+  const onSaved = (saved: RoomUnit) => setTypes((all) => (all ?? []).map((t) => (t.id === saved.roomTypeId ? { ...t, units: t.units.map((u) => (u.id === saved.id ? saved : u)) } : t)));
+
+  return (
+    <div className="grid gap-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-1.5">
+          <Label htmlFor="cal-room-type" className="text-xs font-semibold">Room type</Label>
+          <Select
+            value={type.id}
+            onValueChange={(v) => {
+              const next = types.find((t) => t.id === v);
+              setTypeId(v);
+              setUnitId(next?.units[0]?.id ?? "");
+            }}
+          >
+            <SelectTrigger id="cal-room-type" className="h-11 rounded-none"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {withRooms.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  {t.name} · {t.units.length} room{t.units.length === 1 ? "" : "s"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="cal-room" className="text-xs font-semibold">Room</Label>
+          <Select value={unit.id} onValueChange={setUnitId}>
+            <SelectTrigger id="cal-room" className="h-11 rounded-none"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {type.units.map((u) => (
+                <SelectItem key={u.id} value={u.id}>
+                  {roomUnitLabel(u.name)} · {format(unitBaseCents(type, u))}
+                  {u.priceCents == null ? " (default)" : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <PricingCalendar key={unit.id} listing={listing} room={{ type, unit, onSaved }} />
     </div>
   );
 }

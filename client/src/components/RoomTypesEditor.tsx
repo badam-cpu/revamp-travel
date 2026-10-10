@@ -1,10 +1,12 @@
 /**
  * Room-type editor for a multi-room property (hotel, guesthouse, hostel —
- * migration 0092). Each room type is booked on its own: name, beds, max guests,
- * size, nightly price, and how many identical rooms there are (= how many can
- * be booked for the same dates). Uncontrolled with ref.getValue() like the
- * other pickers (RoomsEditor, PhotoUploader); the Dashboard reads it once at
- * submit and saves the rows after the listing itself is saved.
+ * migration 0092). Each room type has its beds, max guests, size and a default
+ * nightly price, plus its actual ROOMS (101, 102, …). A room uses the type's
+ * price unless the operator sets its own; per-date prices and blocked dates
+ * per room are set in the pricing calendar. Guests book a type and are given
+ * the cheapest free room. Uncontrolled with ref.getValue() like the other
+ * pickers (RoomsEditor, PhotoUploader); the Dashboard reads it once at submit
+ * and saves the rows after the listing itself is saved.
  */
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { Minus, Plus, X } from "lucide-react";
@@ -19,6 +21,7 @@ import type { RoomType, RoomTypeInput } from "@shared/listings";
 export type RoomTypesEditorHandle = { getValue: () => RoomTypeInput[] };
 
 type BedRow = { key: string; type: string; count: number };
+type UnitRow = { key: string; id?: string; name: string; price: string };
 type Row = {
   key: string;
   id?: string;
@@ -27,11 +30,13 @@ type Row = {
   beds: BedRow[];
   maxGuests: string;
   sizeM2: string;
-  price: string; // whole drams, as typed
-  quantity: string;
+  price: string; // default nightly price, whole drams as typed
+  units: UnitRow[];
   gallery: string[];
   amenities: string[];
 };
+
+const unitRow = (name = "", price = "", id?: string): UnitRow => ({ key: crypto.randomUUID(), id, name, price });
 
 const blankRow = (): Row => ({
   key: crypto.randomUUID(),
@@ -41,43 +46,62 @@ const blankRow = (): Row => ({
   maxGuests: "2",
   sizeM2: "",
   price: "",
-  quantity: "1",
+  units: [unitRow()],
   gallery: [],
   amenities: [],
 });
 
-function seed(rooms: RoomType[]): Row[] {
-  return rooms.map((r) => ({
+function seed(types: RoomType[]): Row[] {
+  return types.map((t) => ({
     key: crypto.randomUUID(),
-    id: r.id,
-    name: r.name,
-    description: r.description ?? "",
-    beds: r.beds.map((b) => ({ key: crypto.randomUUID(), type: b.type || BED_TYPES[0], count: b.count || 1 })),
-    maxGuests: String(r.maxGuests),
-    sizeM2: r.sizeM2 ? String(r.sizeM2) : "",
-    price: r.priceCents ? String(Math.round(r.priceCents / 100)) : "",
-    quantity: String(r.quantity),
-    gallery: r.gallery.length ? r.gallery : r.image ? [r.image] : [],
-    amenities: r.amenities,
+    id: t.id,
+    name: t.name,
+    description: t.description ?? "",
+    beds: t.beds.map((b) => ({ key: crypto.randomUUID(), type: b.type || BED_TYPES[0], count: b.count || 1 })),
+    maxGuests: String(t.maxGuests),
+    sizeM2: t.sizeM2 ? String(t.sizeM2) : "",
+    price: t.priceCents ? String(Math.round(t.priceCents / 100)) : "",
+    // A type saved before individual rooms existed gets its count as numbered rooms.
+    units: t.units.length
+      ? t.units.map((u) => unitRow(u.name, u.priceCents != null ? String(Math.round(u.priceCents / 100)) : "", u.id))
+      : Array.from({ length: Math.max(1, t.quantity) }, (_, i) => unitRow(String(i + 1))),
+    gallery: t.gallery.length ? t.gallery : t.image ? [t.image] : [],
+    amenities: t.amenities,
   }));
 }
 
-/** First problem with the editor's rooms, or null when they're ready to save. */
-export function validateRoomTypes(rooms: RoomTypeInput[]): string | null {
-  if (rooms.length === 0) return "Add at least one room type — guests book a specific room at a hotel.";
-  for (let i = 0; i < rooms.length; i++) {
-    const r = rooms[i];
-    const label = r.name.trim() || `Room type ${i + 1}`;
-    if (!r.name.trim()) return `Give room type ${i + 1} a name.`;
-    if (!(r.priceCents > 0)) return `Set a nightly price for "${label}".`;
-    if (!(r.quantity >= 1)) return `"${label}" needs at least 1 room.`;
-    if (!(r.maxGuests >= 1)) return `"${label}" needs at least 1 guest.`;
+/** The next room number after the type's highest numbered room ("" if none are numbered). */
+function nextNumber(units: UnitRow[]): string {
+  const nums = units.map((u) => Number(u.name.trim())).filter((n) => Number.isInteger(n) && n >= 0);
+  return nums.length ? String(Math.max(...nums) + 1) : "";
+}
+
+/** First problem with the editor's room types, or null when they're ready to save. */
+export function validateRoomTypes(types: RoomTypeInput[]): string | null {
+  if (types.length === 0) return "Add at least one room type — guests book a room type at a hotel.";
+  for (let i = 0; i < types.length; i++) {
+    const t = types[i];
+    const label = t.name.trim() || `Room type ${i + 1}`;
+    if (!t.name.trim()) return `Give room type ${i + 1} a name.`;
+    if (!(t.priceCents > 0)) return `Set a default nightly price for "${label}".`;
+    if (!(t.maxGuests >= 1)) return `"${label}" needs at least 1 guest.`;
+    if (t.units.length === 0) return `Add at least one room to "${label}".`;
+    const seen = new Set<string>();
+    for (const u of t.units) {
+      const n = u.name.trim().toLowerCase();
+      if (!n) return `Give every room in "${label}" a name or number.`;
+      if (seen.has(n)) return `"${label}" has two rooms called "${u.name.trim()}". Give each room its own name.`;
+      seen.add(n);
+      if (u.priceCents != null && !(u.priceCents > 0)) return `Room "${u.name.trim()}" in "${label}" needs a price above ֏0, or leave it empty to use the default.`;
+    }
   }
   return null;
 }
 
 export const RoomTypesEditor = forwardRef<RoomTypesEditorHandle, { defaultValue: RoomType[] }>(function RoomTypesEditor({ defaultValue }, ref) {
   const [rows, setRows] = useState<Row[]>(() => (defaultValue.length ? seed(defaultValue) : [blankRow()]));
+  // "Add several rooms" inputs, per room type.
+  const [bulk, setBulk] = useState<Record<string, { count: string; from: string }>>({});
   const photoRefs = useRef(new Map<string, PhotoUploaderHandle | null>());
 
   useImperativeHandle(
@@ -95,11 +119,16 @@ export const RoomTypesEditor = forwardRef<RoomTypesEditorHandle, { defaultValue:
             sizeM2: Number(r.sizeM2) > 0 ? Math.round(Number(r.sizeM2)) : undefined,
             priceCents: Math.max(0, Math.round((Number(r.price) || 0) * 100)),
             priceUnit: "night",
-            quantity: Math.max(0, Math.round(Number(r.quantity) || 0)),
+            quantity: Math.max(1, r.units.length),
             image: gallery[0],
             gallery,
             amenities: r.amenities,
             sortOrder: i,
+            units: r.units.map((u) => ({
+              id: u.id,
+              name: u.name.trim(),
+              priceCents: u.price.trim() === "" ? undefined : Math.round((Number(u.price) || 0) * 100),
+            })),
           };
         }),
     }),
@@ -111,6 +140,28 @@ export const RoomTypesEditor = forwardRef<RoomTypesEditorHandle, { defaultValue:
     setRows((all) => all.map((r) => (r.key === key ? { ...r, beds: r.beds.map((b) => (b.key === bedKey ? { ...b, ...p } : b)) } : r)));
   const addBed = (key: string) => setRows((all) => all.map((r) => (r.key === key ? { ...r, beds: [...r.beds, { key: crypto.randomUUID(), type: BED_TYPES[0], count: 1 }] } : r)));
   const removeBed = (key: string, bedKey: string) => setRows((all) => all.map((r) => (r.key === key ? { ...r, beds: r.beds.filter((b) => b.key !== bedKey) } : r)));
+  const setUnit = (key: string, unitKey: string, p: Partial<UnitRow>) =>
+    setRows((all) => all.map((r) => (r.key === key ? { ...r, units: r.units.map((u) => (u.key === unitKey ? { ...u, ...p } : u)) } : r)));
+  const addUnit = (key: string) => setRows((all) => all.map((r) => (r.key === key ? { ...r, units: [...r.units, unitRow(nextNumber(r.units))] } : r)));
+  const removeUnit = (key: string, unitKey: string) => setRows((all) => all.map((r) => (r.key === key ? { ...r, units: r.units.filter((u) => u.key !== unitKey) } : r)));
+  const addSeveral = (key: string) => {
+    const b = bulk[key] ?? { count: "", from: "" };
+    const count = Math.min(200, Math.max(0, Math.round(Number(b.count) || 0)));
+    if (!count) return;
+    setRows((all) =>
+      all.map((r) => {
+        if (r.key !== key) return r;
+        // Drop the untouched blank starter row, then append the numbered rooms.
+        const kept = r.units.filter((u) => u.id || u.name.trim() || u.price.trim());
+        const start = Math.round(Number(b.from)) || Number(nextNumber(kept)) || 1;
+        const taken = new Set(kept.map((u) => u.name.trim().toLowerCase()));
+        const added: UnitRow[] = [];
+        for (let n = start; added.length < count; n++) if (!taken.has(String(n))) added.push(unitRow(String(n)));
+        return { ...r, units: [...kept, ...added] };
+      }),
+    );
+    setBulk((s) => ({ ...s, [key]: { count: "", from: "" } }));
+  };
   const removeRow = (key: string) => {
     photoRefs.current.delete(key);
     setRows((all) => all.filter((r) => r.key !== key));
@@ -120,7 +171,7 @@ export const RoomTypesEditor = forwardRef<RoomTypesEditorHandle, { defaultValue:
     <div className="grid gap-3">
       <div>
         <Label>Room types</Label>
-        <p className="mt-1 text-xs text-basalt/45">Add each kind of room you rent. Guests choose one on your page; "Rooms" is how many identical rooms of that type you have.</p>
+        <p className="mt-1 text-xs text-basalt/45">Add each kind of room you rent, then the actual rooms of that kind. Guests choose a room type on your page and get the cheapest room of it that's free.</p>
       </div>
 
       {rows.map((row, i) => (
@@ -130,7 +181,7 @@ export const RoomTypesEditor = forwardRef<RoomTypesEditorHandle, { defaultValue:
               id={`room-type-name-${i}`}
               value={row.name}
               onChange={(e) => patch(row.key, { name: e.target.value })}
-              placeholder="Room name (e.g. Deluxe king room)"
+              placeholder="Room type (e.g. Deluxe king room)"
               className="h-11 rounded-none font-semibold"
               aria-label="Room type name"
             />
@@ -144,7 +195,7 @@ export const RoomTypesEditor = forwardRef<RoomTypesEditorHandle, { defaultValue:
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <div className="grid gap-1.5">
               <Label htmlFor={`room-type-guests-${i}`} className="text-xs">Max guests</Label>
               <Input id={`room-type-guests-${i}`} type="number" min={1} max={30} value={row.maxGuests} onChange={(e) => patch(row.key, { maxGuests: e.target.value })} className="h-10 rounded-none" />
@@ -153,13 +204,83 @@ export const RoomTypesEditor = forwardRef<RoomTypesEditorHandle, { defaultValue:
               <Label htmlFor={`room-type-size-${i}`} className="text-xs">Size m² <span className="font-normal text-basalt/40">(optional)</span></Label>
               <Input id={`room-type-size-${i}`} type="number" min={1} value={row.sizeM2} onChange={(e) => patch(row.key, { sizeM2: e.target.value })} className="h-10 rounded-none" />
             </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor={`room-type-price-${i}`} className="text-xs">Price / night (֏)</Label>
+            <div className="col-span-2 grid gap-1.5 sm:col-span-1">
+              <Label htmlFor={`room-type-price-${i}`} className="text-xs">Default price / night (֏)</Label>
               <Input id={`room-type-price-${i}`} type="number" min={0} step={500} value={row.price} onChange={(e) => patch(row.key, { price: e.target.value })} placeholder="32000" className="h-10 rounded-none" />
             </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor={`room-type-qty-${i}`} className="text-xs">Rooms of this type</Label>
-              <Input id={`room-type-qty-${i}`} type="number" min={1} max={500} value={row.quantity} onChange={(e) => patch(row.key, { quantity: e.target.value })} className="h-10 rounded-none" />
+          </div>
+
+          {/* The actual rooms of this type. */}
+          <div className="grid gap-2 border border-basalt/10 bg-chalk/40 p-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-xs font-semibold text-basalt/70">
+                Rooms <span className="font-normal text-basalt/45">({row.units.length})</span>
+              </p>
+              <p className="text-[11px] text-basalt/45">Leave a price empty to use the default. Set date-by-date prices and blocked dates per room in the Calendar.</p>
+            </div>
+            {row.units.map((u, ui) => (
+              <div key={u.key} className="flex items-center gap-2">
+                <Input
+                  id={`room-unit-name-${i}-${ui}`}
+                  value={u.name}
+                  onChange={(e) => setUnit(row.key, u.key, { name: e.target.value })}
+                  placeholder="101"
+                  aria-label="Room name or number"
+                  className="h-10 w-28 shrink-0 rounded-none text-sm font-semibold"
+                />
+                <Input
+                  id={`room-unit-price-${i}-${ui}`}
+                  type="number"
+                  min={0}
+                  step={500}
+                  value={u.price}
+                  onChange={(e) => setUnit(row.key, u.key, { price: e.target.value })}
+                  placeholder={row.price ? `${Number(row.price).toLocaleString()} (default)` : "Default price"}
+                  aria-label="This room's own price per night (optional)"
+                  className="h-10 min-w-0 flex-1 rounded-none text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeUnit(row.key, u.key)}
+                  aria-label={`Remove room ${u.name || ui + 1}`}
+                  className="grid h-10 w-10 shrink-0 place-items-center text-basalt/40 transition-colors hover:text-destructive"
+                >
+                  <Minus className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1">
+              <button type="button" onClick={() => addUnit(row.key)} className="inline-flex items-center gap-1 text-xs font-semibold text-apricot hover:underline">
+                <Plus className="h-3.5 w-3.5" /> Add room
+              </button>
+              <span className="flex items-center gap-1.5 text-xs text-basalt/55">
+                Add
+                <Input
+                  id={`room-bulk-count-${i}`}
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={bulk[row.key]?.count ?? ""}
+                  onChange={(e) => setBulk((s) => ({ ...s, [row.key]: { from: s[row.key]?.from ?? "", count: e.target.value } }))}
+                  placeholder="5"
+                  aria-label="How many rooms to add"
+                  className="h-8 w-14 rounded-none px-2 text-xs"
+                />
+                rooms numbered from
+                <Input
+                  id={`room-bulk-from-${i}`}
+                  type="number"
+                  min={0}
+                  value={bulk[row.key]?.from ?? ""}
+                  onChange={(e) => setBulk((s) => ({ ...s, [row.key]: { count: s[row.key]?.count ?? "", from: e.target.value } }))}
+                  placeholder={nextNumber(row.units) || "101"}
+                  aria-label="First room number"
+                  className="h-8 w-16 rounded-none px-2 text-xs"
+                />
+                <button type="button" onClick={() => addSeveral(row.key)} className="font-semibold text-apricot hover:underline">
+                  Add
+                </button>
+              </span>
             </div>
           </div>
 

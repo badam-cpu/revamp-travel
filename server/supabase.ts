@@ -220,7 +220,7 @@ export async function getRoomTypesBySlug(slug: string): Promise<RoomType[]> {
   if (!client) return [];
   const { data, error } = await client
     .from("room_types")
-    .select("id, name, description, beds, max_guests, size_m2, price_cents, price_unit, quantity, image, gallery, sort_order, listings!inner(slug)")
+    .select("id, name, description, beds, max_guests, size_m2, price_cents, price_unit, quantity, image, gallery, sort_order, room_units(id, name, price_cents, active, sort_order), listings!inner(slug)")
     .eq("listings.slug", slug)
     .order("sort_order");
   if (error || !data) return [];
@@ -237,6 +237,7 @@ export async function getRoomTypesBySlug(slug: string): Promise<RoomType[]> {
     image: string | null;
     gallery: string[] | null;
     sort_order: number | null;
+    room_units: { id: string; name: string; price_cents: number | null; active: boolean | null; sort_order: number | null }[] | null;
   }[]).map((r) => ({
     id: r.id,
     listingId: slug,
@@ -252,6 +253,17 @@ export async function getRoomTypesBySlug(slug: string): Promise<RoomType[]> {
     gallery: Array.isArray(r.gallery) ? r.gallery : [],
     amenities: [],
     sortOrder: r.sort_order ?? 0,
+    // Only what the "from" price needs; per-date rates/blocks stay out of the bot page.
+    units: (r.room_units ?? []).map((u) => ({
+      id: u.id,
+      roomTypeId: r.id,
+      name: u.name,
+      priceCents: u.price_cents ?? undefined,
+      seasonalRates: [],
+      manualBlockedRanges: [],
+      active: u.active !== false,
+      sortOrder: u.sort_order ?? 0,
+    })),
   }));
 }
 

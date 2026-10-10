@@ -21,6 +21,7 @@ import type { PublicListing } from "./supabase.js";
 import { getPublishedCatalog, getPublishedPosts, getPublishedPostBySlug, getSiteFaq, getPartnerOperators, getSitePartners, getRoomTypesBySlug, type PublicPost } from "./supabase.js";
 import { filterForSite, siteFromHost } from "./site.js";
 import { regions, typeLabels, ARMENIA_REGIONS, formatBeds, type RoomType } from "../shared/listings.js";
+import { typeFromCents } from "../shared/rooms.js";
 import { slugify } from "../shared/slug.js";
 import { compareEatListings } from "../shared/eat.js";
 import { GUIDES, GUIDE_HUB, findGuide, type Guide } from "../shared/guides.js";
@@ -734,7 +735,8 @@ function renderListingDetail(listing: PublicListing, catalog: PublicListing[], o
     ? `<h2>Choose your room</h2><ul>${rooms
         .map((r) => {
           const facts = [formatBeds(r.beds), `${r.maxGuests} ${r.maxGuests === 1 ? "guest" : "guests"}`, r.sizeM2 ? `${r.sizeM2} m²` : ""].filter(Boolean).join(" · ");
-          const price = r.priceCents > 0 ? ` — ֏${Math.round(r.priceCents / 100).toLocaleString()} / night` : "";
+          const from = typeFromCents(r);
+          const price = from > 0 ? ` — from ֏${Math.round(from / 100).toLocaleString()} / night` : "";
           return `<li><strong>${escapeHtml(r.name)}</strong>: ${escapeHtml(facts)}${escapeHtml(price)}${r.description ? `<br>${escapeHtml(r.description)}` : ""}</li>`;
         })
         .join("")}</ul>`

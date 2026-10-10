@@ -105,6 +105,8 @@ export interface StartCheckoutParams {
   guests: number;
   /** Required for a multi-room property: the room type being booked. */
   roomTypeId?: string;
+  /** Hotel rooms: the total the guest was shown; the server refuses rather than charge more. */
+  expectedTotalCents?: number;
 }
 
 /**

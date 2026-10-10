@@ -163,16 +163,46 @@ export interface RoomType {
   beds: RoomBed[];
   maxGuests: number;
   sizeM2?: number;
+  /** Default nightly price for this type's rooms (a room may override it). */
   priceCents: number;
   priceUnit: string;
+  /** Legacy count, only used while a type has no individual rooms. */
   quantity: number;
   image?: string;
   gallery: string[];
   amenities: string[];
   sortOrder: number;
+  /** The type's actual rooms (101, 102…). Guests book the type; a free room is assigned. */
+  units: RoomUnit[];
 }
-/** What the room-type editor saves; `id` is present when editing an existing room. */
-export type RoomTypeInput = Omit<RoomType, "id" | "listingId"> & { id?: string };
+
+/**
+ * One physical room of a room type (0092 `room_units`). Inherits the type's
+ * price unless `priceCents` is set, and has its own per-date prices and blocked
+ * dates — the same pricing tools a single-unit listing has.
+ */
+export interface RoomUnit {
+  id: string;
+  roomTypeId: string;
+  name: string;
+  /** Own base nightly price (AMD cents); undefined = the type's price. */
+  priceCents?: number;
+  /** Per-date overrides, same shape as a listing's seasonal rates (inclusive nights). */
+  seasonalRates: SeasonalRate[];
+  /** Operator-blocked dates (end exclusive). */
+  manualBlockedRanges: { start: string; end: string }[];
+  active: boolean;
+  sortOrder: number;
+}
+
+/** What the editor saves for one room; `id` is present when editing an existing room. */
+export interface RoomUnitInput {
+  id?: string;
+  name: string;
+  priceCents?: number;
+}
+/** What the room-type editor saves; `id` is present when editing an existing room type. */
+export type RoomTypeInput = Omit<RoomType, "id" | "listingId" | "units"> & { id?: string; units: RoomUnitInput[] };
 
 /** A per-period nightly rate override (a season or a specific date range).
  * `start`/`end` are inclusive night dates (YYYY-MM-DD); `priceCents` is AMD. */

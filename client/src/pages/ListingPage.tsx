@@ -641,7 +641,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
         <RoomDetailDialog
           listing={live}
           room={openRoom}
-          booked={openRoom ? roomAvailability.get(openRoom.id) ?? [] : []}
+          availability={roomAvailability}
           stay={hotelStay}
           onStayChange={setHotelStay}
           onClose={() => setOpenRoomId(null)}

@@ -45,7 +45,8 @@ import {
 import { formatSlotTime } from "@shared/sessions";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { useRoomTypes } from "@/hooks/useRoomTypes";
+import { useRoomAvailability, useRoomTypes } from "@/hooks/useRoomTypes";
+import { bestRoomFor, unitPricing } from "@shared/rooms";
 
 const ADDONS_PREVIEW = 3; // show this many, then "Show more"
 
@@ -79,6 +80,12 @@ export default function Checkout({ slug }: { slug: string }) {
   const isHotel = isStay && !!listing?.multiRoom;
   const { rooms, loading: roomsLoading } = useRoomTypes(listing?.id, isHotel);
   const room = isHotel ? rooms.find((r) => r.id === roomId) : undefined;
+  // The room the guest gets (cheapest free one) — the server assigns the same
+  // one and charges its price; if that changed meanwhile, it refuses rather
+  // than charging more than shown here.
+  const roomAvailability = useRoomAvailability(rooms);
+  const bestRoom = room && listing && startDate && endDate && roomAvailability.ready ? bestRoomFor(listing, room, roomAvailability, startDate, endDate, guests) : null;
+  const roomPricing = room ? (bestRoom?.unit ? unitPricing(room, bestRoom.unit) : { priceCents: room.priceCents, priceUnit: room.priceUnit, seasonalRates: [] }) : null;
   // Request-to-book: the host approves before the guest pays (per-listing setting).
   const isRequest = !!sessionId && listing?.bookingMode === "request";
 
@@ -101,18 +108,16 @@ export default function Checkout({ slug }: { slug: string }) {
   const [promoApplying, setPromoApplying] = useState(false);
 
   // --- pricing (mirrors BookingPanel / the server) --------------------------
-  const valid = !!listing && isBookableType(listing.type) && !!startDate && !!endDate && listing.price > 0 && (!isHotel || (!!room && guests <= room.maxGuests));
+  const valid = !!listing && isBookableType(listing.type) && !!startDate && !!endDate && listing.price > 0 && (!isHotel || (!!room && guests <= room.maxGuests && !!bestRoom));
   const nights = startDate && endDate ? nightsBetween(startDate, endDate) : 1;
 
   const accommodationCents = listing
     ? computeBookingAmountCents(
-        room
+        roomPricing
           ? {
-              priceCents: room.priceCents,
-              priceUnit: room.priceUnit,
+              ...roomPricing,
               cancellationPolicy: listing.cancellationPolicy,
               nonrefundableDiscountPercent: listing.nonrefundableDiscountPercent,
-              seasonalRates: [],
             }
           : {
               priceCents: Math.round(listing.price * 100),
@@ -144,7 +149,7 @@ export default function Checkout({ slug }: { slug: string }) {
   }, [listing?.id, valid]);
 
   // --- guards ----------------------------------------------------------------
-  if ((!listing && !offline && listings.length === 0) || (isHotel && roomsLoading)) {
+  if ((!listing && !offline && listings.length === 0) || (isHotel && (roomsLoading || (!!room && !roomAvailability.ready)))) {
     // listings still loading
     return (
       <div className="min-h-screen bg-paper">
@@ -159,9 +164,11 @@ export default function Checkout({ slug }: { slug: string }) {
       <div className="min-h-screen bg-paper">
         <SiteHeader />
         <main className="mx-auto max-w-3xl px-4 py-24 text-center">
-          <h1 className="font-display text-3xl font-normal text-basalt">We couldn't set up this checkout</h1>
+          <h1 className="font-display text-3xl font-normal text-basalt">{room && !bestRoom ? "This room just sold out" : "We couldn't set up this checkout"}</h1>
           <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-basalt/55">
-            The dates or listing look incomplete. Head back and pick your dates again.
+            {room && !bestRoom
+              ? "No room of this type is free for all of your nights anymore. Head back and pick other dates or another room."
+              : "The dates or listing look incomplete. Head back and pick your dates again."}
           </p>
           <Link href={listing ? `/listing/${listing.slug}` : "/explore"} className="mt-6 inline-flex items-center gap-2 rounded-none bg-apricot px-5 py-3 text-sm font-semibold text-white hover:bg-apricot/90">
             <ArrowLeft className="h-4 w-4" /> Back to the listing
@@ -241,7 +248,7 @@ export default function Checkout({ slug }: { slug: string }) {
         endDate,
         guests,
         ...(sessionId ? { sessionId } : {}),
-        ...(room ? { roomTypeId: room.id } : {}),
+        ...(room ? { roomTypeId: room.id, expectedTotalCents: amountCents } : {}),
         ...(addonSel.length ? { addons: addonSel } : {}),
         ...(giftBalance != null && giftCode.trim() ? { giftCode: giftCode.trim() } : {}),
         ...(promoInfo && promoCode.trim() ? { promoCode: promoCode.trim() } : {}),

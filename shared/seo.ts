@@ -15,6 +15,7 @@
  * it would be inventing a customer rating.
  */
 import type { Listing, ListingType, RoomType } from "./listings.js";
+import { typeFromCents, unitBaseCents } from "./rooms.js";
 
 type JsonLd = Record<string, unknown>;
 
@@ -111,9 +112,11 @@ export function buildListingJsonLd(listing: Listing, origin: string, rooms: Room
   // price (AggregateOffer.lowPrice), plus each room type as a HotelRoom.
   if (listing.type === "stay" && listing.multiRoom && listing.price > 0) {
     base.offers = { "@type": "AggregateOffer", lowPrice: Math.round(listing.price), priceCurrency: "AMD", url };
-    const priced = rooms.filter((r) => r.priceCents > 0);
+    // A type's price is its cheapest room's base price (rooms may override the type's).
+    const priced = rooms.filter((r) => typeFromCents(r) > 0);
     if (priced.length) {
-      base.offers = { ...(base.offers as JsonLd), highPrice: Math.round(Math.max(...priced.map((r) => r.priceCents)) / 100), offerCount: priced.length };
+      const allBase = priced.flatMap((r) => (r.units.some((u) => u.active) ? r.units.filter((u) => u.active).map((u) => unitBaseCents(r, u)) : [r.priceCents]));
+      base.offers = { ...(base.offers as JsonLd), highPrice: Math.round(Math.max(...allBase) / 100), offerCount: priced.length };
       base.containsPlace = priced.slice(0, 30).map((r) => ({
         "@type": "HotelRoom",
         name: r.name,
@@ -121,7 +124,7 @@ export function buildListingJsonLd(listing: Listing, origin: string, rooms: Room
         occupancy: { "@type": "QuantitativeValue", maxValue: r.maxGuests },
         ...(r.sizeM2 ? { floorSize: { "@type": "QuantitativeValue", value: r.sizeM2, unitCode: "MTK" } } : {}),
         ...(r.beds.length ? { bed: r.beds.map((b) => ({ "@type": "BedDetails", typeOfBed: b.type, numberOfBeds: b.count })) } : {}),
-        offers: { "@type": "Offer", price: Math.round(r.priceCents / 100), priceCurrency: "AMD", unitText: "night" },
+        offers: { "@type": "Offer", price: Math.round(typeFromCents(r) / 100), priceCurrency: "AMD", unitText: "night" },
       }));
     }
   }

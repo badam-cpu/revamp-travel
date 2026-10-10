@@ -48,6 +48,8 @@ import { randomUUID } from "crypto";
 import { formatSlotTime, slotLocalDate } from "../shared/sessions.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, promoDiscount, addonUnitCost, nightsBetween, maxNightlyOccupancy, type Addon, DEFAULT_CURRENCY, PLATFORM_COMMISSION_PERCENT } from "../shared/bookings.js";
+import { cheapestAvailableUnit, unitPricing } from "../shared/rooms.js";
+import type { RoomUnit } from "../shared/listings.js";
 import { planTrip, PlannerError } from "./planner.js";
 import { fetchPrefill, PrefillError } from "./urlPrefill.js";
 import { fetchMergedBlockedRanges, buildIcalFeed, type IcalFeed } from "./ical.js";
@@ -98,8 +100,10 @@ const startCheckoutSchema = z.object({
   guests: z.number().int().min(1).max(50),
   // Slot booking (tour/experience with a time-slot schedule): the chosen session.
   sessionId: z.string().uuid().optional(),
-  // Multi-room property (hotel, 0092): the room type being booked.
+  // Multi-room property (hotel, 0092): the room type being booked, and the
+  // total the guest was shown (the server won't charge more than that).
   roomTypeId: z.string().uuid().optional(),
+  expectedTotalCents: z.number().int().nonnegative().optional(),
   // Guest checkout: a signed-out traveler books anonymously and gives contact
   // details here (optional — signed-in travelers omit them).
   guestName: z.string().trim().max(120).optional(),
@@ -1281,6 +1285,10 @@ export function registerApiRoutes(app: Express) {
     // party; price and availability below come from the room, not the listing.
     // `multi_room` is undefined before 0092 runs, so ordinary stays never enter.
     let room: { id: string; max_guests: number; price_cents: number; price_unit: string | null; quantity: number } | null = null;
+    // The specific room assigned (the cheapest of the type free for every night,
+    // counting confirmed bookings AND live holds). Null for a type that has no
+    // individual rooms yet — it falls back to the type's count further down.
+    let unit: RoomUnit | null = null;
     if (listing.multi_room === true && listing.type === "stay") {
       const roomAdmin = supabaseAdmin();
       if (!roomAdmin) return res.status(503).json({ error: "Booking isn't available right now." });
@@ -1293,6 +1301,64 @@ export function registerApiRoutes(app: Express) {
       if (!rt || rt.listing_id !== listingId) return res.status(404).json({ error: "That room wasn't found." });
       if (guests > rt.max_guests) return res.status(400).json({ error: `This room fits up to ${rt.max_guests} ${rt.max_guests === 1 ? "guest" : "guests"}.` });
       room = rt;
+
+      const { data: unitRows, error: unitErr } = await roomAdmin
+        .from("room_units")
+        .select("id, room_type_id, name, price_cents, seasonal_rates, manual_blocked_ranges, active, sort_order")
+        .eq("room_type_id", rt.id);
+      if (unitErr) {
+        console.error("[start-checkout] room units read failed", unitErr.message);
+        return res.status(503).json({ error: "Booking isn't available right now." });
+      }
+      const units: RoomUnit[] = (unitRows ?? []).map((u) => ({
+        id: u.id,
+        roomTypeId: u.room_type_id,
+        name: u.name,
+        priceCents: u.price_cents ?? undefined,
+        seasonalRates: Array.isArray(u.seasonal_rates) ? u.seasonal_rates : [],
+        manualBlockedRanges: Array.isArray(u.manual_blocked_ranges) ? u.manual_blocked_ranges : [],
+        active: u.active !== false,
+        sortOrder: u.sort_order ?? 0,
+      }));
+      if (units.length) {
+        const { data: unitBookings, error: ubErr } = await roomAdmin
+          .from("bookings")
+          .select("room_unit_id, status, created_at, start_date, end_date")
+          .in("room_unit_id", units.map((u) => u.id))
+          .in("status", ["confirmed", "pending_payment"])
+          .lt("start_date", endDate)
+          .gt("end_date", startDate);
+        if (ubErr) {
+          console.error("[start-checkout] room availability read failed", ubErr.message);
+          return res.status(503).json({ error: "Booking isn't available right now." });
+        }
+        const holdCutoff = Date.now() - 15 * 60_000;
+        const bookedByUnit = new Map<string, { start: string; end: string }[]>();
+        for (const b of unitBookings ?? []) {
+          if (b.status !== "confirmed" && Date.parse(b.created_at) <= holdCutoff) continue; // stale hold
+          const arr = bookedByUnit.get(b.room_unit_id) ?? [];
+          arr.push({ start: b.start_date, end: b.end_date });
+          bookedByUnit.set(b.room_unit_id, arr);
+        }
+        const best = cheapestAvailableUnit(
+          {
+            cancellationPolicy: listing.cancellation_policy ?? "flexible",
+            nonrefundableDiscountPercent: listing.nonrefundable_discount_percent ?? 0,
+            cleaningFeeCents: listing.cleaning_fee_cents ?? 0,
+            discountType: listing.discount_type,
+            discountValue: listing.discount_value,
+            discountStart: listing.discount_start,
+            discountEnd: listing.discount_end,
+          },
+          { priceCents: rt.price_cents, units },
+          bookedByUnit,
+          startDate,
+          endDate,
+          guests,
+        );
+        if (!best) return res.status(409).json({ error: "No room of this type is free for all of those nights. Try other dates or another room." });
+        unit = best.unit;
+      }
     } else if (parsed.data.roomTypeId) {
       return res.status(400).json({ error: "This listing doesn't have separate rooms." });
     }
@@ -1313,12 +1379,12 @@ export function registerApiRoutes(app: Express) {
     const accommodationCents = computeBookingAmountCents(
       room
         ? {
-            // A room is flat nightly in v1 (no seasonal rates / extra-guest fees).
-            priceCents: room.price_cents,
-            priceUnit: room.price_unit || "night",
+            // The assigned room's nightly price: its per-date rates, else its own
+            // base, else the type's (shared/rooms.ts unitPricing — the same input
+            // the guest's preview used). No extra-guest fees on rooms in v1.
+            ...(unit ? unitPricing({ priceCents: room.price_cents }, unit) : { priceCents: room.price_cents, priceUnit: room.price_unit || "night", seasonalRates: [] }),
             cancellationPolicy: listing.cancellation_policy ?? "flexible",
             nonrefundableDiscountPercent: listing.nonrefundable_discount_percent ?? 0,
-            seasonalRates: [],
           }
         : {
             priceCents: listing.price_cents,
@@ -1366,6 +1432,13 @@ export function registerApiRoutes(app: Express) {
     }
     const finalTotalCents = charge.totalCents + addonsCents;
 
+    // Hotel rooms: never charge more than the guest was shown. If the cheapest
+    // room was taken meanwhile (so a pricier one would be assigned), stop and
+    // let them review instead.
+    if (room && parsed.data.expectedTotalCents != null && finalTotalCents > parsed.data.expectedTotalCents) {
+      return res.status(409).json({ error: "The price for these dates just changed. Go back to review it, then try again." });
+    }
+
     // Availability: reject if the dates clash with the listing's iCal blocked
     // ranges, an existing confirmed booking, or a live (recent) pending hold.
     // A hotel room instead checks its own room type: full only when, on some
@@ -1377,7 +1450,10 @@ export function registerApiRoutes(app: Express) {
     if (overlapsBlocked) return res.status(409).json({ error: "Those dates aren't available." });
 
     const admin = supabaseAdmin();
-    if (room) {
+    if (room && unit) {
+      // Already checked above: the assigned room is free for every night.
+    } else if (room) {
+      // A type with no individual rooms yet: its legacy count.
       if (!admin) return res.status(503).json({ error: "Booking isn't available right now." });
       const { data: roomClashes, error: roomClashErr } = await admin
         .from("bookings")
@@ -1466,6 +1542,7 @@ export function registerApiRoutes(app: Express) {
     baseRow.messaging_consent = messagingConsent;
     // Only hotel bookings carry the column, so every other insert is unchanged.
     if (room) baseRow.room_type_id = room.id;
+    if (unit) baseRow.room_unit_id = unit.id;
 
     // Fully covered by the gift card → no PayLink charge; confirm server-side now.
     if (remainingCents <= 0 && giftId && adminClient) {

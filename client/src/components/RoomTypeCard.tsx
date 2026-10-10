@@ -12,7 +12,7 @@ import { formatBeds } from "@shared/listings";
 import type { LiveListing } from "@/contexts/ListingsContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { imgAttrs } from "@/lib/responsiveImg";
-import { quoteRoom, roomAvailable } from "@/lib/roomTypes";
+import { bestRoomFor, typeFromCents, type RoomAvailability } from "@shared/rooms";
 import type { HotelStay } from "@/components/HotelBooking";
 import { cn } from "@/lib/utils";
 
@@ -34,21 +34,23 @@ function RoomTypeCard({
   listing,
   room,
   stay,
-  booked,
+  availability,
   onOpen,
 }: {
   listing: LiveListing;
   room: RoomType;
   stay: HotelStay;
-  booked: { start: string; end: string }[];
+  availability: RoomAvailability;
   onOpen: () => void;
 }) {
   const { format } = useCurrency();
   const photo = roomPhotos(room, listing.image)[0];
   const hasDates = !!(stay.start && stay.end);
-  const available = !hasDates || roomAvailable(booked, room.quantity, stay.start!, stay.end!);
+  // With dates: the room the guest would get (cheapest free one) and its price.
+  const best = hasDates ? bestRoomFor(listing, room, availability, stay.start!, stay.end!, stay.guests) : null;
+  const available = !hasDates || !!best;
   const tooSmall = stay.guests > room.maxGuests;
-  const quote = hasDates ? quoteRoom(listing, room, stay.start!, stay.end!, stay.guests) : null;
+  const quote = best?.quote ?? null;
 
   return (
     <button
@@ -87,7 +89,9 @@ function RoomTypeCard({
           </p>
         ) : (
           <p>
-            <strong className="font-display text-xl font-normal">{format(room.priceCents)}</strong>
+            {/* "from" when this type's rooms aren't all the same price. */}
+            {room.units.some((u) => u.priceCents != null && u.priceCents !== room.priceCents) && <span className="text-xs text-basalt/50">from </span>}
+            <strong className="font-display text-xl font-normal">{format(typeFromCents(room))}</strong>
             <span className="text-sm text-basalt/50"> / night</span>
           </p>
         )}
@@ -107,7 +111,7 @@ export function RoomTypeList({
   listing: LiveListing;
   rooms: RoomType[];
   stay: HotelStay;
-  availability: Map<string, { start: string; end: string }[]>;
+  availability: RoomAvailability;
   onOpen: (id: string) => void;
 }) {
   const [showAll, setShowAll] = useState(false);
@@ -115,7 +119,7 @@ export function RoomTypeList({
   return (
     <div className="grid gap-3">
       {visible.map((room) => (
-        <RoomTypeCard key={room.id} listing={listing} room={room} stay={stay} booked={availability.get(room.id) ?? []} onOpen={() => onOpen(room.id)} />
+        <RoomTypeCard key={room.id} listing={listing} room={room} stay={stay} availability={availability} onOpen={() => onOpen(room.id)} />
       ))}
       {visible.length < rooms.length && (
         <button type="button" onClick={() => setShowAll(true)} className="justify-self-start text-sm font-semibold underline underline-offset-4 hover:text-apricot">

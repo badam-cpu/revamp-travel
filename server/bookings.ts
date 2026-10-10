@@ -23,6 +23,7 @@ import { refundGiftForBooking } from "./giftcards.js";
 import { resolveOperatorCommissionPercent } from "./subscriptions.js";
 import { releaseSeats } from "./sessions.js";
 import { formatSlotTime } from "../shared/sessions.js";
+import { roomUnitLabel } from "../shared/rooms.js";
 
 export interface BookingRow {
   id: string;
@@ -62,12 +63,16 @@ async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promi
     .maybeSingle();
   if (!listing) return;
 
-  // Hotel room booking (0092): name the room everywhere this booking is shown
-  // (emails, inbox, SMS, payout) so the host knows which room was booked.
-  // Failure-tolerant lookup — a non-room booking (or pre-0092 DB) keeps the title.
-  const { data: roomRef } = await admin.from("bookings").select("room_type_id, room_types(name)").eq("id", row.id).maybeSingle();
-  const roomName = (roomRef as { room_types?: { name?: string } | null } | null)?.room_types?.name;
-  if (roomName) listing.title = `${listing.title} · ${roomName}`;
+  // Hotel room booking (0092): name the room type everywhere this booking is
+  // shown, and — for the host only (their email + payout) — the specific room
+  // assigned ("Room 101"). Failure-tolerant lookup: a non-room booking (or a
+  // pre-0092 DB) keeps the plain title.
+  const { data: roomRef } = await admin.from("bookings").select("room_type_id, room_types(name), room_units(name)").eq("id", row.id).maybeSingle();
+  const ref = roomRef as { room_types?: { name?: string } | null; room_units?: { name?: string } | null } | null;
+  const roomTypeName = ref?.room_types?.name;
+  const unitName = ref?.room_units?.name;
+  if (roomTypeName) listing.title = `${listing.title} · ${roomTypeName}`;
+  const hostTitle = unitName ? `${listing.title} · ${roomUnitLabel(unitName)}` : listing.title;
 
   // Read a loosely-typed fact by label (meeting point / duration / languages).
   const facts = (Array.isArray(listing.facts) ? listing.facts : []) as { label?: string; value?: string }[];
@@ -86,7 +91,7 @@ async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promi
       booking_id: row.id,
       operator_id: listing.operator_id,
       listing_id: row.listing_id,
-      listing_title: listing.title,
+      listing_title: hostTitle,
       listing_type: listing.type,
       gross_cents: base,
       fee_cents: commissionCents,
@@ -137,7 +142,7 @@ async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promi
   const operatorEmail = operator?.user?.email || "";
   const [travelerRes, operatorRes] = await Promise.all([
     travelerEmail ? sendTravelerConfirmation(travelerEmail, info) : Promise.resolve({ sent: false, reason: "no_recipient" as const }),
-    operatorEmail ? sendOperatorNewBooking(operatorEmail, info, travelerName) : Promise.resolve({ sent: false, reason: "no_recipient" as const }),
+    operatorEmail ? sendOperatorNewBooking(operatorEmail, { ...info, listingTitle: hostTitle }, travelerName) : Promise.resolve({ sent: false, reason: "no_recipient" as const }),
   ]);
   // Record the activity for the booking's History log (best-effort). Log the
   // TRUE send result so a delivery/config failure is visible here, not masked

@@ -16,7 +16,7 @@ import type { RoomType } from "@shared/listings";
 import { describeCancellationPolicy, nightsBetween } from "@shared/bookings";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { imgAttrs } from "@/lib/responsiveImg";
-import { quoteRoom, roomAvailable, soldOutNights } from "@/lib/roomTypes";
+import { bestRoomFor, typeFromCents, typeUnavailableNights, type RoomAvailability } from "@shared/rooms";
 import { trackEvent } from "@/lib/analytics";
 import { roomPhotos, roomSummary } from "@/components/RoomTypeCard";
 import { fmtShort, GuestStepper, StayDatesPicker, type HotelStay } from "@/components/HotelBooking";
@@ -25,14 +25,14 @@ import { cn } from "@/lib/utils";
 export function RoomDetailDialog({
   listing,
   room,
-  booked,
+  availability,
   stay,
   onStayChange,
   onClose,
 }: {
   listing: LiveListing;
   room: RoomType | null;
-  booked: { start: string; end: string }[];
+  availability: RoomAvailability;
   stay: HotelStay;
   onStayChange: (stay: HotelStay) => void;
   onClose: () => void;
@@ -54,15 +54,17 @@ export function RoomDetailDialog({
   const grid = photos.length ? Array.from({ length: Math.min(4, photos.length) }, (_, i) => photos[(lead + i) % photos.length]) : [];
 
   const hasDates = !!(stay.start && stay.end);
-  const available = !hasDates || roomAvailable(booked, room.quantity, stay.start!, stay.end!);
+  // The room the guest gets (cheapest free one for every night) and its price.
+  const best = hasDates ? bestRoomFor(listing, room, availability, stay.start!, stay.end!, stay.guests) : null;
+  const available = !hasDates || !!best;
   const tooSmall = stay.guests > room.maxGuests;
-  const quote = hasDates ? quoteRoom(listing, room, stay.start!, stay.end!, stay.guests) : null;
+  const quote = best?.quote ?? null;
   const factVal = (label: string) => listing.facts?.find((f) => f.label.toLowerCase() === label)?.value?.trim();
   const minStayRaw = parseInt(factVal("minimum stay") ?? "", 10);
   const minStay = Number.isFinite(minStayRaw) && minStayRaw > 1 ? minStayRaw : 1;
   const belowMin = hasDates && nightsBetween(stay.start!, stay.end!) < minStay;
   const problem = !available
-    ? "This room is sold out for these dates — try other dates or another room."
+    ? "No room of this type is free for all of these nights — try other dates or another room."
     : tooSmall
       ? `This room fits up to ${room.maxGuests} ${room.maxGuests === 1 ? "guest" : "guests"}.`
       : belowMin
@@ -160,7 +162,7 @@ export function RoomDetailDialog({
                     <StayDatesPicker
                       start={stay.start}
                       end={stay.end}
-                      blocked={soldOutNights(booked, room.quantity)}
+                      blocked={typeUnavailableNights(room, availability, new Date().toISOString().slice(0, 10))}
                       open
                       onOpenChange={setDatesOpen}
                       onCommit={(start, end) => onStayChange({ ...stay, start, end })}
@@ -227,7 +229,7 @@ export function RoomDetailDialog({
                     </>
                   ) : (
                     <>
-                      <strong className="font-display text-xl font-normal">{format(room.priceCents)}</strong>
+                      <strong className="font-display text-xl font-normal">{format(typeFromCents(room))}</strong>
                       <span className="text-basalt/55"> / night</span>
                     </>
                   )}

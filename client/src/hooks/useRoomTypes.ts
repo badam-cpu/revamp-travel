@@ -1,20 +1,26 @@
 import { useEffect, useState } from "react";
 import type { RoomType } from "@shared/listings";
-import { fetchRoomBookedRanges, fetchRoomTypes } from "@/lib/roomTypes";
+import type { RoomAvailability } from "@shared/rooms";
+import { fetchRoomBookedRanges, fetchRoomTypes, fetchUnitBookedRanges } from "@/lib/roomTypes";
 
-/** Confirmed booking ranges per room type (identity-free view), for availability. */
-export function useRoomAvailability(rooms: RoomType[]): Map<string, { start: string; end: string }[]> {
-  const [byRoom, setByRoom] = useState(new Map<string, { start: string; end: string }[]>());
-  const key = rooms.map((r) => r.id).join(",");
+/** Confirmed bookings per individual room and per room type (identity-free views), for availability. */
+export function useRoomAvailability(types: RoomType[]): RoomAvailability & { ready: boolean } {
+  // Tagged with the rooms it was loaded for, so `ready` is false until THESE rooms' bookings are in.
+  const [state, setState] = useState<RoomAvailability & { forKey: string }>({ byType: new Map(), byUnit: new Map(), forKey: "" });
+  const typeKey = types.map((t) => t.id).join(",");
+  const unitKey = types.flatMap((t) => t.units.map((u) => u.id)).join(",");
+  const key = `${typeKey}|${unitKey}`;
   useEffect(() => {
-    if (!key) return;
+    if (!typeKey) return;
     let alive = true;
-    fetchRoomBookedRanges(key.split(",")).then((m) => alive && setByRoom(m));
+    Promise.all([fetchRoomBookedRanges(typeKey.split(",")), fetchUnitBookedRanges(unitKey ? unitKey.split(",") : [])]).then(([byType, byUnit]) => {
+      if (alive) setState({ byType, byUnit, forKey: key });
+    });
     return () => {
       alive = false;
     };
-  }, [key]);
-  return byRoom;
+  }, [typeKey, unitKey, key]);
+  return { byType: state.byType, byUnit: state.byUnit, ready: !!typeKey && state.forKey === key };
 }
 
 /**

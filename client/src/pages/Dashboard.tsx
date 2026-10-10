@@ -63,7 +63,7 @@ import { VideoField, VideoFieldHandle } from "@/components/VideoField";
 import { SearchableMultiSelect, SearchableMultiSelectHandle } from "@/components/SearchableMultiSelect";
 import { ListEditor } from "@/components/ListEditor";
 import { OperatorBookings } from "@/components/OperatorBookings";
-import { PricingCalendar } from "@/components/PricingCalendar";
+import { HotelPricingCalendar, PricingCalendar } from "@/components/PricingCalendar";
 import { OperatorBookingsTimeline } from "@/components/OperatorBookingsTimeline";
 import { PromoCodes } from "@/components/PromoCodes";
 import { OperatorReferrals } from "@/components/OperatorReferrals";
@@ -526,7 +526,8 @@ function ListingFormDialog({
       // Turning the flag off is sent explicitly; an ordinary stay never sends it.
       const hotelRooms = draft.type === "stay" && multiRoom ? (roomTypesRef.current?.getValue() ?? []) : null;
       if (hotelRooms) {
-        const minCents = Math.min(...hotelRooms.map((r) => r.priceCents));
+        // Cheapest room anywhere: a room's own price, else its type's default.
+        const minCents = Math.min(...hotelRooms.flatMap((t) => (t.units.length ? t.units.map((u) => u.priceCents ?? t.priceCents) : [t.priceCents])));
         payload.multiRoom = true;
         payload.price = minCents / 100;
         payload.priceLabel = `֏${Math.round(minCents / 100).toLocaleString()}`;
@@ -763,7 +764,7 @@ function ListingFormDialog({
 
                 {/* Stay-only sleeping arrangement, seasonal rates + house rules. */}
                 {draft.type === "stay" && (
-                  <div className="grid gap-4 sm:max-w-md sm:grid-cols-2">
+                  <div className="grid items-start gap-4 sm:max-w-md sm:grid-cols-2">
                     <div className="grid gap-2">
                       <Label htmlFor="fact_spacetype" className="text-sm font-semibold">Space type</Label>
                       <select
@@ -1642,7 +1643,9 @@ function CalendarSection() {
           ))}
         </select>
       </label>
-      {selected ? (
+      {selected?.multiRoom ? (
+        <HotelPricingCalendar key={selected.id} listing={selected} />
+      ) : selected ? (
         <PricingCalendar key={selected.id} listing={selected} />
       ) : (
         <p className="border border-dashed border-basalt/20 bg-chalk px-6 py-10 text-center text-sm text-basalt/55">Choose an offer above to view and manage its calendar.</p>
