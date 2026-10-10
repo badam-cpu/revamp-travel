@@ -46,22 +46,11 @@
   status = 301
   force = true
 
-# TEMPORARY — revampstay.com is added as a domain alias ahead of launch so
-# Netlify provisions DNS verification + the TLS cert early. Until the stay site
-# ships (useSite() mounted; see REVAMPSTAY-ARCHITECTURE.md §4), the alias
-# must NOT serve a duplicate of revampvacations — so 301 it there, exactly
-# like the netlify.app alias above. REMOVE these two blocks at revampstay launch.
-[[redirects]]
-  from = "https://revampstay.com/*"
-  to = "https://revampvacations.com/:splat"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "https://www.revampstay.com/*"
-  to = "https://revampvacations.com/:splat"
-  status = 301
-  force = true
+# revampstay.com is a domain alias serving the stay-focused site (useSite()
+# branches on hostname; same build, see REVAMPSTAY-ARCHITECTURE.md). It is NOT
+# redirected — it serves its own site. (The pre-launch 301 blocks that pointed
+# the alias at revampvacations were removed at go-live.) The www host has no TLS
+# cert yet; apex is canonical.
 
 # All /api/* traffic is handled by the Express app inside the api Function.
 # force = true so it wins over any static asset resolution.
