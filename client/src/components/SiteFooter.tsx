@@ -11,6 +11,26 @@ import { PaymentMethods } from "@/components/PaymentMethods";
 
 const normalizeRegion = (r: string) => r.trim().replace(/\s+(province|marz)$/i, "").trim();
 
+// Footer nav grouped into themed columns (replaces the old single 13-link list).
+const FOOTER_EXPLORE: [string, string][] = [
+  ["/explore/stay", "Places to stay"],
+  ["/explore/eat", "Restaurants"],
+  ["/explore/tour", "Tours"],
+  ["/explore/experience", "Experiences"],
+  ["/map", "Open the map"],
+];
+const FOOTER_PLAN: [string, string][] = [
+  ["/plan", "AI trip planner"],
+  ["/guide", "Travel guide"],
+  ["/gift-cards", "Gift cards"],
+];
+const FOOTER_COMPANY: [string, string][] = [
+  ["/blog", "Blog"],
+  ["/partners", "Partners"],
+  ["/faq", "FAQ"],
+  ["/developers", "Developers & MCP"],
+];
+
 export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolean; wide?: boolean } = {}) {
   const { profile } = useAuth();
   const { settings } = useSiteSettings();
@@ -47,8 +67,8 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
   return (
     <footer className="relative overflow-hidden bg-basalt text-paper">
       <div className="pointer-events-none absolute -bottom-24 right-0 text-[19rem] font-bold leading-none tracking-[-0.12em] text-white/[0.035]">revamp.</div>
-      <div className="container grid gap-12 py-16 md:grid-cols-[1.4fr_0.8fr_0.8fr] lg:py-24">
-        <div>
+      <div className="container grid gap-x-8 gap-y-10 py-16 sm:grid-cols-2 lg:grid-cols-6 lg:py-24">
+        <div className="sm:col-span-2">
           <BrandMark light />
           <p className="mt-7 max-w-md font-display text-3xl leading-tight tracking-tight text-paper">{settings.homeContent.footerTagline?.trim() || "Find the Armenia that lives between the landmarks."}</p>
           <p className="mt-5 max-w-md text-sm leading-6 text-paper/55">{settings.homeContent.footerSubcopy?.trim() || "Curated stays, tables, and local routes across the country’s cities, forests, lakes, and southern roads."}</p>
@@ -56,18 +76,25 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Explore</p>
           <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
-            <Link href="/explore/stay" className="hover:text-white">Places to stay</Link>
-            <Link href="/explore/eat" className="hover:text-white">Restaurants</Link>
-            <Link href="/explore/tour" className="hover:text-white">Tours</Link>
-            <Link href="/explore/experience" className="hover:text-white">Experiences</Link>
-            <Link href="/map" className="hover:text-white">Open the map</Link>
-            <Link href="/plan" className="hover:text-white">AI trip planner</Link>
-            <Link href="/guide" className="hover:text-white">Travel guide</Link>
-            <Link href="/blog" className="hover:text-white">Blog</Link>
-            <Link href="/partners" className="hover:text-white">Partners</Link>
-            <Link href="/gift-cards" className="hover:text-white">Gift cards</Link>
-            <Link href="/faq" className="hover:text-white">FAQ</Link>
-            <Link href="/developers" className="hover:text-white">Developers &amp; MCP</Link>
+            {FOOTER_EXPLORE.map(([href, label]) => (
+              <Link key={href} href={href} className="hover:text-white">{label}</Link>
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Plan</p>
+          <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
+            {FOOTER_PLAN.map(([href, label]) => (
+              <Link key={href} href={href} className="hover:text-white">{label}</Link>
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Company</p>
+          <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
+            {FOOTER_COMPANY.map(([href, label]) => (
+              <Link key={href} href={href} className="hover:text-white">{label}</Link>
+            ))}
             {profile?.role === "operator" ? (
               <>
                 <Link href="/dashboard" className="hover:text-white">Your dashboard</Link>
