@@ -8,6 +8,7 @@ import { useListings } from "@/contexts/ListingsContext";
 import { cn } from "@/lib/utils";
 import { slugify } from "@/lib/slug";
 import { PaymentMethods } from "@/components/PaymentMethods";
+import { useSite } from "@/contexts/SiteContext";
 
 const normalizeRegion = (r: string) => r.trim().replace(/\s+(province|marz)$/i, "").trim();
 
@@ -32,10 +33,27 @@ const FOOTER_COMPANY: [string, string][] = [
   ["/developers", "Developers & MCP"],
 ];
 
+// revampstay footer groups — stay/relocation categories, not restaurants/tours.
+// Offer-filtered Rent/Buy pages land with the Explore work; for now they route
+// to the stay catalog so there are no dead links.
+const FOOTER_STAY_RENT: [string, string][] = [
+  ["/explore/stay", "Browse homes"],
+  ["/explore/stay", "Long-term rentals"],
+  ["/explore/stay", "Short stays"],
+  ["/explore/stay", "For sale"],
+];
+const FOOTER_STAY_HOSTS: [string, string][] = [
+  ["/host", "List your place"],
+  ["/map", "Open the map"],
+  ["/faq", "FAQ"],
+];
+
 export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolean; wide?: boolean } = {}) {
   const { profile } = useAuth();
   const { settings } = useSiteSettings();
   const { publicListings: listings } = useListings();
+  const site = useSite();
+  const isStay = site === "stay";
 
   // Regions that actually have listings of each type → footer crawl paths into
   // the per-region landing pages (SEO internal links). Deduped, capped. Only
@@ -67,45 +85,86 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
 
   return (
     <footer className="relative overflow-hidden bg-basalt text-paper">
-      <div className="pointer-events-none absolute -bottom-24 right-0 text-[19rem] font-bold leading-none tracking-[-0.12em] text-white/[0.035]">revamp.</div>
+      <div className="pointer-events-none absolute -bottom-24 right-0 text-[19rem] font-bold leading-none tracking-[-0.12em] text-white/[0.035]">{isStay ? "revampstay." : "revamp."}</div>
       <div className="container grid gap-x-8 gap-y-10 py-16 sm:grid-cols-2 lg:grid-cols-6 lg:py-24">
         <div className="sm:col-span-2">
           <BrandMark light />
-          <p className="mt-7 max-w-md font-display text-3xl leading-tight tracking-tight text-paper">{settings.homeContent.footerTagline?.trim() || "Find the Armenia that lives between the landmarks."}</p>
-          <p className="mt-5 max-w-md text-sm leading-6 text-paper/55">{settings.homeContent.footerSubcopy?.trim() || "Curated stays, tables, and local routes across the country’s cities, forests, lakes, and southern roads."}</p>
+          {isStay ? (
+            <>
+              <p className="mt-7 max-w-md font-display text-3xl leading-tight tracking-tight text-paper">Short &amp; long-term homes in Armenia — for a week, a month, or a new chapter.</p>
+              <p className="mt-5 max-w-md text-sm leading-6 text-paper/55">Furnished rentals and properties for sale for travelers, remote workers, and anyone moving to — or back to — Armenia.</p>
+            </>
+          ) : (
+            <>
+              <p className="mt-7 max-w-md font-display text-3xl leading-tight tracking-tight text-paper">{settings.homeContent.footerTagline?.trim() || "Find the Armenia that lives between the landmarks."}</p>
+              <p className="mt-5 max-w-md text-sm leading-6 text-paper/55">{settings.homeContent.footerSubcopy?.trim() || "Curated stays, tables, and local routes across the country’s cities, forests, lakes, and southern roads."}</p>
+            </>
+          )}
         </div>
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Explore</p>
-          <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
-            {FOOTER_EXPLORE.map(([href, label]) => (
-              <Link key={href} href={href} className="hover:text-white">{label}</Link>
-            ))}
-          </div>
-        </div>
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Plan</p>
-          <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
-            {FOOTER_PLAN.map(([href, label]) => (
-              <Link key={href} href={href} className="hover:text-white">{label}</Link>
-            ))}
-          </div>
-        </div>
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Company</p>
-          <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
-            {FOOTER_COMPANY.map(([href, label]) => (
-              <Link key={href} href={href} className="hover:text-white">{label}</Link>
-            ))}
-            {profile?.role === "operator" ? (
-              <>
-                <Link href="/dashboard" className="hover:text-white">Your dashboard</Link>
-                <Link href="/dashboard?section=referrals" className="hover:text-white">Refer &amp; earn</Link>
-              </>
-            ) : (
-              <Link href="/host" className="hover:text-white">Become an operator</Link>
-            )}
-          </div>
-        </div>
+        {isStay ? (
+          <>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Rent &amp; buy</p>
+              <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
+                {FOOTER_STAY_RENT.map(([href, label]) => (
+                  <Link key={label} href={href} className="hover:text-white">{label}</Link>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Hosts &amp; owners</p>
+              <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
+                {FOOTER_STAY_HOSTS.map(([href, label]) => (
+                  <Link key={label} href={href} className="hover:text-white">{label}</Link>
+                ))}
+                {profile?.role === "operator" && <Link href="/dashboard" className="hover:text-white">Your dashboard</Link>}
+              </div>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Revamp</p>
+              <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
+                <a href="https://revampvacations.com" className="inline-flex items-center gap-1 hover:text-white">revampvacations.com <ArrowUpRight className="h-3 w-3" /></a>
+                <Link href="/partners" className="hover:text-white">Partners</Link>
+                <Link href="/developers" className="hover:text-white">Developers &amp; MCP</Link>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Explore</p>
+              <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
+                {FOOTER_EXPLORE.map(([href, label]) => (
+                  <Link key={href} href={href} className="hover:text-white">{label}</Link>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Plan</p>
+              <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
+                {FOOTER_PLAN.map(([href, label]) => (
+                  <Link key={href} href={href} className="hover:text-white">{label}</Link>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Company</p>
+              <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
+                {FOOTER_COMPANY.map(([href, label]) => (
+                  <Link key={href} href={href} className="hover:text-white">{label}</Link>
+                ))}
+                {profile?.role === "operator" ? (
+                  <>
+                    <Link href="/dashboard" className="hover:text-white">Your dashboard</Link>
+                    <Link href="/dashboard?section=referrals" className="hover:text-white">Refer &amp; earn</Link>
+                  </>
+                ) : (
+                  <Link href="/host" className="hover:text-white">Become an operator</Link>
+                )}
+              </div>
+            </div>
+          </>
+        )}
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Keep close</p>
           <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
@@ -114,12 +173,14 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
           </div>
         </div>
       </div>
-      {[
-        { title: "Where to stay", regions: stayRegions, base: "/stay", verb: "Stay in" },
-        { title: "Where to eat", regions: eatRegions, base: "/eat", verb: "Eat in" },
-        { title: "Things to do", regions: tourRegions, base: "/tour", verb: "Tours in" },
-        { title: "Where to visit", regions: visitRegions, base: "/visit", verb: "Visit" },
-      ]
+      {(isStay
+        ? [{ title: "Where to stay", regions: stayRegions, base: "/stay", verb: "Homes in" }]
+        : [
+            { title: "Where to stay", regions: stayRegions, base: "/stay", verb: "Stay in" },
+            { title: "Where to eat", regions: eatRegions, base: "/eat", verb: "Eat in" },
+            { title: "Things to do", regions: tourRegions, base: "/tour", verb: "Tours in" },
+            { title: "Where to visit", regions: visitRegions, base: "/visit", verb: "Visit" },
+          ])
         .filter((row) => row.regions.length > 0)
         .map((row) => (
           <div key={row.base} className="border-t border-white/10">

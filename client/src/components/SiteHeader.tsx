@@ -133,10 +133,10 @@ export function SiteHeader({ minimal = false, flush = false, wide = false }: { m
               </Button>
             </>
           )}
-          {!minimal && (
+          {!minimal && site !== "stay" && (
             <Button asChild className="brand-notch rounded-none bg-apricot px-5 text-white hover:bg-apricot/90">
-              <Link href={site === "stay" ? "/explore/stay" : "/explore"}>
-                <Compass className="mr-2 h-4 w-4" /> {site === "stay" ? "Browse homes" : "Open the field guide"}
+              <Link href="/explore">
+                <Compass className="mr-2 h-4 w-4" /> Open the field guide
               </Link>
             </Button>
           )}
