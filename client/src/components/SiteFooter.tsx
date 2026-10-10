@@ -17,6 +17,7 @@ const FOOTER_EXPLORE: [string, string][] = [
   ["/explore/eat", "Restaurants"],
   ["/explore/tour", "Tours"],
   ["/explore/experience", "Experiences"],
+  ["/explore/place", "Places to visit"],
   ["/map", "Open the map"],
 ];
 const FOOTER_PLAN: [string, string][] = [
