@@ -48,7 +48,13 @@ import Host from "./pages/Host";
 import RedeemStation from "./pages/RedeemStation";
 import Plan from "./pages/Plan";
 import Developers from "./pages/Developers";
-import { SiteProvider } from "@/contexts/SiteContext";
+import StayHome from "./pages/StayHome";
+import { SiteProvider, useSite } from "@/contexts/SiteContext";
+
+/** The "/" landing: revampstay gets StayHome, revampvacations keeps Home. */
+function SiteHome() {
+  return useSite() === "stay" ? <StayHome /> : <Home />;
+}
 
 /** Loads GA4 (if configured) and reports a page view on every route change. */
 function AnalyticsTracker() {
@@ -90,7 +96,7 @@ function ReferralCapture({ code }: { code: string }) {
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
+      <Route path="/" component={SiteHome} />
       <Route path="/r/:code">{(params) => <ReferralCapture code={params.code} />}</Route>
       <Route path="/explore/tour" component={Tours} />
       <Route path="/explore/eat" component={EatGuide} />

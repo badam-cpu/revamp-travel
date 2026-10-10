@@ -27,13 +27,19 @@ export const SITE_BRAND: Record<Site, { name: string; domain: string; crossDomai
  * URL forces the stay site so it can be previewed without DNS — this override
  * is compiled out of production builds (`import.meta.env.DEV`).
  */
-export function detectSite(hostname?: string, search?: string): Site {
+export function isStayHost(hostname?: string): boolean {
   const host = (hostname ?? (typeof window !== "undefined" ? window.location.hostname : "")).toLowerCase();
-  if (/(^|\.)revampstay\.(com|test|localhost)$/.test(host)) return "stay";
-  if (import.meta.env.DEV) {
-    const qs = search ?? (typeof window !== "undefined" ? window.location.search : "");
-    if (new URLSearchParams(qs).get("site") === "stay") return "stay";
-  }
+  return /(^|\.)revampstay\.(com|test|localhost)$/.test(host);
+}
+
+export function detectSite(hostname?: string, search?: string): Site {
+  if (isStayHost(hostname)) return "stay";
+  // `?site=stay` forces the stay site in ANY environment — a pre-launch preview
+  // tool. On a non-revampstay host the stay pages set noindex (see StayHome),
+  // and the bot prerenderer/sitemap stay host-based, so this preview is never
+  // crawled or indexed. Persists for the SPA session (SiteProvider reads once).
+  const qs = search ?? (typeof window !== "undefined" ? window.location.search : "");
+  if (new URLSearchParams(qs).get("site") === "stay") return "stay";
   return "vacations";
 }
 

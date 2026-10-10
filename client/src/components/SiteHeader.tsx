@@ -11,8 +11,11 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { useManagedVenue } from "@/hooks/useManagedVenue";
+import { useSite } from "@/contexts/SiteContext";
 
-const baseLinks = [
+type NavLink = { href: string; label: string; accent?: boolean };
+
+const baseLinks: NavLink[] = [
   { href: "/explore/stay", label: "Stay" },
   { href: "/explore/eat", label: "Eat" },
   { href: "/explore/tour", label: "Tour" },
@@ -20,6 +23,14 @@ const baseLinks = [
   { href: "/explore/place", label: "Visit" },
   { href: "/map", label: "Map" },
   { href: "/plan", label: "AI Planner", accent: true },
+];
+
+// revampstay nav. Offer-filtered Rent/Buy pages land with the Explore work;
+// for now browse routes to the stay catalog so there are no dead links.
+const stayLinks: NavLink[] = [
+  { href: "/explore/stay", label: "Homes" },
+  { href: "/map", label: "Map" },
+  { href: "/host", label: "List your place" },
 ];
 
 /** `minimal` drops the public browse nav + "field guide" CTA — used in the
@@ -33,6 +44,7 @@ export function SiteHeader({ minimal = false, flush = false, wide = false }: { m
   const { user, profile, signOut } = useAuth();
   const unread = useUnreadMessages();
   const hasVenue = useManagedVenue();
+  const site = useSite();
   // The support chat signs a shopper in ANONYMOUSLY (a "Guest") so they can ask
   // without an account — that's not a real login, so the header should still
   // show Sign in / Sign up, not the account menu.
@@ -40,14 +52,15 @@ export function SiteHeader({ minimal = false, flush = false, wide = false }: { m
 
   const links = useMemo(() => {
     if (minimal) return [];
+    const base = site === "stay" ? stayLinks : baseLinks;
     if (profile?.role === "operator") {
-      return [...baseLinks, { href: "/dashboard", label: "Dashboard" }];
+      return [...base, { href: "/dashboard", label: "Dashboard" }];
     }
     if (profile?.role === "admin") {
-      return [...baseLinks, { href: "/admin", label: "Admin" }];
+      return [...base, { href: "/admin", label: "Admin" }];
     }
-    return baseLinks;
-  }, [profile?.role, minimal]);
+    return base;
+  }, [profile?.role, minimal, site]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -122,8 +135,8 @@ export function SiteHeader({ minimal = false, flush = false, wide = false }: { m
           )}
           {!minimal && (
             <Button asChild className="brand-notch rounded-none bg-apricot px-5 text-white hover:bg-apricot/90">
-              <Link href="/explore">
-                <Compass className="mr-2 h-4 w-4" /> Open the field guide
+              <Link href={site === "stay" ? "/explore/stay" : "/explore"}>
+                <Compass className="mr-2 h-4 w-4" /> {site === "stay" ? "Browse homes" : "Open the field guide"}
               </Link>
             </Button>
           )}
