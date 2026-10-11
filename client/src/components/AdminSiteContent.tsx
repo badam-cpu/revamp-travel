@@ -713,8 +713,8 @@ export function AdminSiteContent() {
         <div hidden={tab !== "home"} className="grid gap-4 border border-basalt/10 bg-paper p-5">
           <p className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Footer statement <span className="font-normal normal-case tracking-normal text-basalt/45">(shown site-wide)</span></p>
           <div className="grid gap-2">
-            <Label className="text-sm font-semibold">Tagline</Label>
-            <Textarea rows={2} value={home.footerTagline} onChange={(e) => setHome((p) => ({ ...p, footerTagline: e.target.value }))} placeholder="Find the Armenia that lives between the landmarks." className="rounded-none text-base" />
+            <Label className="text-sm font-semibold">Statement</Label>
+            <p className="inline-flex items-center gap-1.5 text-xs text-basalt/55"><Lock className="h-3.5 w-3.5" /> The footer shows the brand slogan “Stay. Experience. Repeat.” — not editable.</p>
           </div>
           <div className="grid gap-2">
             <Label className="text-sm font-semibold">Sub-copy</Label>

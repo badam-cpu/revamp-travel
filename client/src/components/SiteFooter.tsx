@@ -1,5 +1,6 @@
 /** Revamp brandbook: use a charcoal closing surface, intact wordmark, cropped logo pattern, and practical marketplace context. */
-import { ArrowUpRight, Instagram, Mail } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowUpRight, ChevronDown, Instagram, Mail } from "lucide-react";
 import { Link } from "wouter";
 import { Slogan } from "./Slogan";
 import { BrandMark } from "./BrandMark";
@@ -49,6 +50,46 @@ const FOOTER_STAY_HOSTS: [string, string][] = [
   ["/faq", "FAQ"],
 ];
 
+/** True at/above a min-width (the footer's sections are always open there). */
+function useMinWidth(px: number): boolean {
+  const query = `(min-width: ${px}px)`;
+  const [matches, setMatches] = useState(() => typeof window !== "undefined" && !!window.matchMedia?.(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia?.(query);
+    if (!mq) return;
+    const on = () => setMatches(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, [query]);
+  return matches;
+}
+
+/**
+ * A footer link column. Desktop: heading + links, always open. Phones: the
+ * heading is a toggle and the links start collapsed (still in the DOM, so
+ * crawlers keep every internal link).
+ */
+function FooterGroup({ title, children }: { title: React.ReactNode; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const alwaysOpen = useMinWidth(640); // sm: plain columns, nothing to toggle
+  return (
+    <div className="border-b border-white/10 pb-4 sm:border-0 sm:pb-0">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={alwaysOpen || open}
+        tabIndex={alwaysOpen ? -1 : undefined}
+        className="flex w-full items-center justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-apricot sm:pointer-events-none sm:cursor-default"
+      >
+        {title}
+        <ChevronDown className={cn("h-4 w-4 transition-transform sm:hidden", open && "rotate-180")} />
+      </button>
+      <div className={cn("mt-5 flex-col gap-3 text-sm text-paper/70 sm:flex", open ? "flex" : "hidden")}>{children}</div>
+    </div>
+  );
+}
+
 export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolean; wide?: boolean } = {}) {
   const { profile } = useAuth();
   const { settings } = useSiteSettings();
@@ -65,6 +106,10 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
   const stayRegions = regionsForType("stay");
   const tourRegions = regionsForType("tour");
   const visitRegions = regionsForType("place");
+  // Phones: the destinations block starts collapsed (links stay in the DOM for
+  // crawlers — only hidden visually).
+  const [destOpen, setDestOpen] = useState(false);
+  const destAlwaysOpen = useMinWidth(768); // md: the destinations grid is always shown
 
   // Slim footer for app surfaces (operator dashboard) — just the wordmark,
   // copyright, and legal links, without the tall marketing columns. `wide`
@@ -87,8 +132,8 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
   return (
     <footer className="relative overflow-hidden bg-basalt text-paper">
       <div className="pointer-events-none absolute -bottom-24 right-0 text-[19rem] font-bold leading-none tracking-[-0.12em] text-white/[0.035]">{isStay ? "revampstay." : "revamp."}</div>
-      <div className="container grid gap-x-8 gap-y-10 py-16 sm:grid-cols-2 lg:grid-cols-6 lg:py-24">
-        <div className="sm:col-span-2">
+      <div className="container grid gap-x-8 gap-y-4 py-14 sm:grid-cols-2 sm:gap-y-10 lg:grid-cols-6 lg:py-16">
+        <div className="pb-6 sm:col-span-2 sm:pb-0">
           <BrandMark light />
           {isStay ? (
             <>
@@ -97,60 +142,44 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
             </>
           ) : (
             <>
-              <p className="mt-7 max-w-md font-display text-3xl leading-tight tracking-tight text-paper">{settings.homeContent.footerTagline?.trim() || "Find the Armenia that lives between the landmarks."}</p>
-              <p className="mt-5 max-w-md text-sm leading-6 text-paper/55">{settings.homeContent.footerSubcopy?.trim() || "Curated stays, tables, and local routes across the country’s cities, forests, lakes, and southern roads."}</p>
+              {/* The footer's one statement is the slogan (fixed brand asset). */}
+              <Slogan onDark className="mt-7 text-[2.75rem] lg:text-[3.25rem]" />
+              <p className="mt-6 max-w-md text-sm leading-6 text-paper/55">{settings.homeContent.footerSubcopy?.trim() || "Curated stays, tables, and local routes across the country’s cities, forests, lakes, and southern roads."}</p>
             </>
           )}
         </div>
         {isStay ? (
           <>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Rent &amp; buy</p>
-              <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
+            <FooterGroup title="Rent & buy">
                 {FOOTER_STAY_RENT.map(([href, label]) => (
                   <Link key={label} href={href} className="hover:text-white">{label}</Link>
                 ))}
-              </div>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Hosts &amp; owners</p>
-              <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
+            </FooterGroup>
+            <FooterGroup title="Hosts & owners">
                 {FOOTER_STAY_HOSTS.map(([href, label]) => (
                   <Link key={label} href={href} className="hover:text-white">{label}</Link>
                 ))}
                 {profile?.role === "operator" && <Link href="/dashboard" className="hover:text-white">Your dashboard</Link>}
-              </div>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Revamp</p>
-              <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
+            </FooterGroup>
+            <FooterGroup title="Revamp">
                 <a href="https://revampvacations.com" className="inline-flex items-center gap-1 hover:text-white">revampvacations.com <ArrowUpRight className="h-3 w-3" /></a>
                 <Link href="/partners" className="hover:text-white">Partners</Link>
                 <Link href="/developers" className="hover:text-white">Developers &amp; MCP</Link>
-              </div>
-            </div>
+            </FooterGroup>
           </>
         ) : (
           <>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Explore</p>
-              <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
+            <FooterGroup title="Explore">
                 {FOOTER_EXPLORE.map(([href, label]) => (
                   <Link key={href} href={href} className="hover:text-white">{label}</Link>
                 ))}
-              </div>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Plan</p>
-              <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
+            </FooterGroup>
+            <FooterGroup title="Plan">
                 {FOOTER_PLAN.map(([href, label]) => (
                   <Link key={href} href={href} className="hover:text-white">{label}</Link>
                 ))}
-              </div>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Company</p>
-              <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
+            </FooterGroup>
+            <FooterGroup title="Company">
                 {FOOTER_COMPANY.map(([href, label]) => (
                   <Link key={href} href={href} className="hover:text-white">{label}</Link>
                 ))}
@@ -162,11 +191,10 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
                 ) : (
                   <Link href="/host" className="hover:text-white">Become an operator</Link>
                 )}
-              </div>
-            </div>
+            </FooterGroup>
           </>
         )}
-        <div>
+        <div className="pt-4 sm:pt-0">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Keep close</p>
           <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
             <a href="mailto:hello@revampvacations.com" className="inline-flex items-center gap-2 hover:text-white"><Mail className="h-4 w-4" /> hello@revampvacations.com</a>
@@ -174,33 +202,48 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
           </div>
         </div>
       </div>
-      {(isStay
-        ? [{ title: "Where to stay", regions: stayRegions, base: "/stay", verb: "Homes in" }]
-        : [
-            { title: "Where to stay", regions: stayRegions, base: "/stay", verb: "Stay in" },
-            { title: "Where to eat", regions: eatRegions, base: "/eat", verb: "Eat in" },
-            { title: "Things to do", regions: tourRegions, base: "/tour", verb: "Tours in" },
-            { title: "Where to visit", regions: visitRegions, base: "/visit", verb: "Visit" },
-          ])
-        .filter((row) => row.regions.length > 0)
-        .map((row) => (
-          <div key={row.base} className="border-t border-white/10">
-            <div className="container flex flex-wrap items-center gap-x-5 gap-y-2 py-5 text-[13px] text-paper/60">
-              <span className="w-28 shrink-0 text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">{row.title}</span>
-              {row.regions.map((r) => (
-                <Link key={r} href={`${row.base}/${slugify(r)}`} className="hover:text-white">{row.verb} {r}</Link>
-              ))}
+      {(() => {
+        // One compact "Destinations" block (was four full-width rows): crawl
+        // paths into the per-region landing pages, side by side on desktop,
+        // a collapsible section on phones.
+        const rows = (isStay
+          ? [{ title: "Where to stay", regions: stayRegions, base: "/stay", verb: "Homes in" }]
+          : [
+              { title: "Where to stay", regions: stayRegions, base: "/stay", verb: "Stay in" },
+              { title: "Where to eat", regions: eatRegions, base: "/eat", verb: "Eat in" },
+              { title: "Things to do", regions: tourRegions, base: "/tour", verb: "Tours in" },
+              { title: "Where to visit", regions: visitRegions, base: "/visit", verb: "Visit" },
+            ]
+        ).filter((row) => row.regions.length > 0);
+        if (!rows.length) return null;
+        return (
+          <div className="border-t border-white/10">
+            <div className="container py-6 md:py-8">
+              <button
+                type="button"
+                onClick={() => setDestOpen((o) => !o)}
+                aria-expanded={destAlwaysOpen || destOpen}
+                aria-controls="footer-destinations"
+                className="flex w-full items-center justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-apricot md:hidden"
+              >
+                Destinations <ChevronDown className={cn("h-4 w-4 transition-transform", destOpen && "rotate-180")} />
+              </button>
+              <div id="footer-destinations" className={cn("mt-5 gap-x-8 gap-y-6 sm:grid-cols-2 md:mt-0 md:grid md:grid-cols-4", destOpen ? "grid" : "hidden")}>
+                {rows.map((row) => (
+                  <div key={row.base}>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-paper/45">{row.title}</p>
+                    <div className="mt-3 flex flex-col gap-2 text-[13px] text-paper/60">
+                      {row.regions.map((r) => (
+                        <Link key={r} href={`${row.base}/${slugify(r)}`} className="hover:text-white">{row.verb} {r}</Link>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        ))}
-      {!isStay && (
-        // Every page signs off with the slogan (revampstay is its own brand).
-        <div className="border-t border-white/10">
-          <div className="container py-12 lg:py-16">
-            <Slogan onDark className="text-[3rem] sm:text-[4rem] lg:text-[5rem]" />
-          </div>
-        </div>
-      )}
+        );
+      })()}
       <div className="border-t border-white/10">
         <div className="container flex flex-col gap-4 py-5 text-[11px] text-paper/40 sm:flex-row sm:items-center sm:justify-between">
           <span>© 2026 Revamp Hospitality.</span>
