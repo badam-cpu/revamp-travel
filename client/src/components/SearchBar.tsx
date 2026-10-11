@@ -272,8 +272,9 @@ export function SearchBar({
         {whereField}
         {typeField}
         {!compact && <DatesField range={wantsRange} checkin={checkin} checkout={checkout} onChange={setDates} />}
-        <div className="flex bg-chalk p-2">
-          <Button type="submit" className="min-h-[62px] w-full rounded-none bg-apricot px-7 text-white hover:bg-apricot/90 focus-visible:ring-2 focus-visible:ring-basalt focus-visible:ring-offset-2 focus-visible:ring-offset-chalk">
+        {/* Inset with real breathing room (it sat 8px from the bar's edges). */}
+        <div className="flex items-center bg-chalk p-3 lg:py-3 lg:pl-2 lg:pr-3">
+          <Button type="submit" className="h-14 w-full rounded-none bg-apricot px-8 text-[15px] font-semibold text-white lg:min-w-[148px] hover:bg-apricot/90 focus-visible:ring-2 focus-visible:ring-basalt focus-visible:ring-offset-2 focus-visible:ring-offset-chalk">
             <Search className="mr-2 h-4 w-4" /> Search
           </Button>
         </div>

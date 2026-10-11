@@ -169,7 +169,7 @@ export default function Home() {
               </Link>
             </div>
             {(heroCaption || heroSlides.length > 1) && (
-              <div className="absolute bottom-14 right-4 flex items-end gap-4 text-right text-white sm:right-8 lg:bottom-16">
+              <div className="absolute bottom-14 right-4 flex items-end gap-4 text-right text-white sm:right-8 lg:bottom-24">
                 {heroCaption && (
                   <div key={heroSlides[heroIdx]} className="hero-caption hidden items-end gap-2 lg:flex">
                     <p className="font-display text-xl leading-tight [text-shadow:0_1px_12px_rgba(0,0,0,0.35)]">{heroCaption}</p>
