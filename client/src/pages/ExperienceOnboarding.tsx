@@ -478,7 +478,7 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
   return (
     <div className="min-h-screen bg-paper text-basalt">
       <SiteHeader />
-      <main className="container py-10 lg:py-14">
+      <main className="listing-form container py-10 lg:py-14">
         <Link href="/dashboard" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-basalt/55 hover:text-apricot">
           <ArrowLeft className="h-4 w-4" /> Back to dashboard
         </Link>

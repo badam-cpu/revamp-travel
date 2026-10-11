@@ -64,7 +64,7 @@ export const SearchableMultiSelect = forwardRef<
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKeyDown}
           placeholder={placeholder}
-          className="h-11 rounded-none pl-9 text-sm"
+          className="h-12 rounded-none pl-9 text-base md:text-base"
         />
       </div>
 

@@ -93,7 +93,7 @@ export function ListEditor({
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="h-9 rounded-none text-sm"
+          className="h-12 rounded-none text-base md:text-base"
         />
         <Button
           type="button"
@@ -101,7 +101,7 @@ export function ListEditor({
           size="sm"
           onClick={add}
           disabled={!draft.trim()}
-          className="h-9 shrink-0 rounded-none border-basalt/15 text-xs"
+          className="h-12 shrink-0 rounded-none border-basalt/15 text-sm"
         >
           <Plus className="mr-1.5 h-3.5 w-3.5" /> Add
         </Button>

@@ -615,7 +615,7 @@ function ListingFormDialog({
 
           {/* Scrollable middle — one section per screen */}
           <div className="flex-1 overflow-y-auto">
-            <form ref={formRef} noValidate onSubmit={submit} id="listing-onboarding" className="mx-auto w-full max-w-2xl px-5 py-10 sm:px-8 sm:py-16">
+            <form ref={formRef} noValidate onSubmit={submit} id="listing-onboarding" className="listing-form mx-auto w-full max-w-2xl px-5 py-10 sm:px-8 sm:py-16">
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-apricot">
                 {isEdit ? `Editing ${draft.type}` : `New ${draft.type}`} · Step {step + 1} of {STEPS.length}
               </p>

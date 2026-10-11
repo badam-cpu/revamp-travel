@@ -293,7 +293,7 @@ export function AdminPlaces() {
         <p className="mt-2 max-w-xl text-sm text-basalt/55">Free, curated venues — museums, galleries, libraries, coworking spaces and more. Search a place on Google to pull its rating, address and website, then pick a category and save.</p>
       </div>
 
-      <div className="grid gap-3 border border-basalt/12 bg-paper p-5">
+      <div className="listing-form grid gap-3 border border-basalt/12 bg-paper p-5">
         <div>
           <Label className="mb-1.5 block text-xs font-semibold text-basalt/60">Find on Google</Label>
           <GooglePlaceFinder onFound={onFound} />
@@ -392,7 +392,7 @@ export function AdminPlaces() {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid gap-1.5">
+    <div className="grid content-start gap-1.5">
       <Label className="text-xs font-semibold text-basalt/60">{label}</Label>
       {children}
     </div>

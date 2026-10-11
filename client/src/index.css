@@ -108,6 +108,22 @@
   .rounded-none { border-radius: 0.875rem !important; }
 }
 
+/* Listing-form field standard: every text field, dropdown and native select in
+   a listing form (stay/tour dialog, experience wizard, admin restaurant/place)
+   is 48px tall with 16px text and the brand corner, and dropdowns fill their
+   column (pairs share a row in equal halves). Deliberately unlayered so
+   it wins over per-component Tailwind sizes (ui/Input h-9 md:text-sm,
+   SelectTrigger data-[size=default]:h-9, older h-10/h-11 overrides) — one rule
+   instead of matching classes in every form, so new fields can't drift.
+   Radix's visually-hidden native <select> sizes itself inline, so it's unaffected. */
+.listing-form :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="hidden"]):not([type="color"]), select, [data-slot="select-trigger"]) {
+  height: 3rem;
+  font-size: 1rem;
+  border-radius: 0.875rem;
+}
+.listing-form :is(select, [data-slot="select-trigger"]) { width: 100%; }
+.listing-form textarea { font-size: 1rem; border-radius: 0.875rem; }
+
 @layer components {
   .container { width: 100%; margin-inline: auto; padding-inline: 1rem; }
   .flex { min-height: 0; min-width: 0; }
