@@ -803,6 +803,24 @@ export async function moderateInbox(input: { action: "redact" | "close" | "reope
 }
 
 /** Admin-only: promote a traveler to operator (or demote back). */
+/** Admin "Log in as operator" (0093): a one-time sign-in token for that operator. */
+export async function adminImpersonate(operatorId: string, adminToken: string): Promise<{ auditId: string; tokenHash: string; operatorName: string }> {
+  return request<{ auditId: string; tokenHash: string; operatorName: string }>("/api/admin-impersonate", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ operatorId }),
+  });
+}
+
+/** Close an admin's visit to an operator account (records the end time). */
+export async function adminImpersonateEnd(auditId: string, adminToken: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>("/api/admin-impersonate/end", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ auditId }),
+  });
+}
+
 export async function adminSetRole(userId: string, role: "traveler" | "operator"): Promise<{ ok: boolean }> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;

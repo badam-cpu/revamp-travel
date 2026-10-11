@@ -44,6 +44,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import type { ListingInput, ListingType, RoomType } from "@shared/listings";
 import { LISTING_LIMITS, STAY_SPACE_TYPES, listingOffers } from "@shared/listings";
 import { Switch } from "@/components/ui/switch";
+import { TimeSelect } from "@/components/TimeSelect";
 import { RoomTypesEditor, RoomTypesEditorHandle, validateRoomTypes } from "@/components/RoomTypesEditor";
 import { fetchRoomTypes } from "@/lib/roomTypes";
 import { ApiError, importListingPrefill, syncIcal } from "@/lib/api";
@@ -265,7 +266,8 @@ const STEPS = [
   { title: "The basics", blurb: (t: ListingType) => `Give your ${t} a name and a short label travelers will recognize.` },
   { title: "Where it is", blurb: () => "Pin it on the map of Armenia so travelers can find it." },
   { title: "Describe it", blurb: () => "Tell travelers what makes it worth the trip." },
-  { title: "Amenities & pricing", blurb: () => "What's included, the rate, and a few quick facts." },
+  { title: "Amenities & photos", blurb: () => "What's included, a few quick facts, and your photos." },
+  { title: "Pricing", blurb: () => "Your rate, discounts and cancellation terms." },
 ];
 const LAST_STEP = STEPS.length - 1;
 
@@ -420,11 +422,12 @@ function ListingFormDialog({
       if (lat < 38 || lat > 42 || lng < 43 || lng > 47) return fail("Coordinates must be inside Armenia (lat 38–42, lng 43–47).");
     }
     if (s === 2 && (!fieldValue("shortDescription") || !fieldValue("longDescription"))) return fail("Add a short and a full description.");
-    if (s === 3 && draft.type === "stay" && multiRoom) {
+    // Step 5 — pricing.
+    if (s === 4 && draft.type === "stay" && multiRoom) {
       // A hotel is priced per room type — the rooms carry the required prices.
       const roomError = validateRoomTypes(roomTypesRef.current?.getValue() ?? []);
       if (roomError) return fail(roomError);
-    } else if (s === 3) {
+    } else if (s === 4) {
       // A stay with the offer block picks which prices are required; everything
       // else (and a stay offered nightly) still requires the nightly price.
       const hasOfferBlock = draft.type === "stay" && !!formRef.current?.elements.namedItem("offer_nightly");
@@ -758,7 +761,7 @@ function ListingFormDialog({
                 </div>
               </div>
 
-              {/* Step 4 — amenities & pricing */}
+              {/* Step 4 — amenities & photos */}
               <div hidden={step !== 3} className="mt-10 grid gap-8">
                 <AmenityPicker ref={amenitiesRef} type={draft.type} defaultValue={draft.amenities ?? []} />
 
@@ -793,46 +796,34 @@ function ListingFormDialog({
                   </div>
                 )}
                 {draft.type === "stay" && (
-                  <div className="grid gap-5">
-                    <div className="flex items-start gap-4 border border-basalt/15 bg-chalk/40 p-5">
-                      <Switch id="multiRoom" checked={multiRoom} onCheckedChange={setMultiRoom} className="mt-0.5" />
-                      <div>
-                        <Label htmlFor="multiRoom" className="text-sm font-semibold">This is a multi-room property (hotel)</Label>
-                        <p className="mt-1 text-sm text-basalt/55">For hotels, guesthouses and hostels. Guests pick a specific room on your page; you set a price and a room count per room type.</p>
-                      </div>
-                    </div>
-                    {multiRoom &&
-                      (roomTypes === null ? (
-                        <p className="text-sm text-basalt/50">Loading your room types…</p>
-                      ) : (
-                        <RoomTypesEditor ref={roomTypesRef} defaultValue={roomTypes} />
-                      ))}
-                  </div>
-                )}
-                {draft.type === "stay" && (
                   <div hidden={multiRoom}>
                     <RoomsEditor ref={roomsRef} defaultValue={draft.rooms ?? []} />
                   </div>
                 )}
-                {draft.type === "stay" && <RatesEditor ref={ratesRef} defaultValue={draft.seasonalRates ?? []} rate={siteSettings.usdToAmdRate} />}
                 {draft.type === "stay" && (
                   <div className="grid gap-3">
                     <div>
                       <p className="text-sm font-semibold">Check-in & checkout times <span className="font-normal text-basalt/45">(optional)</span></p>
                       <p className="mt-0.5 text-xs text-basalt/45">Shown on your listing and in the guest's confirmation email.</p>
                     </div>
-                    <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="grid items-start gap-4 sm:grid-cols-2">
                       <div className="grid gap-2">
                         <Label htmlFor="fact_checkin" className="text-sm font-semibold">Check-in from</Label>
-                        <Input id="fact_checkin" name="fact_checkin" placeholder="e.g. 3:00 PM" defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "check-in")?.value ?? ""} className={FIELD} />
+                        <TimeSelect
+                          id="fact_checkin"
+                          name="fact_checkin"
+                          defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "check-in")?.value ?? ""}
+                          className="h-12 rounded-none border border-basalt/15 bg-paper px-3 text-base focus:border-apricot focus:outline-none"
+                        />
                       </div>
                       <div className="grid gap-2">
                         <Label htmlFor="fact_checkout" className="text-sm font-semibold">Checkout by</Label>
-                        <Input id="fact_checkout" name="fact_checkout" placeholder="e.g. 11:00 AM" defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "checkout")?.value ?? ""} className={FIELD} />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="fact_minstay" className="text-sm font-semibold">Minimum stay <span className="font-normal text-basalt/45">(nights)</span></Label>
-                        <Input id="fact_minstay" name="fact_minstay" type="number" min={1} max={365} placeholder="e.g. 2" defaultValue={parseInt(draft.facts?.find((f) => f.label.toLowerCase() === "minimum stay")?.value ?? "", 10) || ""} className={FIELD} />
+                        <TimeSelect
+                          id="fact_checkout"
+                          name="fact_checkout"
+                          defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "checkout")?.value ?? ""}
+                          className="h-12 rounded-none border border-basalt/15 bg-paper px-3 text-base focus:border-apricot focus:outline-none"
+                        />
                       </div>
                     </div>
                   </div>
@@ -874,6 +865,73 @@ function ListingFormDialog({
                       <Label htmlFor="importantInfo" className="text-sm font-semibold">Important info <span className="font-normal text-basalt/45">(optional)</span></Label>
                       <Textarea id="importantInfo" name="importantInfo" rows={2} placeholder="Age restrictions, accessibility notes, cancellation policy…" defaultValue={draft.importantInfo} className="rounded-none text-base" />
                     </div>
+                  </div>
+                )}
+
+                {/* Tour essentials — duration + languages, shown on the detail page. */}
+                {draft.type === "tour" && (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="tourDuration" className="text-sm font-semibold">Duration</Label>
+                      <Input id="tourDuration" name="tourDuration" placeholder="e.g. 3 hours" defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "duration")?.value ?? ""} className={FIELD} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="tourLanguages" className="text-sm font-semibold">Language(s)</Label>
+                      <Input id="tourLanguages" name="tourLanguages" placeholder="e.g. Armenian, English" defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "languages")?.value ?? ""} className={FIELD} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Quick facts — collapsed by default to keep the form tidy; the
+                    inputs stay in the DOM so any values still save even closed. */}
+                <details className="group grid gap-3 border border-basalt/12 p-4" open={(draft.facts?.length ?? 0) > 0}>
+                  <summary className="flex cursor-pointer list-none items-center justify-between">
+                    <span className="text-sm font-semibold">Quick facts <span className="font-normal text-basalt/45">(optional — a few at-a-glance details)</span></span>
+                    <ChevronDown className="h-4 w-4 shrink-0 text-basalt/40 transition-transform group-open:rotate-180" />
+                  </summary>
+                  <div className="mt-3 grid gap-2">
+                    {[0, 1, 2, 3, 4, 5].map((i) => {
+                      const [exLabel, exValue] = FACT_EXAMPLES[draft.type][i];
+                      return (
+                        <div key={i} className="grid grid-cols-2 gap-2">
+                          <Input name={`fact${i + 1}Label`} placeholder={`Label, e.g. ${exLabel}`} defaultValue={draft.facts?.[i]?.label} className="h-11 rounded-none" />
+                          <Input name={`fact${i + 1}Value`} placeholder={`Value, e.g. ${exValue}`} defaultValue={draft.facts?.[i]?.value} className="h-11 rounded-none" />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </details>
+
+                <PhotoUploader ref={photosRef} defaultValue={realPhotos(draft)} defaultFocus={draft.coverFocus} />
+
+                <div className="grid gap-2">
+                  <p className="text-sm font-semibold text-basalt">Intro video <span className="font-normal text-basalt/45">(optional — a short clip really helps)</span></p>
+                  <VideoField ref={videoRef} defaultValue={draft.videoUrl} />
+                </div>
+
+                <label className="flex items-center gap-3 border border-basalt/12 bg-chalk px-4 py-3 text-sm">
+                  <input type="checkbox" name="featured" defaultChecked={draft.featured} className="h-4 w-4 accent-[#F15822]" />
+                  Feature on the home page
+                </label>
+              </div>
+
+              {/* Step 5 — pricing */}
+              <div hidden={step !== 4} className="mt-10 grid gap-8">
+                {draft.type === "stay" && (
+                  <div className="grid gap-5">
+                    <div className="flex items-start gap-4 border border-basalt/15 bg-chalk/40 p-5">
+                      <Switch id="multiRoom" checked={multiRoom} onCheckedChange={setMultiRoom} className="mt-0.5" />
+                      <div>
+                        <Label htmlFor="multiRoom" className="text-sm font-semibold">This is a multi-room property (hotel)</Label>
+                        <p className="mt-1 text-sm text-basalt/55">For hotels, guesthouses and hostels. Add your room types and their rooms, each with its price; guests choose a room type on your page.</p>
+                      </div>
+                    </div>
+                    {multiRoom &&
+                      (roomTypes === null ? (
+                        <p className="text-sm text-basalt/50">Loading your room types…</p>
+                      ) : (
+                        <RoomTypesEditor ref={roomTypesRef} defaultValue={roomTypes} />
+                      ))}
                   </div>
                 )}
 
@@ -996,6 +1054,19 @@ function ListingFormDialog({
                   )}
                 </div>
 
+                {/* Seasonal / per-date rates and minimum stay (a hotel prices per room instead). */}
+                {draft.type === "stay" && (
+                  <div hidden={multiRoom} className="grid gap-6">
+                    <RatesEditor ref={ratesRef} defaultValue={draft.seasonalRates ?? []} rate={siteSettings.usdToAmdRate} />
+                  </div>
+                )}
+                {draft.type === "stay" && (
+                  <div className="grid gap-2 sm:max-w-xs">
+                    <Label htmlFor="fact_minstay" className="text-sm font-semibold">Minimum stay <span className="font-normal text-basalt/45">(nights)</span></Label>
+                    <Input id="fact_minstay" name="fact_minstay" type="number" min={1} max={365} placeholder="e.g. 2" defaultValue={parseInt(draft.facts?.find((f) => f.label.toLowerCase() === "minimum stay")?.value ?? "", 10) || ""} className={FIELD} />
+                  </div>
+                )}
+
                 <div className="grid gap-4 border border-basalt/10 bg-chalk/60 p-4">
                   <div className="grid gap-2">
                     <Label htmlFor="cancellationPolicy" className="text-sm font-semibold">Cancellation policy</Label>
@@ -1052,52 +1123,6 @@ function ListingFormDialog({
                     </div>
                   </div>
                 </div>
-
-                {/* Tour essentials — duration + languages, shown on the detail page. */}
-                {draft.type === "tour" && (
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="grid gap-2">
-                      <Label htmlFor="tourDuration" className="text-sm font-semibold">Duration</Label>
-                      <Input id="tourDuration" name="tourDuration" placeholder="e.g. 3 hours" defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "duration")?.value ?? ""} className={FIELD} />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="tourLanguages" className="text-sm font-semibold">Language(s)</Label>
-                      <Input id="tourLanguages" name="tourLanguages" placeholder="e.g. Armenian, English" defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "languages")?.value ?? ""} className={FIELD} />
-                    </div>
-                  </div>
-                )}
-
-                {/* Quick facts — collapsed by default to keep the form tidy; the
-                    inputs stay in the DOM so any values still save even closed. */}
-                <details className="group grid gap-3 border border-basalt/12 p-4" open={(draft.facts?.length ?? 0) > 0}>
-                  <summary className="flex cursor-pointer list-none items-center justify-between">
-                    <span className="text-sm font-semibold">Quick facts <span className="font-normal text-basalt/45">(optional — a few at-a-glance details)</span></span>
-                    <ChevronDown className="h-4 w-4 shrink-0 text-basalt/40 transition-transform group-open:rotate-180" />
-                  </summary>
-                  <div className="mt-3 grid gap-2">
-                    {[0, 1, 2, 3, 4, 5].map((i) => {
-                      const [exLabel, exValue] = FACT_EXAMPLES[draft.type][i];
-                      return (
-                        <div key={i} className="grid grid-cols-2 gap-2">
-                          <Input name={`fact${i + 1}Label`} placeholder={`Label, e.g. ${exLabel}`} defaultValue={draft.facts?.[i]?.label} className="h-11 rounded-none" />
-                          <Input name={`fact${i + 1}Value`} placeholder={`Value, e.g. ${exValue}`} defaultValue={draft.facts?.[i]?.value} className="h-11 rounded-none" />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </details>
-
-                <PhotoUploader ref={photosRef} defaultValue={realPhotos(draft)} defaultFocus={draft.coverFocus} />
-
-                <div className="grid gap-2">
-                  <p className="text-sm font-semibold text-basalt">Intro video <span className="font-normal text-basalt/45">(optional — a short clip really helps)</span></p>
-                  <VideoField ref={videoRef} defaultValue={draft.videoUrl} />
-                </div>
-
-                <label className="flex items-center gap-3 border border-basalt/12 bg-chalk px-4 py-3 text-sm">
-                  <input type="checkbox" name="featured" defaultChecked={draft.featured} className="h-4 w-4 accent-[#F15822]" />
-                  Feature on the home page
-                </label>
 
                 <p className="flex items-start gap-2 text-xs leading-5 text-basalt/50">
                   <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-apricot" />

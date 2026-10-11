@@ -37,6 +37,7 @@ import { resolvePromo } from "./promo.js";
 import { promoDiscountCents } from "../shared/promo.js";
 import { resolveAudience, sendCampaign, marketingConfigured, verifyUnsub, generateEmailBody, emailGenConfigured, parseContactsCsv, importContacts, sendTelegramCampaign, resolveTelegramRecipients, telegramBroadcastConfigured } from "./marketing.js";
 import { listAdminUsers } from "./adminUsers.js";
+import { endImpersonation, startImpersonation } from "./impersonation.js";
 import { listManagedVenues, venueSummary } from "./restaurant.js";
 import { isAllowedGiftAmount } from "../shared/giftcards.js";
 import { payoutState } from "../shared/payouts.js";
@@ -254,6 +255,10 @@ const adminSetRoleSchema = z.object({
   userId: z.string().uuid(),
   role: z.enum(["traveler", "operator"]),
 });
+
+// Admin "Log in as operator" (0093) — see server/impersonation.ts.
+const adminImpersonateSchema = z.object({ operatorId: z.string().uuid() });
+const adminImpersonateEndSchema = z.object({ auditId: z.string().uuid() });
 
 const operatorAssistantSchema = z.object({
   messages: z
@@ -2806,6 +2811,54 @@ export function registerApiRoutes(app: Express) {
   // operator back. Service-role write (profiles RLS lets a user edit only their
   // own non-role fields). Never touches admin accounts; refuses to demote an
   // operator who still owns listings (would orphan editable products).
+  // POST /api/admin-impersonate — admin-only: a one-time sign-in token for an
+  // operator account (no email sent, password untouched), logged in
+  // admin_impersonations. The browser exchanges it for the operator's session.
+  app.post("/api/admin-impersonate", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+
+    const parsed = adminImpersonateSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+
+    try {
+      const result = await startImpersonation(admin, {
+        adminId: userId,
+        operatorId: parsed.data.operatorId,
+        ip: req.ip,
+        userAgent: req.get("user-agent") || undefined,
+      });
+      if (!result.ok) return res.status(result.status).json({ error: result.error });
+      res.json({ auditId: result.auditId, tokenHash: result.tokenHash, operatorName: result.operatorName });
+    } catch (err) {
+      console.error("[admin-impersonate]", err);
+      res.status(500).json({ error: "Couldn't open this account. Please try again." });
+    }
+  });
+
+  // POST /api/admin-impersonate/end — admin-only: close a visit (sets ended_at).
+  app.post("/api/admin-impersonate/end", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+
+    const parsed = adminImpersonateEndSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    await endImpersonation(admin, { adminId: userId, auditId: parsed.data.auditId });
+    res.json({ ok: true });
+  });
+
   app.post("/api/admin-set-role", async (req: Request, res: Response) => {
     const authHeader = req.get("authorization") || "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;

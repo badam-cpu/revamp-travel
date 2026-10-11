@@ -70,7 +70,7 @@ export function SiteHeader({ minimal = false, flush = false, wide = false }: { m
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b border-basalt/10 bg-paper/94 text-basalt backdrop-blur-xl">
+    <header className="sticky top-[var(--impersonation-bar,0px)] z-50 border-b border-basalt/10 bg-paper/94 text-basalt backdrop-blur-xl">
       <div className={cn("flex h-[76px] items-center justify-between gap-5", wide ? "mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-10" : flush ? "w-full px-5 lg:px-7" : "container")}>
         <BrandMark />
         <nav className="hidden items-center gap-6 xl:flex" aria-label="Primary navigation">

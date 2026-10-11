@@ -11,6 +11,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { setTrackingSuppressed } from "@/lib/track";
+import { readImpersonation, returnToAdmin } from "@/lib/impersonation";
 
 // "admin" has no self-serve signup path (Signup.tsx only offers traveler/
 // operator) — it's granted by hand via SQL, see
@@ -184,6 +185,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    // An admin signed in as an operator (0093): "Sign out" returns to admin —
+    // never a global sign-out, which would also sign the real operator out of
+    // every device they use.
+    if (readImpersonation()) {
+      await returnToAdmin();
+      return;
+    }
     await supabase.auth.signOut();
   }, []);
 

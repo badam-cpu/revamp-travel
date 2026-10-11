@@ -11,8 +11,10 @@ import { adminUsers, adminSetRole, ApiError, type AdminUserRow, type AdminUsersF
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Loader2, LogIn } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
+import { startImpersonation } from "@/lib/impersonation";
 
 const BLANK = { bookingId: "", userId: "", email: "", phone: "", name: "", role: "all", flag: "all" };
 
@@ -71,6 +73,21 @@ export function AdminUsers() {
     } catch (e) {
       toast(e instanceof Error ? e.message : "Couldn't change that account's role.");
     } finally {
+      setBusyId(null);
+    }
+  };
+
+  // Sign this browser in as the operator (0093) to apply changes on their
+  // behalf; the bar at the top leads back here.
+  const logInAs = async (u: AdminUserRow) => {
+    const name = u.businessName || u.displayName || u.email || "this operator";
+    if (!window.confirm(`Log in as ${name}?\n\nYou'll see and change their account exactly as they do, until you choose "Return to admin" in the bar at the top.`)) return;
+    setBusyId(u.id);
+    try {
+      await startImpersonation(u.id);
+      window.location.assign("/dashboard");
+    } catch (e) {
+      toast(e instanceof ApiError || e instanceof Error ? e.message : "Couldn't open this account. Please try again.");
       setBusyId(null);
     }
   };
@@ -163,7 +180,12 @@ export function AdminUsers() {
                       <Button size="sm" disabled={busyId === u.id} onClick={() => changeRole(u, "operator")} className="h-8 rounded-none bg-apricot text-white hover:bg-apricot/90">{busyId === u.id ? "…" : "Make operator"}</Button>
                     )}
                     {u.role === "operator" && (
-                      <Button size="sm" variant="outline" disabled={busyId === u.id} onClick={() => changeRole(u, "traveler")} className="h-8 rounded-none border-basalt/20">{busyId === u.id ? "…" : "Make traveler"}</Button>
+                      <div className="flex justify-end gap-2">
+                        <Button size="sm" disabled={busyId === u.id} onClick={() => logInAs(u)} className="h-8 rounded-none bg-basalt text-paper hover:bg-basalt/90">
+                          <LogIn className="mr-1.5 h-3.5 w-3.5" /> Log in as
+                        </Button>
+                        <Button size="sm" variant="outline" disabled={busyId === u.id} onClick={() => changeRole(u, "traveler")} className="h-8 rounded-none border-basalt/20">{busyId === u.id ? "…" : "Make traveler"}</Button>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -181,6 +203,69 @@ export function AdminUsers() {
           <button type="button" disabled={page >= pages || loading} onClick={() => setPage((p) => p + 1)} className="font-semibold text-apricot disabled:text-basalt/30 hover:underline disabled:no-underline">Next</button>
         </div>
       )}
+
+      <AdminAccessLog />
+    </div>
+  );
+}
+
+type AccessRow = {
+  id: string;
+  started_at: string;
+  ended_at: string | null;
+  admin: { display_name: string | null } | null;
+  operator: { display_name: string | null; business_name: string | null } | null;
+};
+
+/** Who opened which operator account, and for how long (admins only, by RLS). Hidden until 0093 runs. */
+function AdminAccessLog() {
+  const [rows, setRows] = useState<AccessRow[] | null>(null);
+  useEffect(() => {
+    supabase
+      .from("admin_impersonations")
+      .select("id, started_at, ended_at, admin:profiles!admin_impersonations_admin_id_fkey(display_name), operator:profiles!admin_impersonations_operator_id_fkey(display_name, business_name)")
+      .order("started_at", { ascending: false })
+      .limit(20)
+      .then(({ data, error }) => setRows(error ? [] : ((data ?? []) as unknown as AccessRow[])));
+  }, []);
+  if (!rows || rows.length === 0) return null;
+
+  const fmt = (s: string) => new Date(s).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  const duration = (a: string, b: string) => {
+    const mins = Math.max(1, Math.round((Date.parse(b) - Date.parse(a)) / 60_000));
+    return mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} h ${mins % 60} min`;
+  };
+
+  return (
+    <div className="grid gap-3">
+      <div>
+        <p className="text-sm font-semibold">Admin access log</p>
+        <p className="text-xs text-basalt/50">Every time an admin logged in as an operator. Only admins can see this.</p>
+      </div>
+      <div className="overflow-x-auto border border-basalt/12">
+        <table className="w-full min-w-[560px] text-sm">
+          <thead>
+            <tr className="border-b border-basalt/12 bg-chalk/40 text-left text-[11px] uppercase tracking-[0.08em] text-basalt/50">
+              <th className="px-3 py-2 font-semibold">Admin</th>
+              <th className="px-3 py-2 font-semibold">Operator account</th>
+              <th className="px-3 py-2 font-semibold">Started</th>
+              <th className="px-3 py-2 font-semibold">Length</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} className="border-b border-basalt/8 last:border-0">
+                <td className="px-3 py-2">{r.admin?.display_name || "—"}</td>
+                <td className="px-3 py-2">{r.operator?.business_name || r.operator?.display_name || "—"}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-basalt/70">{fmt(r.started_at)}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-basalt/70">
+                  {r.ended_at ? duration(r.started_at, r.ended_at) : <span className="font-semibold text-apricot">Active now</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

@@ -14,6 +14,7 @@ import { SavedPlacesProvider } from "./contexts/SavedPlacesContext";
 import { SiteSettingsProvider } from "./contexts/SiteSettingsContext";
 import { CurrencyProvider } from "./contexts/CurrencyContext";
 import { AnnouncementBanner } from "./components/AnnouncementBanner";
+import { ImpersonationBar } from "./components/ImpersonationBar";
 import { CookieConsent } from "./components/CookieConsent";
 import { SupportWidget } from "./components/SupportWidget";
 import { OperatorAssistant } from "./components/OperatorAssistant";
@@ -157,6 +158,7 @@ function App() {
                     <AnalyticsTracker />
                     <ScrollToTop />
                     <AnnouncementBanner />
+                    <ImpersonationBar />
                     <Router />
                     <SupportWidget />
                     <OperatorAssistant />
