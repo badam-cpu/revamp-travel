@@ -64,6 +64,15 @@ export interface HomeContent {
    *  linking to the real article. Editorial coverage of the destination, NOT a
    *  claim that Revamp was featured. Admin supplies logos (permission is theirs). */
   mediaMentions?: MediaMention[];
+  /** Per hero photo (keyed by its URL): the caption shown on the hero while
+   *  that photo is up, and its alt text. No caption → none is shown, so a
+   *  caption can never sit on a photo it doesn't describe. */
+  heroSlides?: Record<string, HeroSlideMeta>;
+}
+
+export interface HeroSlideMeta {
+  caption?: string;
+  alt?: string;
 }
 
 export interface MediaMention {

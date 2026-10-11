@@ -323,6 +323,7 @@ function renderHome(catalog: PublicListing[], origin: string): string {
 
   const bodyHtml = `
 <h1>Revamp Vacations — Stays, Tours &amp; Experiences in Armenia</h1>
+<p><strong>Stay. Experience. Repeat.</strong></p>
 <p>Curated places to stay, Armenian restaurants, local tours, and memorable routes across Armenia.</p>
 <section>
 <h2>Browse by category</h2>

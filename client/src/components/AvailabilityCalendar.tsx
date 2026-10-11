@@ -41,6 +41,10 @@ export function AvailabilityCalendar({
   bookedRanges = [],
   onChange,
   mode = "range",
+  initialStart = null,
+  initialEnd = null,
+  className,
+  showLegend = true,
 }: {
   blockedRanges: BlockedRange[];
   /** Confirmed-booking ranges (from listing_booked_ranges), greyed out alongside the iCal ranges. */
@@ -49,6 +53,12 @@ export function AvailabilityCalendar({
   onChange?: (range: { start: string | null; end: string | null }) => void;
   /** "range" = check-in → check-out (stays); "single" = one date (tours/experiences). */
   mode?: "range" | "single";
+  /** Pre-selected dates (YYYY-MM-DD), e.g. when a search's date picker reopens. */
+  initialStart?: string | null;
+  initialEnd?: string | null;
+  className?: string;
+  /** The Available/Unavailable key — meaningless where nothing is blocked (search). */
+  showLegend?: boolean;
 }) {
   const blocked = useMemo(() => expandBlocked([...blockedRanges, ...bookedRanges]), [blockedRanges, bookedRanges]);
   const today = useMemo(() => {
@@ -56,9 +66,12 @@ export function AvailabilityCalendar({
     t.setHours(0, 0, 0, 0);
     return t;
   }, []);
-  const [view, setView] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
-  const [start, setStart] = useState<string | null>(null);
-  const [end, setEnd] = useState<string | null>(null);
+  const [view, setView] = useState(() => {
+    const from = initialStart ? parseIso(initialStart) : today;
+    return new Date(from.getFullYear(), from.getMonth(), 1);
+  });
+  const [start, setStart] = useState<string | null>(initialStart);
+  const [end, setEnd] = useState<string | null>(mode === "range" ? initialEnd : null);
 
   // Report the current selection upward (only a complete range counts as chosen).
   useEffect(() => {
@@ -111,7 +124,7 @@ export function AvailabilityCalendar({
   const nights = start && end ? Math.round((parseIso(end).getTime() - parseIso(start).getTime()) / DAY_MS) : 0;
 
   return (
-    <div className="border border-basalt/12 bg-paper p-3">
+    <div className={cn("border border-basalt/12 bg-paper p-3", className)}>
       <div className="mb-2 flex items-center justify-between">
         <button
           type="button"
@@ -202,7 +215,7 @@ export function AvailabilityCalendar({
         )}
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-basalt/50">
+      <div className={cn("mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-basalt/50", !showLegend && "hidden")}>
         <span className="inline-flex items-center gap-1.5">
           <span className="h-3 w-3 rounded-full border border-basalt/25" /> Available
         </span>

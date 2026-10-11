@@ -23,7 +23,7 @@ export function ahaCopyConfigured(): boolean {
   return !!getClient();
 }
 
-export type AhaField = "title" | "shortDescription" | "longDescription" | "highlights" | "neighborhood";
+export type AhaField = "title" | "eyebrow" | "shortDescription" | "longDescription" | "highlights" | "neighborhood";
 export type AhaMode = "generate" | "improve";
 export type AhaListingType = "stay" | "tour" | "experience" | "eat" | "place";
 
@@ -66,6 +66,7 @@ const TYPE_GUIDE: Record<AhaListingType, string> = {
 const T = LISTING_TEXT_LIMITS;
 const FIELD_GUIDE: Record<AhaField, string> = {
   title: `A listing TITLE: a specific, appealing name — between ${T.title.min} and ${T.title.max} characters INCLUDING spaces (it must fit two short lines on a card), no ALL CAPS, no clickbait, no quotes, no "|" separators. Return the title only.`,
+  eyebrow: `A CATEGORY LABEL (the small line above the title on a card): what kind of listing this is, in plain words — between ${T.eyebrow.min} and ${T.eyebrow.max} characters INCLUDING spaces, e.g. "City-centre apartment", "Wine & lavash class". No place names, no punctuation at the end. Return the label only.`,
   shortDescription: `A SHORT DESCRIPTION: one sentence of ${T.shortDescription.min}–${T.shortDescription.max} characters INCLUDING spaces (it must fit two short lines on a card) that leads with the place + the hook. No line breaks. Return the sentence only.`,
   longDescription: `A LONG DESCRIPTION: 2–4 short paragraphs (roughly 60–140 words, at least ${T.longDescription.min} characters). Scannable, concrete, warm. No headings, no bullet lists, no markdown. Return the paragraphs only, separated by blank lines.`,
   highlights: "HIGHLIGHTS / itinerary: 4–6 short, punchy bullet points (each ≤ ~12 words), in a sensible order. Return ONE per line, no numbering, no bullet characters, no markdown.",
@@ -141,7 +142,7 @@ export async function generateListingCopy(input: AhaCopyInput): Promise<AhaCopyR
     // Hold the card-text fields to the same length rules as the forms: one
     // corrective retry with the exact count, then trim at a word boundary as
     // a last resort (never past the max — the form would refuse it).
-    if (input.field === "title" || input.field === "shortDescription" || input.field === "longDescription") {
+    if (input.field === "title" || input.field === "eyebrow" || input.field === "shortDescription" || input.field === "longDescription") {
       const { min, max } = listingTextLimits(input.field, input.listingType);
       const fits = (s: string) => s.length >= min && s.length <= max;
       if (!fits(text)) {

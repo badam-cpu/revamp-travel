@@ -889,3 +889,21 @@ export async function askOperatorAssistant(messages: OperatorChatTurn[]): Promis
     body: JSON.stringify({ messages }),
   });
 }
+
+/* ── Admin: bulk listing text fixes (server/textFixes.ts) ─────────────── */
+export type TextFixField = "title" | "eyebrow" | "shortDescription";
+export interface TextFixProblem { field: TextFixField; current: string; problem: string; min: number; max: number }
+export interface TextFixListing { id: string; slug: string; type: string; title: string; city: string; problems: TextFixProblem[] }
+export interface TextFixSuggestion { field: TextFixField; current: string; suggested: string; problem: string | null }
+
+async function adminPost<T>(path: string, body: unknown): Promise<T> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<T>(path, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
+}
+export const adminTextFixScan = () => adminPost<{ listings: TextFixListing[] }>("/api/admin-text-fixes/scan", {});
+export const adminTextFixSuggest = (listingId: string, field: TextFixField) =>
+  adminPost<{ suggestion: TextFixSuggestion | null }>("/api/admin-text-fixes/suggest", { listingId, field });
+export const adminTextFixApply = (listingId: string, changes: Partial<Record<TextFixField, string>>) =>
+  adminPost<{ ok: true }>("/api/admin-text-fixes/apply", { listingId, changes });

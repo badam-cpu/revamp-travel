@@ -18,7 +18,7 @@
  * "paste a URL" fallback remains for externally-hosted images and for the
  * link-import reference photo the operator may choose to keep.
  */
-import { forwardRef, useImperativeHandle, useRef, useState, type DragEvent } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type DragEvent } from "react";
 import { ImagePlus, Star, X, ArrowLeft, ArrowRight, Loader2, Link2 } from "lucide-react";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { uploadImage } from "@/lib/imageUpload";
@@ -60,7 +60,7 @@ function parseFocus(s?: string): { x: number; y: number } {
   return { x: Math.min(100, Math.max(0, Number(m[1]))), y: Math.min(100, Math.max(0, Number(m[2]))) };
 }
 
-export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: string[]; defaultFocus?: string }>(function PhotoUploader({ defaultValue = [], defaultFocus }, ref) {
+export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: string[]; defaultFocus?: string; onChange?: (urls: string[]) => void }>(function PhotoUploader({ defaultValue = [], defaultFocus, onChange }, ref) {
   const { user } = useAuth();
   const [photos, setPhotos] = useState<Photo[]>(() => defaultValue.filter(Boolean).map((url) => ({ id: crypto.randomUUID(), url })));
   const [pending, setPending] = useState<Pending[]>([]);
@@ -74,6 +74,10 @@ export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: st
   const frameRef = useRef<HTMLDivElement>(null);
 
   useImperativeHandle(ref, () => ({ getValue: () => photos.map((p) => p.url), getCoverFocus: () => `${Math.round(focus.x)}% ${Math.round(focus.y)}%` }), [photos, focus]);
+  // Optional live notification (e.g. per-photo captions next to the uploader).
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  useEffect(() => { onChangeRef.current?.(photos.map((p) => p.url)); }, [photos]);
 
   const setFocusFromEvent = (clientX: number, clientY: number) => {
     const el = frameRef.current;

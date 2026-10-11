@@ -136,7 +136,15 @@ export function SiteHeader({ minimal = false, flush = false, wide = false }: { m
             </>
           )}
           {!minimal && site !== "stay" && (
-            <Button asChild className="brand-notch rounded-none bg-apricot px-5 text-white hover:bg-apricot/90">
+            // On the home page the hero search is the one orange action, so the
+            // field-guide link steps back to an outline there.
+            <Button
+              asChild
+              className={cn(
+                "brand-notch rounded-none px-5",
+                location === "/" ? "border border-basalt/20 bg-transparent text-basalt hover:border-apricot hover:bg-transparent hover:text-apricot" : "bg-apricot text-white hover:bg-apricot/90",
+              )}
+            >
               <Link href="/explore">
                 <Compass className="mr-2 h-4 w-4" /> Open the field guide
               </Link>

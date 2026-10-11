@@ -27,6 +27,7 @@ import { reconcileUserBookings, logBookingEvent, finalizeConfirmedBooking } from
 import { startOperatorSubscription, reconcileOperatorSubscriptions, cancelOperatorSubscription, ensurePlanRegistered, type PlanRow } from "./subscriptions.js";
 import { syncListingSessions, reserveSeats, releaseSeats } from "./sessions.js";
 import { generateListingCopy, ahaCopyConfigured } from "./ahaCopy.js";
+import { scanTextFixes, suggestTextFix, applyTextFixes } from "./textFixes.js";
 import { generateSupportReply, type SupportTurn } from "./support.js";
 import { generateOperatorReply, type OperatorTurn } from "./operatorAssistant.js";
 import { scanMessage } from "./messaging.js";
@@ -309,6 +310,13 @@ const saveScheduleSchema = z.object({
 const bookingDecisionSchema = z.object({ bookingId: z.string().uuid() });
 
 // --- Aha writing assist (listing copy) ---
+const textFixField = z.enum(["title", "eyebrow", "shortDescription"]);
+const textFixSuggestSchema = z.object({ listingId: z.string().uuid(), field: textFixField });
+const textFixApplySchema = z.object({
+  listingId: z.string().uuid(),
+  changes: z.object({ title: z.string().max(200), eyebrow: z.string().max(200), shortDescription: z.string().max(400) }).partial(),
+});
+
 const ahaCopySchema = z.object({
   field: z.enum(["title", "shortDescription", "longDescription", "highlights", "neighborhood"]),
   mode: z.enum(["generate", "improve"]),
@@ -3790,6 +3798,63 @@ export function registerApiRoutes(app: Express) {
     } catch (err) {
       console.error("[sessions/save-schedule]", err);
       res.status(500).json({ error: "Couldn't save your schedule." });
+    }
+  });
+
+  // Admin bulk text fixes (server/textFixes.ts): scan published listings whose
+  // card text breaks the length rules → Aha suggests a fitting version per
+  // field → the admin approves; only approved, re-validated text is saved.
+  const adminOnly = async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId) { res.status(401).json({ error: "Sign in." }); return null; }
+    const admin = supabaseAdmin();
+    if (!admin) { res.status(503).json({ error: "Not available right now." }); return null; }
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") { res.status(403).json({ error: "Admins only." }); return null; }
+    return { admin, userId };
+  };
+
+  app.post("/api/admin-text-fixes/scan", async (req: Request, res: Response) => {
+    const ctx = await adminOnly(req, res);
+    if (!ctx) return;
+    try {
+      res.json({ listings: await scanTextFixes(ctx.admin) });
+    } catch (err) {
+      console.error("[admin-text-fixes/scan]", err);
+      res.status(500).json({ error: "Couldn't check listings right now. Please try again." });
+    }
+  });
+
+  app.post("/api/admin-text-fixes/suggest", async (req: Request, res: Response) => {
+    const ctx = await adminOnly(req, res);
+    if (!ctx) return;
+    if (!ahaCopyConfigured()) return res.status(503).json({ error: "Aha isn't available right now." });
+    const parsed = textFixSuggestSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    try {
+      const suggestion = await suggestTextFix(ctx.admin, parsed.data.listingId, parsed.data.field);
+      res.json({ suggestion });
+    } catch (err) {
+      console.error("[admin-text-fixes/suggest]", err);
+      res.status(500).json({ error: "Aha couldn't draft that — try again in a moment." });
+    }
+  });
+
+  app.post("/api/admin-text-fixes/apply", async (req: Request, res: Response) => {
+    const ctx = await adminOnly(req, res);
+    if (!ctx) return;
+    const parsed = textFixApplySchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    try {
+      const result = await applyTextFixes(ctx.admin, parsed.data.listingId, parsed.data.changes);
+      if (!result.ok) return res.status(result.status).json({ error: result.error });
+      console.info("[admin-text-fixes/apply]", { admin: ctx.userId, listing: parsed.data.listingId, fields: Object.keys(parsed.data.changes) });
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[admin-text-fixes/apply]", err);
+      res.status(500).json({ error: "Couldn't save that change. Please try again." });
     }
   });
 

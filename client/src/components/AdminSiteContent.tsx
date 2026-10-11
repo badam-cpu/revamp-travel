@@ -6,9 +6,10 @@
  * Reads/refreshes through SiteSettingsContext so the change shows up live.
  */
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Minus, Plus, Save } from "lucide-react";
+import { ArrowDown, ArrowUp, Lock, Minus, Plus, Save } from "lucide-react";
+import { Slogan } from "@/components/Slogan";
 import { supabase } from "@/lib/supabase";
-import { useSiteSettings, DEFAULT_SERVICE_PARTNERS } from "@/contexts/SiteSettingsContext";
+import { useSiteSettings, DEFAULT_SERVICE_PARTNERS, type HeroSlideMeta } from "@/contexts/SiteSettingsContext";
 import { useListings } from "@/contexts/ListingsContext";
 import { PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
 import { Button } from "@/components/ui/button";
@@ -68,6 +69,9 @@ export function AdminSiteContent() {
 
   const [hydrated, setHydrated] = useState(false);
   const [headline, setHeadline] = useState("");
+  // Hero photos currently in the uploader (live) + each one's caption/alt.
+  const [heroPhotos, setHeroPhotos] = useState<string[]>([]);
+  const [heroMeta, setHeroMeta] = useState<Record<string, HeroSlideMeta>>({});
   const [subcopy, setSubcopy] = useState("");
   const [featuredSlugs, setFeaturedSlugs] = useState<string[]>([]);
   const [annEnabled, setAnnEnabled] = useState(false);
@@ -100,6 +104,7 @@ export function AdminSiteContent() {
   useEffect(() => {
     if (!loaded || hydrated) return;
     setHeadline(settings.heroHeadline);
+    setHeroMeta(settings.homeContent.heroSlides ?? {});
     setSubcopy(settings.heroSubcopy);
     setFeaturedSlugs(settings.featuredSlugs);
     setAnnEnabled(settings.announcementEnabled);
@@ -288,6 +293,11 @@ export function AdminSiteContent() {
                 logo: partnerPhotoRefs.current.get(p.id)?.getValue()[0] ?? p.logo ?? "",
               }))
               .filter((p) => p.name && p.blurb),
+            heroSlides: Object.fromEntries(
+              heroImages
+                .map((url) => [url, { caption: (heroMeta[url]?.caption ?? "").trim(), alt: (heroMeta[url]?.alt ?? "").trim() }] as const)
+                .filter(([, m]) => m.caption || m.alt),
+            ),
             mediaMentions: mediaMentions
               .map((m) => ({
                 name: m.name.trim(),
@@ -363,14 +373,49 @@ export function AdminSiteContent() {
               key={hydrated ? "ready" : "loading"}
               ref={photosRef}
               defaultValue={settings.heroImages.length ? settings.heroImages : settings.heroImage ? [settings.heroImage] : []}
+              onChange={setHeroPhotos}
             />
           </div>
+          {heroPhotos.length > 0 && (
+            <div className="grid gap-3">
+              <div>
+                <Label className="text-sm font-semibold">Photo captions <span className="font-normal text-basalt/45">(optional)</span></Label>
+                <p className="mt-1 text-xs text-basalt/50">Shown on the hero while that photo is up — name what's actually in it. A photo with no caption shows none. The description is read aloud to screen-reader users.</p>
+              </div>
+              {heroPhotos.map((url, i) => (
+                <div key={url} className="grid grid-cols-[72px_minmax(0,1fr)] gap-3 border border-basalt/10 p-3">
+                  <img src={url} alt="" className="h-[72px] w-[72px] rounded-none object-cover" />
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Input
+                      aria-label={`Caption for photo ${i + 1}`}
+                      value={heroMeta[url]?.caption ?? ""}
+                      maxLength={48}
+                      onChange={(e) => setHeroMeta((m) => ({ ...m, [url]: { ...m[url], caption: e.target.value } }))}
+                      placeholder="e.g. Cascade steps, Yerevan"
+                      className="h-11 rounded-none"
+                    />
+                    <Input
+                      aria-label={`Description of photo ${i + 1}`}
+                      value={heroMeta[url]?.alt ?? ""}
+                      maxLength={160}
+                      onChange={(e) => setHeroMeta((m) => ({ ...m, [url]: { ...m[url], alt: e.target.value } }))}
+                      placeholder="Describe the photo (for screen readers)"
+                      className="h-11 rounded-none"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="grid gap-2">
-            <Label htmlFor="heroHeadline" className="text-sm font-semibold">Headline <span className="font-normal text-basalt/45">(blank = “Stay. Experience. Repeat.”)</span></Label>
-            <Input id="heroHeadline" value={headline} onChange={(e) => setHeadline(e.target.value)} placeholder="Stay. Experience. Repeat." className="h-11 rounded-none" />
+            <Label className="text-sm font-semibold">Slogan</Label>
+            <div className="flex items-start justify-between gap-4 border border-basalt/10 bg-chalk p-4">
+              <Slogan className="text-[2rem]" />
+              <span className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-basalt/55"><Lock className="h-3.5 w-3.5" /> Brand slogan — not editable</span>
+            </div>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="heroSubcopy" className="text-sm font-semibold">Sub-copy</Label>
+            <Label htmlFor="heroSubcopy" className="text-sm font-semibold">Line under the slogan</Label>
             <Textarea id="heroSubcopy" rows={2} value={subcopy} onChange={(e) => setSubcopy(e.target.value)} placeholder="Exceptional stays, Armenian tables, and local routes…" className="rounded-none text-base" />
           </div>
           {sectionSave()}

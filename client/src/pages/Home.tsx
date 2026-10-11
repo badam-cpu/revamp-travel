@@ -1,6 +1,6 @@
 /** Revamp brandbook: bold sans hierarchy, white/orange/charcoal surfaces, rounded media, cropped logo patterns, and Armenian photography. */
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowRight, ChevronLeft, ChevronRight, Compass, MapPin, MoveUpRight } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, Compass, MapPin, MoveUpRight, Pause, Play } from "lucide-react";
 import { Link } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -45,18 +45,22 @@ export default function Home() {
   // with only one image it's a plain hero (no motion).
   const heroSlides = settings.heroImages.length ? settings.heroImages : [heroImage];
   const [heroIdx, setHeroIdx] = useState(0);
+  // Visitors can pause the slideshow (WCAG 2.2.2); reduced-motion never plays.
+  const [heroPaused, setHeroPaused] = useState(false);
+  const reducedMotion = typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const heroMeta = settings.homeContent.heroSlides ?? {};
+  const heroCaption = heroMeta[heroSlides[heroIdx]]?.caption?.trim();
   const regionScrollRef = useRef<HTMLDivElement>(null);
   const scrollRegions = (dir: 1 | -1) => {
     const el = regionScrollRef.current;
     if (el) el.scrollBy({ left: dir * el.clientWidth * 0.8, behavior: "smooth" });
   };
+  useEffect(() => setHeroIdx(0), [heroSlides.length]);
   useEffect(() => {
-    setHeroIdx(0);
-    if (heroSlides.length < 2) return;
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    const t = setInterval(() => setHeroIdx((i) => (i + 1) % heroSlides.length), 5000);
+    if (heroSlides.length < 2 || reducedMotion || heroPaused) return;
+    const t = setInterval(() => setHeroIdx((i) => (i + 1) % heroSlides.length), 6000);
     return () => clearInterval(t);
-  }, [heroSlides.length]);
+  }, [heroSlides.length, reducedMotion, heroPaused]);
   const heroSubcopy =
     settings.heroSubcopy ||
     "Exceptional stays, Armenian tables, and local routes—carefully gathered for travelers who want to feel the country, not just pass through it.";
@@ -114,9 +118,9 @@ export default function Home() {
     title: "Revamp Vacations — Stays, Tours & Experiences in Armenia",
     description: "Curated places to stay, Armenian restaurants, local tours, and memorable routes across Armenia.",
     canonicalPath: "/",
-    // Link previews can't render SVG — use the raster OG card unless the admin
-    // set a real (raster) hero photo.
-    ogImage: heroImage.endsWith(".svg") ? "/images/og-cover.jpg" : heroImage,
+    // Shared links show the slogan card (Stay. Experience. Repeat. + a hero
+    // photo) — the same image the bot prerender uses (server/prerender.ts).
+    ogImage: "/images/og-cover.jpg",
     jsonLd: [buildWebsiteJsonLd(window.location.origin), buildOrganizationJsonLd(window.location.origin)],
   });
 
@@ -124,32 +128,87 @@ export default function Home() {
     <div className="min-h-screen bg-paper text-basalt">
       <SiteHeader />
       <main>
-        <section className="hero-field relative min-h-[660px] overflow-hidden border-b border-basalt/10 sm:min-h-[720px]">
+        <section className="hero-field relative overflow-hidden border-b border-basalt/10">
           {heroSlides.map((src, i) => (
             <img
               key={`${src}-${i}`}
               {...imgAttrs(src, "100vw")}
-              alt={i === 0 ? "Armenian highlands at morning light" : ""}
+              alt={heroMeta[src]?.alt?.trim() || ""}
               aria-hidden={i === heroIdx ? undefined : true}
+              {...(i === 0 ? { fetchPriority: "high" as const } : { loading: "lazy" as const })}
               className={`absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-[1200ms] ${i === heroIdx ? "opacity-100" : "opacity-0"}`}
             />
           ))}
-          <div className="hero-image-overlay absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.98)_0%,rgba(255,255,255,0.88)_36%,rgba(255,255,255,0.18)_67%,rgba(33,33,33,0.12)_100%)]" />
-          <div className="brand-pattern-hero pointer-events-none absolute -left-8 top-14 text-[15rem] font-bold leading-none tracking-[-0.12em] text-apricot/10">re.</div>
-          <div className="container relative z-10 flex min-h-[660px] flex-col justify-center pb-28 pt-16 sm:min-h-[720px]">
+          <div className="hero-image-overlay absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.97)_0%,rgba(255,255,255,0.86)_34%,rgba(255,255,255,0.12)_64%,rgba(33,33,33,0.18)_100%)]" />
+          <div className="container relative z-10 flex min-h-[540px] flex-col justify-center pb-32 pt-14 sm:min-h-[600px] lg:pb-20">
             <div className="max-w-[720px]">
-              <div className="hero-enter flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.23em] text-tuff"><span className="h-px w-10 bg-tuff" /> Curated across Armenia</div>
-              <h1 className="hero-enter mt-7 font-display text-[4rem] leading-[0.86] tracking-[-0.055em] text-basalt sm:text-[5.6rem] lg:text-[7rem]">
-                {settings.heroHeadline ? settings.heroHeadline : (<>Stay.<br /><span className="text-apricot">Experience.</span><br />Repeat.</>)}
-              </h1>
-              <p className="hero-enter mt-7 max-w-lg text-base leading-7 text-basalt/65 sm:text-lg">{heroSubcopy}</p>
-              <Link href="/explore" className="hero-enter mt-8 inline-flex items-center gap-3 text-xs font-bold uppercase tracking-[0.17em] text-basalt hover:text-apricot">Find your way through Armenia <span className="grid h-9 w-9 place-items-center border border-basalt/25"><ArrowDown className="h-4 w-4" /></span></Link>
+              <div className="hero-enter flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.22em] text-basalt/70"><span className="h-px w-10 bg-apricot" /> Curated across Armenia</div>
+              {/* The slogan is a fixed brand asset (never admin-editable). The
+                  brand's "re." mark sits behind "Repeat." — logo and slogan
+                  read as one lockup, and "Experience." stays clean orange. */}
+              <div className="hero-enter relative mt-6">
+                {/* Decorative mark lives outside the <h1> so the heading reads
+                    exactly "Stay. Experience. Repeat." to crawlers and screen
+                    readers. Same font-size as the h1 so its em offsets line up
+                    with the "Repeat." line. */}
+                <span aria-hidden className="pointer-events-none absolute bottom-0 left-0 select-none font-display text-[4rem] leading-[0.86] sm:text-[5.6rem] lg:text-[6.5rem]">
+                  <span className="absolute -bottom-[0.26em] -left-[0.32em] text-[2.6em] font-bold leading-none tracking-[-0.12em] text-apricot/[0.2]">re.</span>
+                </span>
+                <h1 className="relative font-display text-[4rem] leading-[0.86] tracking-[-0.055em] text-basalt sm:text-[5.6rem] lg:text-[6.5rem]">
+                  Stay.
+                  <br />
+                  <span className="text-apricot">Experience.</span>
+                  <br />
+                  Repeat.
+                </h1>
+              </div>
+              <p className="hero-enter mt-6 max-w-lg text-base leading-7 text-basalt/70 sm:text-lg">{heroSubcopy}</p>
+              <Link href="/explore" className="hero-enter group mt-7 inline-flex items-center gap-3 text-xs font-bold uppercase tracking-[0.17em] text-basalt hover:text-apricot focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-apricot">
+                Browse all of Armenia
+                <span className="grid h-9 w-9 place-items-center rounded-full border border-basalt/25 transition-colors group-hover:border-apricot group-hover:bg-apricot group-hover:text-white"><ArrowRight className="h-4 w-4" /></span>
+              </Link>
             </div>
-            <div className="absolute bottom-9 right-8 hidden items-end gap-3 text-right text-white lg:flex"><div><p className="text-[10px] font-bold uppercase tracking-[0.17em] text-white/65">Field note 001</p><p className="mt-1 font-display text-xl">Morning road to Geghard</p></div><MapPin className="mb-1 h-5 w-5 text-apricot" /></div>
+            {(heroCaption || heroSlides.length > 1) && (
+              <div className="absolute bottom-14 right-4 flex items-end gap-4 text-right text-white sm:right-8 lg:bottom-16">
+                {heroCaption && (
+                  <div key={heroSlides[heroIdx]} className="hero-caption hidden items-end gap-2 lg:flex">
+                    <p className="font-display text-xl leading-tight [text-shadow:0_1px_12px_rgba(0,0,0,0.35)]">{heroCaption}</p>
+                    <MapPin className="mb-0.5 h-5 w-5 shrink-0 text-apricot" />
+                  </div>
+                )}
+                {heroSlides.length > 1 && (
+                  <div className="flex items-center gap-1 rounded-full bg-basalt/45 py-1 pl-1 pr-2.5 backdrop-blur-sm">
+                    {!reducedMotion && (
+                      <button
+                        type="button"
+                        onClick={() => setHeroPaused((p) => !p)}
+                        aria-label={heroPaused ? "Play slideshow" : "Pause slideshow"}
+                        aria-pressed={heroPaused}
+                        className="grid h-8 w-8 place-items-center rounded-full text-white hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-white"
+                      >
+                        {heroPaused ? <Play className="h-3.5 w-3.5 fill-current" /> : <Pause className="h-3.5 w-3.5 fill-current" />}
+                      </button>
+                    )}
+                    <div className="flex items-center gap-1.5 pl-1">
+                      {heroSlides.map((src, i) => (
+                        <button
+                          key={`dot-${src}-${i}`}
+                          type="button"
+                          onClick={() => { setHeroIdx(i); setHeroPaused(true); }}
+                          aria-label={`Show photo ${i + 1} of ${heroSlides.length}`}
+                          aria-current={i === heroIdx}
+                          className={`h-1.5 rounded-full transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${i === heroIdx ? "w-5 bg-white" : "w-1.5 bg-white/50 hover:bg-white/80"}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </section>
 
-        <div className="container relative z-20 -mt-10"><SearchBar /></div>
+        <div className="container relative z-20 -mt-10" data-support-yield><SearchBar mobileCollapse /></div>
 
         <section className="container py-20 lg:py-28">
           <div className="grid gap-8 lg:grid-cols-[0.7fr_1.3fr] lg:items-end">

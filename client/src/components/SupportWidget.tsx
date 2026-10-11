@@ -36,7 +36,36 @@ export function SupportWidget() {
   const [contactSaved, setContactSaved] = useState(false);
   const [savingContact, setSavingContact] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
+  // The launcher steps aside while a page's primary search (marked
+  // `data-support-yield`, e.g. the home hero search) is on screen, so it never
+  // sits on top of the Search button.
+  const [yieldToSearch, setYieldToSearch] = useState(false);
+  useEffect(() => {
+    // Checked directly on scroll/resize/DOM changes (one cheap rect read; React
+    // skips the update when nothing changed) rather than with an
+    // IntersectionObserver on a fixed node: pages are lazy-loaded and can
+    // re-render the marked element, which would leave an observer watching a
+    // detached node.
+    const check = () => {
+      let visible = false;
+      document.querySelectorAll("[data-support-yield]").forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.height > 0 && r.bottom > 0 && r.top < window.innerHeight) visible = true;
+      });
+      setYieldToSearch(visible);
+    };
+    check();
+    const mo = new MutationObserver(check);
+    mo.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("scroll", check, { passive: true });
+    window.addEventListener("resize", check);
+    return () => {
+      mo.disconnect();
+      window.removeEventListener("scroll", check);
+      window.removeEventListener("resize", check);
+    };
+  }, [location]);
 
   // Assistant replies are short Markdown; links to Revamp pages (/listing/…,
   // /explore/…) should open in-app, not a new tab.
@@ -127,7 +156,12 @@ export function SupportWidget() {
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Chat with the Revamp AI assistant"
-          className="fixed bottom-20 right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-apricot text-white shadow-[0_10px_30px_rgba(241,88,34,0.4)] transition-transform hover:scale-105 lg:bottom-4"
+          aria-hidden={yieldToSearch || undefined}
+          tabIndex={yieldToSearch ? -1 : undefined}
+          className={cn(
+            "fixed bottom-20 right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-apricot text-white shadow-[0_10px_30px_rgba(241,88,34,0.4)] transition-[transform,translate,opacity] duration-300 hover:scale-105 lg:bottom-4",
+            yieldToSearch && "pointer-events-none translate-y-3 opacity-0",
+          )}
         >
           <MessageCircle className="h-6 w-6" />
         </button>

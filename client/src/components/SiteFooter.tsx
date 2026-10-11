@@ -1,6 +1,7 @@
 /** Revamp brandbook: use a charcoal closing surface, intact wordmark, cropped logo pattern, and practical marketplace context. */
 import { ArrowUpRight, Instagram, Mail } from "lucide-react";
 import { Link } from "wouter";
+import { Slogan } from "./Slogan";
 import { BrandMark } from "./BrandMark";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
@@ -192,6 +193,14 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
             </div>
           </div>
         ))}
+      {!isStay && (
+        // Every page signs off with the slogan (revampstay is its own brand).
+        <div className="border-t border-white/10">
+          <div className="container py-12 lg:py-16">
+            <Slogan onDark className="text-[3rem] sm:text-[4rem] lg:text-[5rem]" />
+          </div>
+        </div>
+      )}
       <div className="border-t border-white/10">
         <div className="container flex flex-col gap-4 py-5 text-[11px] text-paper/40 sm:flex-row sm:items-center sm:justify-between">
           <span>© 2026 Revamp Hospitality.</span>

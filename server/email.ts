@@ -50,6 +50,9 @@ function shell(title: string, bodyHtml: string, siteUrl: string): string {
         <div style="padding:6px 30px 30px;color:#212121;">
           <h1 style="font-size:23px;line-height:1.22;letter-spacing:-.02em;margin:14px 0 16px;">${esc(title)}</h1>
           ${bodyHtml}
+          <div style="border-top:1px solid #eee;margin-top:24px;padding-top:20px;">
+            <p style="margin:0;font-weight:800;font-size:26px;line-height:.92;letter-spacing:-.04em;color:#212121;">Stay.<br /><span style="color:#F15822;">Experience.</span><br />Repeat.</p>
+          </div>
         </div>
         <div style="padding:18px 30px;border-top:1px solid #eee;background:#faf9f5;">
           <p style="font-size:12px;color:#8B8478;margin:0;line-height:1.6;">

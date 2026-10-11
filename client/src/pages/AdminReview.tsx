@@ -16,7 +16,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { Activity, AlertTriangle, BarChart3, BookOpen, Check, CreditCard, ExternalLink, FileText, Gift, Home, Landmark, LayoutDashboard, ListChecks, Mail, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, QrCode, Ticket, Timer, UserSearch, Users, Utensils, Wallet, X } from "lucide-react";
+import { Activity, AlertTriangle, TextCursorInput, BarChart3, BookOpen, Check, CreditCard, ExternalLink, FileText, Gift, Home, Landmark, LayoutDashboard, ListChecks, Mail, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, QrCode, Ticket, Timer, UserSearch, Users, Utensils, Wallet, X } from "lucide-react";
 import { formatLocation } from "@/lib/region";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -29,6 +29,7 @@ import { Inbox } from "@/components/Inbox";
 import { AdminListings } from "@/components/AdminListings";
 import { AdminEateries } from "@/components/AdminEateries";
 import { AdminPlaces } from "@/components/AdminPlaces";
+import { AdminTextFixes } from "@/components/AdminTextFixes";
 import { AdminDocuments } from "@/components/AdminDocuments";
 import { QrManager } from "@/components/QrManager";
 import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
@@ -245,12 +246,13 @@ function StatTile({ n, label, onClick }: { n: number | string; label: string; on
   );
 }
 
-type AdminSection = "overview" | "health" | "reviews" | "listings" | "eateries" | "places" | "analytics" | "vouchers" | "users" | "accounts" | "giftcards" | "subscriptions" | "referrals" | "support" | "messages" | "response" | "email" | "documents" | "qr" | "payouts" | "blog" | "hub" | "site";
+type AdminSection = "overview" | "health" | "reviews" | "listings" | "textfixes" | "eateries" | "places" | "analytics" | "vouchers" | "users" | "accounts" | "giftcards" | "subscriptions" | "referrals" | "support" | "messages" | "response" | "email" | "documents" | "qr" | "payouts" | "blog" | "hub" | "site";
 const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: typeof Home }[] = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
   { key: "health", label: "Health", icon: Activity },
   { key: "reviews", label: "Approvals", icon: ListChecks },
   { key: "listings", label: "Listings", icon: Package },
+  { key: "textfixes", label: "Text fixes", icon: TextCursorInput },
   { key: "eateries", label: "Eat guide", icon: Utensils },
   { key: "places", label: "Visit guide", icon: Landmark },
   { key: "analytics", label: "Analytics", icon: BarChart3 },
@@ -357,6 +359,7 @@ function AdminConsole() {
             {section === "health" && <AdminHealth />}
             {section === "reviews" && <ReviewsPanel />}
             {section === "listings" && <AdminListings />}
+            {section === "textfixes" && <AdminTextFixes />}
             {section === "eateries" && <AdminEateries />}
             {section === "places" && <AdminPlaces />}
             {section === "analytics" && <AnalyticsDashboard scope="admin" />}
