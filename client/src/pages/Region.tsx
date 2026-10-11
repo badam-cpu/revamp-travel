@@ -102,7 +102,7 @@ export default function Region({ slug }: { slug: string }) {
         {/* Listing sections */}
         {loading && matched.length === 0 ? (
           <section className="mt-12">
-            <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 3 }).map((_, i) => <ListingCardSkeleton key={i} />)}
             </div>
           </section>
@@ -121,7 +121,7 @@ export default function Region({ slug }: { slug: string }) {
                   )}
                 </div>
                 <p className="mt-2 max-w-xl text-sm text-basalt/55">{s.sub}</p>
-                <div className="mt-7 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="mt-7 grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
                   {items.map((l) => <ListingCard key={l.id} listing={l} />)}
                 </div>
               </section>

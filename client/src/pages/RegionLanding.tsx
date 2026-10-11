@@ -122,7 +122,7 @@ export default function RegionLanding({ type, region }: { type: LandingType; reg
               {items.map((l) => <TourCard key={l.id} listing={l} surface="region" />)}
             </div>
           ) : (
-            <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
               {items.map((l) => <ListingCard key={l.id} listing={l} surface="region" />)}
             </div>
           )}

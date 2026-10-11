@@ -141,6 +141,11 @@ export function AdminSiteContent() {
   }, [loading, hydrated, settings]);
 
   const published = listings.filter((l) => l.status === "published");
+  // Featured picker: ~90 published listings — a name filter keeps it usable.
+  const [featuredQuery, setFeaturedQuery] = useState("");
+  const featuredMatches = featuredQuery.trim()
+    ? published.filter((l) => `${l.title} ${l.type} ${l.city ?? ""}`.toLowerCase().includes(featuredQuery.trim().toLowerCase()))
+    : published;
 
   // Operator options for the "featured (big names first)" picker — distinct
   // operators with a published listing, with their business/display name.
@@ -428,9 +433,21 @@ export function AdminSiteContent() {
           {published.length === 0 ? (
             <p className="text-sm text-basalt/45">No published listings yet.</p>
           ) : (
-            <div className="grid max-h-64 gap-1.5 overflow-y-auto">
-              {published.map((l) => (
-                <label key={l.id} className="flex items-center gap-3 text-sm text-basalt">
+            <div className="grid gap-2">
+              <Input
+                value={featuredQuery}
+                onChange={(e) => setFeaturedQuery(e.target.value)}
+                placeholder={`Search ${published.length} published listings…`}
+                aria-label="Search published listings"
+                className="h-10 rounded-none"
+              />
+              {/* Rows keep their natural height (auto-rows-max) so a long list
+                  scrolls inside the box instead of squeezing rows on top of
+                  each other. */}
+              <div className="grid max-h-72 auto-rows-max gap-0.5 overflow-y-auto border border-basalt/10 p-1">
+                {featuredMatches.length === 0 && <p className="px-2 py-2 text-sm text-basalt/45">No listings match “{featuredQuery}”.</p>}
+                {featuredMatches.map((l) => (
+                <label key={l.id} className="flex min-h-9 cursor-pointer items-center gap-3 px-2 py-1.5 text-sm text-basalt hover:bg-chalk">
                   <Checkbox
                     checked={featuredSlugs.includes(l.slug)}
                     onCheckedChange={() => toggleFeatured(l.slug)}
@@ -439,7 +456,8 @@ export function AdminSiteContent() {
                   <span className="min-w-0 flex-1 truncate">{l.title}</span>
                   <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.1em] text-basalt/40">{l.type}</span>
                 </label>
-              ))}
+                ))}
+              </div>
             </div>
           )}
 

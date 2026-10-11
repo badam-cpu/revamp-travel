@@ -176,7 +176,7 @@ export default function EatGuide() {
 
         <section className="container py-10 lg:py-12">
           {loading ? (
-            <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 6 }).map((_, i) => <ListingCardSkeleton key={i} />)}
             </div>
           ) : eateries.length === 0 ? (
@@ -245,7 +245,7 @@ function EatGroup({ name, items }: { name: string; items: LiveListing[] }) {
         <h2 className="font-display text-2xl tracking-[-0.02em]">{name}</h2>
         <span className="text-xs font-semibold uppercase tracking-[0.12em] text-basalt/40">{items.length} spot{items.length === 1 ? "" : "s"}</span>
       </div>
-      <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
         {shown.map((l) => <ListingCard key={l.id} listing={l} surface="guide" />)}
       </div>
       {items.length > GROUP_CAP && (

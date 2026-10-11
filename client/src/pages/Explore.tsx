@@ -300,8 +300,8 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
           </div>
 
           {loading ? (
-            <div className="mt-7 grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(390px,0.9fr)]">
-              <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2">
+            <div className="mt-7 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(390px,0.9fr)]">
+              <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2">
                 {Array.from({ length: 6 }).map((_, i) => <ListingCardSkeleton key={i} />)}
               </div>
               <div className="hidden lg:block">
@@ -309,9 +309,9 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
               </div>
             </div>
           ) : filtered.length ? (
-            <div className="mt-7 grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(390px,0.9fr)]">
+            <div className="mt-7 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(390px,0.9fr)]">
               <div>
-                <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2">
                   {shown.map((listing) => <ListingCard key={listing.id} listing={listing} active={listing.id === selectedId} onHover={setSelectedId} />)}
                 </div>
                 {filtered.length > visible && (

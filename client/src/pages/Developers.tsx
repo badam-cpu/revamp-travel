@@ -80,8 +80,8 @@ function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) 
 
 function CodeBlock({ code }: { code: string }) {
   return (
-    <div className="relative">
-      <pre className="overflow-x-auto rounded-none border border-basalt/10 bg-basalt px-4 py-3.5 text-[13px] leading-relaxed text-paper/90">
+    <div className="relative min-w-0 max-w-full">
+      <pre className="max-w-full overflow-x-auto rounded-none border border-basalt/10 bg-basalt px-4 py-3.5 text-[13px] leading-relaxed text-paper/90">
         <code>{code}</code>
       </pre>
       <div className="absolute right-2.5 top-2.5">
@@ -133,8 +133,8 @@ export default function Developers() {
               Armenia, check availability, and plan trips grounded in the live catalog. No sign-up, no API key.
             </p>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="inline-flex items-center gap-3 rounded-none border border-basalt/15 bg-paper px-4 py-2.5">
-                <code className="text-sm text-basalt">{MCP_URL}</code>
+              <div className="inline-flex max-w-full flex-wrap items-center gap-3 rounded-none border border-basalt/15 bg-paper px-4 py-2.5">
+                <code className="min-w-0 break-all text-sm text-basalt">{MCP_URL}</code>
                 <CopyButton text={MCP_URL} label="Copy URL" />
               </div>
             </div>
@@ -145,7 +145,7 @@ export default function Developers() {
         <section className="mx-auto max-w-5xl px-5 py-14">
           <h2 className="font-display text-2xl tracking-tight text-basalt">Four tools</h2>
           <p className="mt-2 max-w-2xl text-basalt/65">Everything returns real, currently-published data with a link back to each listing.</p>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2">
+          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 [&>*]:min-w-0">
             {TOOLS.map((t) => (
               <div key={t.name} className="rounded-none border border-basalt/10 bg-paper p-5">
                 <div className="flex items-center gap-3">
@@ -165,7 +165,7 @@ export default function Developers() {
           <div className="mx-auto max-w-5xl px-5 py-14">
             <h2 className="font-display text-2xl tracking-tight text-basalt">Connect in a minute</h2>
 
-            <div className="mt-8 grid gap-10 lg:grid-cols-2">
+            <div className="mt-8 grid grid-cols-1 gap-10 lg:grid-cols-2 [&>*]:min-w-0">
               {/* Claude */}
               <div>
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-basalt/70">Claude (web or desktop)</h3>

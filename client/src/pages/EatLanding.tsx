@@ -176,12 +176,12 @@ export default function EatLanding({ mode, value }: { mode: "region" | "cuisine"
 
         {/* The spots */}
         {loading && eats.length === 0 ? (
-          <section className="mt-12 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+          <section className="mt-12 grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 3 }).map((_, i) => <ListingCardSkeleton key={i} />)}
           </section>
         ) : eats.length > 0 ? (
           <section className="mt-12">
-            <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
               {eats.slice(0, visible).map((l) => <ListingCard key={l.id} listing={l} surface="landing" />)}
             </div>
             {eats.length > visible && (
@@ -216,7 +216,7 @@ export default function EatLanding({ mode, value }: { mode: "region" | "cuisine"
                   <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Places to stay</h3>
                   <Link href={`/explore/stay?region=${encodeURIComponent(label)}`} className="text-xs font-bold uppercase tracking-[0.12em] text-apricot hover:underline">See all →</Link>
                 </div>
-                <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">{nearbyStays.map((l) => <ListingCard key={l.id} listing={l} />)}</div>
+                <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">{nearbyStays.map((l) => <ListingCard key={l.id} listing={l} />)}</div>
               </div>
             )}
             {nearbyTours.length > 0 && (
@@ -225,7 +225,7 @@ export default function EatLanding({ mode, value }: { mode: "region" | "cuisine"
                   <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Things to do</h3>
                   <Link href={`/explore/tour?region=${encodeURIComponent(label)}`} className="text-xs font-bold uppercase tracking-[0.12em] text-apricot hover:underline">See all →</Link>
                 </div>
-                <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">{nearbyTours.map((l) => <ListingCard key={l.id} listing={l} />)}</div>
+                <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">{nearbyTours.map((l) => <ListingCard key={l.id} listing={l} />)}</div>
               </div>
             )}
           </section>
