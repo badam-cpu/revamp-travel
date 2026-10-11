@@ -28,6 +28,8 @@ import { Inbox } from "@/components/Inbox";
 import { PartnerHub } from "@/components/PartnerHub";
 import { PriceLabsConnect } from "@/components/PriceLabsConnect";
 import { PriceLabsSync } from "@/components/PriceLabsSync";
+import { PayLinkConnect } from "@/components/PayLinkConnect";
+import { CommissionStatements } from "@/components/CommissionStatements";
 import { ExternalReviewsManager } from "@/components/ExternalReviewsManager";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -1897,6 +1899,7 @@ function DashboardContent() {
               <div>
                 <SectionHead title="Integrations" sub="Connect Revamp with the tools you already use." />
                 <div className="grid gap-8">
+                  <PayLinkConnect />
                   <PriceLabsSync />
                   <PriceLabsConnect />
                   <ExternalReviewsManager />
@@ -1913,8 +1916,11 @@ function DashboardContent() {
 
             {section === "billing" && (
               <div>
-                <SectionHead title="Billing" sub="Your Revamp subscription — billed monthly, cancel anytime." />
-                <OperatorSubscription />
+                <SectionHead title="Billing" sub="Your Revamp subscription and, if you're paid directly through your own PayLink, your monthly commission statements." />
+                <div className="grid gap-8">
+                  <CommissionStatements />
+                  <OperatorSubscription />
+                </div>
               </div>
             )}
 

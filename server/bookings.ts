@@ -12,7 +12,8 @@
  * `where status = 'pending_payment'`, so a double poll never double-confirms.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { checkPayment } from "./paylink.js";
+import { clientForOwner } from "./paymentAccounts.js";
+import { recordDirectBookingCharge } from "./directLedger.js";
 import { sendTravelerConfirmation, sendOperatorNewBooking, sendReviewRequest, type BookingEmailInfo } from "./email.js";
 import { notifyBooking } from "./notify.js";
 import { qualifyReferralForOperator } from "./referrals.js";
@@ -45,6 +46,19 @@ export interface BookingRow {
   addons: { name: string; amountCents: number; qty: number; onRequest?: boolean }[] | null;
   session_id: string | null;
   starts_at: string | null;
+}
+
+/**
+ * Which PayLink account issued this booking's charge (0094) plus the amounts the
+ * direct-payment ledger needs. Looked up separately and failure-tolerant (like
+ * room_type_id) so BOOKING_COLS never names a 0094 column — a pre-0094 DB just
+ * reads "Revamp's account" and nothing changes.
+ */
+async function directPaymentInfo(admin: SupabaseClient, bookingId: string): Promise<{ owner: string | null; addonsCents: number; giftAppliedCents: number }> {
+  const { data, error } = await admin.from("bookings").select("paylink_account_owner, addons_cents, gift_applied_cents").eq("id", bookingId).maybeSingle();
+  if (error || !data) return { owner: null, addonsCents: 0, giftAppliedCents: 0 };
+  const d = data as { paylink_account_owner?: string | null; addons_cents?: number | null; gift_applied_cents?: number | null };
+  return { owner: d.paylink_account_owner ?? null, addonsCents: d.addons_cents ?? 0, giftAppliedCents: d.gift_applied_cents ?? 0 };
 }
 
 // Columns every confirm/reconcile query needs (row detail for the emails too).
@@ -86,7 +100,17 @@ async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promi
   const base = row.base_cents ?? row.amount_cents;
   const commissionPct = await resolveOperatorCommissionPercent(admin, listing.operator_id);
   const { commissionCents, operatorNetCents } = computeBookingCharge(base, commissionPct);
-  await admin.from("payouts").upsert(
+  const direct = await directPaymentInfo(admin, row.id);
+  if (direct.owner) {
+    // Paid into the operator's OWN PayLink (0094): Revamp holds nothing, so no
+    // payout — the operator owes commission + add-ons (minus any Revamp gift
+    // portion) on their monthly statement.
+    await recordDirectBookingCharge(
+      admin,
+      { id: row.id, base_cents: row.base_cents, amount_cents: row.amount_cents, addons_cents: direct.addonsCents, gift_applied_cents: direct.giftAppliedCents, currency: row.currency },
+      { operatorId: listing.operator_id, listingTitle: hostTitle, commissionPercent: commissionPct },
+    );
+  } else await admin.from("payouts").upsert(
     {
       booking_id: row.id,
       operator_id: listing.operator_id,
@@ -213,7 +237,15 @@ export async function confirmBookingRow(admin: SupabaseClient, row: BookingRow):
   if (row.status !== "pending_payment" && row.status !== "awaiting_payment") return { granted: false, status: row.status };
   const payableStatuses = ["pending_payment", "awaiting_payment"];
 
-  const check = await checkPayment({ requestId: row.paylink_request_id, orderId: row.paylink_order_id });
+  // Verify with the account that issued the charge — Revamp's, or the
+  // operator's own PayLink (0094). Missing credentials → leave it pending.
+  const { owner } = await directPaymentInfo(admin, row.id);
+  const client = await clientForOwner(admin, owner);
+  if (!client) {
+    console.error("[bookings] no credentials to verify direct payment", row.id);
+    return { granted: false, status: "unconfirmed" };
+  }
+  const check = await client.checkPayment({ requestId: row.paylink_request_id, orderId: row.paylink_order_id });
   if (!check.ok) return { granted: false, status: "unconfirmed" };
 
   if (!check.approved) {

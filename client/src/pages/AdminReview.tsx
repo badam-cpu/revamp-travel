@@ -45,6 +45,7 @@ import { AdminSubscriptions } from "@/components/AdminSubscriptions";
 import { AdminHealth } from "@/components/AdminHealth";
 import { AdminReferrals } from "@/components/AdminReferrals";
 import { AdminQrEarnings } from "@/components/AdminQrEarnings";
+import { AdminDirectPayments } from "@/components/AdminDirectPayments";
 import { useAuth } from "@/contexts/AuthContext";
 import { RequireRole } from "@/components/RequireRole";
 import { Button } from "@/components/ui/button";
@@ -388,6 +389,7 @@ function AdminConsole() {
               <>
                 <AdminPayouts />
                 <AdminQrEarnings />
+                <AdminDirectPayments />
               </>
             )}
             {section === "blog" && <AdminBlog />}

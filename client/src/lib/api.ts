@@ -907,3 +907,34 @@ export const adminTextFixSuggest = (listingId: string, field: TextFixField) =>
   adminPost<{ suggestion: TextFixSuggestion | null }>("/api/admin-text-fixes/suggest", { listingId, field });
 export const adminTextFixApply = (listingId: string, changes: Partial<Record<TextFixField, string>>) =>
   adminPost<{ ok: true }>("/api/admin-text-fixes/apply", { listingId, changes });
+
+/* ── Direct payments: operator's own PayLink (0094) ────────────────────── */
+export interface PaymentAccountStatus {
+  connected: boolean;
+  available?: boolean;
+  status?: "active" | "paused" | "disconnected";
+  accountHint?: string | null;
+  connectedAt?: string | null;
+  pausedAt?: string | null;
+  pausedReason?: string | null;
+}
+async function authed<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Please sign in and try again.");
+  return request<T>(path, {
+    method: init.method ?? "GET",
+    headers: { Authorization: `Bearer ${token}` },
+    ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
+  });
+}
+export const paylinkAccountStatus = () => authed<PaymentAccountStatus>("/api/paylink-account/status");
+export const paylinkAccountConnect = (partnerId: string, partnerKey: string) =>
+  authed<PaymentAccountStatus>("/api/paylink-account/connect", { method: "POST", body: { partnerId, partnerKey } });
+export const paylinkAccountDisconnect = () => authed<{ connected: false }>("/api/paylink-account/disconnect", { method: "POST", body: {} });
+export const confirmCommissionStatements = () => authed<{ paid: number }>("/api/commission-statements/confirm", { method: "POST", body: {} });
+export const adminSetDirectPaymentsPaused = (operatorId: string, paused: boolean) =>
+  authed<{ ok: true }>("/api/admin/direct-payments/pause", { method: "POST", body: { operatorId, paused } });
+export const adminMarkStatementPaid = (id: string, reference?: string) =>
+  authed<{ ok: true }>("/api/admin/commission-statements/mark-paid", { method: "POST", body: { id, reference } });
+export const adminVoidStatement = (id: string) => authed<{ ok: true }>("/api/admin/commission-statements/void", { method: "POST", body: { id } });

@@ -73,3 +73,8 @@ All site imagery is self-hosted SVG under `client/public/images/` and `client/pu
 ## Future Secrets
 
 Milestone B (real Stripe-backed bookings — scoped in `CLAUDE.md`, not yet built) will add `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`, both server/Netlify-Function-only, following the same pattern as `ANTHROPIC_API_KEY`: kept off the client, exposed only through purpose-built endpoints.
+
+## OPERATOR_SECRETS_KEY (server-only, required for direct PayLink payments)
+
+Encrypts operators' PayLink API keys before they're stored (migration 0094, `server/secretBox.ts`). 32 random bytes, base64 — generate with `openssl rand -base64 32` and set it in Netlify → Site configuration → Environment variables (Functions scope), then redeploy. Never commit it, never prefix it with `VITE_`, and keep a copy in a password manager: if it's lost or changed, stored keys can't be decrypted — those operators fall back to Revamp's account until they reconnect. Without it, operators can't connect a PayLink account (nothing is ever stored in plain text).
+

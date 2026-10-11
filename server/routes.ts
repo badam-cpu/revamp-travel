@@ -23,6 +23,10 @@ import { translateTexts } from "./translate.js";
 import { pricelabsListings, syncOperatorPrices } from "./pricelabs.js";
 import { supabaseAdmin, adminConfigured } from "./supabaseAdmin.js";
 import { paylinkConfigured, registerPayment, checkPayment } from "./paylink.js";
+import { resolvePaymentAccount, clientForOwner, accountOwnerPatch, getPaymentAccountStatus, connectPaymentAccount, disconnectPaymentAccount, setPaymentAccountPaused } from "./paymentAccounts.js";
+import { confirmOperatorStatements, markStatementPaid, voidStatement } from "./commissionStatements.js";
+import { reverseDirectBookingCharge } from "./directLedger.js";
+import { markQrPaymentPaid } from "./qrPayments.js";
 import { reconcileUserBookings, logBookingEvent, finalizeConfirmedBooking } from "./bookings.js";
 import { startOperatorSubscription, reconcileOperatorSubscriptions, cancelOperatorSubscription, ensurePlanRegistered, type PlanRow } from "./subscriptions.js";
 import { syncListingSessions, reserveSeats, releaseSeats } from "./sessions.js";
@@ -732,7 +736,9 @@ export function registerApiRoutes(app: Express) {
       const currency = process.env.PAYLINK_CURRENCY || DEFAULT_CURRENCY;
       const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
       const paymentId = crypto.randomUUID();
-      const pay = await registerPayment({
+      // The operator's own PayLink if they connected one (0094), else Revamp's.
+      const account = await resolvePaymentAccount(admin, qr.owner_id);
+      const pay = await account.client.registerPayment({
         amount: currency === "AMD" ? Math.round(amountCents / 100) : amountCents / 100,
         currency,
         returnUrl: `${site}/q/${code}?pay=${paymentId}`,
@@ -752,6 +758,7 @@ export function registerApiRoutes(app: Express) {
         payer_name: payerName,
         note,
         paylink_request_id: pay.requestId,
+        ...(account.owner ? { paylink_account_owner: account.owner } : {}),
       });
       if (error) {
         console.error("[qr-payment/start] insert", error.message);
@@ -772,12 +779,14 @@ export function registerApiRoutes(app: Express) {
     const id = String(req.body?.paymentId || "").trim();
     if (!id) return res.status(400).json({ error: "Missing payment id." });
     try {
-      const { data: row } = await admin.from("qr_payments").select("id, status, paylink_request_id, paylink_order_id, amount_cents").eq("id", id).maybeSingle();
+      const { data: row } = await admin.from("qr_payments").select("*").eq("id", id).maybeSingle();
       if (!row) return res.status(404).json({ error: "Payment not found." });
       if (row.status === "paid") return res.json({ status: "paid", amountCents: row.amount_cents });
-      const check = await checkPayment({ requestId: row.paylink_request_id, orderId: row.paylink_order_id });
+      // Verify with the account that issued the charge (operator's own or Revamp's).
+      const client = await clientForOwner(admin, row.paylink_account_owner);
+      const check = client ? await client.checkPayment({ requestId: row.paylink_request_id, orderId: row.paylink_order_id }) : { approved: false, orderId: null };
       if (check.approved) {
-        await admin.from("qr_payments").update({ status: "paid", paid_at: new Date().toISOString(), paylink_order_id: check.orderId ?? row.paylink_order_id }).eq("id", id).eq("status", "pending_payment");
+        await markQrPaymentPaid(admin, row, check.orderId ?? null);
         return res.json({ status: "paid", amountCents: row.amount_cents });
       }
       res.json({ status: "pending", amountCents: row.amount_cents });
@@ -1265,7 +1274,9 @@ export function registerApiRoutes(app: Express) {
       // Instant: charge via PayLink now.
       const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
       try {
-        const pay = await registerPayment({
+        // The operator's own PayLink if connected (0094), else Revamp's.
+        const account = await resolvePaymentAccount(admin, listing.operator_id);
+        const pay = await account.client.registerPayment({
           amount: currency === "AMD" ? Math.round(slotCharge.totalCents / 100) : slotCharge.totalCents / 100,
           currency,
           returnUrl: `${site}/account?checkout=return`,
@@ -1277,7 +1288,7 @@ export function registerApiRoutes(app: Express) {
         }
         const { error: insErr } = await admin
           .from("bookings")
-          .insert({ ...slotRow, status: "pending_payment", provider: "paylink", paylink_request_id: pay.requestId, paylink_order_id: pay.orderId })
+          .insert({ ...slotRow, status: "pending_payment", provider: "paylink", paylink_request_id: pay.requestId, paylink_order_id: pay.orderId, ...(account.owner ? { paylink_account_owner: account.owner } : {}) })
           .select("id")
           .maybeSingle();
         if (insErr) {
@@ -1601,9 +1612,11 @@ export function registerApiRoutes(app: Express) {
       return res.json({ confirmed: true, fullyCovered: true, bookingId: created.id });
     }
 
-    // Otherwise charge the remainder via PayLink.
+    // Otherwise charge the remainder via PayLink — the operator's own account
+    // if they connected one (0094), else Revamp's.
     try {
-      const pay = await registerPayment({
+      const account = await resolvePaymentAccount(adminClient, listing.operator_id);
+      const pay = await account.client.registerPayment({
         // PayLink's `amount` is in major currency units. AMD (our settlement
         // currency) has no minor unit, so round to a whole dram — every stored
         // *_cents value is AMD hundredths. Charge only the amount left after any gift.
@@ -1617,7 +1630,10 @@ export function registerApiRoutes(app: Express) {
         return res.status(502).json({ error: "Couldn't start checkout." });
       }
       // Insert the pending hold as the traveler (RLS allows own + pending only).
-      const { data: pendingRow, error: insErr } = await supa
+      // A direct-account hold is written by the server so the issuing-account
+      // column can't be set from a client.
+      const writer = account.owner && adminClient ? adminClient : supa;
+      const { data: pendingRow, error: insErr } = await writer
         .from("bookings")
         .insert({
           ...baseRow,
@@ -1625,6 +1641,7 @@ export function registerApiRoutes(app: Express) {
           provider: "paylink",
           paylink_request_id: pay.requestId,
           paylink_order_id: pay.orderId,
+          ...(account.owner ? { paylink_account_owner: account.owner } : {}),
         })
         .select("id")
         .maybeSingle();
@@ -1757,8 +1774,9 @@ export function registerApiRoutes(app: Express) {
       const currency = process.env.PAYLINK_CURRENCY || DEFAULT_CURRENCY;
       const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
       let pay;
+      const account = await resolvePaymentAccount(admin, listing.operator_id);
       try {
-        pay = await registerPayment({
+        pay = await account.client.registerPayment({
           amount: currency === "AMD" ? Math.round(charge.totalCents / 100) : charge.totalCents / 100,
           currency,
           returnUrl: `${site}/`,
@@ -1772,7 +1790,7 @@ export function registerApiRoutes(app: Express) {
       if (!pay.redirectUrl) { await releaseSlot(); return res.status(502).json({ error: "Couldn't create the payment link." }); }
       const { data: created, error: insErr } = await admin
         .from("bookings")
-        .insert({ ...row, currency, status: "pending_payment", provider: "paylink", paylink_request_id: pay.requestId, paylink_order_id: pay.orderId })
+        .insert({ ...row, currency, status: "pending_payment", provider: "paylink", paylink_request_id: pay.requestId, paylink_order_id: pay.orderId, ...(account.owner ? { paylink_account_owner: account.owner } : {}) })
         .select("id")
         .single();
       if (insErr) {
@@ -1901,8 +1919,9 @@ export function registerApiRoutes(app: Express) {
     const amountCents = (bk as { amount_cents: number }).amount_cents;
     const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
     let pay;
+    const account = await resolvePaymentAccount(admin, L.operator_id);
     try {
-      pay = await registerPayment({
+      pay = await account.client.registerPayment({
         amount: currency === "AMD" ? Math.round(amountCents / 100) : amountCents / 100,
         currency,
         returnUrl: `${site}/`,
@@ -1916,7 +1935,7 @@ export function registerApiRoutes(app: Express) {
 
     const { error: upErr } = await admin
       .from("bookings")
-      .update({ status: "pending_payment", provider: "paylink", paylink_request_id: pay.requestId, paylink_order_id: pay.orderId })
+      .update({ status: "pending_payment", provider: "paylink", paylink_request_id: pay.requestId, paylink_order_id: pay.orderId, ...(await accountOwnerPatch(admin, account)) })
       .eq("id", bookingId);
     if (upErr) return res.status(500).json({ error: "Couldn't update the booking." });
 
@@ -2026,6 +2045,13 @@ export function registerApiRoutes(app: Express) {
 
     // Void the operator payout for this booking (unless it was already paid out).
     await admin.from("payouts").update({ status: "cancelled" }).eq("booking_id", booking.id).neq("status", "paid");
+    // Direct payment (0094): void the unbilled commission charge, or credit it on
+    // the next statement if it was already billed. No-op for Revamp-account bookings.
+    try {
+      await reverseDirectBookingCharge(admin, booking.id);
+    } catch (e) {
+      console.error("[cancel-booking] direct ledger reversal failed", booking.id, e);
+    }
     await logBookingEvent(admin, booking.id, "status_cancelled", isTraveler ? "Cancelled by guest" : isOperator ? "Cancelled by operator" : "Cancelled by admin");
 
     // Notify the counterparty (best-effort). Traveler cancels → tell operator; operator/admin cancels → tell traveler.
@@ -3858,6 +3884,118 @@ export function registerApiRoutes(app: Express) {
     }
   });
 
+  // ── Direct payments: operator's own PayLink account (0094) ─────────────
+  // Operator connects their PayLink API credentials (verified with PayLink,
+  // stored service-role only, never returned); guests then pay them directly
+  // and Revamp bills commission monthly (server/commissionStatements.ts).
+  const requireOperatorRole = async (req: Request, res: Response) => {
+    const ctx = await requireOperator(req);
+    if (!ctx) { res.status(401).json({ error: "Sign in as an operator." }); return null; }
+    const { data: me } = await ctx.admin.from("profiles").select("role").eq("id", ctx.userId).maybeSingle();
+    if (me?.role !== "operator") { res.status(403).json({ error: "Operators only." }); return null; }
+    return ctx;
+  };
+
+  app.get("/api/paylink-account/status", async (req: Request, res: Response) => {
+    const ctx = await requireOperatorRole(req, res);
+    if (!ctx) return;
+    try {
+      res.json(await getPaymentAccountStatus(ctx.admin, ctx.userId));
+    } catch (err) {
+      console.error("[paylink-account/status]", err);
+      res.status(503).json({ error: "Direct payments aren't available yet." });
+    }
+  });
+
+  app.post("/api/paylink-account/connect", async (req: Request, res: Response) => {
+    const ctx = await requireOperatorRole(req, res);
+    if (!ctx) return;
+    if (rateLimited(giftPurchaseHits, `plconnect:${ctx.userId}`, 6)) return res.status(429).json({ error: "Too many attempts — try again in a minute." });
+    const partnerId = typeof req.body?.partnerId === "string" ? req.body.partnerId.slice(0, 120) : "";
+    const partnerKey = typeof req.body?.partnerKey === "string" ? req.body.partnerKey.slice(0, 200) : "";
+    try {
+      const result = await connectPaymentAccount(ctx.admin, ctx.userId, { partnerId, partnerKey });
+      if (!result.ok) return res.status(result.status).json({ error: result.error });
+      res.json(await getPaymentAccountStatus(ctx.admin, ctx.userId));
+    } catch (err) {
+      console.error("[paylink-account/connect]", err instanceof Error ? err.message : "error"); // never log the key
+      res.status(503).json({ error: "Couldn't connect right now. Please try again." });
+    }
+  });
+
+  app.post("/api/paylink-account/disconnect", async (req: Request, res: Response) => {
+    const ctx = await requireOperatorRole(req, res);
+    if (!ctx) return;
+    try {
+      await disconnectPaymentAccount(ctx.admin, ctx.userId);
+      res.json({ connected: false });
+    } catch (err) {
+      console.error("[paylink-account/disconnect]", err);
+      res.status(500).json({ error: "Couldn't disconnect right now. Please try again." });
+    }
+  });
+
+  // Operator back from paying a statement → verify it now (the cron also does).
+  app.post("/api/commission-statements/confirm", async (req: Request, res: Response) => {
+    const ctx = await requireOperatorRole(req, res);
+    if (!ctx) return;
+    try {
+      res.json({ paid: await confirmOperatorStatements(ctx.admin, ctx.userId) });
+    } catch (err) {
+      console.error("[commission-statements/confirm]", err);
+      res.status(500).json({ error: "Couldn't check the payment right now." });
+    }
+  });
+
+  // Admin: pause/resume an operator's direct payments.
+  app.post("/api/admin/direct-payments/pause", async (req: Request, res: Response) => {
+    const ctx = await adminOnly(req, res);
+    if (!ctx) return;
+    const operatorId = String(req.body?.operatorId || "");
+    const paused = req.body?.paused === true;
+    if (!/^[0-9a-f-]{36}$/i.test(operatorId)) return res.status(400).json({ error: "Missing operator." });
+    try {
+      const ok = await setPaymentAccountPaused(ctx.admin, operatorId, paused, paused ? "Paused by Revamp" : undefined);
+      if (!ok) return res.status(404).json({ error: "That operator hasn't connected a PayLink account." });
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[admin/direct-payments/pause]", err);
+      res.status(500).json({ error: "Couldn't update that account." });
+    }
+  });
+
+  // Admin: mark a statement paid (e.g. paid by bank transfer, or a credit paid out) / void it.
+  app.post("/api/admin/commission-statements/mark-paid", async (req: Request, res: Response) => {
+    const ctx = await adminOnly(req, res);
+    if (!ctx) return;
+    const id = String(req.body?.id || "");
+    const reference = typeof req.body?.reference === "string" ? req.body.reference.slice(0, 120) : null;
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ error: "Missing statement." });
+    try {
+      const ok = await markStatementPaid(ctx.admin, id, { reference });
+      if (!ok) return res.status(409).json({ error: "That statement is already settled." });
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[admin/commission-statements/mark-paid]", err);
+      res.status(500).json({ error: "Couldn't update the statement." });
+    }
+  });
+
+  app.post("/api/admin/commission-statements/void", async (req: Request, res: Response) => {
+    const ctx = await adminOnly(req, res);
+    if (!ctx) return;
+    const id = String(req.body?.id || "");
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ error: "Missing statement." });
+    try {
+      const ok = await voidStatement(ctx.admin, id);
+      if (!ok) return res.status(409).json({ error: "That statement is already settled." });
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[admin/commission-statements/void]", err);
+      res.status(500).json({ error: "Couldn't update the statement." });
+    }
+  });
+
   // POST /api/aha-listing-copy — Aha writes/improves one listing field (title,
   // short/long description, highlights), tuned to type + SEO + Revamp standards.
   // Operators (and admins) only; rate-limited. Returns { text } or { items }.
@@ -3916,7 +4054,8 @@ export function registerApiRoutes(app: Express) {
     const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
     const currency = booking.currency || process.env.PAYLINK_CURRENCY || DEFAULT_CURRENCY;
     try {
-      const pay = await registerPayment({
+      const account = await resolvePaymentAccount(admin, listing.operator_id);
+      const pay = await account.client.registerPayment({
         amount: currency === "AMD" ? Math.round(booking.amount_cents / 100) : booking.amount_cents / 100,
         currency,
         returnUrl: `${site}/account?checkout=return`,
@@ -3925,7 +4064,7 @@ export function registerApiRoutes(app: Express) {
       if (!pay.redirectUrl) return res.status(502).json({ error: "Couldn't create the payment link." });
       const { data: upd } = await admin
         .from("bookings")
-        .update({ status: "awaiting_payment", paylink_request_id: pay.requestId, paylink_order_id: pay.orderId })
+        .update({ status: "awaiting_payment", paylink_request_id: pay.requestId, paylink_order_id: pay.orderId, ...(await accountOwnerPatch(admin, account)) })
         .eq("id", booking.id)
         .eq("status", "requested")
         .select("id");

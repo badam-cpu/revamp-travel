@@ -65,80 +65,9 @@ export function paylinkConfigured(): boolean {
   return !!(BASE && PARTNER_ID && PARTNER_KEY);
 }
 
-// In-process token cache (per warm function instance).
-const _auth: { access: string | null; accessExp: number; refresh: string | null; refreshExp: number } = {
-  access: null,
-  accessExp: 0,
-  refresh: null,
-  refreshExp: 0,
-};
-
 interface TokenPart {
   token?: string;
   expiration?: string;
-}
-function store(j: { accessToken?: TokenPart | string; refreshToken?: TokenPart | string }) {
-  const at = j.accessToken;
-  const rt = j.refreshToken;
-  _auth.access = (at && typeof at === "object" && at.token) || (typeof at === "string" ? at : null);
-  _auth.accessExp = at && typeof at === "object" && at.expiration ? new Date(at.expiration).getTime() : Date.now() + 9 * 60 * 1000;
-  _auth.refresh = (rt && typeof rt === "object" && rt.token) || (typeof rt === "string" ? rt : null);
-  _auth.refreshExp = rt && typeof rt === "object" && rt.expiration ? new Date(rt.expiration).getTime() : 0;
-}
-
-async function authorize(): Promise<void> {
-  const res = await fetch(BASE + ROUTES.authorize, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ partnerId: PARTNER_ID, partnerKey: PARTNER_KEY }),
-  });
-  if (!res.ok) throw new Error("paylink authorize " + res.status + " " + (await res.text()).slice(0, 200));
-  store(await res.json());
-}
-
-async function refresh(): Promise<void> {
-  if (!_auth.refresh) return authorize();
-  try {
-    // Integration takes { refreshToken }; production takes the raw token string.
-    // Either failure falls back to authorize(), so a mismatch is self-healing.
-    const body = IS_INTEGRATION ? { refreshToken: _auth.refresh } : _auth.refresh;
-    const res = await fetch(BASE + ROUTES.refresh, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error("refresh " + res.status);
-    store(await res.json());
-  } catch {
-    await authorize();
-  }
-}
-
-async function accessToken(): Promise<string | null> {
-  const skew = 60 * 1000;
-  if (_auth.access && Date.now() < _auth.accessExp - skew) return _auth.access;
-  if (_auth.refresh && Date.now() < _auth.refreshExp - skew) {
-    await refresh();
-    return _auth.access;
-  }
-  await authorize();
-  return _auth.access;
-}
-
-// Authenticated request with one automatic re-auth on 401.
-async function api(path: string, { method = "GET", body }: { method?: string; body?: unknown } = {}): Promise<Response> {
-  const doFetch = (tok: string | null) =>
-    fetch(BASE + path, {
-      method,
-      headers: { authorization: "Bearer " + tok, "content-type": "application/json" },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-  let res = await doFetch(await accessToken());
-  if (res.status === 401) {
-    await authorize();
-    res = await doFetch(await accessToken());
-  }
-  return res;
 }
 
 export interface RegisterResult {
@@ -146,51 +75,6 @@ export interface RegisterResult {
   redirectUrl: string | null;
   orderId: string | null;
   raw: unknown;
-}
-
-/**
- * Register a one-off payment link. Spec response is { requestId, redirectUrl }
- * only — orderId is NOT assigned until the customer actually pays, so it's null
- * here and backfilled on the first successful poll. `returnUrl` is the single
- * post-payment return URL PayLink supports (no separate success/cancel).
- */
-export async function registerPayment({
-  amount,
-  currency,
-  returnUrl,
-  info,
-  allowAnonymous = false,
-}: {
-  amount: number;
-  currency: string;
-  returnUrl: string;
-  info: string;
-  allowAnonymous?: boolean;
-}): Promise<RegisterResult> {
-  const body: Record<string, unknown> = {
-    requestType: REQUEST_TYPE,
-    amount,
-    currency,
-    language: LANGUAGE,
-    isActive: true,
-    isFlexible: false, // payer can't change the amount (spec)
-    maxCount: 1, // single-use link, one payment only — also suppresses PayLink's
-                 // hosted-page quantity/count stepper (spec: "maximum number of
-                 // payments allowed"). Each booking gets its own link.
-    allowAnonymous,
-    backUrl: returnUrl,
-    requestInfo: info,
-  };
-  if (ROUTES.hasRedirectField) body.paymentWebRedirectUrl = returnUrl;
-  const res = await api(ROUTES.register, { method: "POST", body });
-  if (!res.ok) throw new Error("paylink register " + res.status + " " + (await res.text()).slice(0, 200));
-  const j = (await res.json()) as { requestId?: string; redirectUrl?: string };
-  return {
-    requestId: j.requestId ?? null,
-    redirectUrl: j.redirectUrl ?? null,
-    orderId: null, // assigned by PayLink only once a payment is made
-    raw: j,
-  };
 }
 
 export interface PaymentStatus {
@@ -217,26 +101,196 @@ function readPayment(p: PaymentRecord, fallbackOrderId: string | null): PaymentS
   };
 }
 
+export interface PaylinkCredentials {
+  partnerId: string;
+  partnerKey: string;
+}
+
 /**
- * Poll a payment's status. Once we know the orderId, GetPaymentByOrderId
- * returns a single record; before that (register gives no orderId),
- * Payment/{requestId} returns an ARRAY of attempts — pick an approved one if
- * present, else the most recent, so we can backfill the orderId and keep going.
+ * One PayLink merchant account: its credentials + its own token cache. Revamp's
+ * account is `revampPaylink` (env credentials); an operator who connected their
+ * own PayLink gets a client from `createPaylinkClient` (server/paymentAccounts.ts)
+ * so guests' money lands in THEIR account. Same host/routes/currency for both.
  */
-export async function checkPayment({ requestId, orderId }: { requestId: string | null; orderId: string | null }): Promise<PaymentStatus> {
-  if (orderId != null && orderId !== "") {
-    const res = await api(ROUTES.byOrder(orderId));
-    if (!res.ok) return { ok: false, approved: false, status: "unknown", httpStatus: res.status };
-    return readPayment((await res.json()) as PaymentRecord, orderId);
+export class PaylinkClient {
+  // In-process token cache (per warm function instance, per account).
+  private auth: { access: string | null; accessExp: number; refresh: string | null; refreshExp: number } = {
+    access: null,
+    accessExp: 0,
+    refresh: null,
+    refreshExp: 0,
+  };
+
+  constructor(private readonly creds: PaylinkCredentials) {}
+
+  private store(j: { accessToken?: TokenPart | string; refreshToken?: TokenPart | string }) {
+    const at = j.accessToken;
+    const rt = j.refreshToken;
+    this.auth.access = (at && typeof at === "object" && at.token) || (typeof at === "string" ? at : null);
+    this.auth.accessExp = at && typeof at === "object" && at.expiration ? new Date(at.expiration).getTime() : Date.now() + 9 * 60 * 1000;
+    this.auth.refresh = (rt && typeof rt === "object" && rt.token) || (typeof rt === "string" ? rt : null);
+    this.auth.refreshExp = rt && typeof rt === "object" && rt.expiration ? new Date(rt.expiration).getTime() : 0;
   }
-  if (!requestId) return { ok: false, approved: false, status: "unknown" };
-  const res = await api(ROUTES.byRequest(requestId));
-  if (!res.ok) return { ok: false, approved: false, status: "unknown", httpStatus: res.status };
-  const arr = await res.json();
-  const list: PaymentRecord[] = Array.isArray(arr) ? arr : arr ? [arr] : [];
-  if (!list.length) return { ok: true, approved: false, status: "pending", orderId: null };
-  const approved = list.find((p) => p.paymentApproved === true);
-  return readPayment(approved || list[list.length - 1], null);
+
+  async authorize(): Promise<void> {
+    const res = await fetch(BASE + ROUTES.authorize, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ partnerId: this.creds.partnerId, partnerKey: this.creds.partnerKey }),
+    });
+    if (!res.ok) throw new Error("paylink authorize " + res.status + " " + (await res.text()).slice(0, 200));
+    this.store(await res.json());
+  }
+
+  /** True when PayLink accepts these credentials (used when an operator connects). */
+  async verifyCredentials(): Promise<boolean> {
+    try {
+      await this.authorize();
+      return !!this.auth.access;
+    } catch {
+      return false;
+    }
+  }
+
+  private async refresh(): Promise<void> {
+    if (!this.auth.refresh) return this.authorize();
+    try {
+      // Integration takes { refreshToken }; production takes the raw token string.
+      // Either failure falls back to authorize(), so a mismatch is self-healing.
+      const body = IS_INTEGRATION ? { refreshToken: this.auth.refresh } : this.auth.refresh;
+      const res = await fetch(BASE + ROUTES.refresh, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error("refresh " + res.status);
+      this.store(await res.json());
+    } catch {
+      await this.authorize();
+    }
+  }
+
+  private async accessToken(): Promise<string | null> {
+    const skew = 60 * 1000;
+    if (this.auth.access && Date.now() < this.auth.accessExp - skew) return this.auth.access;
+    if (this.auth.refresh && Date.now() < this.auth.refreshExp - skew) {
+      await this.refresh();
+      return this.auth.access;
+    }
+    await this.authorize();
+    return this.auth.access;
+  }
+
+  // Authenticated request with one automatic re-auth on 401.
+  async api(path: string, { method = "GET", body }: { method?: string; body?: unknown } = {}): Promise<Response> {
+    const doFetch = (tok: string | null) =>
+      fetch(BASE + path, {
+        method,
+        headers: { authorization: "Bearer " + tok, "content-type": "application/json" },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    let res = await doFetch(await this.accessToken());
+    if (res.status === 401) {
+      await this.authorize();
+      res = await doFetch(await this.accessToken());
+    }
+    return res;
+  }
+
+  /**
+   * Register a one-off payment link. Spec response is { requestId, redirectUrl }
+   * only — orderId is NOT assigned until the customer actually pays, so it's null
+   * here and backfilled on the first successful poll. `returnUrl` is the single
+   * post-payment return URL PayLink supports (no separate success/cancel).
+   */
+  async registerPayment({
+    amount,
+    currency,
+    returnUrl,
+    info,
+    allowAnonymous = false,
+  }: {
+    amount: number;
+    currency: string;
+    returnUrl: string;
+    info: string;
+    allowAnonymous?: boolean;
+  }): Promise<RegisterResult> {
+    const body: Record<string, unknown> = {
+      requestType: REQUEST_TYPE,
+      amount,
+      currency,
+      language: LANGUAGE,
+      isActive: true,
+      isFlexible: false, // payer can't change the amount (spec)
+      maxCount: 1, // single-use link, one payment only — also suppresses PayLink's
+                   // hosted-page quantity/count stepper (spec: "maximum number of
+                   // payments allowed"). Each booking gets its own link.
+      allowAnonymous,
+      backUrl: returnUrl,
+      requestInfo: info,
+    };
+    if (ROUTES.hasRedirectField) body.paymentWebRedirectUrl = returnUrl;
+    const res = await this.api(ROUTES.register, { method: "POST", body });
+    if (!res.ok) throw new Error("paylink register " + res.status + " " + (await res.text()).slice(0, 200));
+    const j = (await res.json()) as { requestId?: string; redirectUrl?: string };
+    return {
+      requestId: j.requestId ?? null,
+      redirectUrl: j.redirectUrl ?? null,
+      orderId: null, // assigned by PayLink only once a payment is made
+      raw: j,
+    };
+  }
+
+  /**
+   * Poll a payment's status. Once we know the orderId, GetPaymentByOrderId
+   * returns a single record; before that (register gives no orderId),
+   * Payment/{requestId} returns an ARRAY of attempts — pick an approved one if
+   * present, else the most recent, so we can backfill the orderId and keep going.
+   */
+  async checkPayment({ requestId, orderId }: { requestId: string | null; orderId: string | null }): Promise<PaymentStatus> {
+    if (orderId != null && orderId !== "") {
+      const res = await this.api(ROUTES.byOrder(orderId));
+      if (!res.ok) return { ok: false, approved: false, status: "unknown", httpStatus: res.status };
+      return readPayment((await res.json()) as PaymentRecord, orderId);
+    }
+    if (!requestId) return { ok: false, approved: false, status: "unknown" };
+    const res = await this.api(ROUTES.byRequest(requestId));
+    if (!res.ok) return { ok: false, approved: false, status: "unknown", httpStatus: res.status };
+    const arr = await res.json();
+    const list: PaymentRecord[] = Array.isArray(arr) ? arr : arr ? [arr] : [];
+    if (!list.length) return { ok: true, approved: false, status: "pending", orderId: null };
+    const approved = list.find((p) => p.paymentApproved === true);
+    return readPayment(approved || list[list.length - 1], null);
+  }
+}
+
+/** Revamp's own merchant account (env credentials). */
+export const revampPaylink = new PaylinkClient({ partnerId: PARTNER_ID ?? "", partnerKey: PARTNER_KEY ?? "" });
+
+// One client per operator account per warm instance, so each keeps its token.
+const operatorClients = new Map<string, PaylinkClient>();
+/** A client for an operator's own PayLink account (cached per credentials). */
+export function createPaylinkClient(creds: PaylinkCredentials): PaylinkClient {
+  const key = `${creds.partnerId}\u0000${creds.partnerKey}`;
+  let c = operatorClients.get(key);
+  if (!c) {
+    c = new PaylinkClient(creds);
+    operatorClients.set(key, c);
+  }
+  return c;
+}
+
+// Module-level helpers stay bound to Revamp's account, so existing callers
+// (gift cards, vouchers, subscriptions, statements) are unchanged.
+function api(path: string, opts: { method?: string; body?: unknown } = {}): Promise<Response> {
+  return revampPaylink.api(path, opts);
+}
+export function registerPayment(opts: Parameters<PaylinkClient["registerPayment"]>[0]): Promise<RegisterResult> {
+  return revampPaylink.registerPayment(opts);
+}
+export function checkPayment(opts: { requestId: string | null; orderId: string | null }): Promise<PaymentStatus> {
+  return revampPaylink.checkPayment(opts);
 }
 
 /* ------------------------------------------------------------------ *

@@ -450,6 +450,72 @@ export function sendReferralReward(to: string, opts: { rewardCents: number; curr
   return send(to, "You earned a Revamp referral reward", html);
 }
 
+export interface CommissionStatementEmail {
+  periodLabel: string; // e.g. "October 2026"
+  commissionCents: number;
+  addonsCents: number;
+  giftCreditCents: number;
+  adjustmentCents: number;
+  totalDueCents: number;
+  currency: string;
+  dueDate: string; // YYYY-MM-DD
+  payUrl: string | null;
+}
+
+function statementTable(s: CommissionStatementEmail): string {
+  const row = (label: string, cents: number, sign = "") =>
+    `<tr><td style="padding:6px 12px;color:#3f3b36;">${esc(label)}</td><td style="padding:6px 12px;text-align:right;white-space:nowrap;">${sign}${money(Math.abs(cents), s.currency)}</td></tr>`;
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;font-size:14px;line-height:1.5;border:1px solid #eee;border-radius:8px;padding:4px 0;margin:8px 0 18px;">
+    ${row("Revamp commission", s.commissionCents)}
+    ${s.addonsCents ? row("Checkout add-ons", s.addonsCents) : ""}
+    ${s.giftCreditCents ? row("Gift-card amounts Revamp owes you", s.giftCreditCents, "− ") : ""}
+    ${s.adjustmentCents ? row("Credits for cancelled bookings", s.adjustmentCents, "− ") : ""}
+    <tr><td style="padding:8px 12px;border-top:1px solid #eee;font-weight:700;">Total due</td><td style="padding:8px 12px;border-top:1px solid #eee;text-align:right;font-weight:700;white-space:nowrap;">${money(s.totalDueCents, s.currency)}</td></tr>
+  </table>`;
+}
+
+/** Monthly commission statement for an operator paid directly via their own PayLink. */
+export function sendCommissionStatement(to: string, s: CommissionStatementEmail) {
+  const site = SITE();
+  const html = shell(
+    `Your Revamp statement — ${s.periodLabel}`,
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 10px;">Guests paid you directly through your PayLink account last month. Here's what's due to Revamp for ${esc(s.periodLabel)}.</p>
+     ${statementTable(s)}
+     <p style="font-size:14px;line-height:1.6;margin:0 0 14px;color:#3f3b36;">Please pay by <strong>${esc(prettyDate(s.dueDate))}</strong>. If it's still unpaid after that, direct payments pause and new bookings are paid to Revamp until it's settled.</p>
+     ${s.payUrl ? `<p style="margin:0 0 8px;"><a href="${esc(s.payUrl)}" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Pay ${money(s.totalDueCents, s.currency)}</a></p>` : ""}
+     <p style="font-size:13px;line-height:1.6;margin:10px 0 0;"><a href="${esc(site)}/dashboard?section=billing" style="color:#F15822;">See all statements</a></p>`,
+    site,
+  );
+  return send(to, `Revamp statement — ${s.periodLabel}: ${money(s.totalDueCents, s.currency)} due`, html);
+}
+
+/** Reminder a few days before a statement's due date. */
+export function sendCommissionStatementReminder(to: string, s: CommissionStatementEmail) {
+  const site = SITE();
+  const html = shell(
+    `Reminder: statement due ${prettyDate(s.dueDate)}`,
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 10px;">Your Revamp statement for ${esc(s.periodLabel)} (<strong>${money(s.totalDueCents, s.currency)}</strong>) is due on <strong>${esc(prettyDate(s.dueDate))}</strong>. After that, direct payments pause until it's paid.</p>
+     ${s.payUrl ? `<p style="margin:0 0 8px;"><a href="${esc(s.payUrl)}" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Pay now</a></p>` : ""}
+     <p style="font-size:13px;line-height:1.6;margin:10px 0 0;"><a href="${esc(site)}/dashboard?section=billing" style="color:#F15822;">See your statements</a></p>`,
+    site,
+  );
+  return send(to, `Reminder: your Revamp statement is due ${prettyDate(s.dueDate)}`, html);
+}
+
+/** Direct payments paused because a statement is overdue. */
+export function sendDirectPaymentsPaused(to: string, s: CommissionStatementEmail) {
+  const site = SITE();
+  const html = shell(
+    "Direct payments are paused",
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 10px;">Your Revamp statement for ${esc(s.periodLabel)} (<strong>${money(s.totalDueCents, s.currency)}</strong>) is overdue, so new bookings are now paid to Revamp instead of your PayLink account. You'll still receive those earnings through your regular Revamp payouts.</p>
+     <p style="font-size:14px;line-height:1.6;margin:0 0 14px;color:#3f3b36;">Paying the statement switches direct payments back on automatically.</p>
+     ${s.payUrl ? `<p style="margin:0 0 8px;"><a href="${esc(s.payUrl)}" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Pay ${money(s.totalDueCents, s.currency)}</a></p>` : ""}
+     <p style="font-size:13px;line-height:1.6;margin:10px 0 0;"><a href="${esc(site)}/dashboard?section=billing" style="color:#F15822;">See your statements</a></p>`,
+    site,
+  );
+  return send(to, "Revamp: direct payments are paused", html);
+}
+
 /** A previously-alerting cron has recovered — sent once when it comes back. */
 export function sendCronRecovered(to: string, opts: { job: string }) {
   const site = SITE();
