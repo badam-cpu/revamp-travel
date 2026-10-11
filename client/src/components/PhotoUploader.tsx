@@ -332,10 +332,10 @@ export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: st
             }
           }}
           placeholder="Or paste an image URL"
-          className="h-9 rounded-none text-xs"
+          className="h-12 rounded-none text-base md:text-base"
           disabled={atCapacity}
         />
-        <Button type="button" variant="outline" size="sm" onClick={addUrl} disabled={!urlDraft.trim() || atCapacity} className="h-9 shrink-0 rounded-none border-basalt/15 text-xs">
+        <Button type="button" variant="outline" size="sm" onClick={addUrl} disabled={!urlDraft.trim() || atCapacity} className="h-12 shrink-0 rounded-none border-basalt/15 px-5 text-sm">
           <Link2 className="mr-1.5 h-3.5 w-3.5" /> Add
         </Button>
       </div>

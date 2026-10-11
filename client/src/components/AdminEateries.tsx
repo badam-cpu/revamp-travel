@@ -15,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { CharCount } from "@/components/CharCount";
+import { LISTING_LIMITS, firstListingTextProblem } from "@shared/listings";
 import { toast } from "sonner";
 import { Loader2, Star, Trash2, Utensils } from "lucide-react";
 import { GooglePlaceFinder } from "@/components/GooglePlaceFinder";
@@ -214,6 +216,16 @@ export function AdminEateries() {
       toast("Add at least a name, city, and one photo.");
       return;
     }
+    // Same card-text rules as every listing (shared/listings.ts). The long
+    // description stays optional here, but anything written has to fit.
+    const lengthProblem = firstListingTextProblem(
+      { title: f.title, shortDescription: f.shortDescription, longDescription: f.longDescription },
+      { listingType: "eat", optional: ["longDescription"] },
+    );
+    if (lengthProblem) {
+      toast(lengthProblem);
+      return;
+    }
     const cover = photos[0];
     setSaving(true);
     try {
@@ -229,7 +241,7 @@ export function AdminEateries() {
         image: cover,
         gallery: photos,
         cover_focus: photosRef.current?.getCoverFocus() ?? "50% 50%",
-        short_description: f.shortDescription.trim() || `A Revamp-recommended spot in ${f.city.trim()}.`,
+        short_description: f.shortDescription.trim(),
         long_description: f.longDescription.trim(),
         tags: [f.venueType.trim(), f.cuisine.trim()].filter(Boolean),
         venue_type: f.venueType.trim() || null,
@@ -314,7 +326,7 @@ export function AdminEateries() {
         </div>
 
         <div className="grid gap-3 border-t border-basalt/10 pt-4 sm:grid-cols-2">
-          <Field label="Name"><Input value={f.title} onChange={(e) => set({ title: e.target.value })} className="h-10 rounded-none" /></Field>
+          <Field label="Name"><Input value={f.title} maxLength={LISTING_LIMITS.title} onChange={(e) => set({ title: e.target.value })} className="h-10 rounded-none" /><CharCount field="title" value={f.title} listingType="eat" className="justify-self-end" /></Field>
           <Field label="Type"><CategorySelect key={`ven-${formKey}`} value={f.venueType} options={venueOptions} placeholder="Choose a type…" newLabel="+ Add new type…" onChange={(v) => set({ venueType: v })} /></Field>
           <Field label="Cuisine"><CategorySelect key={`cui-${formKey}`} value={f.cuisine} options={cuisineOptions} placeholder="Choose a cuisine…" newLabel="+ Add new cuisine…" onChange={(v) => set({ cuisine: v })} /></Field>
           <Field label="City"><Input value={f.city} onChange={(e) => set({ city: e.target.value })} className="h-10 rounded-none" /></Field>
@@ -338,8 +350,8 @@ export function AdminEateries() {
               Pin to the top of the guide &amp; area/cuisine pages
             </label>
           </Field>
-          <div className="sm:col-span-2"><Field label="Short description"><Textarea rows={2} value={f.shortDescription} onChange={(e) => set({ shortDescription: e.target.value })} placeholder="One-line teaser shown on the card and as the lead." className="rounded-none text-base" /></Field></div>
-          <div className="sm:col-span-2"><Field label="Long description"><Textarea rows={4} value={f.longDescription} onChange={(e) => set({ longDescription: e.target.value })} placeholder="Fuller write-up shown on the restaurant page (optional)." className="rounded-none text-base" /></Field></div>
+          <div className="sm:col-span-2"><Field label="Short description"><Textarea rows={2} value={f.shortDescription} maxLength={LISTING_LIMITS.shortDescription} onChange={(e) => set({ shortDescription: e.target.value })} placeholder="One-line teaser shown on the card and as the lead (40–80 characters)." className="rounded-none text-base" /><CharCount field="shortDescription" value={f.shortDescription} className="justify-self-end" /></Field></div>
+          <div className="sm:col-span-2"><Field label="Long description"><Textarea rows={4} value={f.longDescription} maxLength={LISTING_LIMITS.longDescription} onChange={(e) => set({ longDescription: e.target.value })} placeholder="Fuller write-up shown on the restaurant page (optional)." className="rounded-none text-base" />{f.longDescription.trim() && <CharCount field="longDescription" value={f.longDescription} className="justify-self-end" />}</Field></div>
           <div className="sm:col-span-2">
             <Field label="Other locations (branches)">
               <div className="grid gap-3">

@@ -182,14 +182,14 @@ export const RoomTypesEditor = forwardRef<RoomTypesEditorHandle, { defaultValue:
               value={row.name}
               onChange={(e) => patch(row.key, { name: e.target.value })}
               placeholder="Room type (e.g. Deluxe king room)"
-              className="h-11 rounded-none font-semibold"
+              className="h-12 rounded-none text-base md:text-base font-semibold"
               aria-label="Room type name"
             />
             <button
               type="button"
               onClick={() => removeRow(row.key)}
               aria-label="Remove room type"
-              className="grid h-11 w-11 shrink-0 place-items-center border border-basalt/15 text-basalt/50 transition-colors hover:border-destructive hover:text-destructive"
+              className="grid h-12 w-12 shrink-0 place-items-center border border-basalt/15 text-basalt/50 transition-colors hover:border-destructive hover:text-destructive"
             >
               <X className="h-4 w-4" />
             </button>
@@ -198,15 +198,15 @@ export const RoomTypesEditor = forwardRef<RoomTypesEditorHandle, { defaultValue:
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <div className="grid gap-1.5">
               <Label htmlFor={`room-type-guests-${i}`} className="text-xs">Max guests</Label>
-              <Input id={`room-type-guests-${i}`} type="number" min={1} max={30} value={row.maxGuests} onChange={(e) => patch(row.key, { maxGuests: e.target.value })} className="h-10 rounded-none" />
+              <Input id={`room-type-guests-${i}`} type="number" min={1} max={30} value={row.maxGuests} onChange={(e) => patch(row.key, { maxGuests: e.target.value })} className="h-12 rounded-none text-base md:text-base" />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor={`room-type-size-${i}`} className="text-xs">Size m² <span className="font-normal text-basalt/40">(optional)</span></Label>
-              <Input id={`room-type-size-${i}`} type="number" min={1} value={row.sizeM2} onChange={(e) => patch(row.key, { sizeM2: e.target.value })} className="h-10 rounded-none" />
+              <Input id={`room-type-size-${i}`} type="number" min={1} value={row.sizeM2} onChange={(e) => patch(row.key, { sizeM2: e.target.value })} className="h-12 rounded-none text-base md:text-base" />
             </div>
             <div className="col-span-2 grid gap-1.5 sm:col-span-1">
               <Label htmlFor={`room-type-price-${i}`} className="text-xs">Default price / night (֏)</Label>
-              <Input id={`room-type-price-${i}`} type="number" min={0} step={500} value={row.price} onChange={(e) => patch(row.key, { price: e.target.value })} placeholder="32000" className="h-10 rounded-none" />
+              <Input id={`room-type-price-${i}`} type="number" min={0} step={500} value={row.price} onChange={(e) => patch(row.key, { price: e.target.value })} placeholder="32000" className="h-12 rounded-none text-base md:text-base" />
             </div>
           </div>
 
@@ -226,7 +226,7 @@ export const RoomTypesEditor = forwardRef<RoomTypesEditorHandle, { defaultValue:
                   onChange={(e) => setUnit(row.key, u.key, { name: e.target.value })}
                   placeholder="101"
                   aria-label="Room name or number"
-                  className="h-10 w-28 shrink-0 rounded-none text-sm font-semibold"
+                  className="h-12 w-28 shrink-0 rounded-none text-base md:text-base font-semibold"
                 />
                 <Input
                   id={`room-unit-price-${i}-${ui}`}
@@ -237,13 +237,13 @@ export const RoomTypesEditor = forwardRef<RoomTypesEditorHandle, { defaultValue:
                   onChange={(e) => setUnit(row.key, u.key, { price: e.target.value })}
                   placeholder={row.price ? `${Number(row.price).toLocaleString()} (default)` : "Default price"}
                   aria-label="This room's own price per night (optional)"
-                  className="h-10 min-w-0 flex-1 rounded-none text-sm"
+                  className="h-12 min-w-0 flex-1 rounded-none text-base md:text-base"
                 />
                 <button
                   type="button"
                   onClick={() => removeUnit(row.key, u.key)}
                   aria-label={`Remove room ${u.name || ui + 1}`}
-                  className="grid h-10 w-10 shrink-0 place-items-center text-basalt/40 transition-colors hover:text-destructive"
+                  className="grid h-12 w-12 shrink-0 place-items-center text-basalt/40 transition-colors hover:text-destructive"
                 >
                   <Minus className="h-4 w-4" />
                 </button>
@@ -289,7 +289,7 @@ export const RoomTypesEditor = forwardRef<RoomTypesEditorHandle, { defaultValue:
             {row.beds.map((bed) => (
               <div key={bed.key} className="flex items-center gap-2">
                 <Select value={bed.type} onValueChange={(v) => setBed(row.key, bed.key, { type: v })}>
-                  <SelectTrigger className="h-10 flex-1 rounded-none text-sm"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-12 data-[size=default]:h-12 flex-1 rounded-none text-base"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {BED_TYPES.map((t) => (
                       <SelectItem key={t} value={t}>{t}</SelectItem>
@@ -302,10 +302,10 @@ export const RoomTypesEditor = forwardRef<RoomTypesEditorHandle, { defaultValue:
                   max={20}
                   value={bed.count}
                   onChange={(e) => setBed(row.key, bed.key, { count: Number(e.target.value) || 1 })}
-                  className="h-10 w-20 rounded-none text-sm"
+                  className="h-12 w-20 rounded-none text-base md:text-base"
                   aria-label="How many"
                 />
-                <button type="button" onClick={() => removeBed(row.key, bed.key)} aria-label="Remove bed" className="grid h-10 w-10 shrink-0 place-items-center text-basalt/40 transition-colors hover:text-destructive">
+                <button type="button" onClick={() => removeBed(row.key, bed.key)} aria-label="Remove bed" className="grid h-12 w-12 shrink-0 place-items-center text-basalt/40 transition-colors hover:text-destructive">
                   <Minus className="h-4 w-4" />
                 </button>
               </div>
@@ -323,7 +323,7 @@ export const RoomTypesEditor = forwardRef<RoomTypesEditorHandle, { defaultValue:
               value={row.description}
               onChange={(e) => patch(row.key, { description: e.target.value })}
               placeholder="Courtyard view, rain shower, breakfast included"
-              className="rounded-none"
+              className="rounded-none text-base md:text-base"
             />
           </div>
 

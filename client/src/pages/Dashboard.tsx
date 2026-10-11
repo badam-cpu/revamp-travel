@@ -42,7 +42,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useListings, LiveListing } from "@/contexts/ListingsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import type { ListingInput, ListingType, RoomType } from "@shared/listings";
-import { LISTING_LIMITS, STAY_SPACE_TYPES, listingOffers } from "@shared/listings";
+import { LISTING_LIMITS, LISTING_TEXT_LIMITS, STAY_SPACE_TYPES, firstListingTextProblem, listingOffers } from "@shared/listings";
+import { CharCount } from "@/components/CharCount";
 import { Switch } from "@/components/ui/switch";
 import { TimeSelect } from "@/components/TimeSelect";
 import { RoomTypesEditor, RoomTypesEditorHandle, validateRoomTypes } from "@/components/RoomTypesEditor";
@@ -272,7 +273,15 @@ const STEPS = [
 const LAST_STEP = STEPS.length - 1;
 
 /** Roomy, brand-radius field sizing shared across the onboarding inputs. */
-const FIELD = "h-12 rounded-none text-base";
+/** Roomy, brand-radius field sizing shared across EVERY control in the listing
+ * form — 48px tall, 16px text — so text boxes and dropdowns all match. The
+ * shared ui/Input drops to 14px on desktop (md:text-sm) and ui/SelectTrigger
+ * pins 36px via data-[size=default]:h-9, so both are overridden here. */
+const FIELD = "h-12 rounded-none text-base md:text-base";
+const SELECT_TRIGGER = "h-12 data-[size=default]:h-12 w-full rounded-none text-base";
+const NATIVE_SELECT = "h-12 w-full rounded-none border border-basalt/15 bg-paper px-3 text-base focus:border-apricot focus:outline-none";
+/** A lone field that should line up with one column of the two-column pairs. */
+const HALF = "sm:w-[calc(50%-0.5rem)]";
 
 // Stay property types offered in the listing form (stored in facts as
 // "Property type"; shown in place of the generic "Stay" on the listing page).
@@ -380,7 +389,10 @@ function ListingFormDialog({
   // Google Places autocomplete fills the uncontrolled fields imperatively.
   const setField = (name: string, value: string) => {
     const el = formRef.current?.elements.namedItem(name) as HTMLInputElement | null;
-    if (el) el.value = value;
+    if (!el) return;
+    el.value = value;
+    // Let listeners (character counters) see programmatic fills like Aha AI's.
+    el.dispatchEvent(new Event("input", { bubbles: true }));
   };
 
   const fieldValue = (name: string) =>
@@ -413,7 +425,11 @@ function ListingFormDialog({
   // Per-step required checks (native validation is off — hidden steps can't be
   // focused, so we gate progression ourselves; the server still Zod-validates).
   const validateStep = (s: number): boolean => {
-    if (s === 0 && (!fieldValue("title") || !fieldValue("eyebrow"))) return fail("Add a title and an eyebrow label to continue.");
+    if (s === 0) {
+      if (!fieldValue("title") || !fieldValue("eyebrow")) return fail("Add a title and an eyebrow label to continue.");
+      const lengthProblem = firstListingTextProblem({ title: fieldValue("title"), eyebrow: fieldValue("eyebrow") });
+      if (lengthProblem) return fail(lengthProblem);
+    }
     if (s === 1) {
       if (!fieldValue("city") || !fieldValue("region")) return fail("Add the city and region.");
       const lat = Number(fieldValue("lat"));
@@ -421,13 +437,19 @@ function ListingFormDialog({
       if (!fieldValue("lat") || !fieldValue("lng") || Number.isNaN(lat) || Number.isNaN(lng)) return fail("Add the latitude and longitude.");
       if (lat < 38 || lat > 42 || lng < 43 || lng > 47) return fail("Coordinates must be inside Armenia (lat 38–42, lng 43–47).");
     }
-    if (s === 2 && (!fieldValue("shortDescription") || !fieldValue("longDescription"))) return fail("Add a short and a full description.");
-    // Step 5 — pricing.
-    if (s === 4 && draft.type === "stay" && multiRoom) {
-      // A hotel is priced per room type — the rooms carry the required prices.
+    if (s === 2) {
+      if (!fieldValue("shortDescription") || !fieldValue("longDescription")) return fail("Add a short and a full description.");
+      const lengthProblem = firstListingTextProblem({ shortDescription: fieldValue("shortDescription"), longDescription: fieldValue("longDescription") });
+      if (lengthProblem) return fail(lengthProblem);
+    }
+    // Step 3 — a hotel's room types (with their rooms and prices) live in "Describe it".
+    if (s === 2 && draft.type === "stay" && multiRoom) {
       const roomError = validateRoomTypes(roomTypesRef.current?.getValue() ?? []);
       if (roomError) return fail(roomError);
-    } else if (s === 4) {
+    }
+    // Step 5 — pricing. A hotel is priced per room (step 3), so only the
+    // single-unit nightly price/offers are checked here.
+    if (s === 4 && !(draft.type === "stay" && multiRoom)) {
       // A stay with the offer block picks which prices are required; everything
       // else (and a stay offered nightly) still requires the nightly price.
       const hasOfferBlock = draft.type === "stay" && !!formRef.current?.elements.namedItem("offer_nightly");
@@ -636,16 +658,23 @@ function ListingFormDialog({
                     <AhaAssist field="title" listingType={draft.type} getContext={ahaContext} getCurrent={() => fieldValue("title")} onApplyText={(t) => setField("title", t)} />
                   </div>
                   <Input id="title" name="title" maxLength={LISTING_LIMITS.title} placeholder="e.g. Forest House Dilijan" defaultValue={draft.title} className={FIELD} />
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-xs text-basalt/45">{LISTING_TEXT_LIMITS.title.min}–{LISTING_TEXT_LIMITS.title.max} characters, so it fits on listing cards without being cut off.</p>
+                    <CharCount forId="title" field="title" />
+                  </div>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="eyebrow" className="text-sm font-semibold">Eyebrow label</Label>
                   <Input id="eyebrow" name="eyebrow" maxLength={LISTING_LIMITS.eyebrow} placeholder="e.g. Timber hideaway" defaultValue={draft.eyebrow} className={FIELD} />
-                  <p className="text-xs text-basalt/45">A short kicker (max {LISTING_LIMITS.eyebrow} characters) shown above the title on cards — not a full sentence.</p>
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-xs text-basalt/45">A short kicker ({LISTING_TEXT_LIMITS.eyebrow.min}–{LISTING_TEXT_LIMITS.eyebrow.max} characters) shown above the title on cards — not a full sentence.</p>
+                    <CharCount forId="eyebrow" field="eyebrow" />
+                  </div>
                 </div>
-                <div className="grid gap-2 sm:max-w-[16rem]">
+                <div className={cn("grid gap-2", HALF)}>
                   <Label htmlFor="accent" className="text-sm font-semibold">Map marker color</Label>
                   <Select name="accent" defaultValue={draft.accent}>
-                    <SelectTrigger id="accent" className="h-12 rounded-none text-base"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="accent" className={SELECT_TRIGGER}><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="apricot">Apricot</SelectItem>
                       <SelectItem value="sevan">Charcoal</SelectItem>
@@ -694,7 +723,7 @@ function ListingFormDialog({
                   <Input id="address" name="address" placeholder="e.g. 12 Aram St, Apt 4, Yerevan 0010" defaultValue={draft.address} className={FIELD} />
                   <p className="text-xs text-basalt/45">Kept private — shared with the guest after they book, not shown publicly.</p>
                 </div>
-                <div className="grid gap-6 sm:grid-cols-2">
+                <div className="grid items-start gap-4 sm:grid-cols-2">
                   <div className="grid gap-2">
                     <Label htmlFor="city" className="text-sm font-semibold">City</Label>
                     <Input id="city" name="city" placeholder="e.g. Yerevan" defaultValue={draft.city} className={FIELD} />
@@ -718,11 +747,11 @@ function ListingFormDialog({
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="grid gap-1.5">
                       <Label htmlFor="lat" className="text-xs font-semibold text-basalt/60">Latitude</Label>
-                      <Input id="lat" name="lat" type="number" step="0.0001" min={38} max={42} defaultValue={draft.coordinates?.lat} className="h-11 rounded-none" />
+                      <Input id="lat" name="lat" type="number" step="0.0001" min={38} max={42} defaultValue={draft.coordinates?.lat} className={FIELD} />
                     </div>
                     <div className="grid gap-1.5">
                       <Label htmlFor="lng" className="text-xs font-semibold text-basalt/60">Longitude</Label>
-                      <Input id="lng" name="lng" type="number" step="0.0001" min={43} max={47} defaultValue={draft.coordinates?.lng} className="h-11 rounded-none" />
+                      <Input id="lng" name="lng" type="number" step="0.0001" min={43} max={47} defaultValue={draft.coordinates?.lng} className={FIELD} />
                     </div>
                   </div>
                 </div>
@@ -730,20 +759,81 @@ function ListingFormDialog({
 
               {/* Step 3 — describe it */}
               <div hidden={step !== 2} className="mt-10 grid gap-6">
+                {/* Stay-only: what kind of place it is, then how it's laid out — a hotel's
+                    room types (with their rooms and prices), or a home's rooms & beds. */}
+                {draft.type === "stay" && (
+                  <div className="grid items-start gap-4 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="fact_spacetype" className="text-sm font-semibold">Space type</Label>
+                      <select
+                        id="fact_spacetype"
+                        name="fact_spacetype"
+                        defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "space type")?.value ?? ""}
+                        className={NATIVE_SELECT}
+                      >
+                        <option value="">Select…</option>
+                        {STAY_SPACE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <p className="text-xs text-basalt/45">What the guest books — shows as e.g. “Room in guesthouse”.</p>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="fact_propertytype" className="text-sm font-semibold">Property type</Label>
+                      <select
+                        id="fact_propertytype"
+                        name="fact_propertytype"
+                        defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "property type")?.value ?? ""}
+                        className={NATIVE_SELECT}
+                      >
+                        <option value="">Select a type…</option>
+                        {PROPERTY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                )}
+                {draft.type === "stay" && (
+                  <div className="grid gap-5">
+                    <div className="flex items-start gap-4 border border-basalt/15 bg-chalk/40 p-5">
+                      <Switch id="multiRoom" checked={multiRoom} onCheckedChange={setMultiRoom} className="mt-0.5" />
+                      <div>
+                        <Label htmlFor="multiRoom" className="text-sm font-semibold">This is a multi-room property (hotel)</Label>
+                        <p className="mt-1 text-sm text-basalt/55">For hotels, guesthouses and hostels. Add your room types and their rooms, each with its price; guests choose a room type on your page.</p>
+                      </div>
+                    </div>
+                    {multiRoom &&
+                      (roomTypes === null ? (
+                        <p className="text-sm text-basalt/50">Loading your room types…</p>
+                      ) : (
+                        <RoomTypesEditor ref={roomTypesRef} defaultValue={roomTypes} />
+                      ))}
+                  </div>
+                )}
+                {draft.type === "stay" && (
+                  <div hidden={multiRoom}>
+                    <RoomsEditor ref={roomsRef} defaultValue={draft.rooms ?? []} />
+                  </div>
+                )}
+
                 <div className="grid gap-2">
                   <div className="flex items-center justify-between gap-2">
                     <Label htmlFor="shortDescription" className="text-sm font-semibold">Short description</Label>
                     <AhaAssist field="shortDescription" listingType={draft.type} getContext={ahaContext} getCurrent={() => fieldValue("shortDescription")} onApplyText={(t) => setField("shortDescription", t)} />
                   </div>
-                  <Textarea id="shortDescription" name="shortDescription" maxLength={LISTING_LIMITS.shortDescription} rows={2} placeholder="One or two lines shown on cards." defaultValue={draft.shortDescription} className="rounded-none text-base" />
-                  <p className="text-xs text-basalt/45">Max {LISTING_LIMITS.shortDescription} characters — a tight one or two lines for cards.</p>
+                  <Textarea id="shortDescription" name="shortDescription" maxLength={LISTING_LIMITS.shortDescription} rows={2} placeholder="One or two lines shown on cards." defaultValue={draft.shortDescription} className="rounded-none text-base md:text-base" />
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-xs text-basalt/45">{LISTING_TEXT_LIMITS.shortDescription.min}–{LISTING_TEXT_LIMITS.shortDescription.max} characters — exactly the two lines a listing card shows.</p>
+                    <CharCount forId="shortDescription" field="shortDescription" />
+                  </div>
                 </div>
                 <div className="grid gap-2">
                   <div className="flex items-center justify-between gap-2">
                     <Label htmlFor="longDescription" className="text-sm font-semibold">Full description</Label>
                     <AhaAssist field="longDescription" listingType={draft.type} getContext={ahaContext} getCurrent={() => fieldValue("longDescription")} onApplyText={(t) => setField("longDescription", t)} />
                   </div>
-                  <Textarea id="longDescription" name="longDescription" rows={5} placeholder="The full write-up shown on the listing page." defaultValue={draft.longDescription} className="rounded-none text-base" />
+                  <Textarea id="longDescription" name="longDescription" maxLength={LISTING_LIMITS.longDescription} rows={5} placeholder="The full write-up shown on the listing page." defaultValue={draft.longDescription} className="rounded-none text-base md:text-base" />
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-xs text-basalt/45">At least {LISTING_TEXT_LIMITS.longDescription.min} characters — a few real sentences about the place.</p>
+                    <CharCount forId="longDescription" field="longDescription" />
+                  </div>
                 </div>
                 {draft.type === "stay" && (
                   <div className="grid gap-2">
@@ -751,7 +841,7 @@ function ListingFormDialog({
                       <Label htmlFor="neighborhood" className="text-sm font-semibold">Describe the neighborhood <span className="font-normal text-basalt/45">(optional)</span></Label>
                       <AhaAssist field="neighborhood" listingType={draft.type} getContext={ahaContext} getCurrent={() => fieldValue("neighborhood")} onApplyText={(t) => setField("neighborhood", t)} />
                     </div>
-                    <Textarea id="neighborhood" name="neighborhood" rows={3} placeholder="What's the area like — the street, the vibe, what's within a short walk?" defaultValue={draft.neighborhood} className="rounded-none text-base" />
+                    <Textarea id="neighborhood" name="neighborhood" rows={3} placeholder="What's the area like — the street, the vibe, what's within a short walk?" defaultValue={draft.neighborhood} className="rounded-none text-base md:text-base" />
                     <p className="text-xs text-basalt/45">Nearby major sights are shown automatically on your listing based on its location.</p>
                   </div>
                 )}
@@ -765,41 +855,6 @@ function ListingFormDialog({
               <div hidden={step !== 3} className="mt-10 grid gap-8">
                 <AmenityPicker ref={amenitiesRef} type={draft.type} defaultValue={draft.amenities ?? []} />
 
-                {/* Stay-only sleeping arrangement, seasonal rates + house rules. */}
-                {draft.type === "stay" && (
-                  <div className="grid items-start gap-4 sm:max-w-md sm:grid-cols-2">
-                    <div className="grid gap-2">
-                      <Label htmlFor="fact_spacetype" className="text-sm font-semibold">Space type</Label>
-                      <select
-                        id="fact_spacetype"
-                        name="fact_spacetype"
-                        defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "space type")?.value ?? ""}
-                        className="h-12 rounded-none border border-basalt/15 bg-paper px-3 text-base focus:border-apricot focus:outline-none"
-                      >
-                        <option value="">Select…</option>
-                        {STAY_SPACE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                      <p className="text-xs text-basalt/45">What the guest books — shows as e.g. “Room in guesthouse”.</p>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="fact_propertytype" className="text-sm font-semibold">Property type</Label>
-                      <select
-                        id="fact_propertytype"
-                        name="fact_propertytype"
-                        defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "property type")?.value ?? ""}
-                        className="h-12 rounded-none border border-basalt/15 bg-paper px-3 text-base focus:border-apricot focus:outline-none"
-                      >
-                        <option value="">Select a type…</option>
-                        {PROPERTY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                )}
-                {draft.type === "stay" && (
-                  <div hidden={multiRoom}>
-                    <RoomsEditor ref={roomsRef} defaultValue={draft.rooms ?? []} />
-                  </div>
-                )}
                 {draft.type === "stay" && (
                   <div className="grid gap-3">
                     <div>
@@ -813,7 +868,7 @@ function ListingFormDialog({
                           id="fact_checkin"
                           name="fact_checkin"
                           defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "check-in")?.value ?? ""}
-                          className="h-12 rounded-none border border-basalt/15 bg-paper px-3 text-base focus:border-apricot focus:outline-none"
+                          className={NATIVE_SELECT}
                         />
                       </div>
                       <div className="grid gap-2">
@@ -822,7 +877,7 @@ function ListingFormDialog({
                           id="fact_checkout"
                           name="fact_checkout"
                           defaultValue={draft.facts?.find((f) => f.label.toLowerCase() === "checkout")?.value ?? ""}
-                          className="h-12 rounded-none border border-basalt/15 bg-paper px-3 text-base focus:border-apricot focus:outline-none"
+                          className={NATIVE_SELECT}
                         />
                       </div>
                     </div>
@@ -863,7 +918,7 @@ function ListingFormDialog({
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="importantInfo" className="text-sm font-semibold">Important info <span className="font-normal text-basalt/45">(optional)</span></Label>
-                      <Textarea id="importantInfo" name="importantInfo" rows={2} placeholder="Age restrictions, accessibility notes, cancellation policy…" defaultValue={draft.importantInfo} className="rounded-none text-base" />
+                      <Textarea id="importantInfo" name="importantInfo" rows={2} placeholder="Age restrictions, accessibility notes, cancellation policy…" defaultValue={draft.importantInfo} className="rounded-none text-base md:text-base" />
                     </div>
                   </div>
                 )}
@@ -894,8 +949,8 @@ function ListingFormDialog({
                       const [exLabel, exValue] = FACT_EXAMPLES[draft.type][i];
                       return (
                         <div key={i} className="grid grid-cols-2 gap-2">
-                          <Input name={`fact${i + 1}Label`} placeholder={`Label, e.g. ${exLabel}`} defaultValue={draft.facts?.[i]?.label} className="h-11 rounded-none" />
-                          <Input name={`fact${i + 1}Value`} placeholder={`Value, e.g. ${exValue}`} defaultValue={draft.facts?.[i]?.value} className="h-11 rounded-none" />
+                          <Input name={`fact${i + 1}Label`} placeholder={`Label, e.g. ${exLabel}`} defaultValue={draft.facts?.[i]?.label} className={FIELD} />
+                          <Input name={`fact${i + 1}Value`} placeholder={`Value, e.g. ${exValue}`} defaultValue={draft.facts?.[i]?.value} className={FIELD} />
                         </div>
                       );
                     })}
@@ -917,23 +972,6 @@ function ListingFormDialog({
 
               {/* Step 5 — pricing */}
               <div hidden={step !== 4} className="mt-10 grid gap-8">
-                {draft.type === "stay" && (
-                  <div className="grid gap-5">
-                    <div className="flex items-start gap-4 border border-basalt/15 bg-chalk/40 p-5">
-                      <Switch id="multiRoom" checked={multiRoom} onCheckedChange={setMultiRoom} className="mt-0.5" />
-                      <div>
-                        <Label htmlFor="multiRoom" className="text-sm font-semibold">This is a multi-room property (hotel)</Label>
-                        <p className="mt-1 text-sm text-basalt/55">For hotels, guesthouses and hostels. Add your room types and their rooms, each with its price; guests choose a room type on your page.</p>
-                      </div>
-                    </div>
-                    {multiRoom &&
-                      (roomTypes === null ? (
-                        <p className="text-sm text-basalt/50">Loading your room types…</p>
-                      ) : (
-                        <RoomTypesEditor ref={roomTypesRef} defaultValue={roomTypes} />
-                      ))}
-                  </div>
-                )}
 
                 {/* revampstay — "How do you want to offer it?" (stays only).
                     Nightly is always on (the price field below); monthly and
@@ -972,7 +1010,7 @@ function ListingFormDialog({
                         <div className="grid gap-2">
                           <Label htmlFor="furnished" className="text-sm font-semibold">Furnishing</Label>
                           <Select name="furnished" defaultValue={draft.furnished ?? "furnished"}>
-                            <SelectTrigger id="furnished" className="h-12 rounded-none text-base"><SelectValue /></SelectTrigger>
+                            <SelectTrigger id="furnished" className={SELECT_TRIGGER}><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="furnished">Furnished</SelectItem>
                               <SelectItem value="semi">Semi-furnished</SelectItem>
@@ -1022,7 +1060,7 @@ function ListingFormDialog({
                   </div>
                 )}
 
-                <div className="grid gap-6 sm:grid-cols-3">
+                <div className="grid items-start gap-4 sm:grid-cols-2">
                   {/* A hotel's price, unit and guest caps come from its room types. */}
                   <div className="grid gap-2" hidden={multiRoom}>
                     <Label htmlFor="price" className="text-sm font-semibold">Price in AMD ({draft.type === "stay" ? "per night" : "per person"})</Label>
@@ -1037,18 +1075,21 @@ function ListingFormDialog({
                     <Input id="maxGuests" name="maxGuests" type="number" min={1} max={50} placeholder={draft.type === "stay" ? "e.g. 4" : "e.g. 8"} defaultValue={draft.maxGuests || ""} className={FIELD} />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="cleaningFee" className="text-sm font-semibold">Cleaning fee in AMD <span className="font-normal text-basalt/45">(optional, per booking)</span></Label>
+                    <Label htmlFor="cleaningFee" className="text-sm font-semibold">Cleaning fee (AMD)</Label>
                     <Input id="cleaningFee" name="cleaningFee" type="number" min={0} placeholder="e.g. 10000" defaultValue={draft.cleaningFeeCents ? draft.cleaningFeeCents / 100 : ""} className={FIELD} />
+                    <p className="text-xs text-basalt/45">Optional — charged once per booking.</p>
                   </div>
                   {draft.type === "stay" && !multiRoom && (
                     <>
                       <div className="grid gap-2">
-                        <Label htmlFor="guestsIncluded" className="text-sm font-semibold">Guests included in price <span className="font-normal text-basalt/45">(optional)</span></Label>
+                        <Label htmlFor="guestsIncluded" className="text-sm font-semibold">Guests included</Label>
                         <Input id="guestsIncluded" name="guestsIncluded" type="number" min={1} max={50} placeholder="e.g. 2" defaultValue={draft.guestsIncluded || ""} className={FIELD} />
+                        <p className="text-xs text-basalt/45">Optional — guests covered by the nightly price.</p>
                       </div>
                       <div className="grid gap-2">
-                        <Label htmlFor="extraGuestFee" className="text-sm font-semibold">Extra guest fee in AMD <span className="font-normal text-basalt/45">(per extra guest, per night)</span></Label>
+                        <Label htmlFor="extraGuestFee" className="text-sm font-semibold">Extra guest fee (AMD)</Label>
                         <Input id="extraGuestFee" name="extraGuestFee" type="number" min={0} placeholder="e.g. 8000" defaultValue={draft.extraGuestFeeCents ? draft.extraGuestFeeCents / 100 : ""} className={FIELD} />
+                        <p className="text-xs text-basalt/45">Per extra guest, per night.</p>
                       </div>
                     </>
                   )}
@@ -1061,7 +1102,7 @@ function ListingFormDialog({
                   </div>
                 )}
                 {draft.type === "stay" && (
-                  <div className="grid gap-2 sm:max-w-xs">
+                  <div className={cn("grid gap-2", HALF)}>
                     <Label htmlFor="fact_minstay" className="text-sm font-semibold">Minimum stay <span className="font-normal text-basalt/45">(nights)</span></Label>
                     <Input id="fact_minstay" name="fact_minstay" type="number" min={1} max={365} placeholder="e.g. 2" defaultValue={parseInt(draft.facts?.find((f) => f.label.toLowerCase() === "minimum stay")?.value ?? "", 10) || ""} className={FIELD} />
                   </div>
@@ -1071,14 +1112,14 @@ function ListingFormDialog({
                   <div className="grid gap-2">
                     <Label htmlFor="cancellationPolicy" className="text-sm font-semibold">Cancellation policy</Label>
                     <Select name="cancellationPolicy" defaultValue={draft.cancellationPolicy ?? "flexible"}>
-                      <SelectTrigger id="cancellationPolicy" className="h-12 rounded-none text-base"><SelectValue /></SelectTrigger>
+                      <SelectTrigger id="cancellationPolicy" className={SELECT_TRIGGER}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="flexible">Flexible — free cancellation up to a cutoff</SelectItem>
                         <SelectItem value="non_refundable">Non-refundable — cheaper, no refunds</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="grid gap-6 sm:grid-cols-2">
+                  <div className="grid items-start gap-4 sm:grid-cols-2">
                     <div className="grid gap-2">
                       <Label htmlFor="freeCancelDays" className="text-sm font-semibold">Free-cancel window <span className="font-normal text-basalt/45">(flexible)</span></Label>
                       <Input id="freeCancelDays" name="freeCancelDays" type="number" min={0} max={365} placeholder="7" defaultValue={draft.freeCancelDays ?? 7} className={FIELD} />
@@ -1097,11 +1138,11 @@ function ListingFormDialog({
                     <Label className="text-sm font-semibold">Discount <span className="font-normal text-basalt/45">(optional sale for a travel-date window)</span></Label>
                     <p className="mt-1 text-xs text-basalt/45">Applies when a guest's check-in falls within the dates below. Shows an "on sale" badge on your listing.</p>
                   </div>
-                  <div className="grid gap-6 sm:grid-cols-2">
+                  <div className="grid items-start gap-4 sm:grid-cols-2">
                     <div className="grid gap-2">
                       <Label htmlFor="discountType" className="text-sm font-semibold">Type</Label>
                       <Select name="discountType" defaultValue={draft.discountType ?? "none"}>
-                        <SelectTrigger id="discountType" className="h-12 rounded-none text-base"><SelectValue /></SelectTrigger>
+                        <SelectTrigger id="discountType" className={SELECT_TRIGGER}><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">No discount</SelectItem>
                           <SelectItem value="percent">Percentage off (%)</SelectItem>

@@ -740,15 +740,71 @@ export const ARMENIA_REGIONS = [
 ];
 
 /**
- * Character limits for the card-facing text fields, so operator input can't
- * break the listing-card / detail design. Enforced in the operator forms
- * (maxLength + counters) and clamped on display as a safety net.
+ * Length rules for the card-facing text of EVERY listing type, so all cards
+ * read the same — no title cut off with "…" next to a one-word one. Sized to
+ * what a listing card shows without truncating (eyebrow: one uppercase line;
+ * title and short description: two lines each). The single source for the
+ * operator/admin forms (hard max + live counter + min check on save) and for
+ * Aha AI, which writes to the same ranges.
  */
-export const LISTING_LIMITS = {
-  eyebrow: 40, // small uppercase kicker (one line)
-  title: 60, // ~2 lines on a card
-  shortDescription: 160, // ~2 lines; also a good SEO meta length
+export const LISTING_TEXT_LIMITS = {
+  eyebrow: { min: 6, max: 36 },
+  title: { min: 10, max: 40 },
+  shortDescription: { min: 40, max: 80 },
+  longDescription: { min: 150, max: 5000 },
 } as const;
+export type ListingTextField = keyof typeof LISTING_TEXT_LIMITS;
+
+/** Max lengths only (inputs' maxLength). */
+export const LISTING_LIMITS = {
+  eyebrow: LISTING_TEXT_LIMITS.eyebrow.max,
+  title: LISTING_TEXT_LIMITS.title.max,
+  shortDescription: LISTING_TEXT_LIMITS.shortDescription.max,
+  longDescription: LISTING_TEXT_LIMITS.longDescription.max,
+} as const;
+
+const TEXT_FIELD_NAMES: Record<ListingTextField, string> = {
+  eyebrow: "The eyebrow label",
+  title: "The title",
+  shortDescription: "The short description",
+  longDescription: "The full description",
+};
+
+/**
+ * The min/max for a field on a given listing type. Restaurants and places
+ * (curated) carry their real names ("Dolmama"), so their title minimum is 2.
+ */
+export function listingTextLimits(field: ListingTextField, listingType?: ListingType): { min: number; max: number } {
+  const rule = LISTING_TEXT_LIMITS[field];
+  if (field === "title" && listingType && isCuratedType(listingType)) return { min: 2, max: rule.max };
+  return rule;
+}
+
+/**
+ * What's wrong with a field's length, in plain words — or null when it's within
+ * the rules. `optional` lets an empty value pass (e.g. a curated venue's long
+ * description); anything typed still has to fit.
+ */
+export function listingTextProblem(field: ListingTextField, value: string, opts: { listingType?: ListingType; optional?: boolean } = {}): string | null {
+  const n = value.trim().length;
+  if (n === 0 && opts.optional) return null;
+  const { min, max } = listingTextLimits(field, opts.listingType);
+  if (n < min) return `${TEXT_FIELD_NAMES[field]} needs at least ${min} characters (it has ${n}).`;
+  if (n > max) return `${TEXT_FIELD_NAMES[field]} can be at most ${max} characters so it fits on listing cards (it has ${n}).`;
+  return null;
+}
+
+/** First length problem among the given fields, or null. */
+export function firstListingTextProblem(
+  values: Partial<Record<ListingTextField, string>>,
+  opts: { listingType?: ListingType; optional?: ListingTextField[] } = {},
+): string | null {
+  for (const field of Object.keys(values) as ListingTextField[]) {
+    const problem = listingTextProblem(field, values[field] ?? "", { listingType: opts.listingType, optional: opts.optional?.includes(field) });
+    if (problem) return problem;
+  }
+  return null;
+}
 
 export const typeLabels: Record<ListingType, string> = {
   stay: "Stay",

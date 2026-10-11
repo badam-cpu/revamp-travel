@@ -66,12 +66,12 @@ export const VideoField = forwardRef<VideoFieldHandle, { defaultValue?: string }
       ) : (
         <div className="grid gap-2">
           <input ref={inputRef} type="file" accept={ACCEPTED_VIDEO} onChange={onFile} className="hidden" />
-          <Button type="button" variant="outline" onClick={() => inputRef.current?.click()} disabled={busy} className="h-11 justify-center rounded-none border-dashed">
+          <Button type="button" variant="outline" onClick={() => inputRef.current?.click()} disabled={busy} className="h-12 justify-center rounded-none border-dashed">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Upload className="mr-2 h-4 w-4" /> Upload a short clip (≤ {MAX_VIDEO_SECONDS}s, MP4/WebM)</>}
           </Button>
           <div className="flex items-center gap-2">
-            <Input value={urlDraft} onChange={(e) => setUrlDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addUrl(); } }} placeholder="…or paste a YouTube / Vimeo link" className="h-10 rounded-none" />
-            <Button type="button" variant="outline" onClick={addUrl} className="h-10 shrink-0 rounded-none border-basalt/20"><Link2 className="h-4 w-4" /></Button>
+            <Input value={urlDraft} onChange={(e) => setUrlDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addUrl(); } }} placeholder="…or paste a YouTube / Vimeo link" className="h-12 rounded-none text-base md:text-base" />
+            <Button type="button" variant="outline" onClick={addUrl} className="h-12 shrink-0 rounded-none border-basalt/20 px-5"><Link2 className="h-4 w-4" /></Button>
           </div>
         </div>
       )}

@@ -72,6 +72,8 @@ import { AhaAssist } from "@/components/AhaAssist";
 import type { ResolvedPlace } from "@/lib/googleMaps";
 import { useListings, LiveListing } from "@/contexts/ListingsContext";
 import type { ListingFact, ListingInput } from "@shared/listings";
+import { LISTING_LIMITS, LISTING_TEXT_LIMITS, firstListingTextProblem } from "@shared/listings";
+import { CharCount } from "@/components/CharCount";
 import { ApiError, type AhaCopyContext } from "@/lib/api";
 import { factValue } from "@/lib/tourFacts";
 import { cn } from "@/lib/utils";
@@ -304,10 +306,17 @@ const STEP_META: { title: string; subtitle: string }[] = [
   { title: "Review & submit", subtitle: "Take one last look before it goes to review." },
 ];
 
+/** The step's card-text length problem (shared rules), shown under "Next" — or null. */
+function stepTextProblem(step: number, d: WizardData): string | null {
+  if (step === 0) return firstListingTextProblem({ eyebrow: d.eyebrow, title: d.title });
+  if (step === 2) return firstListingTextProblem({ shortDescription: d.shortDescription, longDescription: d.longDescription });
+  return null;
+}
+
 const STEP_VALIDATORS: ((data: WizardData) => boolean)[] = [
-  (d) => d.eyebrow.trim().length > 0 && d.title.trim().length > 0,
+  (d) => d.eyebrow.trim().length > 0 && d.title.trim().length > 0 && !stepTextProblem(0, d),
   (d) => d.city.trim().length > 0 && d.region.trim().length > 0,
-  (d) => d.shortDescription.trim().length > 0 && d.longDescription.trim().length > 0,
+  (d) => d.shortDescription.trim().length > 0 && d.longDescription.trim().length > 0 && !stepTextProblem(2, d),
   (d) => d.highlights.length > 0,
   (d) => d.duration.trim().length > 0 && d.groupSize.trim().length > 0 && d.meetingPoint.trim().length > 0,
   () => true,
@@ -520,14 +529,17 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                 <div className="mt-8 grid gap-6">
                   {/* Step 0 — The basics */}
                   <div className={cn("grid gap-6", currentStep !== 0 && "hidden")}>
-                    <StepField label="Category label" help='Short and specific — e.g. "Hands-on kitchen class" or "Craft workshop".'>
-                      <Input value={data.eyebrow} onChange={(e) => set("eyebrow", e.target.value)} placeholder="Hands-on kitchen class" />
+                    <StepField label="Category label" help={`Short and specific (${LISTING_TEXT_LIMITS.eyebrow.min}–${LISTING_TEXT_LIMITS.eyebrow.max} characters) — e.g. "Hands-on kitchen class" or "Craft workshop".`}>
+                      <Input value={data.eyebrow} maxLength={LISTING_LIMITS.eyebrow} onChange={(e) => set("eyebrow", e.target.value)} placeholder="Hands-on kitchen class" />
+                      <CharCount field="eyebrow" value={data.eyebrow} className="justify-self-end" />
                     </StepField>
                     <StepField
                       label="Title"
+                      help={`${LISTING_TEXT_LIMITS.title.min}–${LISTING_TEXT_LIMITS.title.max} characters, so it fits on listing cards without being cut off.`}
                       action={<AhaAssist field="title" listingType="experience" getContext={ahaCtx} getCurrent={() => data.title} onApplyText={(t) => set("title", t)} />}
                     >
-                      <Input value={data.title} onChange={(e) => set("title", e.target.value)} placeholder="Lavash & Wine Craft Afternoon" />
+                      <Input value={data.title} maxLength={LISTING_LIMITS.title} onChange={(e) => set("title", e.target.value)} placeholder="Lavash & Wine Craft Afternoon" />
+                      <CharCount field="title" value={data.title} className="justify-self-end" />
                     </StepField>
                     <ListEditor
                       label="Tags (optional)"
@@ -580,17 +592,19 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                   <div className={cn("grid gap-6", currentStep !== 2 && "hidden")}>
                     <StepField
                       label="Short description"
-                      help="One or two sentences — shown on the listing card."
+                      help={`${LISTING_TEXT_LIMITS.shortDescription.min}–${LISTING_TEXT_LIMITS.shortDescription.max} characters — exactly the two lines a listing card shows.`}
                       action={<AhaAssist field="shortDescription" listingType="experience" getContext={ahaCtx} getCurrent={() => data.shortDescription} onApplyText={(t) => set("shortDescription", t)} />}
                     >
-                      <Textarea rows={2} value={data.shortDescription} onChange={(e) => set("shortDescription", e.target.value)} />
+                      <Textarea rows={2} value={data.shortDescription} maxLength={LISTING_LIMITS.shortDescription} onChange={(e) => set("shortDescription", e.target.value)} />
+                      <CharCount field="shortDescription" value={data.shortDescription} className="justify-self-end" />
                     </StepField>
                     <StepField
                       label="Full description"
-                      help="The story of the experience — what makes it worth doing, told in your own voice."
+                      help={`The story of the experience — what makes it worth doing, told in your own voice. At least ${LISTING_TEXT_LIMITS.longDescription.min} characters.`}
                       action={<AhaAssist field="longDescription" listingType="experience" getContext={ahaCtx} getCurrent={() => data.longDescription} onApplyText={(t) => set("longDescription", t)} />}
                     >
-                      <Textarea rows={6} value={data.longDescription} onChange={(e) => set("longDescription", e.target.value)} />
+                      <Textarea rows={6} value={data.longDescription} maxLength={LISTING_LIMITS.longDescription} onChange={(e) => set("longDescription", e.target.value)} />
+                      <CharCount field="longDescription" value={data.longDescription} className="justify-self-end" />
                     </StepField>
                   </div>
 
@@ -842,7 +856,7 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                   <Button type="button" className="rounded-none bg-apricot text-white hover:bg-apricot/90" onClick={goNext} disabled={!canAdvance}>
                     Next <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
-                  {!canAdvance && <p className="mt-1.5 text-xs text-tuff">Fill in this step to continue.</p>}
+                  {!canAdvance && <p className="mt-1.5 text-xs text-tuff">{stepTextProblem(currentStep, data) ?? "Fill in this step to continue."}</p>}
                 </div>
               )}
             </div>

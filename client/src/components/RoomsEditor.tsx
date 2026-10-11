@@ -58,8 +58,8 @@ export const RoomsEditor = forwardRef<RoomsEditorHandle, { defaultValue: Listing
       {rooms.map((room) => (
         <div key={room.id} className="grid gap-3 border border-basalt/10 bg-paper p-4">
           <div className="flex items-center gap-2">
-            <Input value={room.name} onChange={(e) => setRoomName(room.id, e.target.value)} placeholder="Room name (e.g. Bedroom, Living room)" className="h-11 rounded-none" />
-            <button type="button" onClick={() => removeRoom(room.id)} aria-label="Remove room" className="grid h-11 w-11 shrink-0 place-items-center border border-basalt/15 text-basalt/50 transition-colors hover:border-destructive hover:text-destructive">
+            <Input value={room.name} onChange={(e) => setRoomName(room.id, e.target.value)} placeholder="Room name (e.g. Bedroom, Living room)" className="h-12 rounded-none text-base md:text-base" />
+            <button type="button" onClick={() => removeRoom(room.id)} aria-label="Remove room" className="grid h-12 w-12 shrink-0 place-items-center border border-basalt/15 text-basalt/50 transition-colors hover:border-destructive hover:text-destructive">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -67,7 +67,7 @@ export const RoomsEditor = forwardRef<RoomsEditorHandle, { defaultValue: Listing
             {room.beds.map((bed) => (
               <div key={bed.id} className="flex items-center gap-2">
                 <Select value={bed.type} onValueChange={(v) => setBed(room.id, bed.id, { type: v })}>
-                  <SelectTrigger className="h-10 flex-1 rounded-none text-sm"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-12 data-[size=default]:h-12 flex-1 rounded-none text-base"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {BED_TYPES.map((t) => (
                       <SelectItem key={t} value={t}>{t}</SelectItem>
@@ -80,10 +80,10 @@ export const RoomsEditor = forwardRef<RoomsEditorHandle, { defaultValue: Listing
                   max={20}
                   value={bed.count}
                   onChange={(e) => setBed(room.id, bed.id, { count: Number(e.target.value) || 1 })}
-                  className="h-10 w-20 rounded-none text-sm"
+                  className="h-12 w-20 rounded-none text-base md:text-base"
                   aria-label="How many"
                 />
-                <button type="button" onClick={() => removeBed(room.id, bed.id)} aria-label="Remove bed" className="grid h-10 w-10 shrink-0 place-items-center text-basalt/40 transition-colors hover:text-destructive">
+                <button type="button" onClick={() => removeBed(room.id, bed.id)} aria-label="Remove bed" className="grid h-12 w-12 shrink-0 place-items-center text-basalt/40 transition-colors hover:text-destructive">
                   <Minus className="h-4 w-4" />
                 </button>
               </div>

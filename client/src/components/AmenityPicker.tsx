@@ -328,7 +328,7 @@ export const AmenityPicker = forwardRef<AmenityPickerHandle, { type: ListingType
             onChange={(e) => setCustomText(e.target.value)}
             onKeyDown={handleCustomKeyDown}
             placeholder={type === "stay" ? "Add a custom amenity" : "Add a custom inclusion"}
-            className="h-9 rounded-none text-sm"
+            className="h-12 rounded-none text-base md:text-base"
           />
           <Button
             type="button"
@@ -336,7 +336,7 @@ export const AmenityPicker = forwardRef<AmenityPickerHandle, { type: ListingType
             size="sm"
             onClick={addCustom}
             disabled={!customText.trim()}
-            className="h-9 shrink-0 rounded-none border-basalt/15 text-xs"
+            className="h-12 shrink-0 rounded-none border-basalt/15 px-5 text-sm"
           >
             Add
           </Button>

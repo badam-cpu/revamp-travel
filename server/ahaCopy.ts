@@ -9,6 +9,7 @@
  * mirroring the app's no-fabrication policy.
  */
 import Anthropic from "@anthropic-ai/sdk";
+import { LISTING_TEXT_LIMITS, listingTextLimits } from "../shared/listings.js";
 
 let client: Anthropic | null | undefined;
 function getClient(): Anthropic | null {
@@ -60,10 +61,13 @@ const TYPE_GUIDE: Record<AhaListingType, string> = {
   place: "A place to visit (museum, gallery, library, coworking space, etc.). Lead with what it is and where, what you'll see or do there, the atmosphere, and practical good-to-knows (hours, entry). Editorial, not salesy — these are free picks.",
 };
 
+// Length ranges come from the same rules the listing forms enforce
+// (shared/listings.ts LISTING_TEXT_LIMITS), so Aha's text always fits a card.
+const T = LISTING_TEXT_LIMITS;
 const FIELD_GUIDE: Record<AhaField, string> = {
-  title: "A listing TITLE: a specific, appealing name — max ~60 characters, no ALL CAPS, no clickbait, no quotes. Return the title only.",
-  shortDescription: "A one-line SHORT DESCRIPTION (~110–160 characters): a single sentence that leads with the place + the hook. No line breaks. Return the sentence only.",
-  longDescription: "A LONG DESCRIPTION: 2–4 short paragraphs (roughly 60–140 words total). Scannable, concrete, warm. No headings, no bullet lists, no markdown. Return the paragraphs only, separated by blank lines.",
+  title: `A listing TITLE: a specific, appealing name — between ${T.title.min} and ${T.title.max} characters INCLUDING spaces (it must fit two short lines on a card), no ALL CAPS, no clickbait, no quotes, no "|" separators. Return the title only.`,
+  shortDescription: `A SHORT DESCRIPTION: one sentence of ${T.shortDescription.min}–${T.shortDescription.max} characters INCLUDING spaces (it must fit two short lines on a card) that leads with the place + the hook. No line breaks. Return the sentence only.`,
+  longDescription: `A LONG DESCRIPTION: 2–4 short paragraphs (roughly 60–140 words, at least ${T.longDescription.min} characters). Scannable, concrete, warm. No headings, no bullet lists, no markdown. Return the paragraphs only, separated by blank lines.`,
   highlights: "HIGHLIGHTS / itinerary: 4–6 short, punchy bullet points (each ≤ ~12 words), in a sensible order. Return ONE per line, no numbering, no bullet characters, no markdown.",
   neighborhood: "A NEIGHBOURHOOD description: 1–3 short paragraphs about the area around the stay — the street, the vibe, and what's genuinely within a short walk (cafes, sights, transport, shops). Concrete and local, not generic. Only mention specific landmarks or walking distances you can infer from the city/region context — never invent them. No headings, no bullet lists, no markdown. Return the paragraphs only, separated by blank lines.",
 };
@@ -105,18 +109,24 @@ export async function generateListingCopy(input: AhaCopyInput): Promise<AhaCopyR
 
   const userMsg = `${task}\n\nFORMAT: ${FIELD_GUIDE[input.field]}\n\nDRAFT CONTEXT:\n${ctxLines.join("\n")}`;
 
-  try {
+  const ask = async (messages: Anthropic.MessageParam[]): Promise<string> => {
     const response = await anthropic.messages.create({
       model: process.env.SUPPORT_MODEL || "claude-haiku-4-5",
       max_tokens: 700,
       system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }] as unknown as Anthropic.MessageCreateParams["system"],
-      messages: [{ role: "user", content: userMsg }],
+      messages,
     });
-    const raw = response.content
+    return response.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
       .map((b) => b.text)
       .join("\n")
       .trim();
+  };
+  // Strip accidental wrapping quotes for title/short.
+  const clean = (s: string) => s.replace(/^["“']+|["”']+$/g, "").trim();
+
+  try {
+    const raw = await ask([{ role: "user", content: userMsg }]);
     if (!raw) return {};
     if (input.field === "highlights") {
       const items = raw
@@ -126,11 +136,40 @@ export async function generateListingCopy(input: AhaCopyInput): Promise<AhaCopyR
         .slice(0, 8);
       return { items };
     }
-    // Strip accidental wrapping quotes for title/short.
-    const text = raw.replace(/^["“']+|["”']+$/g, "").trim();
+    let text = clean(raw);
+
+    // Hold the card-text fields to the same length rules as the forms: one
+    // corrective retry with the exact count, then trim at a word boundary as
+    // a last resort (never past the max — the form would refuse it).
+    if (input.field === "title" || input.field === "shortDescription" || input.field === "longDescription") {
+      const { min, max } = listingTextLimits(input.field, input.listingType);
+      const fits = (s: string) => s.length >= min && s.length <= max;
+      if (!fits(text)) {
+        const retry = clean(
+          await ask([
+            { role: "user", content: userMsg },
+            { role: "assistant", content: text },
+            {
+              role: "user",
+              content: `That is ${text.length} characters. It must be between ${min} and ${max} characters including spaces. ${text.length > max ? "Shorten it" : "Expand it a little"} — same facts, same standards. Return only the ${input.field}.`,
+            },
+          ]),
+        );
+        if (retry && (fits(retry) || Math.abs(retry.length - max) < Math.abs(text.length - max))) text = retry;
+      }
+      if (text.length > max) text = trimToWords(text, max);
+    }
     return { text };
   } catch (err) {
     console.error("[aha-copy] generation failed", err);
     return {};
   }
+}
+
+/** Cut at the last whole word that fits (and drop a dangling separator). */
+function trimToWords(s: string, max: number): string {
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max + 1);
+  const atSpace = cut.lastIndexOf(" ");
+  return (atSpace > max * 0.6 ? cut.slice(0, atSpace) : s.slice(0, max)).replace(/[\s,;:–—|&-]+$/, "").trim();
 }
