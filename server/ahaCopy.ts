@@ -104,7 +104,7 @@ export async function generateListingCopy(input: AhaCopyInput): Promise<AhaCopyR
 
   const task =
     input.mode === "improve" && input.current?.trim()
-      ? `TASK: Improve the operator's existing ${input.field} below — keep their true facts and intent, fix tone/clarity/structure, and apply the standards. Do not add facts they didn't state.\n\nExisting ${input.field}:\n${input.current.trim()}`
+      ? `TASK: Improve the operator's existing ${input.field} below — keep their true facts and intent, fix tone/clarity/structure, and apply the standards. Do not add facts they didn't state.${input.current.includes("**") ? " Keep their **bold** markers around the same words or headings." : ""}\n\nExisting ${input.field}:\n${input.current.trim()}`
       : `TASK: Write a fresh ${input.field} from the draft context. If details are thin, keep it general but never invent specifics.`;
 
   const userMsg = `${task}\n\nFORMAT: ${FIELD_GUIDE[input.field]}\n\nDRAFT CONTEXT:\n${ctxLines.join("\n")}`;

@@ -14,6 +14,7 @@ import { EAT_CATEGORIES, VENUE_TYPES } from "@/lib/eatCategories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { BoldButton } from "@/components/BoldButton";
 import { Label } from "@/components/ui/label";
 import { CharCount } from "@/components/CharCount";
 import { LISTING_LIMITS, firstListingTextProblem } from "@shared/listings";
@@ -351,7 +352,7 @@ export function AdminEateries() {
             </label>
           </Field>
           <div className="sm:col-span-2"><Field label="Short description"><Textarea rows={2} value={f.shortDescription} maxLength={LISTING_LIMITS.shortDescription} onChange={(e) => set({ shortDescription: e.target.value })} placeholder="One-line teaser shown on the card and as the lead (40–80 characters)." className="rounded-none text-base" /><CharCount field="shortDescription" value={f.shortDescription} className="justify-self-end" /></Field></div>
-          <div className="sm:col-span-2"><Field label="Long description"><Textarea rows={4} value={f.longDescription} maxLength={LISTING_LIMITS.longDescription} onChange={(e) => set({ longDescription: e.target.value })} placeholder="Fuller write-up shown on the restaurant page (optional)." className="rounded-none text-base" />{f.longDescription.trim() && <CharCount field="longDescription" value={f.longDescription} className="justify-self-end" />}</Field></div>
+          <div className="sm:col-span-2"><Field label="Long description"><Textarea id="restaurant-longDescription" rows={4} value={f.longDescription} maxLength={LISTING_LIMITS.longDescription} onChange={(e) => set({ longDescription: e.target.value })} placeholder="Fuller write-up shown on the restaurant page (optional). Select words and press B to make them bold." className="rounded-none text-base" /><div className="flex items-center justify-between gap-3"><BoldButton forId="restaurant-longDescription" />{f.longDescription.trim() && <CharCount field="longDescription" value={f.longDescription} />}</div></Field></div>
           <div className="sm:col-span-2">
             <Field label="Other locations (branches)">
               <div className="grid gap-3">

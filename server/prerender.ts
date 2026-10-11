@@ -29,6 +29,7 @@ import { HOST_HUB, HOST_PAGES, findHostPage, type HostPage } from "../shared/hos
 import type { ListingType } from "../shared/listings.js";
 import { buildArticleJsonLd, buildBlogListJsonLd, buildBreadcrumbJsonLd, buildCollectionPageJsonLd, buildFaqJsonLd, buildListingJsonLd, buildOrganizationJsonLd, buildWebsiteJsonLd } from "../shared/seo.js";
 import { renderMarkdown, markdownToPlain } from "../shared/markdown.js";
+import { boldToHtml } from "../shared/richText.js";
 import { GIFT_CARD_AMOUNTS_CENTS, GIFT_CARD_VALID_MONTHS } from "../shared/giftcards.js";
 import { findRegionGuide, listingInRegion, type RegionGuide } from "../shared/regionGuides.js";
 
@@ -757,7 +758,7 @@ ${escapeHtml(listing.title)}
 <p>${escapeHtml(listing.eyebrow)} — ${escapeHtml(listing.city)}, ${escapeHtml(normalizeRegionName(listing.region))}</p>
 ${galleryHtml}
 <p>${escapeHtml(listing.shortDescription)}</p>
-<p>${escapeHtml(listing.longDescription).replace(/\n/g, "<br>")}</p>
+<p>${boldToHtml(escapeHtml(listing.longDescription)).replace(/\n/g, "<br>")}</p>
 <p>${priceLine}</p>
 ${factsHtml}
 ${roomsHtml}

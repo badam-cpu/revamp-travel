@@ -37,6 +37,7 @@ import { BrandMark } from "@/components/BrandMark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { BoldButton } from "@/components/BoldButton";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useListings, LiveListing } from "@/contexts/ListingsContext";
@@ -827,11 +828,14 @@ function ListingFormDialog({
                 <div className="grid gap-2">
                   <div className="flex items-center justify-between gap-2">
                     <Label htmlFor="longDescription" className="text-sm font-semibold">Full description</Label>
-                    <AhaAssist field="longDescription" listingType={draft.type} getContext={ahaContext} getCurrent={() => fieldValue("longDescription")} onApplyText={(t) => setField("longDescription", t)} />
+                    <div className="flex items-center gap-2">
+                      <BoldButton forId="longDescription" />
+                      <AhaAssist field="longDescription" listingType={draft.type} getContext={ahaContext} getCurrent={() => fieldValue("longDescription")} onApplyText={(t) => setField("longDescription", t)} />
+                    </div>
                   </div>
                   <Textarea id="longDescription" name="longDescription" maxLength={LISTING_LIMITS.longDescription} rows={5} placeholder="The full write-up shown on the listing page." defaultValue={draft.longDescription} className="rounded-none text-base md:text-base" />
                   <div className="flex items-start justify-between gap-3">
-                    <p className="text-xs text-basalt/45">At least {LISTING_TEXT_LIMITS.longDescription.min} characters — a few real sentences about the place.</p>
+                    <p className="text-xs text-basalt/45">At least {LISTING_TEXT_LIMITS.longDescription.min} characters — a few real sentences about the place. To make words bold, select them and press <strong className="font-semibold text-basalt/70">B</strong>.</p>
                     <CharCount forId="longDescription" field="longDescription" />
                   </div>
                 </div>
@@ -839,7 +843,10 @@ function ListingFormDialog({
                   <div className="grid gap-2">
                     <div className="flex items-center justify-between gap-2">
                       <Label htmlFor="neighborhood" className="text-sm font-semibold">Describe the neighborhood <span className="font-normal text-basalt/45">(optional)</span></Label>
-                      <AhaAssist field="neighborhood" listingType={draft.type} getContext={ahaContext} getCurrent={() => fieldValue("neighborhood")} onApplyText={(t) => setField("neighborhood", t)} />
+                      <div className="flex items-center gap-2">
+                        <BoldButton forId="neighborhood" />
+                        <AhaAssist field="neighborhood" listingType={draft.type} getContext={ahaContext} getCurrent={() => fieldValue("neighborhood")} onApplyText={(t) => setField("neighborhood", t)} />
+                      </div>
                     </div>
                     <Textarea id="neighborhood" name="neighborhood" rows={3} placeholder="What's the area like — the street, the vibe, what's within a short walk?" defaultValue={draft.neighborhood} className="rounded-none text-base md:text-base" />
                     <p className="text-xs text-basalt/45">Nearby major sights are shown automatically on your listing based on its location.</p>

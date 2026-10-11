@@ -60,6 +60,7 @@ import { RequireRole } from "@/components/RequireRole";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { BoldButton } from "@/components/BoldButton";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -600,10 +601,15 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                     </StepField>
                     <StepField
                       label="Full description"
-                      help={`The story of the experience — what makes it worth doing, told in your own voice. At least ${LISTING_TEXT_LIMITS.longDescription.min} characters.`}
-                      action={<AhaAssist field="longDescription" listingType="experience" getContext={ahaCtx} getCurrent={() => data.longDescription} onApplyText={(t) => set("longDescription", t)} />}
+                      help={`The story of the experience — what makes it worth doing, told in your own voice. At least ${LISTING_TEXT_LIMITS.longDescription.min} characters. To make words bold, select them and press B.`}
+                      action={
+                        <div className="flex items-center gap-2">
+                          <BoldButton forId="exp-longDescription" />
+                          <AhaAssist field="longDescription" listingType="experience" getContext={ahaCtx} getCurrent={() => data.longDescription} onApplyText={(t) => set("longDescription", t)} />
+                        </div>
+                      }
                     >
-                      <Textarea rows={6} value={data.longDescription} maxLength={LISTING_LIMITS.longDescription} onChange={(e) => set("longDescription", e.target.value)} />
+                      <Textarea id="exp-longDescription" rows={6} value={data.longDescription} maxLength={LISTING_LIMITS.longDescription} onChange={(e) => set("longDescription", e.target.value)} />
                       <CharCount field="longDescription" value={data.longDescription} className="justify-self-end" />
                     </StepField>
                   </div>

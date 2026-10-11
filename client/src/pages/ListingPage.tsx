@@ -39,6 +39,7 @@ import { ExternalReviews } from "@/components/ExternalReviews";
 import { describeCancellationPolicy, nightlyPriceRange } from "@shared/bookings";
 import { buildBreadcrumbJsonLd, buildListingJsonLd } from "@shared/seo";
 import { shareCurrentPage } from "@/lib/share";
+import { RichText } from "@/components/RichText";
 
 /** What every Revamp stay includes — a marketplace-wide baseline shown on stay
  * pages (a stated standard Revamp holds stay operators to, not a per-listing
@@ -398,18 +399,18 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
               <div className="mt-8 max-w-3xl">
                 <p className="text-lg font-medium leading-relaxed text-basalt sm:text-xl">{listing.shortDescription}</p>
                 {listing.longDescription && listing.longDescription.trim() !== listing.shortDescription.trim() && (
-                  <p className="mt-4 whitespace-pre-line text-[15px] leading-8 text-basalt/90">{listing.longDescription}</p>
+                  <RichText text={listing.longDescription} className="mt-4 whitespace-pre-line text-[15px] leading-8 text-basalt/90" />
                 )}
                 {listing.videoUrl && (
                   <ListingVideo url={listing.videoUrl} poster={listing.image} className="mt-6 aspect-video" />
                 )}
               </div>
 
-              {/* Facts already surfaced in the "at a glance" strip (property type
-                  → Type tile, check-in/checkout times) are filtered out here to
-                  avoid showing them twice. */}
+              {/* Facts already surfaced in the "at a glance" strip (space +
+                  property type → Type tile, check-in/checkout times) are
+                  filtered out here to avoid showing them twice. */}
               {(() => {
-                const shownInGlance = new Set(["property type", "check-in", "checkout", "minimum stay"]);
+                const shownInGlance = new Set(["space type", "property type", "check-in", "checkout", "minimum stay"]);
                 const otherFacts = listing.facts.filter((f) => !shownInGlance.has(f.label.toLowerCase()));
                 return otherFacts.length > 0 ? (
                   <dl className="mt-8 grid max-w-3xl grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
@@ -547,9 +548,10 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
             <div>
               <p className="eyebrow">On the map</p>
               <h2 className="mt-3 font-display text-5xl leading-none tracking-[-0.04em]">Meet the neighborhood.</h2>
-              <p className="mt-5 max-w-sm whitespace-pre-line text-sm leading-6 text-basalt/55">
-                {listing.neighborhood?.trim() || "Use the map as a starting point. Exact arrival notes are shared once a date is confirmed."}
-              </p>
+              <RichText
+                text={listing.neighborhood?.trim() || "Use the map as a starting point. Exact arrival notes are shared once a date is confirmed."}
+                className="mt-5 max-w-sm whitespace-pre-line text-sm leading-6 text-basalt/55"
+              />
               {branches.length > 0 && (
                 <div className="mt-7">
                   <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/40">Locations ({branches.length + 1})</p>

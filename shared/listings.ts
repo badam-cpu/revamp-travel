@@ -8,6 +8,7 @@
  * that file — not this array — is the source of truth for live inventory.
  * Edit this array only to change what a *fresh* install seeds with.
  */
+import { stripBold } from "./richText.js";
 
 export type ListingType = "stay" | "eat" | "tour" | "experience" | "place";
 
@@ -786,7 +787,8 @@ export function listingTextLimits(field: ListingTextField, listingType?: Listing
  * description); anything typed still has to fit.
  */
 export function listingTextProblem(field: ListingTextField, value: string, opts: { listingType?: ListingType; optional?: boolean } = {}): string | null {
-  const n = value.trim().length;
+  // Bold markers (`**…**`, shared/richText.ts) aren't text the reader sees.
+  const n = stripBold(value).trim().length;
   if (n === 0 && opts.optional) return null;
   const { min, max } = listingTextLimits(field, opts.listingType);
   if (n < min) return `${TEXT_FIELD_NAMES[field]} needs at least ${min} characters (it has ${n}).`;

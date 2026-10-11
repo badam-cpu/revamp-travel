@@ -7,6 +7,7 @@
  */
 import { useEffect, useState } from "react";
 import { listingTextLimits, type ListingTextField, type ListingType } from "@shared/listings";
+import { stripBold } from "@shared/richText";
 import { cn } from "@/lib/utils";
 
 export function CharCount({
@@ -29,13 +30,13 @@ export function CharCount({
     if (value !== undefined || !forId) return;
     const el = document.getElementById(forId) as HTMLInputElement | HTMLTextAreaElement | null;
     if (!el) return;
-    const sync = () => setWatched(el.value.trim().length);
+    const sync = () => setWatched(stripBold(el.value).trim().length);
     sync();
     el.addEventListener("input", sync);
     return () => el.removeEventListener("input", sync);
   }, [forId, value]);
 
-  const n = value !== undefined ? value.trim().length : watched;
+  const n = value !== undefined ? stripBold(value).trim().length : watched;
   const off = (n > 0 && n < min) || n > max;
   return (
     <span aria-live="polite" className={cn("shrink-0 text-xs tabular-nums", off ? "font-semibold text-apricot" : "text-basalt/45", className)}>

@@ -33,6 +33,7 @@ import { trackListing } from "@/lib/track";
 import { OperatorBrand } from "@/components/OperatorBrand";
 import { ListingVideo } from "@/components/ListingVideo";
 import { ExternalReviews } from "@/components/ExternalReviews";
+import { RichText } from "@/components/RichText";
 
 export function TourDetail({ listing }: { listing: Listing }) {
   const { publicListings: listings } = useListings();
@@ -179,7 +180,7 @@ export function TourDetail({ listing }: { listing: Listing }) {
           <div className="mt-8">
             <p className="eyebrow">Overview</p>
             <h2 className="mt-3 font-display text-2xl leading-snug tracking-[-0.02em] text-basalt/90">{listing.shortDescription}</h2>
-            <p className="mt-4 whitespace-pre-line text-[15px] leading-8 text-basalt/90">{listing.longDescription}</p>
+            <RichText text={listing.longDescription} className="mt-4 whitespace-pre-line text-[15px] leading-8 text-basalt/90" />
           </div>
 
           {!!listing.highlights?.length && (() => {
