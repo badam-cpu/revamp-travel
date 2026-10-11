@@ -117,3 +117,7 @@ server/data/
 
 # Netlify CLI local state (site link, cached functions, dev artifacts)
 .netlify/
+
+# Impeccable design reviews: keep critique snapshots (score history/backlog),
+# skip one-off review screenshots
+.impeccable/visuals/
