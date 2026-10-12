@@ -260,7 +260,7 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
             {type === "stay" && site !== "stay" && hasHotels && (
               <div className="mt-3 flex flex-wrap gap-2">
                 <button onClick={() => setStayKind("all")} className={cn("filter-chip", stayKind === "all" && "active")}>All stays</button>
-                <button onClick={() => setStayKind("hotels")} className={cn("filter-chip", stayKind === "hotels" && "active")}>Hotels</button>
+                <button onClick={() => setStayKind("hotels")} className={cn("filter-chip", stayKind === "hotels" && "active")}>Hotels &amp; guesthouses</button>
               </div>
             )}
             {type === "place" && placeCategoryGroups.length > 0 && (

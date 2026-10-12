@@ -463,7 +463,7 @@ export function OperatorBookingsTimeline() {
           })}
         </div>
       </div>
-      <p className="mt-3 text-xs text-basalt/45">Rolling {startDate} → {addDaysIso(windowEnd, -1)}. Scroll sideways or use the month menu to move ahead. Bars are your bookings; hatched blocks are dates synced as unavailable from a connected calendar. Hotels open into one row per room — click a day on a room to record a booking for it. Tap a booking for full details.</p>
+      <p className="mt-3 text-xs text-basalt/45">Rolling {startDate} → {addDaysIso(windowEnd, -1)}. Scroll sideways or use the month menu to move ahead. Bars are your bookings; hatched blocks are dates synced as unavailable from a connected calendar. Hotels and guesthouses open into one row per room — click a day on a room to record a booking for it. Tap a booking for full details.</p>
       <BookingDetailDialog bookingId={openId} onClose={() => setOpenId(null)} onChanged={() => setReload((k) => k + 1)} />
       <DirectBookingDialog listing={direct?.listing ?? null} startDate={direct?.date ?? null} room={direct?.room ?? null} onClose={() => setDirect(null)} onCreated={() => setReload((k) => k + 1)} />
     </div>
