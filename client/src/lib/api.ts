@@ -410,6 +410,35 @@ export async function updateBookingContact(
   });
 }
 
+/** A room a hotel booking could move to (server/roomMoves.ts). */
+export interface RoomMoveOption {
+  unitId: string;
+  unitName: string;
+  typeId: string;
+  typeName: string;
+  maxGuests: number;
+  current: boolean;
+  available: boolean;
+  reason?: string;
+}
+
+async function operatorPost<T>(path: string, body: unknown): Promise<T> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in as an operator.");
+  return request<T>(path, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
+}
+
+/** The hotel's rooms, marked free/not for this booking's nights. */
+export async function getRoomMoveOptions(bookingId: string): Promise<RoomMoveOption[]> {
+  return (await operatorPost<{ options: RoomMoveOption[] }>("/api/booking-move-room/options", { bookingId })).options;
+}
+
+/** Move a confirmed hotel booking to another room (the guest's price is unchanged). */
+export function moveBookingRoom(bookingId: string, roomUnitId: string): Promise<{ ok: boolean; room: string }> {
+  return operatorPost("/api/booking-move-room", { bookingId, roomUnitId });
+}
+
 /** Buy a prepaid dining voucher for a restaurant — returns the PayLink redirect URL. */
 export async function startVoucherCheckout(listingId: string, faceCents: number): Promise<{ redirectUrl?: string; priceCents?: number }> {
   const { data } = await supabase.auth.getSession();

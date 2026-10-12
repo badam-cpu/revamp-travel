@@ -6,10 +6,10 @@
  * the operator's own listings.
  */
 import { useEffect, useState } from "react";
-import { Mail, Phone, User, Pencil } from "lucide-react";
+import { ArrowRightLeft, Mail, Phone, User, Pencil } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
-import { setBookingPayment, cancelBooking, ensureBookingThread, updateBookingContact, sendBookingPaymentLink } from "@/lib/api";
+import { setBookingPayment, cancelBooking, ensureBookingThread, updateBookingContact, sendBookingPaymentLink, getRoomMoveOptions, moveBookingRoom, type RoomMoveOption } from "@/lib/api";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { BookingStatus } from "@shared/bookings";
 import { fetchBookingRoomNames, withRoomName } from "@/lib/roomTypes";
+import { roomUnitLabel } from "@shared/rooms";
 
 interface AddonSnap { id: string; name: string; unit?: string; qty: number; amountCents: number; onRequest?: boolean }
 interface FullBooking {
@@ -39,6 +40,9 @@ interface FullBooking {
   guest_phone: string | null;
   traveler_id: string | null;
   refund_amount_cents: number | null;
+  /** Hotels (0092): the booked room type and the room it's in. */
+  room_type_id?: string | null;
+  room_unit_id?: string | null;
   listings: { title: string; type: string; city: string } | null;
   profiles: { display_name: string } | null;
 }
@@ -64,6 +68,7 @@ const EVENT_LABEL: Record<string, string> = {
   status_expired: "Unpaid hold expired (auto-cancelled)",
   direct_created: "Direct booking recorded",
   payment_status: "Payment status changed",
+  room_moved: "Moved to another room",
   email_failed: "⚠️ Email failed to send",
 };
 
@@ -93,9 +98,18 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
   const [cPhone, setCPhone] = useState("");
   const [savingContact, setSavingContact] = useState(false);
   const [sendingLink, setSendingLink] = useState(false);
+  // Hotels: which room the booking is in, and the "move to another room" picker.
+  const [roomLabel, setRoomLabel] = useState<string | null>(null);
+  const [moveOptions, setMoveOptions] = useState<RoomMoveOption[] | null>(null);
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [movePick, setMovePick] = useState<string | null>(null);
+  const [moving, setMoving] = useState(false);
   const [, navigate] = useLocation();
 
   useEffect(() => {
+    setRoomLabel(null);
+    setMoveOpen(false);
+    setMovePick(null);
     if (!bookingId) {
       setBooking(null);
       setEvents([]);
@@ -116,6 +130,7 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
         if (loaded)
           fetchBookingRoomNames([loaded.id]).then((names) => {
             if (names.size) setBooking((prev) => (prev ? withRoomName([prev], names)[0] : prev));
+            setRoomLabel(names.get(loaded.id) ?? null);
           });
       });
     // History log — degrades to empty if the table isn't there yet.
@@ -167,6 +182,43 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
   };
   const todayIso = new Date().toISOString().slice(0, 10);
   const canCancel = !!b && (b.status === "pending_payment" || b.status === "confirmed") && b.start_date >= todayIso;
+
+  const canMove = !!b?.room_type_id && b.status === "confirmed" && b.end_date > todayIso;
+  const openMove = async () => {
+    if (!b) return;
+    setMoveOpen(true);
+    setMovePick(null);
+    setMoveOptions(null);
+    try {
+      setMoveOptions(await getRoomMoveOptions(b.id));
+    } catch (e) {
+      setMoveOpen(false);
+      toast(e instanceof Error ? e.message : "Couldn't load the rooms right now.");
+    }
+  };
+  const doMove = async () => {
+    if (!b || !movePick) return;
+    setMoving(true);
+    try {
+      const { room } = await moveBookingRoom(b.id, movePick);
+      setMoveOpen(false);
+      setReloadKey((k) => k + 1);
+      onChanged?.();
+      toast.success(`Moved to ${room}.`);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't move the booking.");
+      void openMove(); // refresh which rooms are free
+    } finally {
+      setMoving(false);
+    }
+  };
+  const moveGroups = (moveOptions ?? []).reduce<{ typeId: string; typeName: string; rooms: RoomMoveOption[] }[]>((acc, o) => {
+    const g = acc.find((x) => x.typeId === o.typeId);
+    if (g) g.rooms.push(o);
+    else acc.push({ typeId: o.typeId, typeName: o.typeName, rooms: [o] });
+    return acc;
+  }, []);
+  const picked = moveOptions?.find((o) => o.unitId === movePick) ?? null;
 
   const messageGuest = async () => {
     if (!b) return;
@@ -262,6 +314,68 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
                   <div><p className="text-basalt/45">Nights</p><p className="font-semibold">{nights(b.start_date, b.end_date)}</p></div>
                   <div><p className="text-basalt/45">Guests</p><p className="font-semibold">{b.guests}</p></div>
                 </div>
+                {b.room_type_id && (
+                  <div className="mt-3 border-t border-basalt/10 pt-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+                      <div className="min-w-0">
+                        <p className="text-basalt/45">Room</p>
+                        <p className="font-semibold">{roomLabel ?? "Assigned when the booking confirms"}</p>
+                      </div>
+                      {canMove && !moveOpen && (
+                        <Button variant="outline" onClick={() => void openMove()} className="h-9 rounded-none border-basalt/20">
+                          <ArrowRightLeft className="mr-1.5 h-4 w-4" /> Move to another room
+                        </Button>
+                      )}
+                    </div>
+                    {moveOpen && (
+                      <div className="mt-3 grid gap-3">
+                        {moveOptions === null ? (
+                          <p className="text-sm text-basalt/50">Checking which rooms are free…</p>
+                        ) : moveOptions.filter((o) => !o.current).length === 0 ? (
+                          <p className="text-sm text-basalt/55">This property has no other rooms set up.</p>
+                        ) : (
+                          moveGroups.map((g) => (
+                            <fieldset key={g.typeId} className="grid gap-2">
+                              <legend className="mb-1 text-xs font-semibold text-basalt/60">
+                                {g.typeName}
+                                {g.typeId === b.room_type_id && <span className="font-normal text-basalt/40"> · the type they booked</span>}
+                              </legend>
+                              <div className="flex flex-wrap gap-2">
+                                {g.rooms.map((o) => (
+                                  <button
+                                    key={o.unitId}
+                                    type="button"
+                                    disabled={!o.available}
+                                    aria-pressed={movePick === o.unitId}
+                                    onClick={() => setMovePick(o.unitId)}
+                                    className={cn(
+                                      "grid min-h-11 min-w-[6.5rem] rounded-none border px-3 py-1.5 text-left text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-apricot",
+                                      movePick === o.unitId
+                                        ? "border-apricot bg-apricot/10 font-semibold text-basalt"
+                                        : o.available
+                                          ? "border-basalt/20 bg-paper hover:border-basalt/50"
+                                          : "cursor-not-allowed border-basalt/10 bg-chalk text-basalt/40",
+                                    )}
+                                  >
+                                    <span>{roomUnitLabel(o.unitName)}</span>
+                                    {o.reason && <span className="text-[11px] leading-4">{o.reason}</span>}
+                                  </button>
+                                ))}
+                              </div>
+                            </fieldset>
+                          ))
+                        )}
+                        <p className="text-xs leading-5 text-basalt/50">Only rooms free for all {nights(b.start_date, b.end_date)} nights can be picked. The guest keeps the price they paid — remember to tell them about the change.</p>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <Button onClick={() => void doMove()} disabled={!picked || moving} className="h-10 rounded-none bg-apricot text-white hover:bg-apricot/90">
+                            {moving ? "Moving…" : picked ? `Move to ${roomUnitLabel(picked.unitName)}` : "Pick a room"}
+                          </Button>
+                          <button type="button" onClick={() => setMoveOpen(false)} disabled={moving} className="text-sm font-semibold text-basalt/50 hover:text-basalt">Cancel</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </section>
 
               {/* Payment */}

@@ -22,6 +22,7 @@ import { matchTripadvisor, tripadvisorConfigured } from "./tripadvisor.js";
 import { translateTexts } from "./translate.js";
 import { pricelabsListings, syncOperatorPrices } from "./pricelabs.js";
 import { supabaseAdmin, adminConfigured } from "./supabaseAdmin.js";
+import { moveBlockedReason, moveBookingToRoom, roomMoveOptions, type MoveBooking, type RoomMoveOption } from "./roomMoves.js";
 import { paylinkConfigured, registerPayment, checkPayment } from "./paylink.js";
 import { resolvePaymentAccount, clientForOwner, accountOwnerPatch, getPaymentAccountStatus, connectPaymentAccount, disconnectPaymentAccount, setPaymentAccountPaused } from "./paymentAccounts.js";
 import { confirmOperatorStatements, markStatementPaid, voidStatement } from "./commissionStatements.js";
@@ -54,7 +55,7 @@ import { randomUUID } from "crypto";
 import { formatSlotTime, slotLocalDate } from "../shared/sessions.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, promoDiscount, addonUnitCost, nightsBetween, maxNightlyOccupancy, listingFeeCents, type Addon, DEFAULT_CURRENCY, PLATFORM_COMMISSION_PERCENT } from "../shared/bookings.js";
-import { cheapestAvailableUnit, unitPricing } from "../shared/rooms.js";
+import { cheapestAvailableUnit, roomUnitLabel, unitPricing } from "../shared/rooms.js";
 import type { RoomUnit } from "../shared/listings.js";
 import { planTrip, PlannerError } from "./planner.js";
 import { fetchPrefill, PrefillError } from "./urlPrefill.js";
@@ -1890,6 +1891,64 @@ export function registerApiRoutes(app: Express) {
     if (upErr) return res.status(500).json({ error: "Couldn't update the contact details." });
     await logBookingEvent(admin, bookingId, "contact_updated", "Guest contact details updated by the operator.");
     res.json({ ok: true });
+  });
+
+  // POST /api/booking-move-room/options + /api/booking-move-room — hotels: the
+  // operator (or an admin) moves a confirmed booking to another room, same type
+  // or an upgrade. The guest keeps the price they paid. See server/roomMoves.ts.
+  const loadMovableBooking = async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId) return void res.status(401).json({ error: "Sign in as an operator." });
+    const admin = supabaseAdmin();
+    if (!admin) return void res.status(503).json({ error: "Not available yet." });
+    const bookingId = typeof req.body?.bookingId === "string" ? req.body.bookingId : "";
+    if (!/^[0-9a-f-]{36}$/i.test(bookingId)) return void res.status(400).json({ error: "Booking not found." });
+    const { data: bk, error } = await admin
+      .from("bookings")
+      .select("id, listing_id, status, start_date, end_date, guests, room_type_id, room_unit_id, listings!inner(operator_id)")
+      .eq("id", bookingId)
+      .maybeSingle();
+    if (error || !bk) {
+      if (error) console.error("[booking-move-room] read failed", error.message);
+      return void res.status(404).json({ error: "Booking not found." });
+    }
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if ((bk as unknown as { listings: { operator_id: string } }).listings.operator_id !== userId && me?.role !== "admin") {
+      return void res.status(403).json({ error: "That booking isn't on your listing." });
+    }
+    const booking = bk as unknown as MoveBooking;
+    const blocked = moveBlockedReason(booking, new Date().toISOString().slice(0, 10));
+    if (blocked) return void res.status(400).json({ error: blocked });
+    return { admin, booking };
+  };
+
+  app.post("/api/booking-move-room/options", async (req: Request, res: Response) => {
+    try {
+      const ctx = await loadMovableBooking(req, res);
+      if (!ctx) return;
+      res.json({ options: await roomMoveOptions(ctx.admin, ctx.booking) });
+    } catch (err) {
+      console.error("[booking-move-room/options]", err);
+      res.status(500).json({ error: "Couldn't load the rooms right now. Please try again." });
+    }
+  });
+
+  app.post("/api/booking-move-room", async (req: Request, res: Response) => {
+    try {
+      const ctx = await loadMovableBooking(req, res);
+      if (!ctx) return;
+      const unitId = typeof req.body?.roomUnitId === "string" ? req.body.roomUnitId : "";
+      const result = await moveBookingToRoom(ctx.admin, ctx.booking, unitId);
+      if (!result.ok) return res.status(result.status).json({ error: result.error });
+      const label = (o: RoomMoveOption) => `${o.typeName} · ${roomUnitLabel(o.unitName)}`;
+      await logBookingEvent(ctx.admin, ctx.booking.id, "room_moved", `${result.from ? `${label(result.from)} → ` : ""}${label(result.to)}`);
+      res.json({ ok: true, room: label(result.to) });
+    } catch (err) {
+      console.error("[booking-move-room]", err);
+      res.status(500).json({ error: "Couldn't move the booking right now. Please try again." });
+    }
   });
 
   // POST /api/operator-booking-send-link — for an existing (usually offline/direct)
