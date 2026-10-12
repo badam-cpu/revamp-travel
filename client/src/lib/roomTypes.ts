@@ -35,6 +35,8 @@ interface RoomUnitRow {
   price_cents: number | null;
   seasonal_rates: SeasonalRate[] | null;
   manual_blocked_ranges: Range[] | null;
+  /** 0096 — absent before that migration (rows come from select("*")). */
+  blocked_ranges?: Range[] | null;
   active: boolean | null;
   sort_order: number | null;
 }
@@ -65,6 +67,7 @@ export function mapRoomUnitRow(row: RoomUnitRow): RoomUnit {
     priceCents: row.price_cents ?? undefined,
     seasonalRates: Array.isArray(row.seasonal_rates) ? row.seasonal_rates : [],
     manualBlockedRanges: Array.isArray(row.manual_blocked_ranges) ? row.manual_blocked_ranges : [],
+    blockedRanges: Array.isArray(row.blocked_ranges) ? row.blocked_ranges : [],
     active: row.active !== false,
     sortOrder: row.sort_order ?? 0,
   };
@@ -220,6 +223,37 @@ async function rangesBy(view: string, key: string, ids: string[]): Promise<Map<s
     out.set(r[key], arr);
   }
   return out;
+}
+
+/** A room's own OTA calendars (0096) — private to the operator/admin by RLS. */
+export interface RoomCalendar {
+  feeds: { label: string; url: string }[];
+  syncedAt: string | null;
+  error: string | null;
+}
+
+/** Calendars for these rooms. Empty when none are set (or before migration 0096). */
+export async function fetchRoomCalendars(unitIds: string[]): Promise<Map<string, RoomCalendar>> {
+  const out = new Map<string, RoomCalendar>();
+  if (!unitIds.length) return out;
+  const { data, error } = await supabase.from("room_unit_calendars").select("room_unit_id, feeds, synced_at, error").in("room_unit_id", unitIds);
+  if (error) {
+    console.error("[room_calendars] read failed", error.message);
+    return out;
+  }
+  for (const r of (data ?? []) as { room_unit_id: string; feeds: unknown; synced_at: string | null; error: string | null }[]) {
+    out.set(r.room_unit_id, { feeds: Array.isArray(r.feeds) ? (r.feeds as RoomCalendar["feeds"]) : [], syncedAt: r.synced_at, error: r.error });
+  }
+  return out;
+}
+
+/** Save one room's calendar links (RLS: only the hotel's operator or an admin). */
+export async function saveRoomFeeds(unitId: string, feeds: { label: string; url: string }[]): Promise<void> {
+  const { error } = await supabase.from("room_unit_calendars").upsert({ room_unit_id: unitId, feeds }, { onConflict: "room_unit_id" });
+  if (error) {
+    console.error("[room_calendars] save failed", error.message);
+    throw new Error("Couldn't save those calendar links. Please try again.");
+  }
 }
 
 /** Confirmed bookings per room type, as [start, end) ranges (types with no rooms yet). */

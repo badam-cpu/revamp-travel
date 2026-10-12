@@ -107,8 +107,10 @@ export function PricingCalendar({ listing, room }: { listing: LiveListing; room?
     return match ? match.priceCents : base;
   };
   const isBooked = (d: string) => booked.some((b) => b.start <= d && d < b.end);
-  // The hotel's synced calendar doesn't apply to individual rooms (v1).
-  const isExternal = (d: string) => !room && (listing.blockedRanges ?? []).some((b) => b.start <= d && d < b.end);
+  // Room mode: the room's own synced Airbnb/Booking.com nights (0096); the
+  // hotel-level synced calendar doesn't apply to individual rooms.
+  const external = room ? room.unit.blockedRanges ?? [] : listing.blockedRanges ?? [];
+  const isExternal = (d: string) => external.some((b) => b.start <= d && d < b.end);
   const isManual = (d: string) => manual.some((b) => b.start <= d && d < b.end);
 
   // Month grid: leading blanks + each day.

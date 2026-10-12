@@ -516,6 +516,24 @@ export function sendDirectPaymentsPaused(to: string, s: CommissionStatementEmail
   return send(to, "Revamp: direct payments are paused", html);
 }
 
+/** Hotels (0096): a room's imported Airbnb/Booking.com calendar now shows a booking
+ *  on nights a Revamp guest already holds in that room — likely a double booking. */
+export function sendRoomCalendarConflict(
+  to: string,
+  c: { hotel: string; room: string; guestName: string; checkIn: string; checkOut: string; source: string },
+) {
+  const site = SITE();
+  const html = shell(
+    `Possible double booking — ${c.room}`,
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 10px;">${esc(c.source)} now shows <strong>${esc(c.room)}</strong> at ${esc(c.hotel)} as booked on nights a Revamp guest already has.</p>
+     <p style="font-size:14px;line-height:1.6;margin:0 0 14px;color:#3f3b36;">Revamp booking: <strong>${esc(c.guestName)}</strong>, ${esc(prettyDate(c.checkIn))} → ${esc(prettyDate(c.checkOut))}.</p>
+     <p style="font-size:14px;line-height:1.6;margin:0 0 14px;color:#3f3b36;">Open the booking and use <strong>Move to another room</strong> to give the Revamp guest a free room — or sort it out on ${esc(c.source)}.</p>
+     <p style="margin:0 0 8px;"><a href="${esc(site)}/dashboard?section=bookings" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Open bookings</a></p>`,
+    site,
+  );
+  return send(to, `Possible double booking: ${c.room}, ${prettyDate(c.checkIn)}`, html);
+}
+
 /** A previously-alerting cron has recovered — sent once when it comes back. */
 export function sendCronRecovered(to: string, opts: { job: string }) {
   const site = SITE();

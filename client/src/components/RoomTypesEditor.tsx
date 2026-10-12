@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PhotoUploader, type PhotoUploaderHandle } from "@/components/PhotoUploader";
+import { HOTEL_MAX_PHOTOS, PhotoUploader, type PhotoUploaderHandle } from "@/components/PhotoUploader";
 import { BED_TYPES } from "@/components/RoomsEditor";
 import type { RoomType, RoomTypeInput } from "@shared/listings";
 
@@ -334,6 +334,7 @@ export const RoomTypesEditor = forwardRef<RoomTypesEditorHandle, { defaultValue:
                 photoRefs.current.set(row.key, h);
               }}
               defaultValue={row.gallery}
+              max={HOTEL_MAX_PHOTOS}
             />
           </div>
         </div>

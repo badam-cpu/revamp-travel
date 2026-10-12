@@ -38,22 +38,24 @@ export interface RoomMoveOption {
 const HOLD_MS = 15 * 60_000;
 const overlaps = (aStart: string, aEnd: string, bStart: string, bEnd: string) => aStart < bEnd && aEnd > bStart;
 
-/** Null when this booking can be moved, else the reason it can't. */
-export function moveBlockedReason(b: MoveBooking, todayIso: string): string | null {
-  if (!b.room_type_id) return "Only hotel room bookings can be moved to another room.";
+/** Null when this booking can be moved, else the reason it can't. A hotel booking
+ *  with no room yet (e.g. recorded before rooms existed) can be given one. */
+export function moveBlockedReason(b: MoveBooking, todayIso: string, isHotel = false): string | null {
+  if (!b.room_type_id && !isHotel) return "Only hotel room bookings can be moved to another room.";
   if (b.status !== "confirmed") return "Only confirmed bookings can be moved.";
   if (b.end_date <= todayIso) return "This stay has already ended.";
   return null;
 }
 
-type UnitRow = { id: string; name: string; active: boolean; sort_order: number | null; manual_blocked_ranges: { start?: string; end?: string }[] | null };
+type RawRange = { start?: string; end?: string };
+type UnitRow = { id: string; name: string; active: boolean; sort_order: number | null; manual_blocked_ranges: RawRange[] | null; blocked_ranges?: RawRange[] | null };
 type TypeRow = { id: string; name: string; max_guests: number | null; sort_order: number | null; room_units: UnitRow[] | null };
 
 /** Every active room of the booking's hotel, with whether it can take this booking. */
 export async function roomMoveOptions(admin: SupabaseClient, b: MoveBooking, now = Date.now()): Promise<RoomMoveOption[]> {
   const { data: types, error } = await admin
     .from("room_types")
-    .select("id, name, max_guests, sort_order, room_units(id, name, active, sort_order, manual_blocked_ranges)")
+    .select("id, name, max_guests, sort_order, room_units(*)") // * so 0096 blocked_ranges is read when present
     .eq("listing_id", b.listing_id)
     .order("sort_order");
   if (error) throw new Error(`room types read failed: ${error.message}`);
@@ -86,7 +88,9 @@ export async function roomMoveOptions(admin: SupabaseClient, b: MoveBooking, now
   return units.map(({ t, u }) => {
     const maxGuests = t.max_guests ?? 2;
     const current = u.id === b.room_unit_id;
-    const blocked = (u.manual_blocked_ranges ?? []).some((r) => r.start && r.end && overlaps(r.start, r.end, b.start_date, b.end_date));
+    const hits = (list: RawRange[] | null | undefined) => (list ?? []).some((r) => r.start && r.end && overlaps(r.start, r.end, b.start_date, b.end_date));
+    const blocked = hits(u.manual_blocked_ranges);
+    const busyElsewhere = hits(u.blocked_ranges);
     const reason = current
       ? "Current room"
       : booked.has(u.id)
@@ -95,11 +99,43 @@ export async function roomMoveOptions(admin: SupabaseClient, b: MoveBooking, now
           ? "Being booked"
           : blocked
             ? "Blocked"
-            : b.guests > maxGuests
-              ? `Sleeps ${maxGuests}`
-              : undefined;
+            : busyElsewhere
+              ? "Busy on Airbnb/Booking"
+              : b.guests > maxGuests
+                ? `Sleeps ${maxGuests}`
+                : undefined;
     return { unitId: u.id, unitName: u.name, typeId: t.id, typeName: t.name, maxGuests, current, available: !reason, ...(reason ? { reason } : {}) };
   });
+}
+
+/** Operator-facing reason a room can't take these nights. */
+export function unavailableMessage(o: RoomMoveOption): string {
+  const why: Record<string, string> = {
+    Booked: "That room is booked for some of these nights.",
+    "Being booked": "Someone is booking that room right now — pick another.",
+    Blocked: "That room is blocked for some of these nights.",
+    "Busy on Airbnb/Booking": "That room is booked on Airbnb or Booking.com for some of these nights.",
+  };
+  return why[o.reason ?? ""] ?? `That room sleeps up to ${o.maxGuests} guests.`;
+}
+
+/** For a NEW booking (operator direct booking): the room's option, or null if it isn't in this hotel. */
+export async function roomOptionForNewBooking(
+  admin: SupabaseClient,
+  q: { listingId: string; unitId: string; startDate: string; endDate: string; guests: number },
+  now = Date.now(),
+): Promise<RoomMoveOption | null> {
+  const pseudo: MoveBooking = {
+    id: "00000000-0000-0000-0000-000000000000",
+    listing_id: q.listingId,
+    status: "confirmed",
+    start_date: q.startDate,
+    end_date: q.endDate,
+    guests: q.guests,
+    room_type_id: null,
+    room_unit_id: null,
+  };
+  return (await roomMoveOptions(admin, pseudo, now)).find((o) => o.unitId === q.unitId) ?? null;
 }
 
 export type MoveResult = { ok: true; from: RoomMoveOption | null; to: RoomMoveOption } | { ok: false; status: number; error: string };
@@ -110,14 +146,7 @@ export async function moveBookingToRoom(admin: SupabaseClient, b: MoveBooking, u
   const to = options.find((o) => o.unitId === unitId);
   if (!to) return { ok: false, status: 404, error: "That room isn't part of this property." };
   if (to.current) return { ok: false, status: 400, error: "The guest is already in that room." };
-  if (!to.available) {
-    const why: Record<string, string> = {
-      Booked: "That room is booked for some of these nights.",
-      "Being booked": "Someone is booking that room right now — pick another.",
-      Blocked: "That room is blocked for some of these nights.",
-    };
-    return { ok: false, status: 409, error: why[to.reason ?? ""] ?? `That room sleeps up to ${to.maxGuests} guests.` };
-  }
+  if (!to.available) return { ok: false, status: 409, error: unavailableMessage(to) };
 
   let q = admin
     .from("bookings")

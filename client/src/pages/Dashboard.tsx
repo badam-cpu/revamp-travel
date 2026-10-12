@@ -45,6 +45,7 @@ import type { ListingInput, ListingType, RoomType } from "@shared/listings";
 import { LISTING_LIMITS, LISTING_TEXT_LIMITS, STAY_SPACE_TYPES, firstListingTextProblem, listingOffers } from "@shared/listings";
 import { EXTRA_FEE_TYPES } from "@shared/bookings";
 import { CharCount } from "@/components/CharCount";
+import { HotelCalendarSync } from "@/components/HotelCalendarSync";
 import { Switch } from "@/components/ui/switch";
 import { TimeSelect } from "@/components/TimeSelect";
 import { RoomTypesEditor, RoomTypesEditorHandle, validateRoomTypes } from "@/components/RoomTypesEditor";
@@ -61,7 +62,7 @@ import { HouseRulesPicker, HouseRulesPickerHandle } from "@/components/HouseRule
 import { RoomsEditor, RoomsEditorHandle } from "@/components/RoomsEditor";
 import { RatesEditor, RatesEditorHandle } from "@/components/RatesEditor";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
-import { PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
+import { HOTEL_MAX_PHOTOS, PhotoUploader, PhotoUploaderHandle } from "@/components/PhotoUploader";
 import { VideoField, VideoFieldHandle } from "@/components/VideoField";
 import { SearchableMultiSelect, SearchableMultiSelectHandle } from "@/components/SearchableMultiSelect";
 import { ListEditor } from "@/components/ListEditor";
@@ -976,7 +977,7 @@ function ListingFormDialog({
                   </div>
                 </details>
 
-                <PhotoUploader ref={photosRef} defaultValue={realPhotos(draft)} defaultFocus={draft.coverFocus} />
+                <PhotoUploader ref={photosRef} defaultValue={realPhotos(draft)} defaultFocus={draft.coverFocus} max={draft.type === "stay" && multiRoom ? HOTEL_MAX_PHOTOS : undefined} />
 
                 <div className="grid gap-2">
                   <p className="text-sm font-semibold text-basalt">Intro video <span className="font-normal text-basalt/45">(optional — a short clip really helps)</span></p>
@@ -1294,6 +1295,8 @@ const ICAL_SOURCE: Record<ListingType, { name: string; placeholder: string; help
 function AvailabilityRow({ listing }: { listing: LiveListing }) {
   // Stays typically list on both Airbnb and Booking.com and want a two-way feed;
   // other types keep the simpler single-calendar import.
+  // Hotels sync per room: each room has its own Airbnb/Booking.com calendar.
+  if (listing.type === "stay" && listing.multiRoom) return <HotelCalendarSync listingId={listing.id} published={listing.status === "published"} />;
   return listing.type === "stay" ? <StayCalendarSync listing={listing} /> : <SingleCalendarSync listing={listing} />;
 }
 

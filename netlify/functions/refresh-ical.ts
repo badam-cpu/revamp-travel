@@ -15,6 +15,7 @@
 import { supabaseAdmin, adminConfigured } from "../../server/supabaseAdmin.js";
 import { fetchMergedBlockedRanges } from "../../server/ical.js";
 import { syncAllPricelabs } from "../../server/pricelabs.js";
+import { syncAllRoomCalendars } from "../../server/roomCalendars.js";
 import { syncListingSessions, applyIcalToSessions } from "../../server/sessions.js";
 import { recordCronRun, checkAndAlertStaleCrons } from "../../server/alerts.js";
 
@@ -90,6 +91,14 @@ export default async (): Promise<Response> => {
     }
   }
 
+  // Hotels (0096): each room's own Airbnb/Booking.com calendars.
+  let rooms = { synced: 0, failed: 0, conflicts: 0 };
+  try {
+    rooms = await syncAllRoomCalendars(admin);
+  } catch (err) {
+    console.error("[refresh-ical] room calendars failed", err);
+  }
+
   // Also pull PriceLabs recommended prices into mapped listings' calendars.
   let pricelabs: { operators: number; synced: number } = { operators: 0, synced: 0 };
   try {
@@ -98,13 +107,13 @@ export default async (): Promise<Response> => {
     console.error("[refresh-ical] pricelabs sync failed", err);
   }
 
-  const result = { total: data.length, refreshed, failed, sessionsClosed, pricelabs };
+  const result = { total: data.length, refreshed, failed, sessionsClosed, rooms, pricelabs };
   console.log("[refresh-ical]", result);
 
   // Heartbeat: the sweep completed (per-feed failures are tracked per listing in
   // ical_error, so they don't mark the cron itself as failed). Then check every
   // monitored cron and alert admins about any that have gone silent.
-  await recordCronRun(admin, JOB, true, `refreshed ${refreshed}, failed ${failed}`);
+  await recordCronRun(admin, JOB, true, `refreshed ${refreshed}, failed ${failed}, rooms ${rooms.synced}/${rooms.synced + rooms.failed}`);
   await checkAndAlertStaleCrons(admin);
 
   return Response.json(result);

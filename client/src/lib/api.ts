@@ -381,6 +381,8 @@ export interface DirectBookingInput {
   paymentStatus: "paid" | "unpaid";
   /** "offline" (default): confirmed now. "paylink": email the customer a payment link. */
   collectVia?: "offline" | "paylink";
+  /** Hotels: the room being booked (required for a multi-room listing). */
+  roomUnitId?: string;
 }
 
 /** Operator records a direct booking — offline (confirmed) or by emailing a PayLink link. */
@@ -437,6 +439,12 @@ export async function getRoomMoveOptions(bookingId: string): Promise<RoomMoveOpt
 /** Move a confirmed hotel booking to another room (the guest's price is unchanged). */
 export function moveBookingRoom(bookingId: string, roomUnitId: string): Promise<{ ok: boolean; room: string }> {
   return operatorPost("/api/booking-move-room", { bookingId, roomUnitId });
+}
+
+/** Hotels (0096): re-pull one room's calendars, or every connected room of the hotel. */
+export interface RoomSyncResult { count: number; feeds: number; errors: string[]; syncedAt: string; conflicts: number }
+export async function syncRoomCalendars(listingId: string, unitId?: string): Promise<Record<string, RoomSyncResult | { error: string }>> {
+  return (await operatorPost<{ results: Record<string, RoomSyncResult | { error: string }> }>("/api/room-calendars/sync", { listingId, unitId })).results;
 }
 
 /** Buy a prepaid dining voucher for a restaurant — returns the PayLink redirect URL. */

@@ -19,16 +19,25 @@ import { createDirectBooking } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
+/** Hotels: the room a direct booking is for (picked on the timeline's room row). */
+export interface DirectBookingRoom {
+  unitId: string;
+  label: string; // "Deluxe king · Room 101"
+  nightlyCents: number; // the room's base nightly price, to prefill
+}
+
 const addDays = (iso: string, n: number) => new Date(Date.parse(iso + "T00:00:00Z") + n * 86_400_000).toISOString().slice(0, 10);
 
 export function DirectBookingDialog({
   listing,
   startDate,
+  room,
   onClose,
   onCreated,
 }: {
   listing: LiveListing | null;
   startDate: string | null;
+  room?: DirectBookingRoom | null;
   onClose: () => void;
   onCreated: () => void;
 }) {
@@ -36,13 +45,13 @@ export function DirectBookingDialog({
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md rounded-none">
-        {listing && startDate && <DirectBookingForm key={listing.id + startDate} listing={listing} startDate={startDate} onClose={onClose} onCreated={onCreated} />}
+        {listing && startDate && <DirectBookingForm key={listing.id + startDate + (room?.unitId ?? "")} listing={listing} startDate={startDate} room={room ?? null} onClose={onClose} onCreated={onCreated} />}
       </DialogContent>
     </Dialog>
   );
 }
 
-function DirectBookingForm({ listing, startDate, onClose, onCreated }: { listing: LiveListing; startDate: string; onClose: () => void; onCreated: () => void }) {
+function DirectBookingForm({ listing, startDate, room, onClose, onCreated }: { listing: LiveListing; startDate: string; room: DirectBookingRoom | null; onClose: () => void; onCreated: () => void }) {
   const { format } = useCurrency();
   const isStay = listing.type === "stay";
   const slotMode = !isStay && scheduleHasSlots(listing.sessionSchedule);
@@ -53,7 +62,7 @@ function DirectBookingForm({ listing, startDate, onClose, onCreated }: { listing
   const [checkIn, setCheckIn] = useState(startDate);
   const [checkOut, setCheckOut] = useState(addDays(startDate, 1));
   const [guests, setGuests] = useState(1);
-  const [nightly, setNightly] = useState(String(Math.round(listing.price) || ""));
+  const [nightly, setNightly] = useState(String(room ? Math.round(room.nightlyCents / 100) || "" : Math.round(listing.price) || ""));
   const [cleaning, setCleaning] = useState(String(Math.round((listing.cleaningFeeCents ?? 0) / 100) || ""));
   const [flat, setFlat] = useState(String(Math.round(listing.price) || "")); // tours/experiences total
   const [paid, setPaid] = useState(false);
@@ -131,6 +140,7 @@ function DirectBookingForm({ listing, startDate, onClose, onCreated }: { listing
         baseCents,
         paymentStatus: paid ? "paid" : "unpaid",
         collectVia,
+        roomUnitId: room?.unitId,
       });
       if (r.paymentLinkSent) toast.success(`Payment link emailed to ${email.trim()} — the booking confirms once they pay.`);
       else toast(slotMode ? "Direct booking created — the seat is reserved on that slot." : "Direct booking created — the dates are now blocked.");
@@ -149,7 +159,7 @@ function DirectBookingForm({ listing, startDate, onClose, onCreated }: { listing
       <DialogHeader>
         <DialogTitle className="font-display text-2xl">Direct booking</DialogTitle>
       </DialogHeader>
-      <p className="-mt-1 text-sm text-basalt/55">{listing.title}</p>
+      <p className="-mt-1 text-sm text-basalt/55">{listing.title}{room ? <> · <span className="font-semibold text-basalt">{room.label}</span></> : null}</p>
 
       <div className="mt-2 grid gap-3">
         <div className="grid gap-1.5">

@@ -31,7 +31,9 @@ import { toast } from "sonner";
 
 export type PhotoUploaderHandle = { getValue: () => string[]; getCoverFocus: () => string };
 
+/** Default cap; hotels (the listing and each room type) allow more — see `max`. */
 const MAX_PHOTOS = 24;
+export const HOTEL_MAX_PHOTOS = 36;
 // Reject sources smaller than this on the long edge: the system can downscale a
 // big photo into the responsive ladder, but it can never add detail, so a small
 // source renders blurry on full-width/retina heroes. 2000px+ is ideal.
@@ -60,7 +62,7 @@ function parseFocus(s?: string): { x: number; y: number } {
   return { x: Math.min(100, Math.max(0, Number(m[1]))), y: Math.min(100, Math.max(0, Number(m[2]))) };
 }
 
-export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: string[]; defaultFocus?: string; onChange?: (urls: string[]) => void }>(function PhotoUploader({ defaultValue = [], defaultFocus, onChange }, ref) {
+export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: string[]; defaultFocus?: string; onChange?: (urls: string[]) => void; max?: number }>(function PhotoUploader({ defaultValue = [], defaultFocus, onChange, max = MAX_PHOTOS }, ref) {
   const { user } = useAuth();
   const [photos, setPhotos] = useState<Photo[]>(() => defaultValue.filter(Boolean).map((url) => ({ id: crypto.randomUUID(), url })));
   const [pending, setPending] = useState<Pending[]>([]);
@@ -90,7 +92,7 @@ export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: st
   };
 
   const canUpload = isSupabaseConfigured && Boolean(user?.id);
-  const atCapacity = photos.length + pending.length >= MAX_PHOTOS;
+  const atCapacity = photos.length + pending.length >= max;
 
   const uploadOne = async (file: File) => {
     if (!user?.id) return;
@@ -117,7 +119,7 @@ export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: st
   const handleFiles = (files: FileList | File[]) => {
     if (!canUpload) return;
     const images = Array.from(files).filter((f) => f.type.startsWith("image/"));
-    const room = MAX_PHOTOS - photos.length - pending.length;
+    const room = max - photos.length - pending.length;
     images.slice(0, Math.max(0, room)).forEach(uploadOne);
   };
 
@@ -192,10 +194,10 @@ export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: st
       >
         <ImagePlus className="h-6 w-6 text-apricot" />
         <p className="text-sm font-semibold">
-          {atCapacity ? `Up to ${MAX_PHOTOS} photos` : "Drag & drop photos, or click to choose"}
+          {atCapacity ? `Up to ${max} photos` : "Drag & drop photos, or click to choose"}
         </p>
         <p className="text-xs text-basalt/45">
-          {canUpload ? `${photos.length}/${MAX_PHOTOS} added · use photos ${MIN_LONG_EDGE}px+ wide (2000px+ ideal)` : "Sign in as an operator to upload — or paste an image URL below."}
+          {canUpload ? `${photos.length}/${max} added · use photos ${MIN_LONG_EDGE}px+ wide (2000px+ ideal)` : "Sign in as an operator to upload — or paste an image URL below."}
         </p>
         <input
           ref={inputRef}

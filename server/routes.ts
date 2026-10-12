@@ -22,7 +22,8 @@ import { matchTripadvisor, tripadvisorConfigured } from "./tripadvisor.js";
 import { translateTexts } from "./translate.js";
 import { pricelabsListings, syncOperatorPrices } from "./pricelabs.js";
 import { supabaseAdmin, adminConfigured } from "./supabaseAdmin.js";
-import { moveBlockedReason, moveBookingToRoom, roomMoveOptions, type MoveBooking, type RoomMoveOption } from "./roomMoves.js";
+import { roomExportRanges, syncRoomCalendar, type RoomSyncResult } from "./roomCalendars.js";
+import { moveBlockedReason, moveBookingToRoom, roomMoveOptions, roomOptionForNewBooking, unavailableMessage, type MoveBooking, type RoomMoveOption } from "./roomMoves.js";
 import { paylinkConfigured, registerPayment, checkPayment } from "./paylink.js";
 import { resolvePaymentAccount, clientForOwner, accountOwnerPatch, getPaymentAccountStatus, connectPaymentAccount, disconnectPaymentAccount, setPaymentAccountPaused } from "./paymentAccounts.js";
 import { confirmOperatorStatements, markStatementPaid, voidStatement } from "./commissionStatements.js";
@@ -172,6 +173,9 @@ const directBookingSchema = z.object({
   // "offline" (default): confirmed now, money handled offline. "paylink": create a
   // pending booking + email the customer a PayLink payment link to pay themselves.
   collectVia: z.enum(["offline", "paylink"]).optional().default("offline"),
+  // Hotels (0092): the specific room, picked on the bookings timeline. Required
+  // for a multi-room listing — a hotel booking without a room would block nothing.
+  roomUnitId: z.string().uuid().optional(),
 });
 
 const bookingPaymentSchema = z.object({
@@ -1122,6 +1126,57 @@ export function registerApiRoutes(app: Express) {
     }
   });
 
+  // Hotels (0096) — calendar sync per room. See server/roomCalendars.ts.
+  // GET /api/ical/room/:unitId(.ics): PUBLIC export of one room (its Revamp
+  // bookings + manual blocks) to paste into that room's Airbnb/Booking.com listing.
+  app.get("/api/ical/room/:unitId", async (req: Request, res: Response) => {
+    const unitId = String(req.params.unitId || "").replace(/\.ics$/i, "");
+    const admin = supabaseAdmin();
+    if (!admin || !/^[0-9a-f-]{36}$/i.test(unitId)) return res.status(404).type("text/plain").send("Room not found.");
+    try {
+      const data = await roomExportRanges(admin, unitId);
+      if (!data) return res.status(404).type("text/plain").send("Room not found or not published.");
+      res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+      res.setHeader("Content-Disposition", `inline; filename="revamp-room-${unitId}.ics"`);
+      res.setHeader("Cache-Control", "public, max-age=300");
+      res.send(buildIcalFeed(`${data.title} — Revamp`, data.ranges));
+    } catch (err) {
+      console.error("[ical/room]", err);
+      res.status(503).type("text/plain").send("Calendar temporarily unavailable.");
+    }
+  });
+
+  // POST /api/room-calendars/sync { listingId, unitId? } — the owning operator (or
+  // an admin) re-pulls one room's feeds, or every connected room of the hotel.
+  app.post("/api/room-calendars/sync", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId) return res.status(401).json({ error: "Sign in as an operator." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Calendar sync isn't available right now." });
+    const listingId = typeof req.body?.listingId === "string" ? req.body.listingId : "";
+    const unitId = typeof req.body?.unitId === "string" ? req.body.unitId : "";
+    const { data: listing } = await admin.from("listings").select("operator_id").eq("id", listingId).maybeSingle();
+    if (!listing) return res.status(404).json({ error: "Listing not found." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (listing.operator_id !== userId && me?.role !== "admin") return res.status(403).json({ error: "That isn't your listing." });
+
+    const { data: units } = await admin.from("room_units").select("id").eq("listing_id", listingId);
+    const ids = ((units ?? []) as { id: string }[]).map((u) => u.id).filter((id) => !unitId || id === unitId);
+    if (unitId && !ids.length) return res.status(404).json({ error: "That room wasn't found." });
+    const results: Record<string, RoomSyncResult | { error: string }> = {};
+    for (const id of ids) {
+      try {
+        results[id] = await syncRoomCalendar(admin, id);
+      } catch (err) {
+        console.error("[room-calendars/sync]", id, err);
+        results[id] = { error: "Couldn't sync this room right now." };
+      }
+    }
+    res.json({ results });
+  });
+
   // GET /api/ical/:id(.ics) — PUBLIC availability export for a published listing,
   // pasted into Airbnb/Booking.com so Revamp bookings + blocks propagate there.
   // Merges confirmed bookings + imported blocks + manual blocks. No auth (OTAs
@@ -1336,7 +1391,7 @@ export function registerApiRoutes(app: Express) {
 
       const { data: unitRows, error: unitErr } = await roomAdmin
         .from("room_units")
-        .select("id, room_type_id, name, price_cents, seasonal_rates, manual_blocked_ranges, active, sort_order")
+        .select("*") // * so the 0096 blocked_ranges column is read when present
         .eq("room_type_id", rt.id);
       if (unitErr) {
         console.error("[start-checkout] room units read failed", unitErr.message);
@@ -1349,6 +1404,7 @@ export function registerApiRoutes(app: Express) {
         priceCents: u.price_cents ?? undefined,
         seasonalRates: Array.isArray(u.seasonal_rates) ? u.seasonal_rates : [],
         manualBlockedRanges: Array.isArray(u.manual_blocked_ranges) ? u.manual_blocked_ranges : [],
+        blockedRanges: Array.isArray(u.blocked_ranges) ? u.blocked_ranges : [],
         active: u.active !== false,
         sortOrder: u.sort_order ?? 0,
       }));
@@ -1709,13 +1765,25 @@ export function registerApiRoutes(app: Express) {
 
     const parsed = directBookingSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
-    const { listingId, sessionId, startDate, endDate, guests, guestName, guestEmail, guestPhone, baseCents, paymentStatus, collectVia } = parsed.data;
+    const { listingId, sessionId, startDate, endDate, guests, guestName, guestEmail, guestPhone, baseCents, paymentStatus, collectVia, roomUnitId } = parsed.data;
     if (endDate <= startDate) return res.status(400).json({ error: "The end date must be after the start date." });
 
     // The caller must own the listing.
-    const { data: listing, error: readErr } = await admin.from("listings").select("id, operator_id, title, city, region, slug, type").eq("id", listingId).maybeSingle();
+    const { data: listing, error: readErr } = await admin.from("listings").select("id, operator_id, title, city, region, slug, type, multi_room").eq("id", listingId).maybeSingle();
     if (readErr || !listing) return res.status(404).json({ error: "Listing not found." });
     if (listing.operator_id !== userId) return res.status(403).json({ error: "That listing isn't yours." });
+
+    // Hotels: book one specific room, and only if it's free for every night.
+    let roomTarget: { unitId: string; typeId: string; label: string } | null = null;
+    if (listing.multi_room) {
+      if (!roomUnitId) return res.status(400).json({ error: "Pick a room — open the hotel on the timeline and click a day on that room's row." });
+      const opt = await roomOptionForNewBooking(admin, { listingId, unitId: roomUnitId, startDate, endDate, guests });
+      if (!opt) return res.status(404).json({ error: "That room isn't part of this property." });
+      if (!opt.available) return res.status(409).json({ error: unavailableMessage(opt) });
+      roomTarget = { unitId: opt.unitId, typeId: opt.typeId, label: `${opt.typeName} · ${roomUnitLabel(opt.unitName)}` };
+    } else if (roomUnitId) {
+      return res.status(400).json({ error: "This listing doesn't have separate rooms." });
+    }
 
     const viaPayLink = collectVia === "paylink";
     if (viaPayLink) {
@@ -1760,6 +1828,7 @@ export function registerApiRoutes(app: Express) {
       guest_phone: guestPhone || null,
     };
     if (slotStartsAt) { row.session_id = sessionId; row.starts_at = slotStartsAt; }
+    if (roomTarget) { row.room_type_id = roomTarget.typeId; row.room_unit_id = roomTarget.unitId; }
 
     const emailInfo: BookingEmailInfo = {
       listingTitle: listing.title,
@@ -1820,11 +1889,11 @@ export function registerApiRoutes(app: Express) {
     if (error) {
       await releaseSlot();
       // 23P01 = exclusion_violation: overlaps an existing confirmed booking.
-      if ((error as { code?: string }).code === "23P01") return res.status(409).json({ error: "Those dates already have a confirmed booking." });
+      if ((error as { code?: string }).code === "23P01") return res.status(409).json({ error: roomTarget ? "That room already has a booking on those nights." : "Those dates already have a confirmed booking." });
       console.error("[direct-booking]", error);
       return res.status(500).json({ error: "Couldn't create the booking." });
     }
-    await logBookingEvent(admin, data.id, "direct_created", `Direct booking recorded by the operator (${paymentStatus}${sessionId ? ", slot" : ""}).`);
+    await logBookingEvent(admin, data.id, "direct_created", `Direct booking recorded by the operator (${paymentStatus}${sessionId ? ", slot" : ""}${roomTarget ? `, ${roomTarget.label}` : ""}).`);
     res.json({ id: data.id, totalCents: charge.totalCents });
   });
 
@@ -1907,7 +1976,7 @@ export function registerApiRoutes(app: Express) {
     if (!/^[0-9a-f-]{36}$/i.test(bookingId)) return void res.status(400).json({ error: "Booking not found." });
     const { data: bk, error } = await admin
       .from("bookings")
-      .select("id, listing_id, status, start_date, end_date, guests, room_type_id, room_unit_id, listings!inner(operator_id)")
+      .select("id, listing_id, status, start_date, end_date, guests, room_type_id, room_unit_id, listings!inner(operator_id, multi_room)")
       .eq("id", bookingId)
       .maybeSingle();
     if (error || !bk) {
@@ -1919,7 +1988,8 @@ export function registerApiRoutes(app: Express) {
       return void res.status(403).json({ error: "That booking isn't on your listing." });
     }
     const booking = bk as unknown as MoveBooking;
-    const blocked = moveBlockedReason(booking, new Date().toISOString().slice(0, 10));
+    const isHotel = (bk as unknown as { listings: { multi_room?: boolean } }).listings.multi_room === true;
+    const blocked = moveBlockedReason(booking, new Date().toISOString().slice(0, 10), isHotel);
     if (blocked) return void res.status(400).json({ error: blocked });
     return { admin, booking };
   };

@@ -43,7 +43,7 @@ interface FullBooking {
   /** Hotels (0092): the booked room type and the room it's in. */
   room_type_id?: string | null;
   room_unit_id?: string | null;
-  listings: { title: string; type: string; city: string } | null;
+  listings: { title: string; type: string; city: string; multi_room?: boolean } | null;
   profiles: { display_name: string } | null;
 }
 interface BookingEvent { id: string; type: string; detail: string | null; created_at: string }
@@ -69,6 +69,7 @@ const EVENT_LABEL: Record<string, string> = {
   direct_created: "Direct booking recorded",
   payment_status: "Payment status changed",
   room_moved: "Moved to another room",
+  calendar_conflict: "⚠️ Clashes with an Airbnb/Booking.com booking",
   email_failed: "⚠️ Email failed to send",
 };
 
@@ -119,7 +120,7 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
     supabase
       .from("bookings")
       // select("*") so a not-yet-run 0035 (payment_status) migration doesn't break the dialog.
-      .select("*, listings!inner(title, type, city), profiles!traveler_id(display_name)")
+      .select("*, listings!inner(title, type, city, multi_room), profiles!traveler_id(display_name)")
       .eq("id", bookingId)
       .maybeSingle()
       .then(({ data }) => {
@@ -183,7 +184,8 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
   const todayIso = new Date().toISOString().slice(0, 10);
   const canCancel = !!b && (b.status === "pending_payment" || b.status === "confirmed") && b.start_date >= todayIso;
 
-  const canMove = !!b?.room_type_id && b.status === "confirmed" && b.end_date > todayIso;
+  const isHotelBooking = !!b?.room_type_id || b?.listings?.multi_room === true;
+  const canMove = !!b && isHotelBooking && b.status === "confirmed" && b.end_date > todayIso;
   const openMove = async () => {
     if (!b) return;
     setMoveOpen(true);
@@ -314,16 +316,16 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
                   <div><p className="text-basalt/45">Nights</p><p className="font-semibold">{nights(b.start_date, b.end_date)}</p></div>
                   <div><p className="text-basalt/45">Guests</p><p className="font-semibold">{b.guests}</p></div>
                 </div>
-                {b.room_type_id && (
+                {isHotelBooking && (
                   <div className="mt-3 border-t border-basalt/10 pt-3">
                     <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
                       <div className="min-w-0">
                         <p className="text-basalt/45">Room</p>
-                        <p className="font-semibold">{roomLabel ?? "Assigned when the booking confirms"}</p>
+                        <p className="font-semibold">{roomLabel ?? (b.status === "confirmed" ? "No room assigned yet" : "Assigned when the booking confirms")}</p>
                       </div>
                       {canMove && !moveOpen && (
                         <Button variant="outline" onClick={() => void openMove()} className="h-9 rounded-none border-basalt/20">
-                          <ArrowRightLeft className="mr-1.5 h-4 w-4" /> Move to another room
+                          <ArrowRightLeft className="mr-1.5 h-4 w-4" /> {roomLabel ? "Move to another room" : "Assign a room"}
                         </Button>
                       )}
                     </div>

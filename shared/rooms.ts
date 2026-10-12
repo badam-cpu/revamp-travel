@@ -85,11 +85,12 @@ export function quoteUnit(listing: QuoteListing, type: Pick<RoomType, "priceCent
   return quote(listing, unitPricing(type, unit), startDate, endDate, guests);
 }
 
-/** Whether a room is free for every night of [start, end): active, not booked, not blocked by the operator. */
-export function unitFree(unit: Pick<RoomUnit, "active" | "manualBlockedRanges">, booked: Range[], start: string, end: string): boolean {
+/** Whether a room is free for every night of [start, end): active, not booked, not blocked by the
+ *  operator, and not busy on the room's own imported Airbnb/Booking.com calendar. */
+export function unitFree(unit: Pick<RoomUnit, "active" | "manualBlockedRanges" | "blockedRanges">, booked: Range[], start: string, end: string): boolean {
   if (!unit.active) return false;
   const clashes = (r: Range) => r.start < end && r.end > start;
-  return !booked.some(clashes) && !(unit.manualBlockedRanges ?? []).some(clashes);
+  return !booked.some(clashes) && !(unit.manualBlockedRanges ?? []).some(clashes) && !(unit.blockedRanges ?? []).some(clashes);
 }
 
 /**

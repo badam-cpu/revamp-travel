@@ -192,6 +192,8 @@ export interface RoomUnit {
   seasonalRates: SeasonalRate[];
   /** Operator-blocked dates (end exclusive). */
   manualBlockedRanges: { start: string; end: string }[];
+  /** Busy nights imported from this room's own Airbnb/Booking.com calendars (0096, end exclusive). */
+  blockedRanges?: { start: string; end: string }[];
   active: boolean;
   sortOrder: number;
 }
