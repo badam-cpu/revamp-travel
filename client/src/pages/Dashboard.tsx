@@ -43,6 +43,7 @@ import { useListings, LiveListing } from "@/contexts/ListingsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import type { ListingInput, ListingType, RoomType } from "@shared/listings";
 import { LISTING_LIMITS, LISTING_TEXT_LIMITS, STAY_SPACE_TYPES, firstListingTextProblem, listingOffers } from "@shared/listings";
+import { EXTRA_FEE_TYPES } from "@shared/bookings";
 import { CharCount } from "@/components/CharCount";
 import { Switch } from "@/components/ui/switch";
 import { TimeSelect } from "@/components/TimeSelect";
@@ -188,6 +189,8 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
     freeCancelDays: Number(get("freeCancelDays")) >= 0 && get("freeCancelDays") !== "" ? Number(get("freeCancelDays")) : 7,
     nonrefundableDiscountPercent: Number(get("nonrefundableDiscountPercent")) >= 0 && get("nonrefundableDiscountPercent") !== "" ? Number(get("nonrefundableDiscountPercent")) : 5,
     cleaningFeeCents: Number(get("cleaningFee")) > 0 ? Math.round(Number(get("cleaningFee")) * 100) : 0,
+    extraFeeType: draft.type !== "stay" && get("extraFeeType") && get("extraFeeType") !== "none" ? get("extraFeeType") : null,
+    extraFeePer: draft.type !== "stay" && get("extraFeePer") === "person" ? "person" : "booking",
     ...(() => {
       const t = get("discountType");
       const type = t === "percent" || t === "amount" ? t : null;
@@ -278,6 +281,12 @@ const LAST_STEP = STEPS.length - 1;
  * shared ui/Input drops to 14px on desktop (md:text-sm) and ui/SelectTrigger
  * pins 36px via data-[size=default]:h-9, so both are overridden here. */
 const FIELD = "h-12 rounded-none text-base md:text-base";
+
+/** Fee names offered for a tour/experience — the standard list, plus a listing's own legacy value. */
+function extraFeeOptions(current?: string | null): string[] {
+  const list: string[] = [...EXTRA_FEE_TYPES];
+  return current && !list.includes(current) ? [current, ...list] : list;
+}
 const SELECT_TRIGGER = "h-12 data-[size=default]:h-12 w-full rounded-none text-base";
 const NATIVE_SELECT = "h-12 w-full rounded-none border border-basalt/15 bg-paper px-3 text-base focus:border-apricot focus:outline-none";
 /** A lone field that should line up with one column of the two-column pairs. */
@@ -359,6 +368,9 @@ function ListingFormDialog({
   // listing-level nightly price/guest fields give way to the room-type editor.
   const roomTypesRef = useRef<RoomTypesEditorHandle>(null);
   const [multiRoom, setMultiRoom] = useState(!!draft?.multiRoom);
+  // Shows only the setting that applies: free-cancel window (flexible) or the
+  // discount % (non-refundable). Both inputs stay mounted so their values save.
+  const [policy, setPolicy] = useState(draft?.cancellationPolicy ?? "flexible");
   // Existing room types load async; the editor (uncontrolled) mounts once they're in.
   const [roomTypes, setRoomTypes] = useState<RoomType[] | null>(null);
   const draftId = draft?.id;
@@ -369,6 +381,7 @@ function ListingFormDialog({
     setError(null);
     setItinerary(draft?.highlights ?? []);
     setMultiRoom(!!draft?.multiRoom);
+    setPolicy(draft?.cancellationPolicy ?? "flexible");
   }, [open, draftId]);
   useEffect(() => {
     let alive = true;
@@ -1080,11 +1093,43 @@ function ListingFormDialog({
                     <Label htmlFor="maxGuests" className="text-sm font-semibold">Max guests</Label>
                     <Input id="maxGuests" name="maxGuests" type="number" min={1} max={50} placeholder={draft.type === "stay" ? "e.g. 4" : "e.g. 8"} defaultValue={draft.maxGuests || ""} className={FIELD} />
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="cleaningFee" className="text-sm font-semibold">Cleaning fee (AMD)</Label>
-                    <Input id="cleaningFee" name="cleaningFee" type="number" min={0} placeholder="e.g. 10000" defaultValue={draft.cleaningFeeCents ? draft.cleaningFeeCents / 100 : ""} className={FIELD} />
-                    <p className="text-xs text-basalt/45">Optional — charged once per booking.</p>
-                  </div>
+                  {draft.type === "stay" ? (
+                    <div className="grid gap-2">
+                      <Label htmlFor="cleaningFee" className="text-sm font-semibold">Cleaning fee (AMD)</Label>
+                      <Input id="cleaningFee" name="cleaningFee" type="number" min={0} placeholder="e.g. 10000" defaultValue={draft.cleaningFeeCents ? draft.cleaningFeeCents / 100 : ""} className={FIELD} />
+                      <p className="text-xs text-basalt/45">Optional — charged once per booking.</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid gap-2">
+                        <Label htmlFor="extraFeeType" className="text-sm font-semibold">Extra fee</Label>
+                        <Select name="extraFeeType" defaultValue={draft.extraFeeType || "none"}>
+                          <SelectTrigger id="extraFeeType" className={SELECT_TRIGGER}><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {extraFeeOptions(draft.extraFeeType).map((t) => (
+                              <SelectItem key={t} value={t}>{t}</SelectItem>
+                            ))}
+                            <SelectItem value="none">Other (shown as “Extra fee”)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-basalt/45">Optional — what guests pay for on top of the price.</p>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="cleaningFee" className="text-sm font-semibold">Fee amount (AMD)</Label>
+                        <Input id="cleaningFee" name="cleaningFee" type="number" min={0} placeholder="e.g. 3000" defaultValue={draft.cleaningFeeCents ? draft.cleaningFeeCents / 100 : ""} className={FIELD} />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="extraFeePer" className="text-sm font-semibold">Charge the fee</Label>
+                        <Select name="extraFeePer" defaultValue={draft.extraFeePer === "person" ? "person" : "booking"}>
+                          <SelectTrigger id="extraFeePer" className={SELECT_TRIGGER}><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="booking">Once per booking</SelectItem>
+                            <SelectItem value="person">Per guest</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </>
+                  )}
                   {draft.type === "stay" && !multiRoom && (
                     <>
                       <div className="grid gap-2">
@@ -1117,7 +1162,7 @@ function ListingFormDialog({
                 <div className="grid gap-4 border border-basalt/10 bg-chalk/60 p-4">
                   <div className="grid gap-2">
                     <Label htmlFor="cancellationPolicy" className="text-sm font-semibold">Cancellation policy</Label>
-                    <Select name="cancellationPolicy" defaultValue={draft.cancellationPolicy ?? "flexible"}>
+                    <Select name="cancellationPolicy" defaultValue={draft.cancellationPolicy ?? "flexible"} onValueChange={(v) => setPolicy(v === "non_refundable" ? "non_refundable" : "flexible")}>
                       <SelectTrigger id="cancellationPolicy" className={SELECT_TRIGGER}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="flexible">Flexible — free cancellation up to a cutoff</SelectItem>
@@ -1126,15 +1171,15 @@ function ListingFormDialog({
                     </Select>
                   </div>
                   <div className="grid items-start gap-4 sm:grid-cols-2">
-                    <div className="grid gap-2">
-                      <Label htmlFor="freeCancelDays" className="text-sm font-semibold">Free-cancel window <span className="font-normal text-basalt/45">(flexible)</span></Label>
+                    <div className="grid gap-2" hidden={policy !== "flexible"}>
+                      <Label htmlFor="freeCancelDays" className="text-sm font-semibold">Free-cancel window <span className="font-normal text-basalt/45">(days)</span></Label>
                       <Input id="freeCancelDays" name="freeCancelDays" type="number" min={0} max={365} placeholder="7" defaultValue={draft.freeCancelDays ?? 7} className={FIELD} />
-                      <p className="text-xs text-basalt/45">Days before check-in that free cancellation ends. After it, no refund.</p>
+                      <p className="text-xs text-basalt/45">Days before {draft.type === "stay" ? "check-in" : "the start"} that free cancellation ends. After it, no refund.</p>
                     </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="nonrefundableDiscountPercent" className="text-sm font-semibold">Non-refundable discount % <span className="font-normal text-basalt/45">(incentive)</span></Label>
+                    <div className="grid gap-2" hidden={policy !== "non_refundable"}>
+                      <Label htmlFor="nonrefundableDiscountPercent" className="text-sm font-semibold">Non-refundable discount %</Label>
                       <Input id="nonrefundableDiscountPercent" name="nonrefundableDiscountPercent" type="number" min={0} max={90} placeholder="5" defaultValue={draft.nonrefundableDiscountPercent ?? 5} className={FIELD} />
-                      <p className="text-xs text-basalt/45">Applied only when the policy is non-refundable.</p>
+                      <p className="text-xs text-basalt/45">Off the price, as the reason to book without refunds.</p>
                     </div>
                   </div>
                 </div>

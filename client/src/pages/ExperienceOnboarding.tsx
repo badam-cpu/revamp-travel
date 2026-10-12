@@ -74,6 +74,7 @@ import type { ResolvedPlace } from "@/lib/googleMaps";
 import { useListings, LiveListing } from "@/contexts/ListingsContext";
 import type { ListingFact, ListingInput } from "@shared/listings";
 import { LISTING_LIMITS, LISTING_TEXT_LIMITS, firstListingTextProblem } from "@shared/listings";
+import { EXTRA_FEE_TYPES } from "@shared/bookings";
 import { CharCount } from "@/components/CharCount";
 import { ApiError, type AhaCopyContext } from "@/lib/api";
 import { factValue } from "@/lib/tourFacts";
@@ -114,6 +115,9 @@ interface WizardData {
   freeCancelDays: number;
   nonrefundableDiscountPercent: number;
   cleaningFeeCents: number;
+  /** What the extra fee covers ("" → shown as "Extra fee") and how it's charged (0095). */
+  extraFeeType: string;
+  extraFeePer: "booking" | "person";
   discountType: "none" | "percent" | "amount";
   discountValue: number;
   discountStart: string;
@@ -153,6 +157,8 @@ function emptyWizardData(): WizardData {
     freeCancelDays: 7,
     nonrefundableDiscountPercent: 5,
     cleaningFeeCents: 0,
+    extraFeeType: "",
+    extraFeePer: "booking",
     discountType: "none",
     discountValue: 0,
     discountStart: "",
@@ -224,6 +230,8 @@ function listingToWizardData(listing: LiveListing): WizardData {
     freeCancelDays: listing.freeCancelDays ?? 7,
     nonrefundableDiscountPercent: listing.nonrefundableDiscountPercent ?? 5,
     cleaningFeeCents: listing.cleaningFeeCents ?? 0,
+    extraFeeType: listing.extraFeeType ?? "",
+    extraFeePer: listing.extraFeePer === "person" ? "person" : "booking",
     discountType: listing.discountType === "percent" || listing.discountType === "amount" ? listing.discountType : "none",
     discountValue: listing.discountType === "amount" ? (listing.discountValue ?? 0) / 100 : listing.discountValue ?? 0,
     discountStart: listing.discountStart ?? "",
@@ -276,6 +284,8 @@ function toListingInput(data: WizardData): ListingInput {
     freeCancelDays: data.freeCancelDays,
     nonrefundableDiscountPercent: data.nonrefundableDiscountPercent,
     cleaningFeeCents: data.cleaningFeeCents,
+    extraFeeType: data.extraFeeType || null,
+    extraFeePer: data.extraFeePer,
     ...(() => {
       const type = data.discountType === "percent" || data.discountType === "amount" ? data.discountType : null;
       const value = type === "amount" ? Math.round(data.discountValue * 100) : Math.round(data.discountValue);
@@ -742,8 +752,28 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                         </SelectContent>
                       </Select>
                     </StepField>
-                    <StepField label="Cleaning fee in AMD (optional)" help="A flat fee added once per booking.">
-                      <Input type="number" min={0} value={data.cleaningFeeCents ? data.cleaningFeeCents / 100 : ""} onChange={(e) => set("cleaningFeeCents", Math.round((Number(e.target.value) || 0) * 100))} placeholder="e.g. 10000" />
+                    <StepField label="Extra fee (optional)" help="What guests pay for on top of the price.">
+                      <Select value={data.extraFeeType || "none"} onValueChange={(v) => set("extraFeeType", v === "none" ? "" : v)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {(data.extraFeeType && !(EXTRA_FEE_TYPES as readonly string[]).includes(data.extraFeeType) ? [data.extraFeeType, ...EXTRA_FEE_TYPES] : [...EXTRA_FEE_TYPES]).map((t) => (
+                            <SelectItem key={t} value={t}>{t}</SelectItem>
+                          ))}
+                          <SelectItem value="none">Other (shown as “Extra fee”)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </StepField>
+                    <StepField label="Fee amount in AMD">
+                      <Input type="number" min={0} value={data.cleaningFeeCents ? data.cleaningFeeCents / 100 : ""} onChange={(e) => set("cleaningFeeCents", Math.round((Number(e.target.value) || 0) * 100))} placeholder="e.g. 3000" />
+                    </StepField>
+                    <StepField label="Charge the fee">
+                      <Select value={data.extraFeePer} onValueChange={(v) => set("extraFeePer", v === "person" ? "person" : "booking")}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="booking">Once per booking</SelectItem>
+                          <SelectItem value="person">Per guest</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </StepField>
                     <div className="sm:col-span-2">
                       <StepField label="Cancellation policy" help="Flexible gives free cancellation up to a cutoff; non-refundable is cheaper but never refunds.">

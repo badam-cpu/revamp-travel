@@ -141,6 +141,9 @@ interface ListingRow {
   free_cancel_days: number | null;
   nonrefundable_discount_percent: number | null;
   cleaning_fee_cents: number | null;
+  /** 0095 — absent on older databases (select("*") just omits them). */
+  extra_fee_type?: string | null;
+  extra_fee_per?: "booking" | "person" | null;
   house_rules: string[] | null;
   neighborhood: string | null;
   nearby: { name: string; category?: string; distanceM?: number }[] | null;
@@ -240,6 +243,8 @@ function mapListingRow(row: ListingRow): LiveListing {
     freeCancelDays: row.free_cancel_days ?? 7,
     nonrefundableDiscountPercent: row.nonrefundable_discount_percent ?? 0,
     cleaningFeeCents: row.cleaning_fee_cents ?? 0,
+    extraFeeType: row.extra_fee_type ?? null,
+    extraFeePer: row.extra_fee_per === "person" ? "person" : "booking",
     houseRules: row.house_rules ?? [],
     neighborhood: row.neighborhood ?? undefined,
     nearby: row.nearby ?? [],
@@ -355,6 +360,11 @@ function toRow(input: ListingInput) {
     free_cancel_days: input.freeCancelDays ?? 7,
     nonrefundable_discount_percent: input.nonrefundableDiscountPercent ?? 5,
     cleaning_fee_cents: input.cleaningFeeCents ?? 0,
+    // 0095 columns are written only for tours/experiences, so saving a stay
+    // never depends on them.
+    ...(input.type !== "stay" && input.type !== "eat"
+      ? { extra_fee_type: input.extraFeeType?.trim() || null, extra_fee_per: input.extraFeePer === "person" ? "person" : "booking" }
+      : {}),
     house_rules: input.houseRules ?? [],
     neighborhood: input.neighborhood ?? null,
     nearby: input.nearby ?? [],

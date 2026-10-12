@@ -53,7 +53,7 @@ import { isCrawlerUserAgent } from "./botDetect.js";
 import { randomUUID } from "crypto";
 import { formatSlotTime, slotLocalDate } from "../shared/sessions.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, promoDiscount, addonUnitCost, nightsBetween, maxNightlyOccupancy, type Addon, DEFAULT_CURRENCY, PLATFORM_COMMISSION_PERCENT } from "../shared/bookings.js";
+import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, promoDiscount, addonUnitCost, nightsBetween, maxNightlyOccupancy, listingFeeCents, type Addon, DEFAULT_CURRENCY, PLATFORM_COMMISSION_PERCENT } from "../shared/bookings.js";
 import { cheapestAvailableUnit, unitPricing } from "../shared/rooms.js";
 import type { RoomUnit } from "../shared/listings.js";
 import { planTrip, PlannerError } from "./planner.js";
@@ -343,6 +343,11 @@ const ahaCopySchema = z.object({
     })
     .default({}),
 });
+
+/** A listings row (snake_case) in the shape `listingFeeCents` reads (0095 columns may be absent). */
+function feeListing(row: any) {
+  return { type: row.type, cleaningFeeCents: row.cleaning_fee_cents ?? 0, extraFeeType: row.extra_fee_type ?? null, extraFeePer: row.extra_fee_per ?? "booking" };
+}
 
 function issuesToMessage(err: z.ZodError): string {
   return err.issues.map((issue) => `${issue.path.join(".") || "value"}: ${issue.message}`).join("; ");
@@ -1218,7 +1223,9 @@ export function registerApiRoutes(app: Express) {
         { discountType: listing.discount_type, discountValue: listing.discount_value, discountStart: listing.discount_start, discountEnd: listing.discount_end },
         startDate,
       );
-      let slotBase = netCents;
+      // + the operator's extra fee (entrance tickets, materials, … — per booking
+      // or per guest), same as the stay path adds its cleaning fee.
+      let slotBase = netCents + listingFeeCents(feeListing(listing), guests);
       let slotPromoDisc = 0;
       if (promoResolved) {
         slotPromoDisc = promoDiscountCents(slotBase, promoResolved.discount_type, promoResolved.discount_value);
@@ -1428,7 +1435,7 @@ export function registerApiRoutes(app: Express) {
       { discountType: listing.discount_type, discountValue: listing.discount_value, discountStart: listing.discount_start, discountEnd: listing.discount_end },
       startDate,
     );
-    let nsBase = netAccommodationCents + (listing.cleaning_fee_cents ?? 0);
+    let nsBase = netAccommodationCents + listingFeeCents(feeListing(listing), guests);
     let promoDisc = 0;
     if (promoResolved) {
       promoDisc = promoDiscountCents(nsBase, promoResolved.discount_type, promoResolved.discount_value);

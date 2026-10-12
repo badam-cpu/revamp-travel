@@ -41,6 +41,8 @@ import {
   describeBookingBasis,
   describeCancellationPolicy,
   extraGuestFeeCentsTotal,
+  listingFeeCents,
+  listingFeeLabel,
   TAX_PERCENT,
 } from "@shared/bookings";
 import { formatSlotTime } from "@shared/sessions";
@@ -139,7 +141,7 @@ export default function Checkout({ slug }: { slug: string }) {
     : 0;
   const roomCents = accommodationCents - extraGuestCents;
   const promo = listing ? promoDiscount(accommodationCents, listing, startDate) : { active: false, discountCents: 0, netCents: 0 };
-  const cleaningCents = accommodationCents > 0 ? listing?.cleaningFeeCents ?? 0 : 0;
+  const cleaningCents = listing && accommodationCents > 0 ? listingFeeCents(listing, guests) : 0;
   const preTaxBase = promo.netCents + cleaningCents;
   const promoCodeDiscountCents = promoInfo ? computePromoCodeDiscount(preTaxBase, promoInfo.discountType, promoInfo.discountValue) : 0;
   const charge = computeBookingCharge(Math.max(0, preTaxBase - promoCodeDiscountCents));
@@ -472,7 +474,7 @@ export default function Checkout({ slug }: { slug: string }) {
                 )}
                 {cleaningCents > 0 && (
                   <div className="flex items-center justify-between text-basalt/55">
-                    <span>Cleaning fee</span>
+                    <span>{listing ? listingFeeLabel(listing, guests) : "Cleaning fee"}</span>
                     <span>{format(cleaningCents)}</span>
                   </div>
                 )}

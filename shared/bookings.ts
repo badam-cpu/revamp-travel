@@ -61,6 +61,40 @@ export function computeBookingCharge(baseCents: number, commissionPercent: numbe
 }
 
 /**
+ * The operator's fee on top of the price (migration 0095). Stays: always the
+ * flat "Cleaning fee", once per booking. Tours/experiences: the operator names
+ * what it covers and charges it once per booking or per guest. The amount
+ * lives in `cleaningFeeCents` for every type. Client preview and server charge
+ * both go through these two helpers so they can't drift.
+ */
+export const EXTRA_FEE_TYPES = ["Entrance tickets", "Materials", "Equipment rental", "Transport", "Food & drinks", "Service fee"] as const;
+export type ExtraFeePer = "booking" | "person";
+
+interface FeeListing {
+  type: ListingType;
+  cleaningFeeCents?: number | null;
+  extraFeeType?: string | null;
+  extraFeePer?: ExtraFeePer | string | null;
+}
+
+const feePerPerson = (l: FeeListing) => l.type !== "stay" && l.extraFeePer === "person";
+
+/** The fee in cents for this booking (0 when none is set). */
+export function listingFeeCents(l: FeeListing, guests: number): number {
+  const fee = Math.max(0, Math.round(l.cleaningFeeCents ?? 0));
+  if (!fee) return 0;
+  return feePerPerson(l) ? fee * Math.max(1, Math.round(guests) || 1) : fee;
+}
+
+/** Guest-facing line label, e.g. "Cleaning fee", "Entrance tickets × 3 guests". */
+export function listingFeeLabel(l: FeeListing, guests?: number): string {
+  if (l.type === "stay") return "Cleaning fee";
+  const name = l.extraFeeType?.trim() || "Extra fee";
+  if (feePerPerson(l) && guests && guests > 1) return `${name} × ${guests} guests`;
+  return feePerPerson(l) ? `${name} (per guest)` : name;
+}
+
+/**
  * Booking lifecycle. Only `confirmed` blocks availability; `pending_payment`
  * is a soft hold during checkout; the rest are terminal/non-blocking. Kept in
  * sync with the `booking_status` enum in

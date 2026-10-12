@@ -24,7 +24,7 @@ import { AskHostButton } from "@/components/AskHostButton";
 import { getListingSessions, groupSessionsByDate, formatSlotTime, type ListingSession } from "@/lib/sessions";
 import { scheduleHasSlots, slotLocalDate } from "@shared/sessions";
 import { Button } from "@/components/ui/button";
-import { computeBookingAmountCents, computeBookingCharge, describeBookingBasis, describeCancellationPolicy, isBookableType, promoDiscount, nightlyPriceRange, nightsBetween, extraGuestFeeCentsTotal } from "@shared/bookings";
+import { computeBookingAmountCents, computeBookingCharge, describeBookingBasis, describeCancellationPolicy, isBookableType, promoDiscount, nightlyPriceRange, nightsBetween, extraGuestFeeCentsTotal, listingFeeCents, listingFeeLabel } from "@shared/bookings";
 import { TAX_PERCENT } from "@shared/bookings";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
@@ -171,9 +171,10 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
   // Promo discount (applies when the check-in date is in the sale window).
   const promo = promoDiscount(accommodationCents, listing, selected?.startDate ?? "");
   const netAccommodationCents = promo.netCents;
-  // Base = discounted accommodation + flat cleaning fee; guest pays base + tax on
-  // top (same helper the server charges with). Add-ons are chosen on /checkout.
-  const cleaningCents = accommodationCents > 0 ? listing.cleaningFeeCents ?? 0 : 0;
+  // Base = discounted accommodation + the operator's fee (stays: cleaning; tours/
+  // experiences: their named extra fee, per booking or per guest); guest pays
+  // base + tax on top (same helpers the server charges with). Add-ons are chosen on /checkout.
+  const cleaningCents = accommodationCents > 0 ? listingFeeCents(listing, guests) : 0;
   const charge = computeBookingCharge(netAccommodationCents + cleaningCents);
   const amountCents = charge.totalCents; // accommodation total; add-ons added at checkout
   const policyText = describeCancellationPolicy(listing.cancellationPolicy, {
@@ -372,7 +373,7 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
           )}
           {cleaningCents > 0 && (
             <div className="flex items-center justify-between text-basalt/55">
-              <span>Cleaning fee</span>
+              <span>{listingFeeLabel(listing, guests)}</span>
               <span>{format(cleaningCents)}</span>
             </div>
           )}

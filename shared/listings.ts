@@ -275,8 +275,14 @@ export interface Listing {
   freeCancelDays?: number;
   /** Non-refundable policy: % off the base price as the incentive. */
   nonrefundableDiscountPercent?: number;
-  /** Flat cleaning fee added once per booking (operator keeps it, less commission). */
+  /** The operator's fee on top of the price (operator keeps it, less commission). Stays: the
+   *  flat cleaning fee. Tours/experiences: an extra fee named by `extraFeeType`, charged per
+   *  `extraFeePer` (0095). See shared/bookings.ts `listingFeeCents`/`listingFeeLabel`. */
   cleaningFeeCents?: number;
+  /** Tours/experiences: what the fee covers ("Entrance tickets", …); null → "Extra fee". */
+  extraFeeType?: string | null;
+  /** Tours/experiences: charge the fee once per booking (default) or per guest. */
+  extraFeePer?: "booking" | "person";
   /** Stay house rules (no smoking / no pets / self check-in, …) — see client/src/lib/houseRules.ts. */
   houseRules?: string[];
   /** Operator's free-text description of the surrounding neighborhood. */
@@ -871,8 +877,14 @@ export interface ListingInput {
   freeCancelDays?: number;
   /** Non-refundable policy: % off the base price as the incentive. */
   nonrefundableDiscountPercent?: number;
-  /** Flat cleaning fee added once per booking (operator keeps it, less commission). */
+  /** The operator's fee on top of the price (operator keeps it, less commission). Stays: the
+   *  flat cleaning fee. Tours/experiences: an extra fee named by `extraFeeType`, charged per
+   *  `extraFeePer` (0095). See shared/bookings.ts `listingFeeCents`/`listingFeeLabel`. */
   cleaningFeeCents?: number;
+  /** Tours/experiences: what the fee covers ("Entrance tickets", …); null → "Extra fee". */
+  extraFeeType?: string | null;
+  /** Tours/experiences: charge the fee once per booking (default) or per guest. */
+  extraFeePer?: "booking" | "person";
   /** Stay house rules (no smoking / no pets / self check-in, …) — see client/src/lib/houseRules.ts. */
   houseRules?: string[];
   /** Operator's free-text description of the surrounding neighborhood. */
