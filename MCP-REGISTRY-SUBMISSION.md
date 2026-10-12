@@ -58,3 +58,43 @@ For each: name **Revamp Vacations**, URL `https://mcp.revampvacations.com/mcp`, 
   logo on connectors and isn't branded.
 - The internal/admin MCP (`/mcp/admin`) stays **unlisted and dormant** — never
   submit it anywhere.
+
+---
+
+## Meta Muse (Meta AI) — connector directory
+
+Meta opened Muse to third-party connectors in Sept 2026. Two routes:
+
+### A. Try it now — private custom connector (only you see it, no review)
+In the Muse app, send: *"Connect to the Revamp Vacations MCP server at https://mcp.revampvacations.com/mcp"*.
+When Muse asks: transport **HTTP (Streamable HTTP)**, authentication **none**. Ask it to test all four tools, save it, and set approval to **read-only**. Then try: *"Use Revamp to find a cabin in Dilijan for 2 next weekend."*
+
+### B. Public listing — submit at https://muse.ai/platform → "Submit a connector"
+(Sign in with a work email; Meta reviews end-to-end against the live endpoint; onboarding in waves.)
+
+**Step 1 — Overview**
+- Connector name: `Revamp Vacations`
+- Company / developer: `Revamp Hospitality LLC`
+- Product website: `https://revampvacations.com`
+- Example prompts:
+  - Find a cozy stay in Dilijan for two next weekend
+  - What are the best tours from Yerevan to Garni and Geghard?
+  - Plan a 4-day Armenia trip with wine, hiking and great food
+  - Is this apartment in Yerevan free from Oct 17 to Oct 20?
+  - Where should I eat in Yerevan's city centre tonight?
+- Icon (512×512 PNG): `client/public/icon-512.png` (https://revampvacations.com/icon-512.png)
+- Accepts payments: **No** (read-only; bookings happen on revampvacations.com via the listing link)
+- Support: `hello@revampvacations.com`
+- Privacy policy: `https://revampvacations.com/privacy`
+- Terms of service: `https://revampvacations.com/terms`
+- Anything else: *Official, read-only MCP for Armenia's curated travel marketplace — live published stays, tours, experiences, restaurants and places. Already listed in the official MCP Registry (com.revampvacations/revamp) and Smithery.*
+
+**Step 2 — Technical specs**
+- Connection type: **Existing MCP**
+- Hosted MCP endpoint: `https://mcp.revampvacations.com/mcp` (Streamable HTTP, sessions, held-open SSE stream; GET 405 / OAuth discovery 404 by design)
+- Documentation: `https://revampvacations.com/developers`
+- Access requirements: *None — public, no account, no paid plan, all regions. Read-only; returns only the published catalog. Fair-use rate limiting.*
+- Authentication: **Other → "None (public, read-only)"** (don't tick API keys or OAuth)
+- Tools: `search_listings`, `get_listing`, `check_availability`, `plan_trip`
+
+**Step 3 — Review:** confirm you're authorized for the brand assets, accept the Muse Connector Terms, submit. (Your account + acceptance — do it yourself.)

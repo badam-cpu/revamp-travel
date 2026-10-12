@@ -12,6 +12,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { CRON_REGISTRY } from "./alerts.js";
 import { pingDb } from "./supabase.js";
 import { paylinkConfigured } from "./paylink.js";
+import { secretsKeyConfigured } from "./secretBox.js";
 import { emailConfigured } from "./email.js";
 import { adminConfigured } from "./supabaseAdmin.js";
 import { googlePlacesConfigured } from "./googlePlaces.js";
@@ -132,6 +133,8 @@ export async function collectHealth(admin: SupabaseClient): Promise<AdminHealth>
 
   const integrations: Record<string, boolean> = {
     payments_paylink: paylinkConfigured(),
+    // Direct operator PayLink (0094): connecting is refused until this key exists.
+    operator_secrets_key: secretsKeyConfigured(),
     email_resend: emailConfigured(),
     supabase_service_role: adminConfigured(),
     anthropic_ai: supportAiConfigured(),

@@ -51,6 +51,7 @@ function Pill({ tone, children }: { tone: Tone; children: React.ReactNode }) {
 /** Friendly names + grouping for the integration booleans. */
 const INTEGRATION_LABELS: Record<string, string> = {
   payments_paylink: "Payments (PayLink)",
+  operator_secrets_key: "Direct PayLink payments (encryption key)",
   email_resend: "Email (Resend)",
   supabase_service_role: "Supabase service role",
   anthropic_ai: "AI (Anthropic)",

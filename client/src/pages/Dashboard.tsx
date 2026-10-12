@@ -26,11 +26,8 @@ import { Link, useLocation, useSearch } from "wouter";
 import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, CreditCard, FileText, Gift, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, Pencil, Plug, Plus, QrCode, RefreshCw, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
 import { Inbox } from "@/components/Inbox";
 import { PartnerHub } from "@/components/PartnerHub";
-import { PriceLabsConnect } from "@/components/PriceLabsConnect";
-import { PriceLabsSync } from "@/components/PriceLabsSync";
-import { PayLinkConnect } from "@/components/PayLinkConnect";
+import { OperatorIntegrations } from "@/components/OperatorIntegrations";
 import { CommissionStatements } from "@/components/CommissionStatements";
-import { ExternalReviewsManager } from "@/components/ExternalReviewsManager";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -1898,12 +1895,7 @@ function DashboardContent() {
             {section === "integrations" && (
               <div>
                 <SectionHead title="Integrations" sub="Connect Revamp with the tools you already use." />
-                <div className="grid gap-8">
-                  <PayLinkConnect />
-                  <PriceLabsSync />
-                  <PriceLabsConnect />
-                  <ExternalReviewsManager />
-                </div>
+                <OperatorIntegrations />
               </div>
             )}
 
