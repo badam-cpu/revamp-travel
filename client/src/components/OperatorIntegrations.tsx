@@ -2,6 +2,8 @@
  * Dashboard → Integrations, grouped into category blocks (Payments, Pricing,
  * Reviews) with a category bar to show one group or all. Deep-linkable via
  * `?section=integrations&cat=<key>`. The cards themselves are unchanged.
+ * Pricing (PriceLabs = nightly rates) only appears for operators with a stay —
+ * tour/experience-only operators never see it.
  */
 import { useEffect, useState } from "react";
 import { useLocation, useSearch } from "wouter";
@@ -10,11 +12,13 @@ import { PayLinkConnect } from "@/components/PayLinkConnect";
 import { PriceLabsSync } from "@/components/PriceLabsSync";
 import { PriceLabsConnect } from "@/components/PriceLabsConnect";
 import { ExternalReviewsManager } from "@/components/ExternalReviewsManager";
+import { useAuth } from "@/contexts/AuthContext";
+import { useListings } from "@/contexts/ListingsContext";
 import { cn } from "@/lib/utils";
 
 type GroupKey = "payments" | "pricing" | "reviews";
 
-const GROUPS: { key: GroupKey; label: string; icon: typeof Wallet; blurb: string; cards: number; render: () => React.ReactNode }[] = [
+const ALL_GROUPS: { key: GroupKey; label: string; icon: typeof Wallet; blurb: string; cards: number; render: () => React.ReactNode }[] = [
   {
     key: "payments",
     label: "Payments",
@@ -47,13 +51,22 @@ const GROUPS: { key: GroupKey; label: string; icon: typeof Wallet; blurb: string
 ];
 
 export function OperatorIntegrations() {
+  const { user } = useAuth();
+  const { listings } = useListings();
+  // PriceLabs prices nightly stays only — hide Pricing for tour/experience-only operators.
+  const hasStay = listings.some((l) => (l as { operatorId?: string }).operatorId === user?.id && l.type === "stay");
+  const GROUPS = ALL_GROUPS.filter((g) => g.key !== "pricing" || hasStay);
   const search = useSearch();
   const [, navigate] = useLocation();
   const fromUrl = new URLSearchParams(search).get("cat") as GroupKey | null;
   const [active, setActive] = useState<GroupKey | "all">(fromUrl && GROUPS.some((g) => g.key === fromUrl) ? fromUrl : "all");
+  // Re-check once listings load (a stay operator's Pricing deep link) and fall
+  // back to All if the chosen group isn't available to this operator.
   useEffect(() => {
     if (fromUrl && GROUPS.some((g) => g.key === fromUrl)) setActive(fromUrl);
-  }, [fromUrl]);
+    else if (active !== "all" && !GROUPS.some((g) => g.key === active)) setActive("all");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromUrl, hasStay]);
 
   const pick = (key: GroupKey | "all") => {
     setActive(key);
