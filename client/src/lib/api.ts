@@ -449,6 +449,17 @@ export function moveBookingRoom(bookingId: string, roomUnitId: string): Promise<
   return operatorPost("/api/booking-move-room", { bookingId, roomUnitId });
 }
 
+/** Switch a listing off/on, or suspend/resume its bookings (0101). Admins are emailed on every change. */
+export type ListingAvailabilityAction = "suspend" | "resume" | "deactivate" | "activate";
+export interface ListingAvailabilityResult { isActive: boolean; suspendedFrom: string | null; suspendedUntil: string | null; bookingsToHonour: number }
+export function setListingAvailability(listingId: string, action: ListingAvailabilityAction, opts: { from?: string; until?: string | null; note?: string } = {}): Promise<ListingAvailabilityResult> {
+  return operatorPost("/api/listing-availability", { listingId, action, ...opts });
+}
+/** How many upcoming bookings a suspension (or switching off, without dates) would leave to honour. */
+export async function previewBookingsToHonour(listingId: string, from?: string, until?: string | null): Promise<number> {
+  return (await operatorPost<{ bookingsToHonour: number }>("/api/listing-availability", { listingId, action: "preview", from, until })).bookingsToHonour;
+}
+
 /** Hotels (0096): re-pull one room's calendars, or every connected room of the hotel. */
 export interface RoomSyncResult { count: number; feeds: number; errors: string[]; syncedAt: string; conflicts: number }
 export async function syncRoomCalendars(listingId: string, unitId?: string): Promise<Record<string, RoomSyncResult | { error: string }>> {

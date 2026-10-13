@@ -13,6 +13,7 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import type { Listing, ListingType, OfferType, Furnished, SaleStatus, RoomBed, RoomType } from "../shared/listings.js";
+import { isDiscoverable, suspensionRange } from "../shared/listings.js";
 import type { CatalogEntry } from "./planner.js";
 
 const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -91,6 +92,10 @@ interface CatalogRow {
   sale_status: SaleStatus | null;
   // Multi-room property (0092) — absent pre-migration; mapped as false.
   multi_room: boolean | null;
+  // Inactive / suspended (0101) — absent pre-migration.
+  is_active?: boolean | null;
+  suspended_from?: string | null;
+  suspended_until?: string | null;
 }
 
 function mapCatalogRow(row: CatalogRow): PublicListing {
@@ -135,6 +140,9 @@ function mapCatalogRow(row: CatalogRow): PublicListing {
     // listingOffers() reads as ["nightly"] — revampvacations output unchanged.
     offerTypes: Array.isArray(row.offer_types) && row.offer_types.length ? row.offer_types : undefined,
     multiRoom: row.multi_room === true,
+    isActive: row.is_active !== false,
+    suspendedFrom: row.suspended_from ?? null,
+    suspendedUntil: row.suspended_until ?? null,
     monthlyRentCents: row.monthly_rent_cents ?? undefined,
     depositCents: row.deposit_cents ?? undefined,
     minLeaseMonths: row.min_lease_months ?? undefined,
@@ -176,7 +184,10 @@ export async function getPublishedCatalog(): Promise<PublicListing[]> {
     // fields, so nothing extra is ever exposed.
     .select("*")
     .eq("status", "published");
-  const rows = error || !data ? [] : (data as CatalogRow[]).map(mapCatalogRow);
+  // Inactive listings (0101) leave every public surface (crawlers, sitemap, MCP,
+  // llms.txt). A SUSPENDED one stays here — its page and index entry survive a
+  // short pause; discovery-style consumers (MCP search) skip it via isDiscoverable.
+  const rows = error || !data ? [] : (data as CatalogRow[]).map(mapCatalogRow).filter((l) => l.isActive !== false);
   catalogCache = { data: rows, expiresAt: Date.now() + CATALOG_TTL_MS };
   return rows;
 }
@@ -316,10 +327,13 @@ export async function listPublishedForPlanner(): Promise<CatalogEntry[]> {
   if (!client) return [];
   const { data, error } = await client
     .from("listings")
-    .select("slug, type, title, city, region, price_cents, price_unit, short_description, venue_type, cuisine, price_band")
+    .select("*") // "*": tolerant of columns a migration hasn't added yet (0101)
     .eq("status", "published");
   if (error || !data) return [];
-  return (data as ListingRow[]).map((row) => ({
+  // Don't recommend what can't be booked today (inactive / suspended, 0101).
+  return (data as (ListingRow & { is_active?: boolean | null; suspended_from?: string | null; suspended_until?: string | null })[])
+    .filter((row) => isDiscoverable({ isActive: row.is_active !== false, suspendedFrom: row.suspended_from, suspendedUntil: row.suspended_until }))
+    .map((row) => ({
     slug: row.slug,
     type: row.type,
     title: row.title,
@@ -454,17 +468,19 @@ async function busyRangesWhere(column: "id" | "slug", value: string): Promise<{ 
   if (!client) return null;
   const { data: listing } = await client
     .from("listings")
-    .select("id, title, status, blocked_ranges, manual_blocked_ranges")
+    .select("*")
     .eq(column, value)
     .eq("status", "published")
     .maybeSingle();
-  if (!listing) return null;
+  if (!listing || listing.is_active === false) return null; // switched off (0101)
   const { data: booked } = await client.from("listing_booked_ranges").select("start_date, end_date").eq("listing_id", listing.id);
   const arr = (v: unknown) => (Array.isArray(v) ? (v as { start: string; end: string }[]) : []);
   const ranges = [
     ...arr(listing.blocked_ranges),
     ...arr(listing.manual_blocked_ranges),
     ...((booked ?? []).map((b) => ({ start: b.start_date as string, end: b.end_date as string }))),
+    // Suspended period (0101) — the host isn't taking bookings then.
+    ...[suspensionRange({ suspendedFrom: listing.suspended_from as string | null, suspendedUntil: listing.suspended_until as string | null })].filter((r): r is { start: string; end: string } => !!r),
   ].filter((r) => r && r.start && r.end);
   return { title: listing.title as string, ranges };
 }

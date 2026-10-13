@@ -441,6 +441,66 @@ export function sendPrepaidTopupAlert(to: string, opts: { restaurantTitle: strin
   return send(to, `Top up ${opts.restaurantTitle}'s prepaid balance`, html);
 }
 
+/**
+ * Admin alert: an operator switched a listing off/on, or suspended / resumed its
+ * bookings (0101, server/listingStatus.ts). Says how many upcoming bookings the
+ * operator still has to honour.
+ */
+export function sendListingStatusAlert(
+  to: string,
+  opts: {
+    action: "suspend" | "resume" | "deactivate" | "activate";
+    listingTitle: string;
+    listingSlug: string;
+    operatorName: string;
+    /** Set when an admin made the change on the operator's behalf. */
+    byAdmin: string | null;
+    from: string | null;
+    until: string | null;
+    note: string | null;
+    bookingsToHonour: number;
+  },
+) {
+  const site = SITE();
+  const day = (iso: string) => new Date(iso + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  const who = opts.byAdmin ? `${esc(opts.byAdmin)} (admin, for ${esc(opts.operatorName)})` : esc(opts.operatorName);
+  const what = {
+    suspend: `suspended bookings for <strong>${esc(opts.listingTitle)}</strong>`,
+    resume: `resumed bookings for <strong>${esc(opts.listingTitle)}</strong>`,
+    deactivate: `switched <strong>${esc(opts.listingTitle)}</strong> to inactive`,
+    activate: `switched <strong>${esc(opts.listingTitle)}</strong> back on`,
+  }[opts.action];
+  const period =
+    opts.action === "suspend" && opts.from
+      ? `<p style="margin:0 0 6px;font-size:14px;">Period: <strong>${esc(day(opts.from))}</strong> → <strong>${opts.until ? esc(day(opts.until)) : "until they resume"}</strong></p>`
+      : "";
+  const effect =
+    opts.action === "deactivate"
+      ? "It's hidden from the site and can't be booked."
+      : opts.action === "suspend"
+        ? "Guests can't book those dates, and the listing is out of search while the period is on."
+        : "It's bookable again.";
+  const honour =
+    opts.action === "suspend" || opts.action === "deactivate"
+      ? `<p style="margin:0 0 6px;font-size:14px;">Upcoming bookings they must still honour: <strong>${opts.bookingsToHonour}</strong></p>`
+      : "";
+  const note = opts.note ? `<blockquote style="margin:10px 0 16px;padding:12px 16px;border-left:3px solid #F15822;background:#faf9f5;font-size:14px;line-height:1.6;color:#3f3b36;">${esc(opts.note)}</blockquote>` : "";
+  const subject = {
+    suspend: `Suspended: ${opts.listingTitle}`,
+    resume: `Bookings resumed: ${opts.listingTitle}`,
+    deactivate: `Inactive: ${opts.listingTitle}`,
+    activate: `Active again: ${opts.listingTitle}`,
+  }[opts.action];
+  const html = shell(
+    "A listing's availability changed",
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 10px;">${who} ${what}. ${effect}</p>
+     ${period}${honour}${note}
+     <p style="margin:16px 0 8px;"><a href="${esc(site)}/listing/${esc(opts.listingSlug)}" style="background:#212121;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">View the listing</a></p>`,
+    site,
+  );
+  return send(to, subject, html);
+}
+
 export function sendSupportAlert(to: string, opts: { travelerName: string; message: string }) {
   const site = SITE();
   const html = shell(

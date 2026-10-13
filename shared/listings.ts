@@ -228,6 +228,11 @@ export interface Branch {
 
 export interface Listing {
   id: string;
+  /** Operator switched the listing off (0101): hidden everywhere, not bookable; existing bookings stand. */
+  isActive?: boolean;
+  /** Operator paused bookings (0101), inclusive dates; until null = until they resume. */
+  suspendedFrom?: string | null;
+  suspendedUntil?: string | null;
   slug: string;
   type: ListingType;
   title: string;
@@ -941,4 +946,43 @@ export interface ListingInput {
   tripadvisorMenuUrl?: string;
   isPartner?: boolean;
   claimedBy?: string | null;
+}
+
+// ── Inactive / suspended listings (0101) ─────────────────────────────────────
+// An operator can SUSPEND bookings for a period (renovation, own use, season)
+// or switch a listing OFF (inactive) instead of deleting it. Either way existing
+// bookings stand and must be honoured. Suspended: those dates can't be booked,
+// and while today is inside the period the listing is out of search/browse
+// (its page stays up with a notice, and stays indexed). Inactive: out of every
+// public surface and not bookable at all, until switched back on.
+const FAR_FUTURE = "9999-12-31";
+type AvailabilityStatus = { isActive?: boolean; suspendedFrom?: string | null; suspendedUntil?: string | null };
+
+/** The suspension as an end-EXCLUSIVE night range (like blocked ranges), or null. */
+export function suspensionRange(l: AvailabilityStatus): { start: string; end: string } | null {
+  if (!l.suspendedFrom) return null;
+  if (!l.suspendedUntil) return { start: l.suspendedFrom, end: FAR_FUTURE };
+  const end = new Date(Date.parse(l.suspendedUntil + "T00:00:00Z") + 86_400_000).toISOString().slice(0, 10);
+  return { start: l.suspendedFrom, end };
+}
+export function isSuspendedOn(l: AvailabilityStatus, day: string): boolean {
+  const r = suspensionRange(l);
+  return !!r && r.start <= day && day < r.end;
+}
+/** Does a [start, end) stay (or a single day when end ≤ start) touch the suspension? */
+export function overlapsSuspension(l: AvailabilityStatus, start: string, end: string): boolean {
+  const r = suspensionRange(l);
+  if (!r) return false;
+  const e = end > start ? end : new Date(Date.parse(start + "T00:00:00Z") + 86_400_000).toISOString().slice(0, 10);
+  return start < r.end && r.start < e;
+}
+/** Shown in search / browse / recommendations today. */
+export function isDiscoverable(l: AvailabilityStatus, today = new Date().toISOString().slice(0, 10)): boolean {
+  return l.isActive !== false && !isSuspendedOn(l, today);
+}
+/** "Paused until 20 Nov" / "Paused until further notice" — for notices. */
+export function suspensionLabel(l: AvailabilityStatus): string | null {
+  if (!l.suspendedFrom) return null;
+  const f = (iso: string) => new Date(iso + "T00:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  return l.suspendedUntil ? `${f(l.suspendedFrom)} – ${f(l.suspendedUntil)}` : `from ${f(l.suspendedFrom)}, until further notice`;
 }

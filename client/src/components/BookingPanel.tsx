@@ -21,6 +21,7 @@ import { supabase } from "@/lib/supabase";
 import type { LiveListing, BlockedRange } from "@/contexts/ListingsContext";
 import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
 import { AskHostButton } from "@/components/AskHostButton";
+import { SuspensionNotice, suspensionBlocked } from "@/components/SuspensionNotice";
 import { getListingSessions, groupSessionsByDate, formatSlotTime, type ListingSession } from "@/lib/sessions";
 import { scheduleHasSlots, slotLocalDate } from "@shared/sessions";
 import { Button } from "@/components/ui/button";
@@ -229,6 +230,7 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
         {isStay && listing.price > 0 && !selected && (
           <p className="mt-1 text-xs text-basalt/50">{priceRange.varies ? "Lowest nightly rate — select dates for exact pricing." : "Select dates for exact pricing."}</p>
         )}
+        <SuspensionNotice listing={listing} />
       </div>
 
       {/* Dates. Slot mode → the same month calendar (only session days enabled),
@@ -278,7 +280,7 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
             {datesOpen && (
               <AvailabilityCalendar
                 mode={isStay ? "range" : "single"}
-                blockedRanges={slotMode ? slotBlockedRanges : [...(listing.blockedRanges ?? []), ...(listing.manualBlockedRanges ?? [])]}
+                blockedRanges={[...(slotMode ? slotBlockedRanges : [...(listing.blockedRanges ?? []), ...(listing.manualBlockedRanges ?? [])]), ...suspensionBlocked(listing)]}
                 bookedRanges={slotMode ? [] : booked}
                 onChange={slotMode ? (r) => { setSlotDate(r.start); setSessionId(null); } : setRange}
               />

@@ -31,6 +31,7 @@ import { applyGrouping, CalendarToolbar, GROUP_OPTIONS, groupOptionsFor, monthsO
 import { fetchRoomTypes, updateRoomTypeRates, updateRoomUnitCalendar } from "@/lib/roomTypes";
 import { userMessage } from "@/lib/api";
 import type { RoomType, RoomUnit, SeasonalRate } from "@shared/listings";
+import { isSuspendedOn } from "@shared/listings";
 import { cn } from "@/lib/utils";
 
 const DAY_MS = 86_400_000;
@@ -85,7 +86,7 @@ interface Bk {
 /** What a day in a row is: sellable (with a price) or not, and why. */
 interface DayState {
   sellable: boolean;
-  why?: "booked" | "synced" | "blocked" | "full";
+  why?: "booked" | "synced" | "blocked" | "full" | "suspended" | "inactive";
   /** Tours/experiences: bookings that day (the day stays sellable). Hotels: rooms free. */
   note?: string;
   cents: number;
@@ -271,9 +272,10 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
                 const free = units.filter((u) => unitFree(u, d)).length;
                 const allBlocked = units.every((u) => u.manualBlockedRanges.some((r) => covers(r, d)));
                 const p = priceOf(rates, type.priceCents, d);
+                const off = listing.isActive === false ? "inactive" : isSuspendedOn(listing, d) ? "suspended" : null;
                 return {
-                  sellable: free > 0,
-                  why: free > 0 ? undefined : allBlocked ? "blocked" : "full",
+                  sellable: free > 0 && !off,
+                  why: off ?? (free > 0 ? undefined : allBlocked ? "blocked" : "full"),
                   note: free > 0 ? `${free} free` : undefined,
                   ...p,
                   blocked: allBlocked,
@@ -294,7 +296,7 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
             key: `listing:${listing.id}`,
             listing,
             label: listing.title,
-            sub: isStay ? "Stay" : listing.type === "tour" ? "Tour" : "Experience",
+            sub: (isStay ? "Stay" : listing.type === "tour" ? "Tour" : "Experience") + (listing.isActive === false ? " · Inactive" : ""),
             unit: isStay ? "night" : listing.priceUnit || "person",
             base,
             rates,
@@ -304,7 +306,7 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
               const blocked = (listing.manualBlockedRanges ?? []).some((r) => covers(r, d));
               // A stay is one unit: a booking takes the night. Tours keep selling — show the count.
               const booked = isStay && onDay.length > 0;
-              const why = booked ? "booked" : synced ? "synced" : blocked ? "blocked" : undefined;
+              const why = booked ? "booked" : listing.isActive === false ? "inactive" : isSuspendedOn(listing, d) ? "suspended" : synced ? "synced" : blocked ? "blocked" : undefined;
               return {
                 sellable: !why,
                 why,
@@ -495,7 +497,7 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
       const past = d < today;
       const selected = inSel(row.key, d);
       const priced = row.base > 0 || s.custom;
-      const why = s.why === "booked" ? "Booked" : s.why === "synced" ? "Synced" : s.why === "blocked" ? "Blocked" : s.why === "full" ? "Full" : null;
+      const why = s.why === "booked" ? "Booked" : s.why === "synced" ? "Synced" : s.why === "blocked" ? "Blocked" : s.why === "full" ? "Full" : s.why === "suspended" ? "Suspended" : s.why === "inactive" ? "Inactive" : null;
       const dt = new Date(d + "T00:00:00Z");
       return (
         <div
@@ -679,7 +681,7 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
                       {thumb}
                       <span className="min-w-0 flex-1">
                         {title}
-                        <span className="block truncate text-[11px] text-basalt/60">Hotel · {hotel.rooms} rooms</span>
+                        <span className="block truncate text-[11px] text-basalt/60">Hotel · {hotel.rooms} rooms{g.listing.isActive === false ? " · Inactive" : ""}</span>
                       </span>
                     </div>
                     <div aria-hidden className="shrink-0" style={{ width: colFrom * CELL_W }} />

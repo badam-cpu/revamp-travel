@@ -61,6 +61,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, promoDiscount, addonUnitCost, nightsBetween, maxNightlyOccupancy, listingFeeCents, type Addon, DEFAULT_CURRENCY, PLATFORM_COMMISSION_PERCENT } from "../shared/bookings.js";
 import { cheapestAvailableUnit, roomUnitLabel, unitPricing } from "../shared/rooms.js";
 import type { RoomUnit } from "../shared/listings.js";
+import { overlapsSuspension } from "../shared/listings.js";
+import { changeListingStatus, upcomingBookings } from "./listingStatus.js";
 import { planTrip, PlannerError } from "./planner.js";
 import { fetchPrefill, PrefillError } from "./urlPrefill.js";
 import { fetchMergedBlockedRanges, buildIcalFeed, type IcalFeed } from "./ical.js";
@@ -1157,6 +1159,42 @@ export function registerApiRoutes(app: Express) {
 
   // POST /api/room-calendars/sync { listingId, unitId? } — the owning operator (or
   // an admin) re-pulls one room's feeds, or every connected room of the hotel.
+  // POST /api/listing-availability — operator (or admin) switches a listing
+  // off/on or suspends/resumes its bookings (0101). Existing bookings stand;
+  // the admins are emailed on every change. See server/listingStatus.ts.
+  app.post("/api/listing-availability", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId) return res.status(401).json({ error: "Sign in as an operator." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "This isn't available right now." });
+    const parsed = z
+      .object({
+        listingId: z.string().uuid(),
+        action: z.enum(["suspend", "resume", "deactivate", "activate", "preview"]),
+        from: z.string().optional(),
+        until: z.string().nullable().optional(),
+        note: z.string().max(1000).optional(),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Something's missing — please try again." });
+    const { listingId, action } = parsed.data;
+    const { data: listing } = await admin.from("listings").select("operator_id").eq("id", listingId).maybeSingle();
+    if (!listing) return res.status(404).json({ error: "Listing not found." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (listing.operator_id !== userId && me?.role !== "admin") return res.status(403).json({ error: "That isn't your listing." });
+    // Preview: how many upcoming bookings a change would leave the operator to honour.
+    if (action === "preview") {
+      return res.json({ bookingsToHonour: await upcomingBookings(admin, listingId, parsed.data.from || null, parsed.data.until ?? null) });
+    }
+    try {
+      res.json(await changeListingStatus(admin, { listingId, actorId: userId, action, from: parsed.data.from, until: parsed.data.until, note: parsed.data.note }));
+    } catch (e) {
+      res.status(400).json({ error: e instanceof Error ? e.message : "Couldn't save that change." });
+    }
+  });
+
   app.post("/api/room-calendars/sync", async (req: Request, res: Response) => {
     const authHeader = req.get("authorization") || "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
@@ -1234,6 +1272,11 @@ export function registerApiRoutes(app: Express) {
     if (readErr || !listing) return res.status(404).json({ error: "Listing not found." });
     if (listing.status !== "published") return res.status(400).json({ error: "This listing isn't open for booking." });
     if (!isBookableType(listing.type)) return res.status(400).json({ error: "This listing can't be booked online." });
+    // Switched off or suspended by the host (0101) — server-side, whatever the page showed.
+    if (listing.is_active === false) return res.status(400).json({ error: "This listing isn't taking bookings right now." });
+    if (overlapsSuspension({ suspendedFrom: listing.suspended_from, suspendedUntil: listing.suspended_until }, startDate, endDate)) {
+      return res.status(409).json({ error: "The host isn't taking bookings for these dates. Please pick other dates." });
+    }
 
     // Resolve an optional operator promo code once, validated against the booking
     // context (code/travel window, weekday, min stay, usage caps, listing scope).

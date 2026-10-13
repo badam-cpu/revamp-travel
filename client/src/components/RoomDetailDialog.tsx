@@ -20,6 +20,7 @@ import { MAX_ROOMS_PER_BOOKING, bestRoomFor, bestRoomsFor, roomsFreeFor, splitGu
 import { trackEvent } from "@/lib/analytics";
 import { roomPhotos, roomSummary } from "@/components/RoomTypeCard";
 import { fmtShort, GuestStepper, StayDatesPicker, type HotelStay } from "@/components/HotelBooking";
+import { suspensionBlocked } from "@/components/SuspensionNotice";
 import { cn } from "@/lib/utils";
 
 export function RoomDetailDialog({
@@ -194,7 +195,7 @@ export function RoomDetailDialog({
                     <StayDatesPicker
                       start={stay.start}
                       end={stay.end}
-                      blocked={typeUnavailableNights(room, availability, new Date().toISOString().slice(0, 10))}
+                      blocked={[...typeUnavailableNights(room, availability, new Date().toISOString().slice(0, 10)), ...suspensionBlocked(listing)]}
                       open
                       onOpenChange={setDatesOpen}
                       onCommit={(start, end) => onStayChange({ ...stay, start, end })}

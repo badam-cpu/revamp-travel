@@ -18,6 +18,7 @@ import { z } from "zod";
 import type { Request, Response } from "express";
 import { getPublishedCatalog, listPublishedForPlanner, getListingBusyRangesBySlug, type PublicListing } from "./supabase.js";
 import { planTrip } from "./planner.js";
+import { isDiscoverable } from "../shared/listings.js";
 
 const SITE = () => (process.env.URL || "https://revampvacations.com").replace(/\/+$/, "");
 
@@ -81,6 +82,7 @@ export function createPublicServer(): McpServer {
       const cui = (cuisine || "").trim().toLowerCase();
       const results = catalog
         .filter((l) => {
+          if (!isDiscoverable(l)) return false; // paused by the host (0101)
           if (type && l.type !== type) return false;
           if (reg && ![l.region, l.city].some((v) => (v || "").toLowerCase().includes(reg))) return false;
           if (cui && ![l.cuisine, l.venueType].some((v) => (v || "").toLowerCase().includes(cui))) return false;

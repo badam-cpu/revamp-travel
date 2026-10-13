@@ -34,6 +34,7 @@ import type { RoomType, SeasonalRate } from "@shared/listings";
 import { roomUnitLabel, unitBaseCents, unitNightCents, unitPricing } from "@shared/rooms";
 import type { LiveListing } from "@/contexts/ListingsContext";
 import { cn } from "@/lib/utils";
+import { suspensionBlocked } from "@/components/SuspensionNotice";
 import { applyGrouping, CalendarToolbar, GROUP_OPTIONS, groupOptionsFor, monthsOf, remember, remembered, rollingDays, ToolbarSelect, useColumnWindow, useCompactPrice, type GroupBy, type TypeFilter } from "@/components/CalendarToolbar";
 
 const DAY_MS = 86_400_000;
@@ -504,6 +505,8 @@ export function OperatorBookingsTimeline() {
           <span className="block truncate text-sm font-semibold text-basalt">{listing.title}</span>
           <span className="block truncate text-[11px] uppercase tracking-wide text-basalt/40">
             {rooms.length ? `Hotel · ${rooms.length} room${rooms.length === 1 ? "" : "s"}` : listing.type}
+            {listing.isActive === false && <span className="font-semibold"> · Inactive</span>}
+            {suspensionBlocked(listing).length > 0 && <span className="normal-case tracking-normal"> · Suspended</span>}
             {sync && !rooms.length && <span className={cn("normal-case tracking-normal", sync.stale && "font-semibold text-apricot")}> · {sync.text}</span>}
           </span>
         </span>
@@ -521,7 +524,7 @@ export function OperatorBookingsTimeline() {
             height: 62,
             bookings,
             synced: listing.blockedRanges ?? [],
-            manual: listing.manualBlockedRanges ?? [],
+            manual: [...(listing.manualBlockedRanges ?? []), ...suspensionBlocked(listing)],
             base: Math.round(listing.price * 100),
             rates: listing.seasonalRates ?? [],
             onDay: (d) => setDirect({ listing, date: d }),
@@ -611,7 +614,7 @@ export function OperatorBookingsTimeline() {
                           height: 52,
                           bookings: bookings.filter((b) => b.room_unit_id === unit.id),
                           synced: unit.blockedRanges ?? [],
-                          manual: unit.manualBlockedRanges,
+                          manual: [...unit.manualBlockedRanges, ...suspensionBlocked(listing)],
                           base: unitBaseCents(type, unit),
                           // Type prices first, the room's own last (they win) — shared/rooms.ts unitPricing.
                           rates: unitPricing(type, unit).seasonalRates,

@@ -11,6 +11,7 @@ import type { BlockedRange, LiveListing } from "@/contexts/ListingsContext";
 import type { RoomType } from "@shared/listings";
 import { maxPartySize, typeFromCents } from "@shared/rooms";
 import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
+import { SuspensionNotice, suspensionBlocked } from "@/components/SuspensionNotice";
 import { AskHostButton } from "@/components/AskHostButton";
 import { Button } from "@/components/ui/button";
 import { useCurrency } from "@/contexts/CurrencyContext";
@@ -149,6 +150,7 @@ export function HotelBookingPanel({
               ? `${rooms.length} room type${rooms.length === 1 ? "" : "s"} — prices in the room list are for your dates.`
               : `${rooms.length} room type${rooms.length === 1 ? "" : "s"} — add your dates to see each room's price.`}
         </p>
+        <SuspensionNotice listing={listing} />
       </div>
 
       <div className="mt-5">
@@ -156,6 +158,7 @@ export function HotelBookingPanel({
         <StayDatesPicker
           start={stay.start}
           end={stay.end}
+          blocked={suspensionBlocked(listing)}
           open={datesOpen}
           onOpenChange={setDatesOpen}
           onCommit={(start, end) => onStayChange({ ...stay, start, end })}

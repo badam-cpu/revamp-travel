@@ -23,7 +23,7 @@
  */
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, CalendarDays, Check, ChevronDown, ChevronLeft, ExternalLink, MoreHorizontal, Copy, CreditCard, FileText, Gift, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, PanelLeftClose, PanelLeftOpen, Pencil, Plug, Plus, QrCode, RefreshCw, Route, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, CalendarDays, Check, ChevronDown, ChevronLeft, ExternalLink, MoreHorizontal, PauseCircle, PlayCircle, Copy, CreditCard, FileText, Gift, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, PanelLeftClose, PanelLeftOpen, Pencil, Plug, Plus, QrCode, RefreshCw, Route, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
 import { Inbox } from "@/components/Inbox";
 import { PartnerHub } from "@/components/PartnerHub";
 import { OperatorIntegrations } from "@/components/OperatorIntegrations";
@@ -42,7 +42,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useListings, LiveListing } from "@/contexts/ListingsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import type { ListingInput, ListingType, RoomType } from "@shared/listings";
-import { LISTING_LIMITS, LISTING_TEXT_LIMITS, STAY_SPACE_TYPES, firstListingTextProblem, listingOffers } from "@shared/listings";
+import { LISTING_LIMITS, LISTING_TEXT_LIMITS, STAY_SPACE_TYPES, firstListingTextProblem, listingOffers, suspensionLabel } from "@shared/listings";
 import { EXTRA_FEE_TYPES } from "@shared/bookings";
 import { CharCount } from "@/components/CharCount";
 import { HotelCalendarSync } from "@/components/HotelCalendarSync";
@@ -71,6 +71,8 @@ import { OperatorBookings } from "@/components/OperatorBookings";
 import { HotelPricingCalendar, PricingCalendar } from "@/components/PricingCalendar";
 import { OperatorBookingsTimeline } from "@/components/OperatorBookingsTimeline";
 import { OperatorMultiCalendar } from "@/components/OperatorMultiCalendar";
+import { ListingAvailabilityDialog, quickAvailability, type AvailabilityMode } from "@/components/ListingAvailabilityDialog";
+import { suspensionBlocked } from "@/components/SuspensionNotice";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { PromoCodes } from "@/components/PromoCodes";
 import { OperatorReferrals } from "@/components/OperatorReferrals";
@@ -1526,12 +1528,11 @@ function StayCalendarSync({ listing }: { listing: LiveListing }) {
 
 function DashboardSection({ type, title, description, wizardMode }: { type: ListingType; title: string; description: string; wizardMode?: boolean }) {
   const { user } = useAuth();
-  const { listings, deleteListing } = useListings();
+  const { listings } = useListings();
   const [, navigate] = useLocation();
   const items = listings.filter((l) => l.type === type && l.operatorId === user?.id);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draft, setDraft] = useState<DraftListing | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [importUrl, setImportUrl] = useState("");
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
@@ -1602,19 +1603,6 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
     }
   };
 
-  const confirmDelete = async (listing: LiveListing) => {
-    if (!window.confirm(`Remove "${listing.title}" from your catalog? This can't be undone.`)) return;
-    setDeletingId(listing.id);
-    try {
-      await deleteListing(listing.id);
-      toast(`${listing.title} removed.`);
-    } catch (err) {
-      toast(err instanceof ApiError || err instanceof Error ? err.message : "Couldn't delete this listing.");
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
   return (
     <section className="border-t border-basalt/10 py-12">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -1648,7 +1636,7 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
       ) : (
         <ul className="mt-8 divide-y divide-basalt/10 border border-basalt/10 bg-paper">
           {items.map((listing) => (
-            <OperatorListingRow key={listing.id} listing={listing} deleting={deletingId === listing.id} onEdit={() => openEdit(listing)} onDelete={() => void confirmDelete(listing)} />
+            <OperatorListingRow key={listing.id} listing={listing} onEdit={() => openEdit(listing)} />
           ))}
         </ul>
       )}
@@ -1675,15 +1663,21 @@ function calendarStatus(listing: LiveListing): { text: string; warn: boolean } {
  * One listing in Dashboard → Listings: a compact row — photo, title (opens the
  * editor), status, place · price, and a link to the guest page in a new tab.
  * Calendar sync (import/export links) and the tour schedule fold away under
- * "Calendar", showing only its status until opened. Delete sits in the ⋯ menu.
+ * "Calendar", showing only its status until opened. The ⋯ menu also holds
+ * Suspend bookings / Resume and the Active switch (0101) — listings are switched
+ * off, never deleted, so existing bookings and history stay intact.
  */
-function OperatorListingRow({ listing, deleting, onEdit, onDelete }: { listing: LiveListing; deleting: boolean; onEdit: () => void; onDelete: () => void }) {
+function OperatorListingRow({ listing, onEdit }: { listing: LiveListing; onEdit: () => void }) {
+  const { refresh } = useListings();
   const [open, setOpen] = useState(false);
+  const [dialog, setDialog] = useState<AvailabilityMode | null>(null);
   const cal = calendarStatus(listing);
+  const active = listing.isActive !== false;
+  const paused = suspensionBlocked(listing).length > 0;
   return (
     <li>
       <div className="flex items-center gap-3 px-4 py-3">
-        {listing.image ? <img src={listing.image} alt="" className="h-12 w-12 shrink-0 rounded-md object-cover" /> : <span aria-hidden className="h-12 w-12 shrink-0 rounded-md bg-chalk" />}
+        {listing.image ? <img src={listing.image} alt="" className={cn("h-12 w-12 shrink-0 rounded-md object-cover", !active && "opacity-40 grayscale")} /> : <span aria-hidden className="h-12 w-12 shrink-0 rounded-md bg-chalk" />}
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
             <button type="button" onClick={onEdit} title="Edit listing" className="min-w-0 truncate text-left text-base font-semibold text-basalt underline-offset-4 hover:text-apricot hover:underline focus-visible:outline-2 focus-visible:outline-apricot">
@@ -1693,9 +1687,11 @@ function OperatorListingRow({ listing, deleting, onEdit, onDelete }: { listing: 
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
             <span className="shrink-0"><StatusBadge status={listing.status} reviewNote={listing.reviewNote} /></span>
+            {!active && <span className="shrink-0 border border-basalt/30 bg-basalt px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-paper">Inactive</span>}
           </div>
           <p className="mt-0.5 truncate text-xs text-basalt/60">
             {listing.city} · {listing.priceLabel}{listing.price > 0 ? ` / ${listing.priceUnit}` : ""}
+            {paused && <span className="font-semibold text-basalt"> · Bookings suspended {suspensionLabel(listing)}</span>}
           </p>
         </div>
         <button
@@ -1720,11 +1716,28 @@ function OperatorListingRow({ listing, deleting, onEdit, onDelete }: { listing: 
               <a href={`/listing/${listing.slug}`} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-2 h-3.5 w-3.5" /> Open guest page</a>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem disabled={deleting} onSelect={onDelete} className="text-destructive focus:text-destructive">
-              <Trash2 className="mr-2 h-3.5 w-3.5" /> {deleting ? "Removing…" : "Delete"}
+            <DropdownMenuItem onSelect={() => setDialog("suspend")} disabled={!active}>
+              <PauseCircle className="mr-2 h-3.5 w-3.5" /> {paused ? "Change suspension" : "Suspend bookings"}
+            </DropdownMenuItem>
+            {paused && (
+              <DropdownMenuItem onSelect={() => void quickAvailability(listing, "resume", refresh)}>
+                <PlayCircle className="mr-2 h-3.5 w-3.5" /> Resume bookings
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem
+              onSelect={(e) => {
+                e.preventDefault();
+                if (active) setDialog("deactivate");
+                else void quickAvailability(listing, "activate", refresh);
+              }}
+              className="justify-between gap-6"
+            >
+              <span>Active</span>
+              <Switch checked={active} aria-label={active ? "Make inactive" : "Make active"} className="pointer-events-none" />
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <ListingAvailabilityDialog key={dialog ?? "closed"} listing={listing} mode={dialog} onClose={() => setDialog(null)} />
       </div>
       {listing.status === "draft" && listing.reviewNote && (
         <p className="mx-4 mb-3 max-w-xl border-l-2 border-destructive/40 pl-2 text-xs leading-5 text-basalt/70">

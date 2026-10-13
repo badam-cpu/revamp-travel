@@ -15,7 +15,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { Listing, ListingInput, ListingType, OfferType, Furnished, SaleStatus, RoomTypeInput } from "@shared/listings";
 import type { SessionSchedule } from "@shared/sessions";
-import { seedListings, placeholderImage, visibleOnVacations, visibleOnStay } from "@shared/listings";
+import { seedListings, placeholderImage, visibleOnVacations, visibleOnStay, isDiscoverable } from "@shared/listings";
 import { supabase } from "@/lib/supabase";
 import { persistRoomTypes } from "@/lib/roomTypes";
 import { slugify } from "@/lib/slug";
@@ -64,6 +64,8 @@ interface ListingsContextType {
    * the raw `listings` so an owner never loses sight of their own rows.
    */
   publicListings: LiveListing[];
+  /** publicListings plus listings suspended today (their pages stay up with a notice), minus switched-off ones (0101). */
+  pageListings: LiveListing[];
   loading: boolean;
   /** Set when Supabase couldn't be reached — the app is showing the static seed instead. */
   offline: boolean;
@@ -190,6 +192,9 @@ interface ListingRow {
   tripadvisor_menu_url: string | null;
   is_partner: boolean | null;
   claimed_by: string | null;
+  is_active?: boolean | null;
+  suspended_from?: string | null;
+  suspended_until?: string | null;
 }
 
 function mapListingRow(row: ListingRow): LiveListing {
@@ -230,6 +235,10 @@ function mapListingRow(row: ListingRow): LiveListing {
     icalError: row.ical_error,
     blockedRanges: Array.isArray(row.blocked_ranges) ? row.blocked_ranges : [],
     manualBlockedRanges: Array.isArray(row.manual_blocked_ranges) ? row.manual_blocked_ranges : [],
+    // Switched off / suspended by the operator (0101) — absent pre-migration.
+    isActive: row.is_active !== false,
+    suspendedFrom: row.suspended_from ?? null,
+    suspendedUntil: row.suspended_until ?? null,
     seasonalRates: Array.isArray(row.seasonal_rates) ? row.seasonal_rates : [],
     maxGuests: row.max_guests ?? undefined,
     guestsIncluded: row.guests_included ?? undefined,
@@ -429,10 +438,17 @@ export function ListingsProvider({ children }: { children: React.ReactNode }) {
   // row that exists today (all stays default to the nightly offer), so this is
   // a zero-regression change until an operator opts a listing out of nightly.
   const site = useSite();
-  const publicListings = useMemo(
-    () => (site === "stay" ? listings.filter(visibleOnStay) : listings.filter(visibleOnVacations)),
+  // Listing pages: everything on this site except switched-off listings (0101).
+  // A suspended listing keeps its page (with a notice); search/browse use
+  // publicListings, which also drops listings suspended today.
+  const pageListings = useMemo(
+    () => (site === "stay" ? listings.filter(visibleOnStay) : listings.filter(visibleOnVacations)).filter((l) => l.isActive !== false),
     [listings, site],
   );
+  const publicListings = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return pageListings.filter((l) => isDiscoverable(l, today));
+  }, [pageListings]);
 
   const refresh = useCallback(async () => {
     try {
@@ -602,7 +618,7 @@ export function ListingsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <ListingsContext.Provider value={{ listings, publicListings, loading, offline, refresh, createListing, updateListing, deleteListing, setIcalUrl, setIcalFeeds, setSeasonalRates, setManualBlocks, setListingFacts, saveRoomTypes }}>
+    <ListingsContext.Provider value={{ listings, publicListings, pageListings, loading, offline, refresh, createListing, updateListing, deleteListing, setIcalUrl, setIcalFeeds, setSeasonalRates, setManualBlocks, setListingFacts, saveRoomTypes }}>
       {children}
     </ListingsContext.Provider>
   );
