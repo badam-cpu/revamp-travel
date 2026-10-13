@@ -85,7 +85,7 @@ import { QrManager } from "@/components/QrManager";
 import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
 import { OperatorResponseStat } from "@/components/OperatorResponseStat";
 import { MessageTemplatesSettings } from "@/components/MessageTemplatesSettings";
-import { ProfileTab, SecurityTab } from "@/pages/Account";
+import { OperatorSettings } from "@/components/OperatorSettings";
 import { EXPERIENCE_PREFILL_STORAGE_KEY } from "@/pages/ExperienceOnboarding";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { toast } from "sonner";
@@ -2080,17 +2080,8 @@ function DashboardContent() {
 
             {section === "settings" && (
               <div>
-                <SectionHead title="Settings" sub="Your account, profile, and password." />
-                <div className="grid gap-12">
-                  <div>
-                    <p className="mb-5 text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Profile</p>
-                    <ProfileTab />
-                  </div>
-                  <div className="border-t border-basalt/10 pt-10">
-                    <p className="mb-5 text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Security</p>
-                    <SecurityTab />
-                  </div>
-                </div>
+                <SectionHead title="Settings" sub="Your business profile and your account." />
+                <OperatorSettings />
               </div>
             )}
           </div>

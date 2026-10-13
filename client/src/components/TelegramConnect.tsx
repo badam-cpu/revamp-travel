@@ -8,8 +8,10 @@ import { useEffect, useState } from "react";
 import { Send, Check, Loader2 } from "lucide-react";
 import { telegramConnect, telegramStatus, telegramDisconnect, ApiError } from "@/lib/api";
 import { toast } from "sonner";
+import { SettingsRow } from "@/components/SettingsRow";
 
-export function TelegramConnect() {
+/** `row`: rendered as a settings row (operator Settings → Account); default: the stacked block used on /account. */
+export function TelegramConnect({ variant = "block" }: { variant?: "block" | "row" } = {}) {
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const [configured, setConfigured] = useState(false);
@@ -44,11 +46,8 @@ export function TelegramConnect() {
     finally { setBusy(false); }
   };
 
-  return (
-    <div className="mt-8 max-w-xl border-t border-basalt/10 pt-6">
-      <h3 className="text-sm font-semibold">Booking updates on Telegram</h3>
-      <p className="mt-1 text-sm text-basalt/55">Get booking confirmations on Telegram — free and instant, no SMS charges.</p>
-      <div className="mt-3 flex flex-wrap items-center gap-3">
+  const controls = (
+      <div className="flex flex-wrap items-center gap-3">
         {connected ? (
           <>
             <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-600"><Check className="h-4 w-4" /> Connected</span>
@@ -63,6 +62,19 @@ export function TelegramConnect() {
           </>
         )}
       </div>
+  );
+  if (variant === "row") {
+    return (
+      <SettingsRow title="Telegram" help="Booking confirmations on Telegram — free and instant, no SMS charges.">
+        {controls}
+      </SettingsRow>
+    );
+  }
+  return (
+    <div className="mt-8 max-w-xl border-t border-basalt/10 pt-6">
+      <h3 className="text-sm font-semibold">Booking updates on Telegram</h3>
+      <p className="mt-1 text-sm text-basalt/55">Get booking confirmations on Telegram — free and instant, no SMS charges.</p>
+      <div className="mt-3">{controls}</div>
     </div>
   );
 }
