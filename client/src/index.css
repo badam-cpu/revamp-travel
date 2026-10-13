@@ -274,10 +274,16 @@
   margin: 2em 0;
 }
 
-/* Bookings timeline (OperatorBookingsTimeline.tsx): nights booked on another
-   channel (Airbnb / Booking.com iCal). A quiet charcoal hatch from the palette,
-   so the operator's own Revamp bookings stay the loudest thing on the grid. */
-.tl-synced {
+/* Bookings → Calendar (OperatorMultiCalendar.tsx): a night that can't be sold
+   (booked, synced from another channel, blocked, or full) — Airbnb's single
+   diagonal stroke over a faint grey. */
+.cal-unavail {
   background-color: color-mix(in oklch, var(--color-basalt) 4%, transparent);
-  background-image: repeating-linear-gradient(135deg, color-mix(in oklch, var(--color-basalt) 13%, transparent) 0 3px, transparent 3px 7px);
+  background-image: linear-gradient(
+    to bottom right,
+    transparent calc(50% - 0.6px),
+    color-mix(in oklch, var(--color-basalt) 22%, transparent) calc(50% - 0.6px),
+    color-mix(in oklch, var(--color-basalt) 22%, transparent) calc(50% + 0.6px),
+    transparent calc(50% + 0.6px)
+  );
 }

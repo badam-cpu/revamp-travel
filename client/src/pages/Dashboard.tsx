@@ -23,7 +23,7 @@
  */
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, CreditCard, FileText, Gift, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, PanelLeftClose, PanelLeftOpen, Pencil, Plug, Plus, QrCode, RefreshCw, Route, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, Check, ChevronDown, ChevronLeft, ExternalLink, MoreHorizontal, Copy, CreditCard, FileText, Gift, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, PanelLeftClose, PanelLeftOpen, Pencil, Plug, Plus, QrCode, RefreshCw, Route, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
 import { Inbox } from "@/components/Inbox";
 import { PartnerHub } from "@/components/PartnerHub";
 import { OperatorIntegrations } from "@/components/OperatorIntegrations";
@@ -70,6 +70,8 @@ import { ListEditor } from "@/components/ListEditor";
 import { OperatorBookings } from "@/components/OperatorBookings";
 import { HotelPricingCalendar, PricingCalendar } from "@/components/PricingCalendar";
 import { OperatorBookingsTimeline } from "@/components/OperatorBookingsTimeline";
+import { OperatorMultiCalendar } from "@/components/OperatorMultiCalendar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { PromoCodes } from "@/components/PromoCodes";
 import { OperatorReferrals } from "@/components/OperatorReferrals";
 import { OperatorPayouts } from "@/components/OperatorPayouts";
@@ -1644,38 +1646,98 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
       {items.length === 0 ? (
         <p className="mt-8 border border-dashed border-basalt/20 bg-chalk px-6 py-10 text-center text-sm text-basalt/55">Nothing here yet — add your first one above.</p>
       ) : (
-        <div className="mt-8 grid gap-3">
+        <ul className="mt-8 divide-y divide-basalt/10 border border-basalt/10 bg-paper">
           {items.map((listing) => (
-            <div key={listing.id} className="border border-basalt/10 bg-paper p-4">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate font-display text-xl leading-tight">{listing.title}</p>
-                    <StatusBadge status={listing.status} reviewNote={listing.reviewNote} />
-                  </div>
-                  <p className="mt-1 text-xs text-basalt/50">{listing.city}, {listing.region} · {listing.priceLabel}{listing.price > 0 ? ` / ${listing.priceUnit}` : ""}</p>
-                  {listing.status === "draft" && listing.reviewNote && (
-                    <p className="mt-2 max-w-md border-l-2 border-destructive/40 pl-2 text-xs leading-5 text-basalt/60">
-                      <span className="font-semibold text-destructive">Admin feedback:</span> {listing.reviewNote}
-                    </p>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="rounded-none border-basalt/15" onClick={() => openEdit(listing)}><Pencil className="mr-2 h-3.5 w-3.5" /> Edit</Button>
-                  <Button variant="outline" size="sm" className="rounded-none border-destructive/30 text-destructive hover:bg-destructive/5" disabled={deletingId === listing.id} onClick={() => confirmDelete(listing)}>
-                    <Trash2 className="mr-2 h-3.5 w-3.5" /> {deletingId === listing.id ? "Removing…" : "Delete"}
-                  </Button>
-                </div>
-              </div>
-              <AvailabilityRow listing={listing} />
-              {(listing.type === "tour" || listing.type === "experience") && <SessionScheduleEditor listing={listing} />}
-            </div>
+            <OperatorListingRow key={listing.id} listing={listing} deleting={deletingId === listing.id} onEdit={() => openEdit(listing)} onDelete={() => void confirmDelete(listing)} />
           ))}
-        </div>
+        </ul>
       )}
 
       {!wizardMode && <ListingFormDialog draft={draft} open={dialogOpen} onOpenChange={setDialogOpen} onSaved={() => setDialogOpen(false)} />}
     </section>
+  );
+}
+
+/** "Synced 2h ago" / "Not connected" for a listing's calendar disclosure. */
+function calendarStatus(listing: LiveListing): { text: string; warn: boolean } {
+  if (listing.type === "stay" && listing.multiRoom) return { text: "Calendars per room", warn: false };
+  const connected = listing.icalFeeds.length > 0 || !!listing.icalUrl;
+  const sched = listing.type !== "stay" ? " · schedule" : "";
+  if (!connected) return { text: `Not connected${sched}`, warn: false };
+  if (listing.icalError) return { text: "Sync issue — check the link", warn: true };
+  if (!listing.icalSyncedAt) return { text: "Not synced yet", warn: true };
+  const h = (Date.now() - Date.parse(listing.icalSyncedAt)) / 3_600_000;
+  const ago = h < 1 ? `${Math.max(1, Math.round(h * 60))}m` : h < 48 ? `${Math.round(h)}h` : `${Math.round(h / 24)}d`;
+  return { text: `Synced ${ago} ago${sched}`, warn: h > 6 };
+}
+
+/**
+ * One listing in Dashboard → Listings: a compact row — photo, title (opens the
+ * editor), status, place · price, and a link to the guest page in a new tab.
+ * Calendar sync (import/export links) and the tour schedule fold away under
+ * "Calendar", showing only its status until opened. Delete sits in the ⋯ menu.
+ */
+function OperatorListingRow({ listing, deleting, onEdit, onDelete }: { listing: LiveListing; deleting: boolean; onEdit: () => void; onDelete: () => void }) {
+  const [open, setOpen] = useState(false);
+  const cal = calendarStatus(listing);
+  return (
+    <li>
+      <div className="flex items-center gap-3 px-4 py-3">
+        {listing.image ? <img src={listing.image} alt="" className="h-12 w-12 shrink-0 rounded-md object-cover" /> : <span aria-hidden className="h-12 w-12 shrink-0 rounded-md bg-chalk" />}
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <button type="button" onClick={onEdit} title="Edit listing" className="min-w-0 truncate text-left text-base font-semibold text-basalt underline-offset-4 hover:text-apricot hover:underline focus-visible:outline-2 focus-visible:outline-apricot">
+              {listing.title}
+            </button>
+            <a href={`/listing/${listing.slug}`} target="_blank" rel="noopener noreferrer" aria-label={`Open ${listing.title} in a new tab`} title="Open the guest page in a new tab" className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-basalt/55 hover:bg-chalk hover:text-apricot">
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+            <span className="shrink-0"><StatusBadge status={listing.status} reviewNote={listing.reviewNote} /></span>
+          </div>
+          <p className="mt-0.5 truncate text-xs text-basalt/60">
+            {listing.city} · {listing.priceLabel}{listing.price > 0 ? ` / ${listing.priceUnit}` : ""}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className={cn("hidden h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold sm:inline-flex", cal.warn ? "border-apricot/50 text-apricot" : "border-basalt/15 text-basalt/70 hover:border-basalt/40 hover:text-basalt")}
+        >
+          <CalendarClock className="h-3.5 w-3.5" /> {cal.text}
+          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
+        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" aria-label={`More actions for ${listing.title}`} className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-basalt/60 hover:bg-chalk hover:text-basalt">
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={onEdit}><Pencil className="mr-2 h-3.5 w-3.5" /> Edit</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setOpen((o) => !o)}><CalendarClock className="mr-2 h-3.5 w-3.5" /> Calendar sync</DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <a href={`/listing/${listing.slug}`} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-2 h-3.5 w-3.5" /> Open guest page</a>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem disabled={deleting} onSelect={onDelete} className="text-destructive focus:text-destructive">
+              <Trash2 className="mr-2 h-3.5 w-3.5" /> {deleting ? "Removing…" : "Delete"}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      {listing.status === "draft" && listing.reviewNote && (
+        <p className="mx-4 mb-3 max-w-xl border-l-2 border-destructive/40 pl-2 text-xs leading-5 text-basalt/70">
+          <span className="font-semibold text-destructive">Admin feedback:</span> {listing.reviewNote}
+        </p>
+      )}
+      {open && (
+        <div className="border-t border-basalt/8 bg-chalk/40 px-4 pb-4">
+          <AvailabilityRow listing={listing} />
+          {(listing.type === "tour" || listing.type === "experience") && <SessionScheduleEditor listing={listing} />}
+        </div>
+      )}
+    </li>
   );
 }
 
@@ -1700,7 +1762,7 @@ const OPERATOR_SECTIONS: { key: OperatorSection; label: string; icon: typeof Hom
 
 const BOOKINGS_VIEWS = [
   { key: "timeline", label: "Timeline", blurb: "Your listings across the calendar — bookings and synced-blocked dates at a glance." },
-  { key: "calendar", label: "Calendar", blurb: "Open a single offer's calendar to see its bookings, set per-date prices, and block or open availability." },
+  { key: "calendar", label: "Calendar", blurb: "Prices and availability for all your listings. Select a day, or drag across several, to change the price or block dates." },
   { key: "list", label: "List", blurb: "Reservations on your listings, grouped by type." },
 ] as const;
 type BookingsView = (typeof BOOKINGS_VIEWS)[number]["key"];
@@ -1735,43 +1797,23 @@ function BookingsSection() {
   );
 }
 
-/** Per-listing calendar: pick one offer, then see/manage its month calendar. */
+/**
+ * Calendar: every listing's prices and availability on one grid (Airbnb
+ * multi-calendar). A listing's name opens its own month calendar — per-room
+ * prices for hotels, minimum stay — with a way back.
+ */
 function CalendarSection() {
-  const { user } = useAuth();
+  const [detail, setDetail] = useState<LiveListing | null>(null);
   const { listings } = useListings();
-  const mine = useMemo(
-    () => listings.filter((l) => l.operatorId === user?.id).sort((a, b) => a.title.localeCompare(b.title)),
-    [listings, user?.id],
-  );
-  const [selectedId, setSelectedId] = useState<string>("");
-  const selected = mine.find((l) => l.id === selectedId) ?? null;
-
-  if (mine.length === 0) {
-    return <p className="border border-dashed border-basalt/20 bg-chalk px-6 py-10 text-center text-sm text-basalt/55">Add a listing to view and manage its calendar here.</p>;
-  }
-
+  const current = detail ? listings.find((l) => l.id === detail.id) ?? detail : null;
+  if (!current) return <OperatorMultiCalendar onOpenListing={setDetail} />;
   return (
     <div>
-      <label className="mb-5 block max-w-md">
-        <span className="mb-1.5 block text-xs font-bold uppercase tracking-[0.1em] text-basalt/45">Listing</span>
-        <select
-          value={selectedId}
-          onChange={(e) => setSelectedId(e.target.value)}
-          className="w-full rounded-none border border-basalt/15 bg-paper px-3 py-2.5 text-sm focus:border-apricot focus:outline-none"
-        >
-          <option value="">Select an offer to open its calendar…</option>
-          {mine.map((l) => (
-            <option key={l.id} value={l.id}>{l.title} · {l.type}</option>
-          ))}
-        </select>
-      </label>
-      {selected?.multiRoom ? (
-        <HotelPricingCalendar key={selected.id} listing={selected} />
-      ) : selected ? (
-        <PricingCalendar key={selected.id} listing={selected} />
-      ) : (
-        <p className="border border-dashed border-basalt/20 bg-chalk px-6 py-10 text-center text-sm text-basalt/55">Choose an offer above to view and manage its calendar.</p>
-      )}
+      <button type="button" onClick={() => setDetail(null)} className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-basalt/70 hover:text-apricot">
+        <ChevronLeft className="h-4 w-4" /> All listings
+      </button>
+      <h2 className="mb-4 font-display text-2xl tracking-[-0.02em]">{current.title}</h2>
+      {current.multiRoom ? <HotelPricingCalendar key={current.id} listing={current} /> : <PricingCalendar key={current.id} listing={current} />}
     </div>
   );
 }
