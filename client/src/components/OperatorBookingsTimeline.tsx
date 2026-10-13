@@ -34,7 +34,7 @@ import type { RoomType, SeasonalRate } from "@shared/listings";
 import { roomUnitLabel, unitBaseCents, unitNightCents, unitPricing } from "@shared/rooms";
 import type { LiveListing } from "@/contexts/ListingsContext";
 import { cn } from "@/lib/utils";
-import { CalendarToolbar, monthsOf, remember, remembered, ToolbarSelect, useCompactPrice, type TypeFilter } from "@/components/CalendarToolbar";
+import { applyGrouping, CalendarToolbar, GROUP_OPTIONS, groupOptionsFor, monthsOf, remember, remembered, ToolbarSelect, useCompactPrice, type GroupBy, type TypeFilter } from "@/components/CalendarToolbar";
 
 const DAY_MS = 86_400_000;
 const CELL_W = 46; // px per night
@@ -43,18 +43,9 @@ const DAYS = 180; // rolling window (~6 months)
 const STALE_HOURS = 6; // a connected calendar older than this is flagged
 const COLLAPSE_KEY = "revamp.timelineCollapsed";
 const PAGE_KEY = "revamp.timelinePageSize";
-const GROUP_KEY = "revamp.timelineGroupBy";
+const GROUP_KEY = "revamp.timelineGroup"; // new key: "Room type" now shows only multi-room properties
 const PAGE_SIZES = [8, 20, 50, 100] as const;
 type PageSize = (typeof PAGE_SIZES)[number];
-/** roomType: hotels nest rooms under room types (default). none: A–Z, hotels list rooms directly. */
-const GROUPS = [
-  { value: "roomType", label: "Room type" },
-  { value: "listingType", label: "Listing type" },
-  { value: "city", label: "City" },
-  { value: "none", label: "None" },
-] as const;
-type GroupBy = (typeof GROUPS)[number]["value"];
-const TYPE_HEADING: Record<string, string> = { stay: "Stays", tour: "Tours", experience: "Experiences" };
 
 type Range = { start: string; end: string };
 
@@ -136,7 +127,7 @@ export function OperatorBookingsTimeline() {
   const [direct, setDirect] = useState<{ listing: LiveListing; date: string; room?: DirectBookingRoom } | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [pageSize, setPageSize] = useState<PageSize>(() => remembered<PageSize>(PAGE_KEY, PAGE_SIZES, 20));
-  const [groupBy, setGroupBy] = useState<GroupBy>(() => remembered<GroupBy>(GROUP_KEY, GROUPS.map((g) => g.value), "roomType"));
+  const [groupBy, setGroupBy] = useState<GroupBy>(() => remembered<GroupBy>(GROUP_KEY, GROUP_OPTIONS.map((g) => g.value), "none"));
   const [page, setPage] = useState(0);
   const [roomsByHotel, setRoomsByHotel] = useState<Map<string, RoomType[]>>(new Map());
   const [roomCals, setRoomCals] = useState<Map<string, RoomCalendar>>(new Map());
@@ -163,14 +154,10 @@ export function OperatorBookingsTimeline() {
   const allMine = useMemo(() => listings.filter((l) => l.operatorId === user?.id).sort((a, b) => a.title.localeCompare(b.title)), [listings, user?.id]);
   const mine = useMemo(() => (typeFilter === "all" ? allMine : allMine.filter((l) => l.type === typeFilter)), [allMine, typeFilter]);
   // Group (section headings), then page through the listings — a hotel counts as one.
-  const groupKey = useCallback(
-    (l: LiveListing) => (groupBy === "listingType" ? TYPE_HEADING[l.type] ?? l.type : groupBy === "city" ? l.city || "No city" : ""),
-    [groupBy],
-  );
-  const ordered = useMemo(
-    () => (groupBy === "listingType" || groupBy === "city" ? [...mine].sort((a, b) => groupKey(a).localeCompare(groupKey(b)) || a.title.localeCompare(b.title)) : mine),
-    [mine, groupBy, groupKey],
-  );
+  const groupChoices = useMemo(() => groupOptionsFor(typeFilter, allMine), [typeFilter, allMine]);
+  // A remembered choice that doesn't fit this filter (e.g. Room type on Tours) falls back to None.
+  const group: GroupBy = groupChoices.some((o) => o.value === groupBy) ? groupBy : "none";
+  const { ordered, key: groupKey } = useMemo(() => applyGrouping(mine, group), [mine, group]);
   const pageCount = Math.max(1, Math.ceil(ordered.length / pageSize));
   const pageNow = Math.min(page, pageCount - 1);
   const paged = ordered.slice(pageNow * pageSize, (pageNow + 1) * pageSize);
@@ -179,7 +166,7 @@ export function OperatorBookingsTimeline() {
     ordered.forEach((l) => m.set(groupKey(l), (m.get(groupKey(l)) ?? 0) + 1));
     return m;
   }, [ordered, groupKey]);
-  useEffect(() => setPage(0), [typeFilter, groupBy, pageSize]);
+  useEffect(() => setPage(0), [typeFilter, group, pageSize]);
   const availableTypes = useMemo(() => {
     const present = new Set(allMine.map((l) => l.type));
     return (["all", "stay", "tour", "experience"] as const).filter((t) => t === "all" || present.has(t));
@@ -258,10 +245,10 @@ export function OperatorBookingsTimeline() {
     });
     return out;
   }, [days, mine, byListing, roomsOf]);
-  const totalUnits = mine.reduce((a, l) => a + (hotelFreeByDay.has(l.id) ? roomsOf(l.id).length : 1), 0);
+  const totalUnits = ordered.reduce((a, l) => a + (hotelFreeByDay.has(l.id) ? roomsOf(l.id).length : 1), 0);
   const availByDay = useMemo(() => {
     const counts = days.map(() => 0);
-    mine.forEach((listing) => {
+    ordered.forEach((listing) => {
       const hotel = hotelFreeByDay.get(listing.id);
       if (hotel) return hotel.forEach((n, i) => (counts[i] += n));
       const bks = byListing.get(listing.id) ?? [];
@@ -271,7 +258,7 @@ export function OperatorBookingsTimeline() {
       });
     });
     return counts;
-  }, [days, mine, byListing, hotelFreeByDay]);
+  }, [days, ordered, byListing, hotelFreeByDay]);
 
   // ── Scrolling: Today, month menu that follows the view ───────────────────────
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -495,7 +482,6 @@ export function OperatorBookingsTimeline() {
   /** One listing's rows: a plain row, or a hotel (summary → room types → rooms). */
   const renderListing = (listing: LiveListing) => {
     const bookings = byListing.get(listing.id) ?? [];
-    const byRoomType = groupBy === "roomType";
     const rooms = roomsOf(listing.id);
     const sync = syncNote(listing.icalFeeds.length > 0 || !!listing.icalUrl, listing.icalSyncedAt, listing.icalError, now);
     const label = (
@@ -564,7 +550,7 @@ export function OperatorBookingsTimeline() {
             return (
               <div key={type.id}>
                 {/* Room type row: the type's price per night (all its rooms) and rooms free. */}
-                {byRoomType && <div role="row" className="flex border-t border-basalt/8 bg-chalk/40">
+                <div role="row" className="flex border-t border-basalt/8 bg-chalk/40">
                   <button
                     type="button"
                     role="rowheader"
@@ -593,8 +579,8 @@ export function OperatorBookingsTimeline() {
                       };
                     },
                   })}
-                </div>}
-                {(typeOpen || !byRoomType) &&
+                </div>
+                {typeOpen &&
                   units.map((unit) => {
                     const roomLabel = `${type.name} · ${roomUnitLabel(unit.name)}`;
                     const cal = roomCals.get(unit.id);
@@ -653,8 +639,8 @@ export function OperatorBookingsTimeline() {
           <ToolbarSelect
             id="tl-group"
             label="Group by"
-            value={groupBy}
-            options={GROUPS}
+            value={group}
+            options={groupChoices}
             onChange={(v) => {
               setGroupBy(v);
               remember(GROUP_KEY, v);

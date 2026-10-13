@@ -27,7 +27,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useListings, type BlockedRange, type LiveListing } from "@/contexts/ListingsContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import { CalendarToolbar, monthsOf, remember, remembered, ToolbarSelect, useCompactPrice, type TypeFilter } from "@/components/CalendarToolbar";
+import { applyGrouping, CalendarToolbar, GROUP_OPTIONS, groupOptionsFor, monthsOf, remember, remembered, ToolbarSelect, useCompactPrice, type GroupBy, type TypeFilter } from "@/components/CalendarToolbar";
 import { fetchRoomTypes, updateRoomTypeRates, updateRoomUnitCalendar } from "@/lib/roomTypes";
 import { userMessage } from "@/lib/api";
 import type { RoomType, RoomUnit, SeasonalRate } from "@shared/listings";
@@ -40,17 +40,9 @@ const DAYS_BACK = 1; // yesterday, faded — like Airbnb
 const DAYS = 366;
 const COLLAPSE_KEY = "revamp.calendarCollapsed";
 const PAGE_KEY = "revamp.calendarPageSize";
-const GROUP_KEY = "revamp.calendarGroupBy";
+const GROUP_KEY = "revamp.calendarGroup"; // new key: "Room type" now shows only multi-room properties
 const PAGE_SIZES = [8, 20, 50, 100] as const;
 type PageSize = (typeof PAGE_SIZES)[number];
-// Hotels always open into room types here — that's where their prices are set.
-const GROUPS = [
-  { value: "none", label: "None" },
-  { value: "listingType", label: "Listing type" },
-  { value: "city", label: "City" },
-] as const;
-type GroupBy = (typeof GROUPS)[number]["value"];
-const TYPE_HEADING: Record<string, string> = { stay: "Stays", tour: "Tours", experience: "Experiences" };
 
 const addDaysIso = (iso: string, n: number) => new Date(Date.parse(iso + "T00:00:00Z") + n * DAY_MS).toISOString().slice(0, 10);
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -154,7 +146,7 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
 
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [pageSize, setPageSize] = useState<PageSize>(() => remembered<PageSize>(PAGE_KEY, PAGE_SIZES, 20));
-  const [groupBy, setGroupBy] = useState<GroupBy>(() => remembered<GroupBy>(GROUP_KEY, GROUPS.map((g) => g.value), "none"));
+  const [groupBy, setGroupBy] = useState<GroupBy>(() => remembered<GroupBy>(GROUP_KEY, GROUP_OPTIONS.map((g) => g.value), "none"));
   const [page, setPage] = useState(0);
   const [bookings, setBookings] = useState<Bk[] | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -183,11 +175,10 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
   const allMine = useMemo(() => listings.filter((l) => l.operatorId === user?.id && l.type !== "eat").sort((a, b) => a.title.localeCompare(b.title)), [listings, user?.id]);
   const mine = useMemo(() => (typeFilter === "all" ? allMine : allMine.filter((l) => l.type === typeFilter)), [allMine, typeFilter]);
   // Group (section headings), then page through the listings — a hotel counts as one.
-  const groupKey = useCallback((l: LiveListing) => (groupBy === "listingType" ? TYPE_HEADING[l.type] ?? l.type : groupBy === "city" ? l.city || "No city" : ""), [groupBy]);
-  const ordered = useMemo(
-    () => (groupBy === "none" ? mine : [...mine].sort((a, b) => groupKey(a).localeCompare(groupKey(b)) || a.title.localeCompare(b.title))),
-    [mine, groupBy, groupKey],
-  );
+  const groupChoices = useMemo(() => groupOptionsFor(typeFilter, allMine), [typeFilter, allMine]);
+  // A remembered choice that doesn't fit this filter (e.g. Room type on Tours) falls back to None.
+  const group: GroupBy = groupChoices.some((o) => o.value === groupBy) ? groupBy : "none";
+  const { ordered, key: groupKey } = useMemo(() => applyGrouping(mine, group), [mine, group]);
   const pageCount = Math.max(1, Math.ceil(ordered.length / pageSize));
   const pageNow = Math.min(page, pageCount - 1);
   const paged = useMemo(() => ordered.slice(pageNow * pageSize, (pageNow + 1) * pageSize), [ordered, pageNow, pageSize]);
@@ -196,7 +187,7 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
     ordered.forEach((l) => m.set(groupKey(l), (m.get(groupKey(l)) ?? 0) + 1));
     return m;
   }, [ordered, groupKey]);
-  useEffect(() => setPage(0), [typeFilter, groupBy, pageSize]);
+  useEffect(() => setPage(0), [typeFilter, group, pageSize]);
   const availableTypes = useMemo(() => {
     const present = new Set(allMine.map((l) => l.type));
     return (["all", "stay", "tour", "experience"] as const).filter((t) => t === "all" || present.has(t));
@@ -564,8 +555,8 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
           <ToolbarSelect
             id="cal-group"
             label="Group by"
-            value={groupBy}
-            options={GROUPS}
+            value={group}
+            options={groupChoices}
             onChange={(v) => {
               setGroupBy(v);
               setSel(null);

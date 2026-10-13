@@ -158,3 +158,32 @@ export function remember(key: string, value: unknown) {
     /* private mode — not remembered */
   }
 }
+
+/**
+ * Group by (timeline + calendar). Only the choices that make sense for what's
+ * shown are offered: "Room type" needs a multi-room property (hotel /
+ * guesthouse) in view — and then shows ONLY those, rooms grouped under their
+ * room types; "Listing type" needs the All filter and more than one type.
+ */
+export const GROUP_OPTIONS = [
+  { value: "none", label: "None" },
+  { value: "roomType", label: "Room type" },
+  { value: "listingType", label: "Listing type" },
+  { value: "city", label: "City" },
+] as const;
+export type GroupBy = (typeof GROUP_OPTIONS)[number]["value"];
+const TYPE_HEADING: Record<string, string> = { stay: "Stays", tour: "Tours", experience: "Experiences" };
+
+export function groupOptionsFor(type: TypeFilter, listings: readonly { type: string; multiRoom?: boolean }[]) {
+  const shown = type === "all" ? listings : listings.filter((l) => l.type === type);
+  const hasHotels = shown.some((l) => l.type === "stay" && l.multiRoom);
+  const types = new Set(shown.map((l) => l.type));
+  return GROUP_OPTIONS.filter((o) => (o.value === "roomType" ? hasHotels : o.value === "listingType" ? type === "all" && types.size > 1 : true));
+}
+/** The listings to show for a grouping, and each one's section heading ("" = none). */
+export function applyGrouping<L extends { type: string; multiRoom?: boolean; city: string; title: string }>(listings: L[], group: GroupBy): { ordered: L[]; key: (l: L) => string } {
+  const key = (l: L) => (group === "listingType" ? TYPE_HEADING[l.type] ?? l.type : group === "city" ? l.city || "No city" : "");
+  if (group === "roomType") return { ordered: listings.filter((l) => l.type === "stay" && l.multiRoom), key };
+  if (group === "none") return { ordered: listings, key };
+  return { ordered: [...listings].sort((a, b) => key(a).localeCompare(key(b)) || a.title.localeCompare(b.title)), key };
+}
