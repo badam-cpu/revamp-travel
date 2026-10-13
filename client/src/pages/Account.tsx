@@ -667,7 +667,7 @@ export default function Account() {
     return (
       <div className="container py-24 text-center">
         <p className="eyebrow">Checking access</p>
-        <h1 className="mt-4 font-display text-[1.75rem] sm:text-[2rem]">One moment.</h1>
+        <h1 className="mt-4 font-display text-2xl">One moment.</h1>
       </div>
     );
   }
