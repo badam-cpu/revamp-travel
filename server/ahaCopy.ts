@@ -174,3 +174,74 @@ function trimToWords(s: string, max: number): string {
   const atSpace = cut.lastIndexOf(" ");
   return (atSpace > max * 0.6 ? cut.slice(0, atSpace) : s.slice(0, max)).replace(/[\s,;:–—|&-]+$/, "").trim();
 }
+
+// ── Customer Journey (0097): draft a guest message template ──────────────────
+
+export interface AhaJourneyInput {
+  step: "checkin" | "midstay" | "checkout" | "meeting" | "after";
+  listingType: "stay" | "tour" | "experience";
+  current?: { subject?: string; body?: string; textBody?: string };
+  context: { title?: string; city?: string; facts?: { label: string; value: string }[]; notes?: string };
+  placeholders: string[];
+}
+export interface AhaJourneyResult {
+  subject?: string;
+  body?: string;
+  textBody?: string;
+}
+
+const JOURNEY_STEP_GUIDE: Record<AhaJourneyInput["step"], string> = {
+  checkin: "Check-in instructions sent before arrival: warm welcome, check-in time, address, how to get in (door code / key), Wi-Fi, parking, who to call.",
+  midstay: "A short mid-stay check-in: hope they're settling in, ask if everything is OK, invite them to tell us in one tap so problems get fixed now.",
+  checkout: "Checkout reminder the evening before: checkout time, a short friendly checklist (keys, windows, lights, belongings), offer help with late checkout or a taxi.",
+  meeting: "Meeting-point instructions before a tour/experience: date and start time, exact meeting point and address, arrive early, what to bring, who to call if late.",
+  after: "Thank-you after the stay/experience: genuine thanks, hope they enjoyed Armenia, ask how it went (a few seconds), invite them back.",
+};
+
+/** Draft (or improve) a Customer Journey message — subject, email body and short text. */
+export async function generateJourneyTemplate(input: AhaJourneyInput): Promise<AhaJourneyResult> {
+  const anthropic = getClient();
+  if (!anthropic) return {};
+  const c = input.context;
+  const system = `You write short, warm, practical guest messages for hosts on Revamp Vacations, a travel marketplace in Armenia.
+Rules:
+- English. Friendly, clear, human. No clichés, no emoji, no exclamation spam, no ALL CAPS.
+- Use ONLY these placeholders, in curly braces, exactly as written: ${input.placeholders.map((p) => `{${p}}`).join(" ")}. Never invent facts (codes, times, addresses) — use a placeholder instead.
+- Put each detail (time, address, code, Wi-Fi, parking) on its own line as "**Label:** {placeholder}" so lines without a value can be dropped automatically.
+- Bold uses **double asterisks**; nothing else (no headings, links or markdown lists other than "• " bullets).
+- The email already has a button to the guest's trip page — don't paste {trip_link} in the email body.
+- The text message (SMS) must be under 160 characters and end with {trip_link}.
+Return ONLY JSON: {"subject": "...", "body": "...", "textBody": "..."} — body uses \\n for line breaks.`;
+  const lines = [
+    `Message: ${JOURNEY_STEP_GUIDE[input.step]}`,
+    `Listing type: ${input.listingType}`,
+    c.title ? `Listing: ${c.title}` : "",
+    c.city ? `City: ${c.city}, Armenia` : "",
+    c.facts?.length ? `Facts: ${c.facts.filter((f) => f.label && f.value).map((f) => `${f.label}: ${f.value}`).join("; ")}` : "",
+    c.notes ? `Host notes: ${c.notes}` : "",
+  ].filter(Boolean);
+  const cur = input.current;
+  const task =
+    cur && (cur.subject?.trim() || cur.body?.trim())
+      ? `Improve this message — keep the host's facts, intent and placeholders, fix tone and clarity:\nSubject: ${cur.subject ?? ""}\nBody:\n${cur.body ?? ""}\nText: ${cur.textBody ?? ""}`
+      : "Write this message from scratch.";
+  try {
+    const response = await anthropic.messages.create({
+      model: process.env.SUPPORT_MODEL || "claude-haiku-4-5",
+      max_tokens: 900,
+      system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }] as unknown as Anthropic.MessageCreateParams["system"],
+      messages: [{ role: "user", content: `${task}\n\n${lines.join("\n")}` }],
+    });
+    const raw = response.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("\n");
+    const json = raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1);
+    const parsed = JSON.parse(json) as AhaJourneyResult;
+    const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : undefined);
+    return { subject: str(parsed.subject, 200), body: str(parsed.body, 6000), textBody: str(parsed.textBody, 480) };
+  } catch (err) {
+    console.error("[aha-journey]", err);
+    return {};
+  }
+}

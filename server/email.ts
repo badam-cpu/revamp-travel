@@ -9,6 +9,8 @@
  *
  * Neither var carries a VITE_ prefix — server-only, never in the client bundle.
  */
+import { boldToHtml } from "../shared/richText.js";
+
 const RESEND_URL = "https://api.resend.com/emails";
 
 export function emailConfigured(): boolean {
@@ -64,7 +66,7 @@ function shell(title: string, bodyHtml: string, siteUrl: string): string {
     </div>`;
 }
 
-async function send(to: string, subject: string, html: string): Promise<{ sent: boolean; reason?: string }> {
+async function send(to: string, subject: string, html: string, opts: { replyTo?: string } = {}): Promise<{ sent: boolean; reason?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
   if (!apiKey || !from) {
@@ -76,7 +78,7 @@ async function send(to: string, subject: string, html: string): Promise<{ sent: 
     const res = await fetch(RESEND_URL, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ from, to: [to], subject, html }),
+      body: JSON.stringify({ from, to: [to], subject, html, ...(opts.replyTo ? { reply_to: opts.replyTo } : {}) }),
     });
     if (!res.ok) {
       console.error("[email] Resend error:", res.status, (await res.text()).slice(0, 200));
@@ -326,6 +328,48 @@ export function sendReviewRequest(
     site,
   );
   return send(to, `How was your ${noun}?`, html);
+}
+
+/** Customer Journey (0097): an operator's step message (check-in, meeting point,
+ *  mid-stay, checkout, thank-you). The body is operator text: escaped, `**bold**`
+ *  kept, line breaks kept. The button opens the guest's private trip page.
+ *  Replies go to the operator when they set a reply-to address. */
+export function sendJourneyEmail(
+  to: string,
+  m: { subject: string; body: string; ctaLabel: string; tripLink: string; hostName?: string; replyTo?: string },
+) {
+  const site = SITE();
+  const paragraphs = m.body
+    .split(/\n{2,}/)
+    .map((p) => `<p style="font-size:15px;line-height:1.6;margin:0 0 14px;">${boldToHtml(esc(p)).replace(/\n/g, "<br />")}</p>`)
+    .join("");
+  const html = shell(
+    m.subject,
+    `${paragraphs}
+     ${m.tripLink ? `<p style="margin:6px 0 8px;"><a href="${esc(m.tripLink)}" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">${esc(m.ctaLabel)}</a></p>` : ""}
+     ${m.hostName ? `<p style="font-size:13px;line-height:1.6;margin:12px 0 0;color:#6B6357;">— ${esc(m.hostName)}, via Revamp</p>` : ""}`,
+    site,
+  );
+  return send(to, m.subject, html, { replyTo: m.replyTo || undefined });
+}
+
+/** Customer Journey: a guest scored their stay/experience 1–3 — tell the operator now. */
+export function sendSurveyAlert(
+  to: string,
+  a: { listingTitle: string; guestName: string; rating: number; comment: string; stepLabel: string; startDate: string; endDate: string },
+) {
+  const site = SITE();
+  const stars = "★".repeat(a.rating) + "☆".repeat(5 - a.rating);
+  const html = shell(
+    `${a.guestName} rated ${a.listingTitle} ${a.rating}/5`,
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 10px;">${esc(a.stepLabel)} survey · ${esc(prettyDate(a.startDate))} → ${esc(prettyDate(a.endDate))}</p>
+     <p style="font-size:22px;letter-spacing:2px;color:#F15822;margin:0 0 10px;">${stars}</p>
+     ${a.comment ? `<blockquote style="margin:0 0 14px;padding:10px 14px;border-left:3px solid #F15822;background:#faf9f5;font-size:15px;line-height:1.6;">${esc(a.comment)}</blockquote>` : ""}
+     <p style="font-size:14px;line-height:1.6;margin:0 0 14px;color:#3f3b36;">A quick personal reply now often turns the stay around. The guest was shown a “we'd like to make it right” note.</p>
+     <p style="margin:0 0 8px;"><a href="${esc(site)}/dashboard?section=bookings" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Open bookings</a></p>`,
+    site,
+  );
+  return send(to, `Guest feedback ${a.rating}/5 — ${a.listingTitle}`, html);
 }
 
 /** Notify an inbox participant that they received a new message (unified inbox). */

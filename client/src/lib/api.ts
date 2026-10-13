@@ -975,3 +975,66 @@ export const adminSetDirectPaymentsPaused = (operatorId: string, paused: boolean
 export const adminMarkStatementPaid = (id: string, reference?: string) =>
   authed<{ ok: true }>("/api/admin/commission-statements/mark-paid", { method: "POST", body: { id, reference } });
 export const adminVoidStatement = (id: string) => authed<{ ok: true }>("/api/admin/commission-statements/void", { method: "POST", body: { id } });
+
+// ── Customer Journey (0097) ──────────────────────────────────────────────────
+
+export interface JourneyPreview {
+  subject: string;
+  body: string;
+  text: string;
+  missing: string[];
+  channels: { email: boolean; text: boolean; inbox: boolean };
+  enabled: boolean;
+  hasEmail: boolean;
+  hasPhone: boolean;
+}
+export function previewJourneyStep(bookingId: string, step: string): Promise<JourneyPreview> {
+  return operatorPost("/api/journey/preview", { bookingId, step });
+}
+export function sendJourneyStepNow(bookingId: string, step: string, channels: { email: boolean; text: boolean; inbox: boolean }): Promise<{ ok: boolean; channels: string[] }> {
+  return operatorPost("/api/journey/send", { bookingId, step, channels });
+}
+export interface JourneyScheduleItem {
+  step: string;
+  label: string;
+  enabled: boolean;
+  applicable: boolean;
+  reason?: string;
+  dueAt: string;
+  latestAt: string;
+  sends: { at: string; status: string; manual: boolean; channels: string[] }[];
+}
+export async function getJourneySchedule(bookingId: string): Promise<JourneyScheduleItem[]> {
+  return (await operatorPost<{ items: JourneyScheduleItem[] }>("/api/journey/schedule", { bookingId })).items;
+}
+export function sendJourneyTest(input: { step: string; listingType: string; listingId?: string | null; subject: string; body: string; textBody: string }): Promise<{ ok: boolean; to: string; text: string }> {
+  return operatorPost("/api/journey/test", input);
+}
+export function ahaJourneyTemplate(input: {
+  step: string;
+  listingType: string;
+  current?: { subject?: string; body?: string; textBody?: string };
+  context?: { title?: string; city?: string; facts?: { label: string; value: string }[]; notes?: string };
+}): Promise<{ subject?: string; body?: string; textBody?: string }> {
+  return operatorPost("/api/aha-journey-template", input);
+}
+
+/** The guest's private trip page (no sign-in — the link's token is the credential). */
+export interface TripPageData {
+  listing: { title: string; type: string; slug: string; image: string | null; city: string | null };
+  booking: { startDate: string; endDate: string; startTime: string; guests: number; room: string; status: string };
+  guestFirstName: string;
+  hostName: string;
+  hostPhone: string;
+  address: string;
+  mapUrl: string;
+  messages: { step: string; label: string; subject: string; body: string; sentAt: string }[];
+  surveys: { step: string; label: string; rating: number | null }[];
+  reviewLinks: { google: string; tripadvisor: string; revamp: string };
+}
+export function getTripPage(token: string): Promise<TripPageData> {
+  return request<TripPageData>(`/api/trip?token=${encodeURIComponent(token)}`);
+}
+export function submitTripSurvey(token: string, step: string, rating: number, comment: string): Promise<{ ok: boolean; rating: number; low: boolean }> {
+  return request("/api/trip/survey", { method: "POST", body: JSON.stringify({ token, step, rating, comment }) });
+}

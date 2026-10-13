@@ -23,7 +23,7 @@
  */
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, CreditCard, FileText, Gift, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, Pencil, Plug, Plus, QrCode, RefreshCw, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, CreditCard, FileText, Gift, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, Pencil, Plug, Plus, QrCode, RefreshCw, Route, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
 import { Inbox } from "@/components/Inbox";
 import { PartnerHub } from "@/components/PartnerHub";
 import { OperatorIntegrations } from "@/components/OperatorIntegrations";
@@ -46,6 +46,7 @@ import { LISTING_LIMITS, LISTING_TEXT_LIMITS, STAY_SPACE_TYPES, firstListingText
 import { EXTRA_FEE_TYPES } from "@shared/bookings";
 import { CharCount } from "@/components/CharCount";
 import { HotelCalendarSync } from "@/components/HotelCalendarSync";
+import { CustomerJourney } from "@/components/CustomerJourney";
 import { Switch } from "@/components/ui/switch";
 import { TimeSelect } from "@/components/TimeSelect";
 import { RoomTypesEditor, RoomTypesEditorHandle, validateRoomTypes } from "@/components/RoomTypesEditor";
@@ -1678,12 +1679,13 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
   );
 }
 
-type OperatorSection = "overview" | "listings" | "analytics" | "bookings" | "promos" | "messages" | "documents" | "qr" | "hub" | "integrations" | "payouts" | "billing" | "referrals" | "settings";
+type OperatorSection = "overview" | "listings" | "analytics" | "bookings" | "promos" | "messages" | "journey" | "documents" | "qr" | "hub" | "integrations" | "payouts" | "billing" | "referrals" | "settings";
 const OPERATOR_SECTIONS: { key: OperatorSection; label: string; icon: typeof Home }[] = [
   { key: "overview", label: "Dashboard", icon: LayoutDashboard },
   { key: "listings", label: "Listings", icon: List },
   { key: "analytics", label: "Analytics", icon: BarChart3 },
   { key: "bookings", label: "Bookings", icon: CalendarCheck },
+  { key: "journey", label: "Customer journey", icon: Route },
   { key: "promos", label: "Promo codes", icon: Ticket },
   { key: "messages", label: "Messages", icon: MessageSquare },
   { key: "documents", label: "Documents", icon: FileText },
@@ -1940,6 +1942,12 @@ function DashboardContent() {
             {section === "qr" && <QrManager scope="operator" />}
             {section === "hub" && <PartnerHub />}
 
+            {section === "journey" && (
+              <div>
+                <SectionHead title="Customer journey" sub="Check-in and meeting-point instructions, mid-stay check-ins and thank-you notes — sent by email and text, by hand or automatically." />
+                <CustomerJourney />
+              </div>
+            )}
             {section === "integrations" && (
               <div>
                 <SectionHead title="Integrations" sub="Connect Revamp with the tools you already use." />

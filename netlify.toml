@@ -147,6 +147,12 @@
   [headers.values]
     X-Robots-Tag = "noindex, nofollow"
 
+# Guests' private trip pages (Customer Journey) — never indexed.
+[[headers]]
+  for = "/trip/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
 # PWA: the service worker must not be cached (so updates ship on the next visit),
 # and the manifest needs the right content type.
 [[headers]]

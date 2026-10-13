@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { BookingStatus } from "@shared/bookings";
 import { fetchBookingRoomNames, withRoomName } from "@/lib/roomTypes";
+import { BookingJourney } from "@/components/BookingJourney";
 import { roomUnitLabel } from "@shared/rooms";
 
 interface AddonSnap { id: string; name: string; unit?: string; qty: number; amountCents: number; onRequest?: boolean }
@@ -70,6 +71,20 @@ const EVENT_LABEL: Record<string, string> = {
   payment_status: "Payment status changed",
   room_moved: "Moved to another room",
   calendar_conflict: "⚠️ Clashes with an Airbnb/Booking.com booking",
+  journey_sent: "Journey message sent",
+  journey_failed: "⚠️ Journey message couldn't be delivered",
+  survey_answered: "Guest answered the survey",
+  survey_low: "⚠️ Guest gave a low score",
+  sms_sent: "SMS sent",
+  sms_failed: "⚠️ SMS failed",
+  whatsapp_sent: "WhatsApp sent",
+  whatsapp_failed: "⚠️ WhatsApp failed",
+  viber_sent: "Viber sent",
+  viber_failed: "⚠️ Viber failed",
+  telegram_sent: "Telegram sent",
+  telegram_failed: "⚠️ Telegram failed",
+  payment_link_sent: "Payment link sent",
+  contact_updated: "Guest contact updated",
   email_failed: "⚠️ Email failed to send",
 };
 
@@ -440,6 +455,9 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
                   </ul>
                 )}
               </section>
+
+              {/* Customer journey (0098): what was sent / is scheduled, and Send message */}
+              <BookingJourney bookingId={b.id} status={b.status} onSent={() => setReloadKey((k) => k + 1)} />
 
               {/* History */}
               <section>

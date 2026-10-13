@@ -32,18 +32,22 @@ export async function notifyBooking(
     operatorId?: string;
     travelerId?: string | null;
     travelerPhone?: string | null;
-    inboxBody: string;
+    inboxBody: string; // "" = don't post to the inbox
     smsBody?: string; // SMS + WhatsApp + Viber text; omit to skip phone channels
     whatsapp?: { templateName?: string; placeholders?: string[]; language?: string };
   },
-): Promise<void> {
-  await postSystemMessage(admin, {
-    bookingId: opts.bookingId,
-    listingId: opts.listingId,
-    operatorId: opts.operatorId,
-    travelerId: opts.travelerId,
-    body: opts.inboxBody,
-  });
+): Promise<string[]> {
+  const sent: string[] = [];
+  if (opts.inboxBody) {
+    await postSystemMessage(admin, {
+      bookingId: opts.bookingId,
+      listingId: opts.listingId,
+      operatorId: opts.operatorId,
+      travelerId: opts.travelerId,
+      body: opts.inboxBody,
+    });
+    sent.push("inbox");
+  }
 
   const smsBody = opts.smsBody;
 
@@ -55,6 +59,7 @@ export async function notifyBooking(
     const { data: tg } = await admin.from("telegram_links").select("chat_id").eq("user_id", opts.travelerId).maybeSingle();
     if (tg?.chat_id) {
       const r = await sendTelegram(tg.chat_id, smsBody);
+      if (r.sent) sent.push("telegram");
       if (r.reason !== "not_configured") await logEvent(admin, opts.bookingId, r.sent ? "telegram_sent" : "telegram_failed", r.sent ? "telegram" : `Telegram failed (${r.reason ?? "unknown"}).`);
     }
   }
@@ -63,7 +68,7 @@ export async function notifyBooking(
   if (phone && smsBody) {
     // Only text/WhatsApp/Viber a customer who explicitly opted in at checkout.
     const { data: consentRow } = await admin.from("bookings").select("messaging_consent").eq("id", opts.bookingId).maybeSingle();
-    if (!consentRow?.messaging_consent) return;
+    if (!consentRow?.messaging_consent) return sent;
     const [sms, wa, vb] = await Promise.all([
       sendSms(phone, smsBody),
       sendWhatsApp(phone, smsBody, opts.whatsapp),
@@ -72,5 +77,9 @@ export async function notifyBooking(
     if (sms.reason !== "not_configured") await logEvent(admin, opts.bookingId, sms.sent ? "sms_sent" : "sms_failed", sms.sent ? phone : `SMS to ${phone} failed (${sms.reason ?? "unknown"}).`);
     if (wa.reason !== "not_configured") await logEvent(admin, opts.bookingId, wa.sent ? "whatsapp_sent" : "whatsapp_failed", wa.sent ? phone : `WhatsApp to ${phone} failed (${wa.reason ?? "unknown"}).`);
     if (vb.reason !== "not_configured") await logEvent(admin, opts.bookingId, vb.sent ? "viber_sent" : "viber_failed", vb.sent ? phone : `Viber to ${phone} failed (${vb.reason ?? "unknown"}).`);
+    if (sms.sent) sent.push("sms");
+    if (wa.sent) sent.push("whatsapp");
+    if (vb.sent) sent.push("viber");
   }
+  return sent;
 }

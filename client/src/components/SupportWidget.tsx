@@ -105,7 +105,8 @@ export function SupportWidget() {
   }, [messages, open]);
 
   // Don't show to operators/admins.
-  if (loading || profile?.role === "operator" || profile?.role === "admin") return null;
+  // Guests' private trip pages have the host's own contacts; keep the screen clear.
+  if (loading || profile?.role === "operator" || profile?.role === "admin" || location.startsWith("/trip/")) return null;
 
   const saveContact = async (e: React.FormEvent) => {
     e.preventDefault();

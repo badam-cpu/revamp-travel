@@ -21,6 +21,7 @@ import { reconcileAllSubscriptions, reconcilePerListingAmounts } from "../../ser
 import { reconcileAllVouchers } from "../../server/vouchers.js";
 import { reconcileQrPayments } from "../../server/qrPayments.js";
 import { runCommissionStatements } from "../../server/commissionStatements.js";
+import { runJourneyAutomations } from "../../server/journey.js";
 import { recordCronRun, checkAndAlertStaleCrons } from "../../server/alerts.js";
 
 const JOB = "reconcile-bookings";
@@ -53,7 +54,14 @@ export default async (): Promise<Response> => {
     // Monthly commission statements for operators paid directly (0094):
     // build on the 1st, collect payments, remind, pause when overdue.
     const statements = await runCommissionStatements(admin);
-    console.log("[reconcile-bookings]", { ...result, reviewEmails: reviews.sent, gifts, giftExpiry, subs, subAmounts, vouchers, qrPays, statements });
+    // Customer Journey (0097): operators' automatic guest messages that are due.
+    let journey = { sent: 0, failed: 0, checked: 0 };
+    try {
+      journey = await runJourneyAutomations(admin);
+    } catch (err) {
+      console.error("[reconcile-bookings] journey failed", err);
+    }
+    console.log("[reconcile-bookings]", { ...result, reviewEmails: reviews.sent, gifts, giftExpiry, subs, subAmounts, vouchers, qrPays, statements, journey });
     // Heartbeat + cron watchdog. This job runs every 10 min, so it's the primary
     // watcher that notices the daily refresh-ical going silent.
     await recordCronRun(admin, JOB, true, `bookings ${result.confirmed ?? 0}c/${result.expired ?? 0}x`);

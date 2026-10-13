@@ -475,7 +475,7 @@ export async function requestReviewsForCompleted(admin: SupabaseClient, { limit 
   // below, so a same-day checkout or a just-finished tour is never emailed early.
   const { data, error } = await admin
     .from("bookings")
-    .select("id, traveler_id, start_date, end_date, status, guest_email, listings!inner(title, slug, type, image)")
+    .select("id, traveler_id, start_date, end_date, status, guest_email, listing_id, listings!inner(title, slug, type, image, operator_id)")
     .in("status", ["confirmed", "completed"])
     .lte("end_date", today)
     .is("review_requested_at", null)
@@ -484,16 +484,34 @@ export async function requestReviewsForCompleted(admin: SupabaseClient, { limit 
 
   const now = Date.now();
   let sent = 0;
-  for (const row of data as unknown as {
+  const rows = data as unknown as {
     id: string;
     traveler_id: string;
     start_date: string;
     end_date: string;
     guest_email: string | null;
-    listings: { title?: string; slug?: string; type?: string; image?: string } | null;
-  }[]) {
+    listing_id: string;
+    listings: { title?: string; slug?: string; type?: string; image?: string; operator_id?: string } | null;
+  }[];
+  // Customer Journey (0097): when the operator's own "Thank you" step is on, it
+  // carries the review link — so Revamp's separate email is skipped (no double email).
+  let journeyAfter = new Set<string>();
+  try {
+    const { afterStepEnabledFor } = await import("./journey.js");
+    journeyAfter = await afterStepEnabledFor(
+      admin,
+      rows.map((r) => ({ id: r.listing_id, operator_id: r.listings?.operator_id ?? "", type: r.listings?.type ?? "" })).filter((l) => l.operator_id),
+    );
+  } catch (err) {
+    console.error("[bookings] journey check failed", err);
+  }
+  for (const row of rows) {
     // Only once a full 24h has passed since the experience actually ended.
     if (now - experienceEndInstant(row.listings?.type, row.start_date, row.end_date) < REVIEW_DELAY_MS) continue;
+    if (journeyAfter.has(row.listing_id)) {
+      await admin.from("bookings").update({ status: "completed", review_requested_at: new Date().toISOString() }).eq("id", row.id);
+      continue;
+    }
     try {
       const { data: traveler } = await admin.auth.admin.getUserById(row.traveler_id);
       const to = traveler?.user?.email || row.guest_email || "";

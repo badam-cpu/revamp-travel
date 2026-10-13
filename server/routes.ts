@@ -24,6 +24,8 @@ import { pricelabsListings, syncOperatorPrices } from "./pricelabs.js";
 import { supabaseAdmin, adminConfigured } from "./supabaseAdmin.js";
 import { roomExportRanges, syncRoomCalendar, type RoomSyncResult } from "./roomCalendars.js";
 import { startRoomGroupCheckout } from "./roomGroupCheckout.js";
+import { bookingIdForToken, journeySchedule, loadJourneyContext, renderStep, sendJourneyStep, submitSurvey, tripPageData, type JourneyContext } from "./journey.js";
+import { JOURNEY_STEPS, PLACEHOLDERS, listingPreviewVars, renderTemplate, sampleVars, stepsFor } from "../shared/journey.js";
 import { moveBlockedReason, moveBookingToRoom, roomMoveOptions, roomOptionForNewBooking, unavailableMessage, type MoveBooking, type RoomMoveOption } from "./roomMoves.js";
 import { paylinkConfigured, registerPayment, checkPayment } from "./paylink.js";
 import { resolvePaymentAccount, clientForOwner, accountOwnerPatch, getPaymentAccountStatus, connectPaymentAccount, disconnectPaymentAccount, setPaymentAccountPaused } from "./paymentAccounts.js";
@@ -33,7 +35,7 @@ import { markQrPaymentPaid } from "./qrPayments.js";
 import { reconcileUserBookings, logBookingEvent, finalizeConfirmedBooking } from "./bookings.js";
 import { startOperatorSubscription, reconcileOperatorSubscriptions, cancelOperatorSubscription, ensurePlanRegistered, type PlanRow } from "./subscriptions.js";
 import { syncListingSessions, reserveSeats, releaseSeats } from "./sessions.js";
-import { generateListingCopy, ahaCopyConfigured } from "./ahaCopy.js";
+import { generateListingCopy, generateJourneyTemplate, ahaCopyConfigured } from "./ahaCopy.js";
 import { scanTextFixes, suggestTextFix, applyTextFixes } from "./textFixes.js";
 import { generateSupportReply, type SupportTurn } from "./support.js";
 import { generateOperatorReply, type OperatorTurn } from "./operatorAssistant.js";
@@ -49,7 +51,7 @@ import { endImpersonation, startImpersonation } from "./impersonation.js";
 import { listManagedVenues, venueSummary } from "./restaurant.js";
 import { isAllowedGiftAmount } from "../shared/giftcards.js";
 import { payoutState } from "../shared/payouts.js";
-import { sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, type BookingEmailInfo } from "./email.js";
+import { sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, sendJourneyEmail, type BookingEmailInfo } from "./email.js";
 import { notifyBooking } from "./notify.js";
 import { telegramConfigured, telegramConnectLink, telegramBotUsername, setTelegramWebhook, sendTelegram } from "./telegram.js";
 import { isCrawlerUserAgent } from "./botDetect.js";
@@ -431,6 +433,9 @@ const planTripHits = new Map<string, number[]>();
 const ahaCopyHits = new Map<string, number[]>();
 const trackHits = new Map<string, number[]>();
 const voucherPurchaseHits = new Map<string, number[]>();
+const journeySendHits = new Map<string, number[]>();
+const tripHits = new Map<string, number[]>();
+const tripSurveyHits = new Map<string, number[]>();
 function rateLimited(map: Map<string, number[]>, key: string, max: number, windowMs = 60_000): boolean {
   const now = Date.now();
   const hits = (map.get(key) ?? []).filter((t) => t > now - windowMs);
@@ -4184,6 +4189,192 @@ export function registerApiRoutes(app: Express) {
     } catch (err) {
       console.error("[aha-listing-copy]", err);
       res.status(500).json({ error: "Aha couldn't draft that. Please try again." });
+    }
+  });
+
+  // ── Customer Journey (0097) — see server/journey.ts + shared/journey.ts ──────
+  const JOURNEY_STEP_KEYS = ["checkin", "midstay", "checkout", "meeting", "after"] as const;
+  const journeyStepSchema = z.enum(JOURNEY_STEP_KEYS);
+  const journeyChannelsSchema = z.object({ email: z.boolean(), text: z.boolean(), inbox: z.boolean() }).partial();
+
+  /** The signed-in operator (or admin) behind a request, or a sent error. */
+  const journeyCaller = async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId) return void res.status(401).json({ error: "Sign in as an operator." });
+    const admin = supabaseAdmin();
+    if (!admin) return void res.status(503).json({ error: "Customer journey isn't available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    return { admin, userId, isAdmin: me?.role === "admin", isOperator: me?.role === "operator" || me?.role === "admin" };
+  };
+  /** Load a booking's journey context the caller may act on. */
+  const journeyBooking = async (req: Request, res: Response, bookingId: unknown) => {
+    const who = await journeyCaller(req, res);
+    if (!who) return;
+    if (typeof bookingId !== "string" || !/^[0-9a-f-]{36}$/i.test(bookingId)) return void res.status(400).json({ error: "Booking not found." });
+    let ctx: JourneyContext | null;
+    try {
+      ctx = await loadJourneyContext(who.admin, bookingId);
+    } catch (err) {
+      console.error("[journey] context", err);
+      return void res.status(503).json({ error: "Customer journey isn't available yet." });
+    }
+    if (!ctx) return void res.status(404).json({ error: "Booking not found." });
+    if (ctx.listing.operator_id !== who.userId && !who.isAdmin) return void res.status(403).json({ error: "That booking isn't on your listing." });
+    return { ...who, ctx };
+  };
+
+  // Preview a step for one booking (rendered with this guest's details).
+  app.post("/api/journey/preview", async (req: Request, res: Response) => {
+    const step = journeyStepSchema.safeParse(req.body?.step);
+    if (!step.success) return res.status(400).json({ error: "Pick a message." });
+    const c = await journeyBooking(req, res, req.body?.bookingId);
+    if (!c) return;
+    if (!stepsFor(c.ctx.listing.type).includes(step.data)) return res.status(400).json({ error: "That message doesn't apply to this listing." });
+    const r = renderStep(c.ctx, step.data);
+    res.json({
+      subject: r.subject,
+      body: r.body,
+      text: r.text.replace(/\s*$/, "") || "",
+      missing: r.missing,
+      channels: r.template.channels,
+      enabled: r.template.enabled,
+      hasEmail: !!(c.ctx.booking.guest_email || c.ctx.booking.traveler_id),
+      hasPhone: !!c.ctx.booking.guest_phone,
+    });
+  });
+
+  // Send a step now (manual), from the booking window.
+  app.post("/api/journey/send", async (req: Request, res: Response) => {
+    const step = journeyStepSchema.safeParse(req.body?.step);
+    const channels = journeyChannelsSchema.safeParse(req.body?.channels ?? {});
+    if (!step.success || !channels.success) return res.status(400).json({ error: "Pick a message and how to send it." });
+    const c = await journeyBooking(req, res, req.body?.bookingId);
+    if (!c) return;
+    if (rateLimited(journeySendHits, c.userId, 20)) return res.status(429).json({ error: "Too many messages at once — try again in a minute." });
+    try {
+      const r = await sendJourneyStep(c.admin, c.ctx.booking.id, step.data, { manual: true, channels: channels.data, ctx: c.ctx });
+      if (!r.ok) return res.status(r.status).json({ error: r.error });
+      res.json({ ok: true, channels: r.channels });
+    } catch (err) {
+      console.error("[journey/send]", err);
+      res.status(500).json({ error: "Couldn't send the message. Please try again." });
+    }
+  });
+
+  // A booking's journey: each step with its timing and what was sent.
+  app.post("/api/journey/schedule", async (req: Request, res: Response) => {
+    const c = await journeyBooking(req, res, req.body?.bookingId);
+    if (!c) return;
+    try {
+      res.json({ items: await journeySchedule(c.admin, c.ctx) });
+    } catch (err) {
+      console.error("[journey/schedule]", err);
+      res.status(500).json({ error: "Couldn't load the schedule." });
+    }
+  });
+
+  // "Send test to me": the operator's draft, rendered with a listing's details
+  // (or sample values), emailed to the operator only.
+  app.post("/api/journey/test", async (req: Request, res: Response) => {
+    const parsed = z
+      .object({
+        step: journeyStepSchema,
+        listingType: z.enum(["stay", "tour", "experience"]),
+        listingId: z.string().uuid().nullable().optional(),
+        subject: z.string().max(200),
+        body: z.string().max(6000),
+        textBody: z.string().max(480).default(""),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    const who = await journeyCaller(req, res);
+    if (!who) return;
+    if (!who.isOperator) return res.status(403).json({ error: "Operators only." });
+    if (rateLimited(journeySendHits, who.userId, 20)) return res.status(429).json({ error: "Too many test messages — try again in a minute." });
+    const d = parsed.data;
+    let vars = sampleVars(d.listingType);
+    if (d.listingId) {
+      const { data: l } = await who.admin.from("listings").select("id, title, type, facts, address, operator_id, multi_room").eq("id", d.listingId).maybeSingle();
+      if (!l || (l.operator_id !== who.userId && !who.isAdmin)) return res.status(404).json({ error: "Listing not found." });
+      const { data: det } = await who.admin.from("journey_listing_details").select("*").eq("listing_id", d.listingId).maybeSingle();
+      vars = listingPreviewVars(d.listingType, { ...(l as never as { title: string; type: string }), multiRoom: l.multi_room === true }, det as never);
+    }
+    const { data: u } = await who.admin.auth.admin.getUserById(who.userId);
+    const to = u?.user?.email;
+    if (!to) return res.status(400).json({ error: "Your account has no email to send the test to." });
+    const r = await sendJourneyEmail(to, {
+      subject: `[Test] ${renderTemplate(d.subject, vars)}`,
+      body: renderTemplate(d.body, vars, { dropEmptyLines: true }),
+      ctaLabel: JOURNEY_STEPS[d.step].cta,
+      tripLink: `${(process.env.URL || "https://revampvacations.com").replace(/\/+$/, "")}/`,
+    });
+    if (!r.sent) return res.status(502).json({ error: "Couldn't send the test email right now." });
+    res.json({ ok: true, to, text: renderTemplate(d.textBody, vars) });
+  });
+
+  // Aha drafts or improves a journey message.
+  app.post("/api/aha-journey-template", async (req: Request, res: Response) => {
+    const parsed = z
+      .object({
+        step: journeyStepSchema,
+        listingType: z.enum(["stay", "tour", "experience"]),
+        current: z.object({ subject: z.string().max(200), body: z.string().max(6000), textBody: z.string().max(480) }).partial().optional(),
+        context: z.object({ title: z.string().max(200), city: z.string().max(120), facts: z.array(z.object({ label: z.string().max(80), value: z.string().max(300) })).max(30), notes: z.string().max(1000) }).partial().default({}),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    const who = await journeyCaller(req, res);
+    if (!who) return;
+    if (!who.isOperator) return res.status(403).json({ error: "Operators only." });
+    if (!ahaCopyConfigured()) return res.status(503).json({ error: "Aha isn't available right now." });
+    if (rateLimited(ahaCopyHits, who.userId, 30)) return res.status(429).json({ error: "You're going a bit fast — give Aha a few seconds." });
+    const placeholders = PLACEHOLDERS.filter((p) => p.types.includes(parsed.data.listingType)).map((p) => p.key);
+    const r = await generateJourneyTemplate({ ...parsed.data, placeholders });
+    if (!r.subject && !r.body) return res.status(502).json({ error: "Aha couldn't draft that — try again in a moment." });
+    res.json(r);
+  });
+
+  // ── The guest's private trip page (/trip/:token) ─────────────────────────────
+  app.get("/api/trip", async (req: Request, res: Response) => {
+    if (rateLimited(tripHits, req.ip || "anon", 60)) return res.status(429).json({ error: "Too many requests — try again in a minute." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "This page isn't available right now." });
+    try {
+      const found = await bookingIdForToken(admin, String(req.query.token ?? ""));
+      if (!found) return res.status(404).json({ error: "We couldn't find this trip page. Check the link in your message." });
+      if (found.expired) return res.status(410).json({ error: "This trip page has expired." });
+      const ctx = await loadJourneyContext(admin, found.id);
+      if (!ctx) return res.status(404).json({ error: "We couldn't find this trip page." });
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("X-Robots-Tag", "noindex, nofollow");
+      res.json(await tripPageData(admin, ctx));
+    } catch (err) {
+      console.error("[trip]", err);
+      res.status(503).json({ error: "This page isn't available right now. Please try again shortly." });
+    }
+  });
+
+  app.post("/api/trip/survey", async (req: Request, res: Response) => {
+    if (rateLimited(tripSurveyHits, req.ip || "anon", 10)) return res.status(429).json({ error: "Too many requests — try again in a minute." });
+    const parsed = z
+      .object({ token: z.string().max(64), step: z.enum(["midstay", "after"]), rating: z.number().int().min(1).max(5), comment: z.string().max(2000).default("") })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Pick 1 to 5 stars." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "This page isn't available right now." });
+    try {
+      const found = await bookingIdForToken(admin, parsed.data.token);
+      if (!found || found.expired) return res.status(404).json({ error: "This trip page isn't available." });
+      const ctx = await loadJourneyContext(admin, found.id);
+      if (!ctx) return res.status(404).json({ error: "This trip page isn't available." });
+      const r = await submitSurvey(admin, ctx, parsed.data.step, parsed.data.rating, parsed.data.comment);
+      if (!r.ok) return res.status(r.status).json({ error: r.error });
+      res.json(r);
+    } catch (err) {
+      console.error("[trip/survey]", err);
+      res.status(503).json({ error: "We couldn't save that right now. Please try again." });
     }
   });
 

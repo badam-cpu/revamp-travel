@@ -45,7 +45,7 @@ export default async (request: Request): Promise<Response | undefined> => {
   // These are handled elsewhere (their own function routes / SPA) — never prerender them.
   if (path.startsWith("/api/")) return;
   if (path === "/robots.txt" || path === "/sitemap.xml") return;
-  if (path === "/dashboard" || path.startsWith("/dashboard/") || path === "/admin" || path.startsWith("/admin/")) return;
+  if (path === "/dashboard" || path.startsWith("/dashboard/") || path === "/admin" || path.startsWith("/admin/") || path.startsWith("/trip/")) return;
   const lastSegment = path.split("/").pop() || "";
   if (lastSegment.includes(".")) return; // hashed JS/CSS, images, favicon.ico, etc.
 

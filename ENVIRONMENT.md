@@ -78,3 +78,8 @@ Milestone B (real Stripe-backed bookings — scoped in `CLAUDE.md`, not yet buil
 
 Encrypts operators' PayLink API keys before they're stored (migration 0094, `server/secretBox.ts`). 32 random bytes, base64 — generate with `openssl rand -base64 32` and set it in Netlify → Site configuration → Environment variables (Functions scope), then redeploy. Never commit it, never prefix it with `VITE_`, and keep a copy in a password manager: if it's lost or changed, stored keys can't be decrypted — those operators fall back to Revamp's account until they reconnect. Without it, operators can't connect a PayLink account (nothing is ever stored in plain text).
 
+## Customer Journey (optional)
+
+| Variable | Purpose |
+| --- | --- |
+| `INFOBIP_WHATSAPP_JOURNEY_TEMPLATE` | Name of a Meta-approved WhatsApp template (placeholders: guest first name, listing, trip link) used for journey texts. Without it, WhatsApp journey texts only reach guests inside WhatsApp's 24-hour window; email, inbox, SMS, Viber and Telegram are unaffected. |
