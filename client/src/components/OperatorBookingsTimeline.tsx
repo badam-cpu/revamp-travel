@@ -19,9 +19,9 @@
  * listings!inner on operator_id), each listing's iCal blocked_ranges and
  * manual blocks, hotels' room types/rooms (+ each room's calendar status).
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useListings } from "@/contexts/ListingsContext";
@@ -34,7 +34,7 @@ import type { RoomType, SeasonalRate } from "@shared/listings";
 import { roomUnitLabel, unitBaseCents, unitNightCents, unitPricing } from "@shared/rooms";
 import type { LiveListing } from "@/contexts/ListingsContext";
 import { cn } from "@/lib/utils";
-import { CalendarToolbar, monthsOf, useCompactPrice, type TypeFilter } from "@/components/CalendarToolbar";
+import { CalendarToolbar, monthsOf, remember, remembered, ToolbarSelect, useCompactPrice, type TypeFilter } from "@/components/CalendarToolbar";
 
 const DAY_MS = 86_400_000;
 const CELL_W = 46; // px per night
@@ -42,6 +42,19 @@ const DAYS_BACK = 0; // the window opens on today (a stay already under way show
 const DAYS = 180; // rolling window (~6 months)
 const STALE_HOURS = 6; // a connected calendar older than this is flagged
 const COLLAPSE_KEY = "revamp.timelineCollapsed";
+const PAGE_KEY = "revamp.timelinePageSize";
+const GROUP_KEY = "revamp.timelineGroupBy";
+const PAGE_SIZES = [8, 20, 50, 100] as const;
+type PageSize = (typeof PAGE_SIZES)[number];
+/** roomType: hotels nest rooms under room types (default). none: A–Z, hotels list rooms directly. */
+const GROUPS = [
+  { value: "roomType", label: "Room type" },
+  { value: "listingType", label: "Listing type" },
+  { value: "city", label: "City" },
+  { value: "none", label: "None" },
+] as const;
+type GroupBy = (typeof GROUPS)[number]["value"];
+const TYPE_HEADING: Record<string, string> = { stay: "Stays", tour: "Tours", experience: "Experiences" };
 
 type Range = { start: string; end: string };
 
@@ -122,6 +135,9 @@ export function OperatorBookingsTimeline() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [direct, setDirect] = useState<{ listing: LiveListing; date: string; room?: DirectBookingRoom } | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [pageSize, setPageSize] = useState<PageSize>(() => remembered<PageSize>(PAGE_KEY, PAGE_SIZES, 20));
+  const [groupBy, setGroupBy] = useState<GroupBy>(() => remembered<GroupBy>(GROUP_KEY, GROUPS.map((g) => g.value), "roomType"));
+  const [page, setPage] = useState(0);
   const [roomsByHotel, setRoomsByHotel] = useState<Map<string, RoomType[]>>(new Map());
   const [roomCals, setRoomCals] = useState<Map<string, RoomCalendar>>(new Map());
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
@@ -146,6 +162,24 @@ export function OperatorBookingsTimeline() {
 
   const allMine = useMemo(() => listings.filter((l) => l.operatorId === user?.id).sort((a, b) => a.title.localeCompare(b.title)), [listings, user?.id]);
   const mine = useMemo(() => (typeFilter === "all" ? allMine : allMine.filter((l) => l.type === typeFilter)), [allMine, typeFilter]);
+  // Group (section headings), then page through the listings — a hotel counts as one.
+  const groupKey = useCallback(
+    (l: LiveListing) => (groupBy === "listingType" ? TYPE_HEADING[l.type] ?? l.type : groupBy === "city" ? l.city || "No city" : ""),
+    [groupBy],
+  );
+  const ordered = useMemo(
+    () => (groupBy === "listingType" || groupBy === "city" ? [...mine].sort((a, b) => groupKey(a).localeCompare(groupKey(b)) || a.title.localeCompare(b.title)) : mine),
+    [mine, groupBy, groupKey],
+  );
+  const pageCount = Math.max(1, Math.ceil(ordered.length / pageSize));
+  const pageNow = Math.min(page, pageCount - 1);
+  const paged = ordered.slice(pageNow * pageSize, (pageNow + 1) * pageSize);
+  const groupCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    ordered.forEach((l) => m.set(groupKey(l), (m.get(groupKey(l)) ?? 0) + 1));
+    return m;
+  }, [ordered, groupKey]);
+  useEffect(() => setPage(0), [typeFilter, groupBy, pageSize]);
   const availableTypes = useMemo(() => {
     const present = new Set(allMine.map((l) => l.type));
     return (["all", "stay", "tour", "experience"] as const).filter((t) => t === "all" || present.has(t));
@@ -458,6 +492,152 @@ export function OperatorBookingsTimeline() {
   const now = Date.now();
   const nameCell = "sticky left-0 z-10 shrink-0 border-r border-basalt/12";
 
+  /** One listing's rows: a plain row, or a hotel (summary → room types → rooms). */
+  const renderListing = (listing: LiveListing) => {
+    const bookings = byListing.get(listing.id) ?? [];
+    const byRoomType = groupBy === "roomType";
+    const rooms = roomsOf(listing.id);
+    const sync = syncNote(listing.icalFeeds.length > 0 || !!listing.icalUrl, listing.icalSyncedAt, listing.icalError, now);
+    const label = (
+      <>
+        {listing.image && !narrow && <img src={listing.image} alt="" className="h-9 w-9 shrink-0 rounded object-cover" />}
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-semibold text-basalt">{listing.title}</span>
+          <span className="block truncate text-[11px] uppercase tracking-wide text-basalt/40">
+            {rooms.length ? `Hotel · ${rooms.length} room${rooms.length === 1 ? "" : "s"}` : listing.type}
+            {sync && !rooms.length && <span className={cn("normal-case tracking-normal", sync.stale && "font-semibold text-apricot")}> · {sync.text}</span>}
+          </span>
+        </span>
+      </>
+    );
+
+    if (!rooms.length) {
+      return (
+        <div key={listing.id} role="row" className="flex border-b border-basalt/8 last:border-b-0">
+          <Link role="rowheader" href={`/listing/${listing.slug}`} className={cn(nameCell, "flex items-center gap-2 bg-paper px-3 py-3 hover:bg-chalk focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-apricot")} style={{ width: nameW }}>
+            {label}
+          </Link>
+          {track({
+            label: listing.title,
+            height: 62,
+            bookings,
+            synced: listing.blockedRanges ?? [],
+            manual: listing.manualBlockedRanges ?? [],
+            base: Math.round(listing.price * 100),
+            rates: listing.seasonalRates ?? [],
+            onDay: (d) => setDirect({ listing, date: d }),
+          })}
+        </div>
+      );
+    }
+
+    // Hotel: summary row (rooms free per night) → room-type rows → rooms.
+    const isOpen = !collapsed.has(listing.id);
+    const free = hotelFreeByDay.get(listing.id) ?? [];
+    return (
+      <div key={listing.id} className="border-b border-basalt/8 last:border-b-0">
+        <div role="row" className="flex bg-chalk/50">
+          <button type="button" role="rowheader" onClick={() => toggleKey(listing.id)} aria-expanded={isOpen} className={cn(nameCell, "flex items-center gap-2 bg-paper px-3 py-3 text-left hover:bg-chalk focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-apricot")} style={{ width: nameW }}>
+            {isOpen ? <ChevronDown className="h-4 w-4 shrink-0 text-basalt/45" /> : <ChevronRight className="h-4 w-4 shrink-0 text-basalt/45" />}
+            {label}
+          </button>
+          {summaryTrack({
+            label: `${listing.title}, all rooms`,
+            height: 62,
+            cell: (_d, i) => {
+              const n = free[i] ?? 0;
+              return {
+                main: <span className={cn("text-sm font-semibold tabular-nums", n === 0 ? "text-tuff" : "text-basalt/70")}>{n}</span>,
+                sub: <span className="text-[9px] text-basalt/40">free</span>,
+                aria: `${n} of ${rooms.length} rooms free`,
+              };
+            },
+          })}
+        </div>
+        {isOpen &&
+          groupByType(rooms).map(({ type, units }) => {
+            const typeKey = `${listing.id}:${type.id}`;
+            const typeOpen = !collapsed.has(typeKey);
+            const typeRates = type.seasonalRates ?? [];
+            const typeFree = (d: string) =>
+              units.filter((u) => !bookings.some((b) => b.room_unit_id === u.id && covers({ start: b.start_date, end: b.end_date }, d)) && !(u.blockedRanges ?? []).some((x) => covers(x, d)) && !u.manualBlockedRanges.some((x) => covers(x, d))).length;
+            return (
+              <div key={type.id}>
+                {/* Room type row: the type's price per night (all its rooms) and rooms free. */}
+                {byRoomType && <div role="row" className="flex border-t border-basalt/8 bg-chalk/40">
+                  <button
+                    type="button"
+                    role="rowheader"
+                    onClick={() => toggleKey(typeKey)}
+                    aria-expanded={typeOpen}
+                    className={cn(nameCell, "flex items-center gap-2 bg-chalk py-2 pr-3 text-left hover:bg-chalk/70 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-apricot", narrow ? "pl-3" : "pl-6")}
+                    style={{ width: nameW }}
+                  >
+                    {typeOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-basalt/45" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-basalt/45" />}
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold text-basalt">{type.name}</span>
+                      <span className="block truncate text-[11px] text-basalt/45">Room type · {units.length} room{units.length === 1 ? "" : "s"}</span>
+                    </span>
+                  </button>
+                  {summaryTrack({
+                    label: type.name,
+                    height: 46,
+                    cell: (d) => {
+                      const rate = typeRates.filter((x) => x.start <= d && d <= x.end).pop();
+                      const n = typeFree(d);
+                      const price = rate ? rate.priceCents : type.priceCents;
+                      return {
+                        main: d >= today ? <span className={cn("text-[10px] font-bold tabular-nums", rate ? "text-apricot" : "text-basalt/70")}>{compact(price)}</span> : null,
+                        sub: <span className={cn("text-[9px] tabular-nums", n === 0 ? "font-semibold text-tuff" : "text-basalt/40")}>{n}/{units.length}</span>,
+                        aria: `${compact(price)}${rate ? " custom price" : ""}, ${n} of ${units.length} free`,
+                      };
+                    },
+                  })}
+                </div>}
+                {(typeOpen || !byRoomType) &&
+                  units.map((unit) => {
+                    const roomLabel = `${type.name} · ${roomUnitLabel(unit.name)}`;
+                    const cal = roomCals.get(unit.id);
+                    const rs = syncNote((cal?.feeds.length ?? 0) > 0, cal?.syncedAt, cal?.error, now);
+                    return (
+                      <div key={unit.id} role="row" className="flex border-t border-basalt/6">
+                        <div role="rowheader" className={cn(nameCell, "flex flex-col justify-center bg-paper py-2 pr-3", narrow ? "pl-4" : "pl-12")} style={{ width: nameW }}>
+                          <span className="truncate text-sm font-semibold text-basalt">{roomUnitLabel(unit.name)}</span>
+                          <span className={cn("truncate text-[11px]", rs?.stale ? "font-semibold text-apricot" : "text-basalt/45")}>
+                            {rs ? rs.text : unit.seasonalRates.length ? "Own prices on some dates" : type.name}
+                          </span>
+                        </div>
+                        {track({
+                          label: roomLabel,
+                          height: 52,
+                          bookings: bookings.filter((b) => b.room_unit_id === unit.id),
+                          synced: unit.blockedRanges ?? [],
+                          manual: unit.manualBlockedRanges,
+                          base: unitBaseCents(type, unit),
+                          // Type prices first, the room's own last (they win) — shared/rooms.ts unitPricing.
+                          rates: unitPricing(type, unit).seasonalRates,
+                          onDay: (d) => setDirect({ listing, date: d, room: { unitId: unit.id, label: roomLabel, nightlyCents: unitNightCents(type, unit, d).cents } }),
+                        })}
+                      </div>
+                    );
+                  })}
+              </div>
+            );
+          })}
+        {/* Bookings with no room (e.g. recorded before rooms existed) stay visible. */}
+        {isOpen && bookings.some((b) => !b.room_unit_id) && (
+          <div role="row" className="flex border-t border-basalt/6">
+            <div role="rowheader" className={cn(nameCell, "flex flex-col justify-center bg-paper py-2 pr-3", narrow ? "pl-4" : "pl-10")} style={{ width: nameW }}>
+              <span className="truncate text-sm font-semibold text-tuff">No room assigned</span>
+              <span className="truncate text-[11px] text-basalt/45">Open a booking to move it to a room</span>
+            </div>
+            {track({ label: `${listing.title}, no room assigned`, height: 52, bookings: bookings.filter((b) => !b.room_unit_id), synced: [], manual: [], base: 0, rates: [] })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div>
       <CalendarToolbar
@@ -468,7 +648,30 @@ export function OperatorBookingsTimeline() {
         types={availableTypes}
         type={typeFilter}
         onType={setTypeFilter}
-      />
+      >
+        <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
+          <ToolbarSelect
+            id="tl-group"
+            label="Group by"
+            value={groupBy}
+            options={GROUPS}
+            onChange={(v) => {
+              setGroupBy(v);
+              remember(GROUP_KEY, v);
+            }}
+          />
+          <ToolbarSelect
+            id="tl-page-size"
+            label="Page size"
+            value={pageSize}
+            options={PAGE_SIZES.map((n) => ({ value: n, label: String(n) }))}
+            onChange={(v) => {
+              setPageSize(v);
+              remember(PAGE_KEY, v);
+            }}
+          />
+        </div>
+      </CalendarToolbar>
 
       {/* Legend */}
       <ul className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-basalt/55" aria-label="Legend">
@@ -522,152 +725,41 @@ export function OperatorBookingsTimeline() {
           </div>
 
           {/* Rows */}
-          {mine.map((listing) => {
-            const bookings = byListing.get(listing.id) ?? [];
-            const rooms = roomsOf(listing.id);
-            const sync = syncNote(listing.icalFeeds.length > 0 || !!listing.icalUrl, listing.icalSyncedAt, listing.icalError, now);
-            const label = (
-              <>
-                {listing.image && !narrow && <img src={listing.image} alt="" className="h-9 w-9 shrink-0 rounded object-cover" />}
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-semibold text-basalt">{listing.title}</span>
-                  <span className="block truncate text-[11px] uppercase tracking-wide text-basalt/40">
-                    {rooms.length ? `Hotel · ${rooms.length} room${rooms.length === 1 ? "" : "s"}` : listing.type}
-                    {sync && !rooms.length && <span className={cn("normal-case tracking-normal", sync.stale && "font-semibold text-apricot")}> · {sync.text}</span>}
-                  </span>
-                </span>
-              </>
-            );
-
-            if (!rooms.length) {
-              return (
-                <div key={listing.id} role="row" className="flex border-b border-basalt/8 last:border-b-0">
-                  <Link role="rowheader" href={`/listing/${listing.slug}`} className={cn(nameCell, "flex items-center gap-2 bg-paper px-3 py-3 hover:bg-chalk focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-apricot")} style={{ width: nameW }}>
-                    {label}
-                  </Link>
-                  {track({
-                    label: listing.title,
-                    height: 62,
-                    bookings,
-                    synced: listing.blockedRanges ?? [],
-                    manual: listing.manualBlockedRanges ?? [],
-                    base: Math.round(listing.price * 100),
-                    rates: listing.seasonalRates ?? [],
-                    onDay: (d) => setDirect({ listing, date: d }),
-                  })}
-                </div>
-              );
-            }
-
-            // Hotel: summary row (rooms free per night) → room-type rows → rooms.
-            const isOpen = !collapsed.has(listing.id);
-            const free = hotelFreeByDay.get(listing.id) ?? [];
-            return (
-              <div key={listing.id} className="border-b border-basalt/8 last:border-b-0">
-                <div role="row" className="flex bg-chalk/50">
-                  <button type="button" role="rowheader" onClick={() => toggleKey(listing.id)} aria-expanded={isOpen} className={cn(nameCell, "flex items-center gap-2 bg-paper px-3 py-3 text-left hover:bg-chalk focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-apricot")} style={{ width: nameW }}>
-                    {isOpen ? <ChevronDown className="h-4 w-4 shrink-0 text-basalt/45" /> : <ChevronRight className="h-4 w-4 shrink-0 text-basalt/45" />}
-                    {label}
-                  </button>
-                  {summaryTrack({
-                    label: `${listing.title}, all rooms`,
-                    height: 62,
-                    cell: (_d, i) => {
-                      const n = free[i] ?? 0;
-                      return {
-                        main: <span className={cn("text-sm font-semibold tabular-nums", n === 0 ? "text-tuff" : "text-basalt/70")}>{n}</span>,
-                        sub: <span className="text-[9px] text-basalt/40">free</span>,
-                        aria: `${n} of ${rooms.length} rooms free`,
-                      };
-                    },
-                  })}
-                </div>
-                {isOpen &&
-                  groupByType(rooms).map(({ type, units }) => {
-                    const typeKey = `${listing.id}:${type.id}`;
-                    const typeOpen = !collapsed.has(typeKey);
-                    const typeRates = type.seasonalRates ?? [];
-                    const typeFree = (d: string) =>
-                      units.filter((u) => !bookings.some((b) => b.room_unit_id === u.id && covers({ start: b.start_date, end: b.end_date }, d)) && !(u.blockedRanges ?? []).some((x) => covers(x, d)) && !u.manualBlockedRanges.some((x) => covers(x, d))).length;
-                    return (
-                      <div key={type.id}>
-                        {/* Room type row: the type's price per night (all its rooms) and rooms free. */}
-                        <div role="row" className="flex border-t border-basalt/8 bg-chalk/40">
-                          <button
-                            type="button"
-                            role="rowheader"
-                            onClick={() => toggleKey(typeKey)}
-                            aria-expanded={typeOpen}
-                            className={cn(nameCell, "flex items-center gap-2 bg-chalk py-2 pr-3 text-left hover:bg-chalk/70 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-apricot", narrow ? "pl-3" : "pl-6")}
-                            style={{ width: nameW }}
-                          >
-                            {typeOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-basalt/45" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-basalt/45" />}
-                            <span className="min-w-0">
-                              <span className="block truncate text-sm font-semibold text-basalt">{type.name}</span>
-                              <span className="block truncate text-[11px] text-basalt/45">Room type · {units.length} room{units.length === 1 ? "" : "s"}</span>
-                            </span>
-                          </button>
-                          {summaryTrack({
-                            label: type.name,
-                            height: 46,
-                            cell: (d) => {
-                              const rate = typeRates.filter((x) => x.start <= d && d <= x.end).pop();
-                              const n = typeFree(d);
-                              const price = rate ? rate.priceCents : type.priceCents;
-                              return {
-                                main: d >= today ? <span className={cn("text-[10px] font-bold tabular-nums", rate ? "text-apricot" : "text-basalt/70")}>{compact(price)}</span> : null,
-                                sub: <span className={cn("text-[9px] tabular-nums", n === 0 ? "font-semibold text-tuff" : "text-basalt/40")}>{n}/{units.length}</span>,
-                                aria: `${compact(price)}${rate ? " custom price" : ""}, ${n} of ${units.length} free`,
-                              };
-                            },
-                          })}
-                        </div>
-                        {typeOpen &&
-                          units.map((unit) => {
-                            const roomLabel = `${type.name} · ${roomUnitLabel(unit.name)}`;
-                            const cal = roomCals.get(unit.id);
-                            const rs = syncNote((cal?.feeds.length ?? 0) > 0, cal?.syncedAt, cal?.error, now);
-                            return (
-                              <div key={unit.id} role="row" className="flex border-t border-basalt/6">
-                                <div role="rowheader" className={cn(nameCell, "flex flex-col justify-center bg-paper py-2 pr-3", narrow ? "pl-4" : "pl-12")} style={{ width: nameW }}>
-                                  <span className="truncate text-sm font-semibold text-basalt">{roomUnitLabel(unit.name)}</span>
-                                  <span className={cn("truncate text-[11px]", rs?.stale ? "font-semibold text-apricot" : "text-basalt/45")}>
-                                    {rs ? rs.text : unit.seasonalRates.length ? "Own prices on some dates" : type.name}
-                                  </span>
-                                </div>
-                                {track({
-                                  label: roomLabel,
-                                  height: 52,
-                                  bookings: bookings.filter((b) => b.room_unit_id === unit.id),
-                                  synced: unit.blockedRanges ?? [],
-                                  manual: unit.manualBlockedRanges,
-                                  base: unitBaseCents(type, unit),
-                                  // Type prices first, the room's own last (they win) — shared/rooms.ts unitPricing.
-                                  rates: unitPricing(type, unit).seasonalRates,
-                                  onDay: (d) => setDirect({ listing, date: d, room: { unitId: unit.id, label: roomLabel, nightlyCents: unitNightCents(type, unit, d).cents } }),
-                                })}
-                              </div>
-                            );
-                          })}
-                      </div>
-                    );
-                  })}
-                {/* Bookings with no room (e.g. recorded before rooms existed) stay visible. */}
-                {isOpen && bookings.some((b) => !b.room_unit_id) && (
-                  <div role="row" className="flex border-t border-basalt/6">
-                    <div role="rowheader" className={cn(nameCell, "flex flex-col justify-center bg-paper py-2 pr-3", narrow ? "pl-4" : "pl-10")} style={{ width: nameW }}>
-                      <span className="truncate text-sm font-semibold text-tuff">No room assigned</span>
-                      <span className="truncate text-[11px] text-basalt/45">Open a booking to move it to a room</span>
-                    </div>
-                    {track({ label: `${listing.title}, no room assigned`, height: 52, bookings: bookings.filter((b) => !b.room_unit_id), synced: [], manual: [], base: 0, rates: [] })}
+          {paged.map((listing, idx) => {
+            const key = groupKey(listing);
+            const heading =
+              key && (idx === 0 || groupKey(paged[idx - 1]) !== key) ? (
+                <div role="row" className="flex border-b border-basalt/12 bg-chalk">
+                  <div role="rowheader" className={cn(nameCell, "bg-chalk px-3 py-2 text-[11px] font-bold uppercase tracking-[0.12em] text-basalt/70")} style={{ width: nameW }}>
+                    {key} <span className="font-semibold normal-case tracking-normal text-basalt/45">· {groupCounts.get(key)}</span>
                   </div>
-                )}
-              </div>
+                  <div aria-hidden style={{ width: trackW }} />
+                </div>
+              ) : null;
+            return (
+              <Fragment key={listing.id}>
+                {heading}
+                {renderListing(listing)}
+              </Fragment>
             );
           })}
         </div>
       </div>
-      <p className="mt-3 text-xs text-basalt/45">Bars are your bookings; hatched blocks are nights booked on another channel (synced from a connected calendar). Click a free night to record a direct booking, or a bar for its details. Hotels and guesthouses open into one row per room.</p>
+      {pageCount > 1 && (
+        <nav aria-label="Listing pages" className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-basalt/60 tabular-nums">
+            {pageNow * pageSize + 1}–{Math.min(ordered.length, (pageNow + 1) * pageSize)} of {ordered.length} listings
+          </span>
+          <button type="button" onClick={() => setPage(pageNow - 1)} disabled={pageNow === 0} aria-label="Previous page" className="grid h-9 w-9 place-items-center rounded-full border border-basalt/15 bg-paper hover:border-basalt/40 disabled:opacity-35">
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <span className="tabular-nums text-basalt/70">Page {pageNow + 1} of {pageCount}</span>
+          <button type="button" onClick={() => setPage(pageNow + 1)} disabled={pageNow >= pageCount - 1} aria-label="Next page" className="grid h-9 w-9 place-items-center rounded-full border border-basalt/15 bg-paper hover:border-basalt/40 disabled:opacity-35">
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </nav>
+      )}
+            <p className="mt-3 text-xs text-basalt/45">Bars are your bookings; hatched blocks are nights booked on another channel (synced from a connected calendar). Click a free night to record a direct booking, or a bar for its details. Hotels and guesthouses open into one row per room.</p>
       <BookingDetailDialog bookingId={openId} onClose={() => setOpenId(null)} onChanged={() => setReload((k) => k + 1)} />
       <DirectBookingDialog listing={direct?.listing ?? null} startDate={direct?.date ?? null} room={direct?.room ?? null} onClose={() => setDirect(null)} onCreated={() => setReload((k) => k + 1)} />
     </div>

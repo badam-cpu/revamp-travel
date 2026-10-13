@@ -103,3 +103,58 @@ export function CalendarToolbar({
     </div>
   );
 }
+
+/** A labelled pill select for the toolbar (Page size, Group by). */
+export function ToolbarSelect<T extends string | number>({
+  id,
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: T;
+  options: readonly { value: T; label: string }[];
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="inline-flex items-center gap-2">
+      <label htmlFor={id} className="text-sm font-semibold text-basalt/70">{label}</label>
+      <div className="relative inline-flex items-center">
+        <select
+          id={id}
+          value={String(value)}
+          onChange={(e) => {
+            const o = options.find((x) => String(x.value) === e.target.value);
+            if (o) onChange(o.value);
+          }}
+          className="h-10 appearance-none rounded-full border border-basalt/15 bg-paper pl-4 pr-9 text-sm font-semibold hover:border-basalt/40 focus:border-basalt focus:outline-none"
+        >
+          {options.map((o) => (
+            <option key={String(o.value)} value={String(o.value)}>{o.label}</option>
+          ))}
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-basalt/70" />
+      </div>
+    </div>
+  );
+}
+
+/** Read a remembered choice (private mode / bad value → fallback). */
+export function remembered<T>(key: string, allowed: readonly T[], fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    const v = raw == null ? null : (JSON.parse(raw) as T);
+    return v != null && allowed.includes(v) ? v : fallback;
+  } catch {
+    return fallback;
+  }
+}
+export function remember(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* private mode — not remembered */
+  }
+}

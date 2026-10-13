@@ -20,14 +20,14 @@
  * Enter/Space selects, Esc clears.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useListings, type BlockedRange, type LiveListing } from "@/contexts/ListingsContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import { CalendarToolbar, monthsOf, useCompactPrice, type TypeFilter } from "@/components/CalendarToolbar";
+import { CalendarToolbar, monthsOf, remember, remembered, ToolbarSelect, useCompactPrice, type TypeFilter } from "@/components/CalendarToolbar";
 import { fetchRoomTypes, updateRoomTypeRates, updateRoomUnitCalendar } from "@/lib/roomTypes";
 import { userMessage } from "@/lib/api";
 import type { RoomType, RoomUnit, SeasonalRate } from "@shared/listings";
@@ -39,6 +39,18 @@ const ROW_H = 64;
 const DAYS_BACK = 1; // yesterday, faded — like Airbnb
 const DAYS = 366;
 const COLLAPSE_KEY = "revamp.calendarCollapsed";
+const PAGE_KEY = "revamp.calendarPageSize";
+const GROUP_KEY = "revamp.calendarGroupBy";
+const PAGE_SIZES = [8, 20, 50, 100] as const;
+type PageSize = (typeof PAGE_SIZES)[number];
+// Hotels always open into room types here — that's where their prices are set.
+const GROUPS = [
+  { value: "none", label: "None" },
+  { value: "listingType", label: "Listing type" },
+  { value: "city", label: "City" },
+] as const;
+type GroupBy = (typeof GROUPS)[number]["value"];
+const TYPE_HEADING: Record<string, string> = { stay: "Stays", tour: "Tours", experience: "Experiences" };
 
 const addDaysIso = (iso: string, n: number) => new Date(Date.parse(iso + "T00:00:00Z") + n * DAY_MS).toISOString().slice(0, 10);
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -141,6 +153,9 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
   const days = useMemo(() => Array.from({ length: DAYS }, (_, i) => addDaysIso(startDate, i)), [startDate]);
 
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [pageSize, setPageSize] = useState<PageSize>(() => remembered<PageSize>(PAGE_KEY, PAGE_SIZES, 20));
+  const [groupBy, setGroupBy] = useState<GroupBy>(() => remembered<GroupBy>(GROUP_KEY, GROUPS.map((g) => g.value), "none"));
+  const [page, setPage] = useState(0);
   const [bookings, setBookings] = useState<Bk[] | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [reload, setReload] = useState(0);
@@ -167,6 +182,21 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
 
   const allMine = useMemo(() => listings.filter((l) => l.operatorId === user?.id && l.type !== "eat").sort((a, b) => a.title.localeCompare(b.title)), [listings, user?.id]);
   const mine = useMemo(() => (typeFilter === "all" ? allMine : allMine.filter((l) => l.type === typeFilter)), [allMine, typeFilter]);
+  // Group (section headings), then page through the listings — a hotel counts as one.
+  const groupKey = useCallback((l: LiveListing) => (groupBy === "listingType" ? TYPE_HEADING[l.type] ?? l.type : groupBy === "city" ? l.city || "No city" : ""), [groupBy]);
+  const ordered = useMemo(
+    () => (groupBy === "none" ? mine : [...mine].sort((a, b) => groupKey(a).localeCompare(groupKey(b)) || a.title.localeCompare(b.title))),
+    [mine, groupBy, groupKey],
+  );
+  const pageCount = Math.max(1, Math.ceil(ordered.length / pageSize));
+  const pageNow = Math.min(page, pageCount - 1);
+  const paged = useMemo(() => ordered.slice(pageNow * pageSize, (pageNow + 1) * pageSize), [ordered, pageNow, pageSize]);
+  const groupCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    ordered.forEach((l) => m.set(groupKey(l), (m.get(groupKey(l)) ?? 0) + 1));
+    return m;
+  }, [ordered, groupKey]);
+  useEffect(() => setPage(0), [typeFilter, groupBy, pageSize]);
   const availableTypes = useMemo(() => {
     const present = new Set(allMine.map((l) => l.type));
     return (["all", "stay", "tour", "experience"] as const).filter((t) => t === "all" || present.has(t));
@@ -219,7 +249,7 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
   type Group = { listing: LiveListing; rows: CalRow[]; hotel?: { rooms: number; free: (d: string) => number } };
   const groups: Group[] = useMemo(() => {
     const bks = bookings ?? [];
-    return mine.map((listing): Group => {
+    return paged.map((listing): Group => {
       const mineBks = bks.filter((b) => b.listing_id === listing.id);
       const priceOf = (rates: SeasonalRate[], base: number, d: string) => {
         const m = rates.filter((r) => r.start <= d && d <= r.end).pop();
@@ -296,7 +326,7 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
         ],
       };
     });
-  }, [mine, bookings, roomsByHotel]);
+  }, [paged, bookings, roomsByHotel]);
   const visibleRows = useMemo(() => groups.flatMap((g) => (g.hotel && collapsed.has(g.listing.id) ? [] : g.rows)), [groups, collapsed]);
 
   // ── Selection ───────────────────────────────────────────────────────────────
@@ -529,7 +559,32 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
           setTypeFilter(t);
           setSel(null);
         }}
-      />
+      >
+        <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
+          <ToolbarSelect
+            id="cal-group"
+            label="Group by"
+            value={groupBy}
+            options={GROUPS}
+            onChange={(v) => {
+              setGroupBy(v);
+              setSel(null);
+              remember(GROUP_KEY, v);
+            }}
+          />
+          <ToolbarSelect
+            id="cal-page-size"
+            label="Page size"
+            value={pageSize}
+            options={PAGE_SIZES.map((n) => ({ value: n, label: String(n) }))}
+            onChange={(v) => {
+              setPageSize(v);
+              setSel(null);
+              remember(PAGE_KEY, v);
+            }}
+          />
+        </div>
+      </CalendarToolbar>
       <ul className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-basalt/60" aria-label="Legend">
         <li className="inline-flex items-center gap-1.5"><span className="text-[13px] tabular-nums text-basalt">֏30k</span> Your price</li>
         <li className="inline-flex items-center gap-1.5"><span className="text-[13px] font-semibold tabular-nums text-apricot">֏35k</span> Custom price for that date</li>
@@ -571,7 +626,16 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
               })}
             </div>
 
-            {groups.map((g) => {
+            {groups.map((g, gi) => [
+              groupKey(g.listing) && (gi === 0 || groupKey(groups[gi - 1].listing) !== groupKey(g.listing)) ? (
+                <div key={`h:${groupKey(g.listing)}`} role="row" className="flex border-b border-basalt/12 bg-chalk">
+                  <div role="rowheader" className={cn(nameCell, "bg-chalk px-3 py-2 text-[11px] font-bold uppercase tracking-[0.12em] text-basalt/70")} style={{ width: nameW }}>
+                    {groupKey(g.listing)} <span className="font-semibold normal-case tracking-normal text-basalt/60">· {groupCounts.get(groupKey(g.listing))}</span>
+                  </div>
+                  <div aria-hidden style={{ width: DAYS * CELL_W }} />
+                </div>
+              ) : null,
+              ((g: Group) => {
               const thumb = g.listing.image && !narrow ? <img src={g.listing.image} alt="" className="h-10 w-10 shrink-0 rounded-md object-cover" /> : null;
               const title = (
                 <button type="button" onClick={() => onOpenListing(g.listing)} title="Open this listing's calendar" className="block w-full truncate text-left text-sm font-semibold text-basalt hover:text-apricot hover:underline focus-visible:outline-2 focus-visible:outline-apricot">
@@ -629,13 +693,29 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
                     ))}
                 </div>
               );
-            })}
+            })(g),
+            ])}
             <div aria-hidden className="h-16" />
           </div>
         </div>
 
         {desktop && panel && <aside className="sticky top-4 w-[320px] shrink-0 border border-basalt/12 bg-paper">{panel}</aside>}
       </div>
+
+      {pageCount > 1 && (
+        <nav aria-label="Listing pages" className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          <span className="tabular-nums text-basalt/60">
+            {pageNow * pageSize + 1}–{Math.min(ordered.length, (pageNow + 1) * pageSize)} of {ordered.length} listings
+          </span>
+          <button type="button" onClick={() => { setPage(pageNow - 1); setSel(null); }} disabled={pageNow === 0} aria-label="Previous page" className="grid h-9 w-9 place-items-center rounded-full border border-basalt/15 bg-paper hover:border-basalt/40 disabled:opacity-35">
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <span className="tabular-nums text-basalt/70">Page {pageNow + 1} of {pageCount}</span>
+          <button type="button" onClick={() => { setPage(pageNow + 1); setSel(null); }} disabled={pageNow >= pageCount - 1} aria-label="Next page" className="grid h-9 w-9 place-items-center rounded-full border border-basalt/15 bg-paper hover:border-basalt/40 disabled:opacity-35">
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </nav>
+      )}
 
       {!desktop && (
         <Sheet open={!!panel} onOpenChange={(o) => !o && setSel(null)}>
