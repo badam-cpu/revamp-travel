@@ -49,7 +49,7 @@ import { formatSlotTime } from "@shared/sessions";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useRoomAvailability, useRoomTypes } from "@/hooks/useRoomTypes";
-import { bestRoomFor, unitPricing } from "@shared/rooms";
+import { bestRoomFor, bestRoomsFor, splitGroupCharges, unitPricing } from "@shared/rooms";
 
 const ADDONS_PREVIEW = 3; // show this many, then "Show more"
 
@@ -89,6 +89,11 @@ export default function Checkout({ slug }: { slug: string }) {
   const roomAvailability = useRoomAvailability(rooms);
   const bestRoom = room && listing && startDate && endDate && roomAvailability.ready ? bestRoomFor(listing, room, roomAvailability, startDate, endDate, guests) : null;
   const roomPricing = room ? (bestRoom?.unit ? unitPricing(room, bestRoom.unit) : { priceCents: room.priceCents, priceUnit: room.priceUnit, seasonalRates: [] }) : null;
+  // Several rooms of this type (0097): `rooms=2,3` = guests in each room. Each
+  // room is its own booking, priced by the same shared code the server charges with.
+  const roomGuests = (params.get("rooms") ?? "").split(",").map(Number).filter((n) => Number.isInteger(n) && n >= 1);
+  const isGroup = isHotel && !!room && roomGuests.length > 1;
+  const groupPicks = isGroup && listing && startDate && endDate && roomAvailability.ready ? bestRoomsFor(listing, room!, roomAvailability, startDate, endDate, roomGuests) : null;
   // Request-to-book: the host approves before the guest pays (per-listing setting).
   const isRequest = !!sessionId && listing?.bookingMode === "request";
 
@@ -111,7 +116,7 @@ export default function Checkout({ slug }: { slug: string }) {
   const [promoApplying, setPromoApplying] = useState(false);
 
   // --- pricing (mirrors BookingPanel / the server) --------------------------
-  const valid = !!listing && isBookableType(listing.type) && !!startDate && !!endDate && listing.price > 0 && (!isHotel || (!!room && guests <= room.maxGuests && !!bestRoom));
+  const valid = !!listing && isBookableType(listing.type) && !!startDate && !!endDate && listing.price > 0 && (!isHotel || (!!room && (isGroup ? !!groupPicks && roomGuests.every((g) => g <= room.maxGuests) : guests <= room.maxGuests && !!bestRoom)));
   const nights = startDate && endDate ? nightsBetween(startDate, endDate) : 1;
 
   const accommodationCents = listing
@@ -146,12 +151,30 @@ export default function Checkout({ slug }: { slug: string }) {
   const promoCodeDiscountCents = promoInfo ? computePromoCodeDiscount(preTaxBase, promoInfo.discountType, promoInfo.discountValue) : 0;
   const charge = computeBookingCharge(Math.max(0, preTaxBase - promoCodeDiscountCents));
 
+  // What the summary shows — the single booking, or the sum of the rooms.
+  const shown = (() => {
+    if (!groupPicks) return { accommodation: roomCents, saleDiscount: promo.active ? promo.discountCents : 0, cleaning: cleaningCents, promoCode: promoCodeDiscountCents, tax: charge.taxCents, total: charge.totalCents };
+    const bases = groupPicks.map((p) => p.quote.charge.baseCents);
+    const sumBase = bases.reduce((a, b) => a + b, 0);
+    const promoCode = promoInfo ? computePromoCodeDiscount(sumBase, promoInfo.discountType, promoInfo.discountValue) : 0;
+    const charges = splitGroupCharges(bases, promoCode);
+    const sum = (f: (p: NonNullable<typeof groupPicks>[number]) => number) => groupPicks.reduce((a, p) => a + f(p), 0);
+    return {
+      accommodation: sum((p) => p.quote.accommodationCents),
+      saleDiscount: sum((p) => p.quote.discountCents),
+      cleaning: sum((p) => p.quote.cleaningCents),
+      promoCode: sumBase - charges.reduce((a, c) => a + c.baseCents, 0),
+      tax: charges.reduce((a, c) => a + c.taxCents, 0),
+      total: charges.reduce((a, c) => a + c.totalCents, 0),
+    };
+  })();
+
   const addons = isStay
     ? (settings.addons ?? []).filter((a) => a.enabled && a.name && (a.priceCents > 0 || a.onRequest))
     : [];
   const visibleAddons = showAllAddons ? addons : addons.slice(0, ADDONS_PREVIEW);
   const addonsTotalCents = addons.reduce((sum, a) => sum + (addonQty[a.id] ?? 0) * addonUnitCost(a, { nights, guests }), 0);
-  const amountCents = charge.totalCents + addonsTotalCents;
+  const amountCents = shown.total + addonsTotalCents;
 
   // GA funnel: checkout started (once per listing when the selection is valid).
   useEffect(() => {
@@ -175,10 +198,12 @@ export default function Checkout({ slug }: { slug: string }) {
       <div className="min-h-screen bg-paper">
         <SiteHeader />
         <main className="mx-auto max-w-3xl px-4 py-24 text-center">
-          <h1 className="font-display text-3xl font-normal text-basalt">{room && !bestRoom ? "This room just sold out" : "We couldn't set up this checkout"}</h1>
+          <h1 className="font-display text-3xl font-normal text-basalt">{room && !(isGroup ? groupPicks : bestRoom) ? (isGroup ? "Not enough rooms left" : "This room just sold out") : "We couldn't set up this checkout"}</h1>
           <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-basalt/55">
-            {room && !bestRoom
-              ? "No room of this type is free for all of your nights anymore. Head back and pick other dates or another room."
+            {room && !(isGroup ? groupPicks : bestRoom)
+              ? isGroup
+                ? `There aren't ${roomGuests.length} rooms of this type free for all of your nights anymore. Head back and pick fewer rooms or other dates.`
+                : "No room of this type is free for all of your nights anymore. Head back and pick other dates or another room."
               : "The dates or listing look incomplete. Head back and pick your dates again."}
           </p>
           <Link href={listing ? `/listing/${listing.slug}` : "/explore"} className="mt-6 inline-flex items-center gap-2 rounded-none bg-apricot px-5 py-3 text-sm font-semibold text-white hover:bg-apricot/90">
@@ -260,6 +285,7 @@ export default function Checkout({ slug }: { slug: string }) {
         guests,
         ...(sessionId ? { sessionId } : {}),
         ...(room ? { roomTypeId: room.id, expectedTotalCents: amountCents } : {}),
+        ...(isGroup ? { rooms: roomGuests.map((g) => ({ guests: g })) } : {}),
         ...(addonSel.length ? { addons: addonSel } : {}),
         ...(giftBalance != null && giftCode.trim() ? { giftCode: giftCode.trim() } : {}),
         ...(promoInfo && promoCode.trim() ? { promoCode: promoCode.trim() } : {}),
@@ -415,8 +441,8 @@ export default function Checkout({ slug }: { slug: string }) {
                   {promoApplying ? "…" : "Apply"}
                 </Button>
               </div>
-              {promoInfo && promoCodeDiscountCents > 0 && (
-                <p className="mt-2 text-xs font-semibold text-apricot">Applied — {format(promoCodeDiscountCents)} off.</p>
+              {promoInfo && shown.promoCode > 0 && (
+                <p className="mt-2 text-xs font-semibold text-apricot">Applied — {format(shown.promoCode)} off.</p>
               )}
             </section>
           </div>
@@ -435,8 +461,8 @@ export default function Checkout({ slug }: { slug: string }) {
               <div className="mt-4 grid gap-1.5 text-sm">
                 {room && (
                   <div className="flex items-center justify-between gap-4 text-basalt/55">
-                    <span>Room</span>
-                    <span className="truncate text-right font-medium text-basalt">{room.name}</span>
+                    <span>{isGroup ? "Rooms" : "Room"}</span>
+                    <span className="truncate text-right font-medium text-basalt">{isGroup ? `${room.name} × ${roomGuests.length}` : room.name}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between text-basalt/55">
@@ -445,14 +471,18 @@ export default function Checkout({ slug }: { slug: string }) {
                 </div>
                 <div className="flex items-center justify-between text-basalt/55">
                   <span>Guests</span>
-                  <span className="font-medium text-basalt">{guests}</span>
+                  <span className="font-medium text-basalt">{isGroup ? `${guests} (${roomGuests.join(" + ")})` : guests}</span>
                 </div>
               </div>
 
               <div className="mt-4 grid gap-1.5 border-t border-basalt/10 pt-4 text-sm">
                 <div className="flex items-center justify-between text-basalt/55">
-                  <span>{describeBookingBasis(listing!, { startDate, endDate, guests }, format(nights > 0 ? Math.round(roomCents / nights) : Math.round(listing!.price * 100)))}</span>
-                  <span>{format(roomCents)}</span>
+                  <span>
+                    {isGroup
+                      ? `${roomGuests.length} rooms × ${nights} ${nights === 1 ? "night" : "nights"}`
+                      : describeBookingBasis(listing!, { startDate, endDate, guests }, format(nights > 0 ? Math.round(roomCents / nights) : Math.round(listing!.price * 100)))}
+                  </span>
+                  <span>{format(shown.accommodation)}</span>
                 </div>
                 {extraGuestCents > 0 && (
                   <div className="flex items-center justify-between text-basalt/55">
@@ -460,27 +490,27 @@ export default function Checkout({ slug }: { slug: string }) {
                     <span>{format(extraGuestCents)}</span>
                   </div>
                 )}
-                {promo.active && (
+                {shown.saleDiscount > 0 && (
                   <div className="flex items-center justify-between font-semibold text-apricot">
                     <span>Discount{listing!.discountType === "percent" ? ` (${listing!.discountValue}% off)` : " (sale)"}</span>
-                    <span>−{format(promo.discountCents)}</span>
+                    <span>−{format(shown.saleDiscount)}</span>
                   </div>
                 )}
-                {promoCodeDiscountCents > 0 && (
+                {shown.promoCode > 0 && (
                   <div className="flex items-center justify-between font-semibold text-apricot">
                     <span>Promo code{promoInfo?.discountType === "percent" ? ` (${promoInfo.discountValue}% off)` : ""}</span>
-                    <span>−{format(promoCodeDiscountCents)}</span>
+                    <span>−{format(shown.promoCode)}</span>
                   </div>
                 )}
-                {cleaningCents > 0 && (
+                {shown.cleaning > 0 && (
                   <div className="flex items-center justify-between text-basalt/55">
-                    <span>{listing ? listingFeeLabel(listing, guests) : "Cleaning fee"}</span>
-                    <span>{format(cleaningCents)}</span>
+                    <span>{listing ? listingFeeLabel(listing, guests) : "Cleaning fee"}{isGroup ? ` × ${roomGuests.length}` : ""}</span>
+                    <span>{format(shown.cleaning)}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between text-basalt/55">
                   <span>Tax ({TAX_PERCENT}%)</span>
-                  <span>{format(charge.taxCents)}</span>
+                  <span>{format(shown.tax)}</span>
                 </div>
                 {addonsTotalCents > 0 && (
                   <div className="flex items-center justify-between text-basalt/55">

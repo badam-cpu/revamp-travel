@@ -174,3 +174,75 @@ export function typeCapacity(type: Pick<RoomType, "quantity" | "units">): number
   const active = type.units.filter((u) => u.active).length;
   return active || type.quantity;
 }
+
+// ── Several rooms of one type in one checkout ────────────────────────────────
+
+/** Most rooms of one type a guest can book in a single checkout. */
+export const MAX_ROOMS_PER_BOOKING = 6;
+
+/**
+ * Pick one free room per entry of `guestsPerRoom` — the cheapest distinct rooms
+ * of the type free for every night (the same rule as a single booking, applied
+ * again for each extra room). Null when there aren't enough free rooms.
+ */
+export function cheapestAvailableUnits(
+  listing: QuoteListing,
+  type: Pick<RoomType, "priceCents" | "units">,
+  bookedByUnit: Map<string, Range[]>,
+  startDate: string,
+  endDate: string,
+  guestsPerRoom: number[],
+): { unit: RoomUnit; quote: RoomQuote; guests: number }[] | null {
+  const picked: { unit: RoomUnit; quote: RoomQuote; guests: number }[] = [];
+  let remaining = [...type.units];
+  for (const guests of guestsPerRoom) {
+    const best = cheapestAvailableUnit(listing, { priceCents: type.priceCents, units: remaining }, bookedByUnit, startDate, endDate, guests);
+    if (!best) return null;
+    picked.push({ ...best, guests });
+    remaining = remaining.filter((u) => u.id !== best.unit.id);
+  }
+  return picked;
+}
+
+/** How many rooms of the type are free for every night (for "Only 2 left"). */
+export function freeUnitCount(type: Pick<RoomType, "units">, bookedByUnit: Map<string, Range[]>, startDate: string, endDate: string): number {
+  return type.units.filter((u) => unitFree(u, bookedByUnit.get(u.id) ?? [], startDate, endDate)).length;
+}
+
+/**
+ * Split one promo-code discount across several rooms in proportion to each
+ * room's pre-tax base (remainder on the first room), then charge each room on
+ * its own (base + tax). The client preview and the server charge both use this,
+ * so the total a guest sees is exactly what each room booking stores.
+ */
+export function splitGroupCharges(bases: number[], promoDiscountCents = 0): BookingCharge[] {
+  const sum = bases.reduce((a, b) => a + b, 0);
+  const promo = Math.max(0, Math.min(Math.round(promoDiscountCents), sum));
+  const alloc = bases.map((b) => (sum > 0 ? Math.floor((promo * b) / sum) : 0));
+  if (alloc.length) alloc[0] += promo - alloc.reduce((a, b) => a + b, 0);
+  return bases.map((b, i) => computeBookingCharge(Math.max(0, b - alloc[i])));
+}
+
+/**
+ * Several rooms of this type for these dates — `bestRoomFor` for a group: the
+ * cheapest distinct free rooms (or, for a type with no individual rooms yet, its
+ * count), each priced for its own guests. Null when there aren't enough rooms.
+ */
+export function bestRoomsFor(
+  listing: QuoteListing,
+  type: RoomType,
+  avail: RoomAvailability,
+  startDate: string,
+  endDate: string,
+  guestsPerRoom: number[],
+): { unit: RoomUnit | null; quote: RoomQuote; guests: number }[] | null {
+  if (type.units.length) return cheapestAvailableUnits(listing, type, avail.byUnit, startDate, endDate, guestsPerRoom);
+  if (maxNightlyOccupancy(avail.byType.get(type.id) ?? [], startDate, endDate) + guestsPerRoom.length > type.quantity) return null;
+  return guestsPerRoom.map((g) => ({ unit: null, guests: g, quote: quoteRoom(listing, type, startDate, endDate, g) }));
+}
+
+/** How many rooms of this type a guest could take for these dates. */
+export function roomsFreeFor(type: RoomType, avail: RoomAvailability, startDate: string, endDate: string): number {
+  if (type.units.length) return freeUnitCount(type, avail.byUnit, startDate, endDate);
+  return Math.max(0, type.quantity - maxNightlyOccupancy(avail.byType.get(type.id) ?? [], startDate, endDate));
+}

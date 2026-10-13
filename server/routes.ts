@@ -23,6 +23,7 @@ import { translateTexts } from "./translate.js";
 import { pricelabsListings, syncOperatorPrices } from "./pricelabs.js";
 import { supabaseAdmin, adminConfigured } from "./supabaseAdmin.js";
 import { roomExportRanges, syncRoomCalendar, type RoomSyncResult } from "./roomCalendars.js";
+import { startRoomGroupCheckout } from "./roomGroupCheckout.js";
 import { moveBlockedReason, moveBookingToRoom, roomMoveOptions, roomOptionForNewBooking, unavailableMessage, type MoveBooking, type RoomMoveOption } from "./roomMoves.js";
 import { paylinkConfigured, registerPayment, checkPayment } from "./paylink.js";
 import { resolvePaymentAccount, clientForOwner, accountOwnerPatch, getPaymentAccountStatus, connectPaymentAccount, disconnectPaymentAccount, setPaymentAccountPaused } from "./paymentAccounts.js";
@@ -112,6 +113,9 @@ const startCheckoutSchema = z.object({
   // total the guest was shown (the server won't charge more than that).
   roomTypeId: z.string().uuid().optional(),
   expectedTotalCents: z.number().int().nonnegative().optional(),
+  // Several rooms of that type in one checkout (0097): guests per room. Two or
+  // more → server/roomGroupCheckout.ts; omitted or one → the single-room path.
+  rooms: z.array(z.object({ guests: z.number().int().min(1).max(50) })).min(1).max(6).optional(),
   // Guest checkout: a signed-out traveler books anonymously and gives contact
   // details here (optional — signed-in travelers omit them).
   guestName: z.string().trim().max(120).optional(),
@@ -1386,6 +1390,29 @@ export function registerApiRoutes(app: Express) {
         .eq("id", parsed.data.roomTypeId)
         .maybeSingle();
       if (!rt || rt.listing_id !== listingId) return res.status(404).json({ error: "That room wasn't found." });
+      if (parsed.data.rooms && parsed.data.rooms.length > 1) {
+        const r = await startRoomGroupCheckout({
+          admin: roomAdmin,
+          supa,
+          userId,
+          site: (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, ""),
+          currency: process.env.PAYLINK_CURRENCY || DEFAULT_CURRENCY,
+          listing,
+          roomType: rt,
+          startDate,
+          endDate,
+          roomsGuests: parsed.data.rooms.map((x) => x.guests),
+          guestName,
+          guestEmail,
+          guestPhone,
+          messagingConsent,
+          addons,
+          giftCode: parsed.data.giftCode,
+          promo: promoResolved,
+          expectedTotalCents: parsed.data.expectedTotalCents,
+        });
+        return res.status(r.status).json(r.body);
+      }
       if (guests > rt.max_guests) return res.status(400).json({ error: `This room fits up to ${rt.max_guests} ${rt.max_guests === 1 ? "guest" : "guests"}.` });
       room = rt;
 

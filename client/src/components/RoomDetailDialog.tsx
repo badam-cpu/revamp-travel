@@ -8,7 +8,7 @@
  */
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { CalendarX2, ClipboardList, Users } from "lucide-react";
+import { BedDouble, CalendarX2, ClipboardList, Minus, Plus, Users } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import type { LiveListing } from "@/contexts/ListingsContext";
@@ -16,7 +16,7 @@ import type { RoomType } from "@shared/listings";
 import { describeCancellationPolicy, nightsBetween } from "@shared/bookings";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { imgAttrs } from "@/lib/responsiveImg";
-import { bestRoomFor, typeFromCents, typeUnavailableNights, type RoomAvailability } from "@shared/rooms";
+import { MAX_ROOMS_PER_BOOKING, bestRoomFor, bestRoomsFor, roomsFreeFor, typeCapacity, typeFromCents, typeUnavailableNights, type RoomAvailability } from "@shared/rooms";
 import { trackEvent } from "@/lib/analytics";
 import { roomPhotos, roomSummary } from "@/components/RoomTypeCard";
 import { fmtShort, GuestStepper, StayDatesPicker, type HotelStay } from "@/components/HotelBooking";
@@ -41,10 +41,13 @@ export function RoomDetailDialog({
   const [, navigate] = useLocation();
   const [lead, setLead] = useState(0);
   const [datesOpen, setDatesOpen] = useState(false);
+  // Several rooms of this type (0097): guests in each extra room (room 1 uses stay.guests).
+  const [extraRooms, setExtraRooms] = useState<number[]>([]);
   const roomId = room?.id;
   useEffect(() => {
     setLead(0);
     setDatesOpen(false);
+    setExtraRooms([]);
   }, [roomId]);
 
   if (!room) return <Dialog open={false} />;
@@ -54,17 +57,38 @@ export function RoomDetailDialog({
   const grid = photos.length ? Array.from({ length: Math.min(4, photos.length) }, (_, i) => photos[(lead + i) % photos.length]) : [];
 
   const hasDates = !!(stay.start && stay.end);
-  // The room the guest gets (cheapest free one for every night) and its price.
-  const best = hasDates ? bestRoomFor(listing, room, availability, stay.start!, stay.end!, stay.guests) : null;
-  const available = !hasDates || !!best;
-  const tooSmall = stay.guests > room.maxGuests;
-  const quote = best?.quote ?? null;
+  const roomGuests = [stay.guests, ...extraRooms];
+  const roomCount = roomGuests.length;
+  // How many rooms the guest may pick: what's free for these dates (else the type's size), capped.
+  const freeRooms = hasDates ? roomsFreeFor(room, availability, stay.start!, stay.end!) : typeCapacity(room);
+  const maxRooms = Math.max(1, Math.min(MAX_ROOMS_PER_BOOKING, freeRooms));
+  const setRoomCount = (n: number) => {
+    const next = Math.max(1, Math.min(maxRooms, n));
+    setExtraRooms((prev) => (next - 1 > prev.length ? [...prev, ...Array(next - 1 - prev.length).fill(Math.min(2, room.maxGuests))] : prev.slice(0, next - 1)));
+  };
+  // The room(s) the guest gets (cheapest free ones for every night) and the price.
+  const best = hasDates && roomCount === 1 ? bestRoomFor(listing, room, availability, stay.start!, stay.end!, stay.guests) : null;
+  const group = hasDates && roomCount > 1 ? bestRoomsFor(listing, room, availability, stay.start!, stay.end!, roomGuests) : null;
+  const available = !hasDates || (roomCount > 1 ? !!group : !!best);
+  const tooSmall = roomGuests.some((g) => g > room.maxGuests);
+  const quote = roomCount > 1
+    ? group
+      ? {
+          nights: group[0].quote.nights,
+          discountCents: group.reduce((a, p) => a + p.quote.discountCents, 0),
+          totalCents: group.reduce((a, p) => a + p.quote.totalCents, 0),
+          undiscountedTotalCents: group.reduce((a, p) => a + p.quote.undiscountedTotalCents, 0),
+        }
+      : null
+    : best?.quote ?? null;
   const factVal = (label: string) => listing.facts?.find((f) => f.label.toLowerCase() === label)?.value?.trim();
   const minStayRaw = parseInt(factVal("minimum stay") ?? "", 10);
   const minStay = Number.isFinite(minStayRaw) && minStayRaw > 1 ? minStayRaw : 1;
   const belowMin = hasDates && nightsBetween(stay.start!, stay.end!) < minStay;
   const problem = !available
-    ? "No room of this type is free for all of these nights — try other dates or another room."
+    ? roomCount > 1 && freeRooms > 0
+      ? `Only ${freeRooms} room${freeRooms === 1 ? "" : "s"} of this type ${freeRooms === 1 ? "is" : "are"} free for these nights.`
+      : "No room of this type is free for all of these nights — try other dates or another room."
     : tooSmall
       ? `This room fits up to ${room.maxGuests} ${room.maxGuests === 1 ? "guest" : "guests"}.`
       : belowMin
@@ -85,7 +109,8 @@ export function RoomDetailDialog({
     }
     if (problem || !quote) return;
     trackEvent("book_click", { item_id: listing.id, item_name: `${listing.title} · ${room.name}`, item_category: listing.type, value: Math.round(quote.totalCents / 100), currency: "AMD" });
-    const q = new URLSearchParams({ start: stay.start!, end: stay.end!, guests: String(stay.guests), room: room.id });
+    const q = new URLSearchParams({ start: stay.start!, end: stay.end!, guests: String(roomGuests.reduce((a, b) => a + b, 0)), room: room.id });
+    if (roomCount > 1) q.set("rooms", roomGuests.join(","));
     navigate(`/checkout/${listing.slug}?${q.toString()}`);
   };
 
@@ -173,11 +198,34 @@ export function RoomDetailDialog({
 
               <div className="mt-6 border-t border-basalt/10 pt-6">
                 <h3 className="flex items-center gap-2 text-lg font-semibold">
-                  <Users className="h-4 w-4 text-apricot" strokeWidth={1.75} /> Guests
+                  <BedDouble className="h-4 w-4 text-apricot" strokeWidth={1.75} /> Rooms
                 </h3>
                 <div className="mt-3 max-w-xs">
-                  <GuestStepper guests={stay.guests} max={room.maxGuests} onChange={(guests) => onStayChange({ ...stay, guests })} />
+                  <CountStepper value={roomCount} min={1} max={maxRooms} unit={["room", "rooms"]} onChange={setRoomCount} label="rooms" />
+                  {maxRooms > 1 && roomCount === 1 && <p className="mt-1.5 text-xs text-basalt/50">Travelling as a group? Book up to {maxRooms} of these rooms at once.</p>}
                 </div>
+                <h3 className="mt-6 flex items-center gap-2 text-lg font-semibold">
+                  <Users className="h-4 w-4 text-apricot" strokeWidth={1.75} /> Guests{roomCount > 1 ? " per room" : ""}
+                </h3>
+                {roomCount === 1 ? (
+                  <div className="mt-3 max-w-xs">
+                    <GuestStepper guests={stay.guests} max={room.maxGuests} onChange={(guests) => onStayChange({ ...stay, guests })} />
+                  </div>
+                ) : (
+                  <div className="mt-3 grid max-w-sm gap-2">
+                    {roomGuests.map((g, i) => (
+                      <div key={i} className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-3">
+                        <span className="text-sm font-semibold text-basalt/70">Room {i + 1}</span>
+                        <GuestStepper
+                          guests={g}
+                          max={room.maxGuests}
+                          onChange={(n) => (i === 0 ? onStayChange({ ...stay, guests: n }) : setExtraRooms((prev) => prev.map((v, j) => (j === i - 1 ? n : v))))}
+                        />
+                      </div>
+                    ))}
+                    <p className="text-xs text-basalt/50">Up to {room.maxGuests} {room.maxGuests === 1 ? "guest" : "guests"} per room. Each room is its own reservation — you can cancel one and keep the others.</p>
+                  </div>
+                )}
               </div>
 
               <div className="mt-6 border-t border-basalt/10 pt-6">
@@ -223,7 +271,7 @@ export function RoomDetailDialog({
                       <strong className="font-display text-xl font-normal underline-offset-4">{format(quote.totalCents)}</strong>
                       <span className="text-basalt/55">
                         {" "}
-                        for {quote.nights} {quote.nights === 1 ? "night" : "nights"} · {fmtShort(stay.start)} – {fmtShort(stay.end)}
+                        for {roomCount > 1 ? `${roomCount} rooms · ` : ""}{quote.nights} {quote.nights === 1 ? "night" : "nights"} · {fmtShort(stay.start)} – {fmtShort(stay.end)}
                       </span>
                       <span className="block text-[11px] text-basalt/45">Includes tax{displayCurrency === "USD" ? " · charged in AMD" : ""}</span>
                     </>
@@ -239,7 +287,7 @@ export function RoomDetailDialog({
                   disabled={hasDates && !!problem}
                   className="h-12 shrink-0 rounded-none bg-apricot px-8 text-base text-white hover:bg-apricot/90"
                 >
-                  {hasDates ? "Reserve" : "Add dates"}
+                  {hasDates ? (roomCount > 1 ? `Reserve ${roomCount} rooms` : "Reserve") : "Add dates"}
                 </Button>
               </div>
             </div>
@@ -247,5 +295,34 @@ export function RoomDetailDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** A − n + stepper for counts other than guests (rooms). */
+function CountStepper({ value, min, max, unit, label, onChange }: { value: number; min: number; max: number; unit: [string, string]; label: string; onChange: (n: number) => void }) {
+  return (
+    <div className="flex items-center justify-between border border-basalt/15 bg-paper px-3 py-2">
+      <button
+        type="button"
+        aria-label={`Fewer ${label}`}
+        disabled={value <= min}
+        onClick={() => onChange(value - 1)}
+        className="grid h-7 w-7 place-items-center border border-basalt/15 text-basalt transition-colors hover:border-apricot hover:text-apricot disabled:opacity-30 disabled:hover:border-basalt/15 disabled:hover:text-basalt"
+      >
+        <Minus className="h-3.5 w-3.5" />
+      </button>
+      <span className="text-sm font-semibold">
+        {value} {value === 1 ? unit[0] : unit[1]}
+      </span>
+      <button
+        type="button"
+        aria-label={`More ${label}`}
+        disabled={value >= max}
+        onClick={() => onChange(value + 1)}
+        className="grid h-7 w-7 place-items-center border border-basalt/15 text-basalt transition-colors hover:border-apricot hover:text-apricot disabled:opacity-30 disabled:hover:border-basalt/15 disabled:hover:text-basalt"
+      >
+        <Plus className="h-3.5 w-3.5" />
+      </button>
+    </div>
   );
 }

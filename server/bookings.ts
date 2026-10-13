@@ -132,18 +132,42 @@ async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promi
   // deliberately independent of the payout above.
   await qualifyReferralForOperator(admin, listing.operator_id, row.id);
 
+  // Several rooms booked together (0097): every room gets its own payout above,
+  // but the guest and host get ONE confirmation for the group — whichever room
+  // confirms first claims it (atomic), the others stay quiet.
+  let groupTitle: string | null = null;
+  let groupHostTitle: string | null = null;
+  let groupGuests = row.guests;
+  let groupAmount = row.amount_cents;
+  let groupAddons = row.addons ?? [];
+  const { data: grp } = await admin.from("bookings").select("booking_group_id").eq("id", row.id).maybeSingle();
+  const groupId = (grp as { booking_group_id?: string | null } | null)?.booking_group_id ?? null;
+  if (groupId) {
+    const { data: claimed } = await admin.from("bookings").update({ group_notified_at: new Date().toISOString() }).eq("id", groupId).is("group_notified_at", null).select("id");
+    if (!claimed?.length) return;
+    const { data: members } = await admin.from("bookings").select("id, guests, amount_cents, addons, room_types(name), room_units(name)").eq("booking_group_id", groupId);
+    const ms = (members ?? []) as unknown as { id: string; guests: number; amount_cents: number; addons: BookingRow["addons"]; room_types: { name?: string } | null; room_units: { name?: string } | null }[];
+    groupAddons = ms.find((m) => m.id === groupId)?.addons ?? groupAddons; // add-ons live on the first room
+    const baseTitle = listing.title.replace(roomTypeName ? ` · ${roomTypeName}` : "", "");
+    groupTitle = `${baseTitle} · ${roomTypeName ?? "Room"} × ${ms.length}`;
+    const numbers = ms.map((m) => (m.room_units?.name ? roomUnitLabel(m.room_units.name) : "")).filter(Boolean);
+    groupHostTitle = numbers.length ? `${groupTitle} (${numbers.join(", ")})` : groupTitle;
+    groupGuests = ms.reduce((a, m) => a + (m.guests ?? 0), 0) || row.guests;
+    groupAmount = ms.reduce((a, m) => a + (m.amount_cents ?? 0), 0) || row.amount_cents;
+  }
+
   // Notify both sides (best-effort).
   const info: BookingEmailInfo = {
-    listingTitle: listing.title,
+    listingTitle: groupTitle ?? listing.title,
     startDate: row.start_date,
     endDate: row.end_date,
-    guests: row.guests,
-    amountCents: row.amount_cents,
+    guests: groupGuests,
+    amountCents: groupAmount,
     currency: row.currency,
     city: listing.city,
     region: listing.region,
     slug: listing.slug,
-    addons: row.addons ?? [],
+    addons: groupAddons,
     type: listing.type,
     time: row.starts_at ? formatSlotTime(row.starts_at) : undefined,
     lat: typeof listing.lat === "number" ? listing.lat : undefined,
@@ -166,7 +190,7 @@ async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promi
   const operatorEmail = operator?.user?.email || "";
   const [travelerRes, operatorRes] = await Promise.all([
     travelerEmail ? sendTravelerConfirmation(travelerEmail, info) : Promise.resolve({ sent: false, reason: "no_recipient" as const }),
-    operatorEmail ? sendOperatorNewBooking(operatorEmail, { ...info, listingTitle: hostTitle }, travelerName) : Promise.resolve({ sent: false, reason: "no_recipient" as const }),
+    operatorEmail ? sendOperatorNewBooking(operatorEmail, { ...info, listingTitle: groupHostTitle ?? hostTitle }, travelerName) : Promise.resolve({ sent: false, reason: "no_recipient" as const }),
   ]);
   // Record the activity for the booking's History log (best-effort). Log the
   // TRUE send result so a delivery/config failure is visible here, not masked

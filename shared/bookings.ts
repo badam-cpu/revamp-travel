@@ -141,6 +141,8 @@ export interface StartCheckoutParams {
   roomTypeId?: string;
   /** Hotel rooms: the total the guest was shown; the server refuses rather than charge more. */
   expectedTotalCents?: number;
+  /** Several rooms of that type in one checkout (0097): guests in each room. */
+  rooms?: { guests: number }[];
 }
 
 /**
