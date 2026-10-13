@@ -15,7 +15,7 @@ import type { LiveListing } from "@/contexts/ListingsContext";
 import { computeBookingCharge, nightsBetween, TAX_PERCENT } from "@shared/bookings";
 import { scheduleHasSlots } from "@shared/sessions";
 import { getListingSessions, slotLocalDate, formatSlotTime, type ListingSession } from "@/lib/sessions";
-import { createDirectBooking } from "@/lib/api";
+import { createDirectBooking, userMessage } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -147,7 +147,7 @@ function DirectBookingForm({ listing, startDate, room, onClose, onCreated }: { l
       onCreated();
       onClose();
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't create the booking.");
+      toast(userMessage(e, "Couldn't create the booking."));
     } finally {
       setSaving(false);
     }

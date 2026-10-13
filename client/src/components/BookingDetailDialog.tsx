@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { ArrowRightLeft, Mail, Phone, User, Pencil } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
-import { setBookingPayment, cancelBooking, ensureBookingThread, updateBookingContact, sendBookingPaymentLink, getRoomMoveOptions, moveBookingRoom, type RoomMoveOption } from "@/lib/api";
+import { setBookingPayment, cancelBooking, ensureBookingThread, updateBookingContact, sendBookingPaymentLink, getRoomMoveOptions, moveBookingRoom, type RoomMoveOption, userMessage } from "@/lib/api";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -176,7 +176,7 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
       onChanged?.();
       toast.success(b.guest_email ? `Payment link emailed to ${b.guest_email}.` : "Payment link created.");
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't send the payment link.");
+      toast(userMessage(e, "Couldn't send the payment link."));
     } finally {
       setSendingLink(false);
     }
@@ -191,7 +191,7 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
       onChanged?.();
       toast("Contact details updated.");
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't update the contact details.");
+      toast(userMessage(e, "Couldn't update the contact details."));
     } finally {
       setSavingContact(false);
     }
@@ -210,7 +210,7 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
       setMoveOptions(await getRoomMoveOptions(b.id));
     } catch (e) {
       setMoveOpen(false);
-      toast(e instanceof Error ? e.message : "Couldn't load the rooms right now.");
+      toast(userMessage(e, "Couldn't load the rooms right now."));
     }
   };
   const doMove = async () => {
@@ -223,7 +223,7 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
       onChanged?.();
       toast.success(`Moved to ${room}.`);
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't move the booking.");
+      toast(userMessage(e, "Couldn't move the booking."));
       void openMove(); // refresh which rooms are free
     } finally {
       setMoving(false);
@@ -245,7 +245,7 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
       onClose();
       navigate("/dashboard?section=messages");
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't open the conversation.");
+      toast(userMessage(e, "Couldn't open the conversation."));
     } finally {
       setMessaging(false);
     }
@@ -261,7 +261,7 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
       toast(refundCents > 0 ? `Cancelled — refund ${money(refundCents, b.currency)} to process manually in PayLink.` : "Booking cancelled — the dates are reopened.");
       onChanged?.();
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't cancel that booking.");
+      toast(userMessage(e, "Couldn't cancel that booking."));
     } finally {
       setCancelling(false);
     }
@@ -423,7 +423,7 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
                               setBooking((prev) => (prev ? { ...prev, payment_status: v } : prev));
                               toast(`Marked ${v}.`);
                             } catch (e) {
-                              toast(e instanceof Error ? e.message : "Couldn't update payment.");
+                              toast(userMessage(e, "Couldn't update payment."));
                             } finally {
                               setSavingPay(false);
                             }

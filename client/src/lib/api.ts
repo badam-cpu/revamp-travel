@@ -9,6 +9,14 @@ import { supabase } from "@/lib/supabase";
 
 export class ApiError extends Error {}
 
+/** What a person sees when something fails: our server's own friendly message,
+ *  or the given fallback — never a raw technical error (that goes to the console). */
+export function userMessage(e: unknown, fallback: string): string {
+  if (e instanceof ApiError && e.message) return e.message;
+  console.error(e);
+  return fallback;
+}
+
 /** Friendly fallback message by HTTP status, when the server didn't send its own. */
 function friendlyError(status: number): string {
   if (status === 429) return "You're going a bit fast — give it a few seconds and try again.";

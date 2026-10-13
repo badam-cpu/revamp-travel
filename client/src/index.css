@@ -273,3 +273,11 @@
   border-top: 1px solid rgba(33, 33, 33, 0.12);
   margin: 2em 0;
 }
+
+/* Bookings timeline (OperatorBookingsTimeline.tsx): nights booked on another
+   channel (Airbnb / Booking.com iCal). A quiet charcoal hatch from the palette,
+   so the operator's own Revamp bookings stay the loudest thing on the grid. */
+.tl-synced {
+  background-color: color-mix(in oklch, var(--color-basalt) 4%, transparent);
+  background-image: repeating-linear-gradient(135deg, color-mix(in oklch, var(--color-basalt) 13%, transparent) 0 3px, transparent 3px 7px);
+}

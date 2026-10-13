@@ -11,7 +11,7 @@ import { Check, Clock, Mail, MessageSquare, Send, Smartphone } from "lucide-reac
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { RichText } from "@/components/RichText";
-import { getJourneySchedule, previewJourneyStep, sendJourneyStepNow, type JourneyPreview, type JourneyScheduleItem } from "@/lib/api";
+import { getJourneySchedule, previewJourneyStep, sendJourneyStepNow, type JourneyPreview, type JourneyScheduleItem, userMessage } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const fmt = (iso: string) =>
@@ -46,7 +46,7 @@ export function BookingJourney({ bookingId, status, onSent }: { bookingId: strin
       setPreview(p);
       setChannels({ email: p.channels.email && p.hasEmail, text: p.channels.text && p.hasPhone, inbox: p.channels.inbox });
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't load that message.");
+      toast(userMessage(e, "Couldn't load that message."));
       setStep(null);
     }
   };
@@ -63,7 +63,7 @@ export function BookingJourney({ bookingId, status, onSent }: { bookingId: strin
       load();
       onSent();
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't send the message.");
+      toast(userMessage(e, "Couldn't send the message."));
     } finally {
       setSending(false);
     }
