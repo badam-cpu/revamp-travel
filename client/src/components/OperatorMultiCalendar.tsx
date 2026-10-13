@@ -674,7 +674,7 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
               return (
                 <div key={g.listing.id} className="border-b border-basalt/[0.08]">
                   <div role="row" className="flex bg-chalk/50">
-                    <div role="rowheader" className={cn(nameCell, "flex items-center gap-2 bg-chalk/80 px-3")} style={{ width: nameW }}>
+                    <div role="rowheader" className={cn(nameCell, "flex items-center gap-2 bg-chalk px-3")} style={{ width: nameW }}>
                       <button type="button" onClick={() => toggle(g.listing.id)} aria-expanded={open} aria-label={open ? "Hide room types" : "Show room types"} className="grid h-7 w-7 shrink-0 place-items-center rounded-md hover:bg-basalt/[0.06]">
                         {open ? <ChevronDown className="h-4 w-4 text-basalt/60" /> : <ChevronRight className="h-4 w-4 text-basalt/60" />}
                       </button>

@@ -491,6 +491,7 @@ export function OperatorBookingsTimeline() {
 
   const trackW = DAYS * CELL_W;
   const now = Date.now();
+  // Sticky name cells sit over scrolling day cells: their background (and hover) must be OPAQUE.
   const nameCell = "sticky left-0 z-10 shrink-0 border-r border-basalt/12";
 
   /** One listing's rows: a plain row, or a hotel (summary → room types → rooms). */
@@ -572,7 +573,7 @@ export function OperatorBookingsTimeline() {
                     role="rowheader"
                     onClick={() => toggleKey(typeKey)}
                     aria-expanded={typeOpen}
-                    className={cn(nameCell, "flex items-center gap-2 bg-chalk py-2 pr-3 text-left hover:bg-chalk/70 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-apricot", narrow ? "pl-3" : "pl-6")}
+                    className={cn(nameCell, "flex items-center gap-2 bg-chalk py-2 pr-3 text-left hover:bg-[color-mix(in_oklch,var(--color-basalt)_5%,var(--color-chalk))] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-apricot", narrow ? "pl-3" : "pl-6")}
                     style={{ width: nameW }}
                   >
                     {typeOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-basalt/45" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-basalt/45" />}
