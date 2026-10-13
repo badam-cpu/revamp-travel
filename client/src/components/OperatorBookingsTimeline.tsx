@@ -34,17 +34,16 @@ import type { RoomType, SeasonalRate } from "@shared/listings";
 import { roomUnitLabel, unitBaseCents, unitNightCents, unitPricing } from "@shared/rooms";
 import type { LiveListing } from "@/contexts/ListingsContext";
 import { cn } from "@/lib/utils";
-import { applyGrouping, CalendarToolbar, GROUP_OPTIONS, groupOptionsFor, monthsOf, remember, remembered, ToolbarSelect, useCompactPrice, type GroupBy, type TypeFilter } from "@/components/CalendarToolbar";
+import { applyGrouping, CalendarToolbar, GROUP_OPTIONS, groupOptionsFor, monthsOf, remember, remembered, rollingDays, ToolbarSelect, useColumnWindow, useCompactPrice, type GroupBy, type TypeFilter } from "@/components/CalendarToolbar";
 
 const DAY_MS = 86_400_000;
 const CELL_W = 46; // px per night
 const DAYS_BACK = 0; // the window opens on today (a stay already under way shows from today)
-const DAYS = 180; // rolling window (~6 months)
 const STALE_HOURS = 6; // a connected calendar older than this is flagged
 const COLLAPSE_KEY = "revamp.timelineCollapsed";
-const PAGE_KEY = "revamp.timelinePageSize";
+const PAGE_KEY = "revamp.timelinePage"; // new key: everyone starts at the default of 5
 const GROUP_KEY = "revamp.timelineGroup"; // new key: "Room type" now shows only multi-room properties
-const PAGE_SIZES = [8, 20, 50, 100] as const;
+const PAGE_SIZES = [5, 20, 50, 100] as const; // 5 = the smallest and the default
 type PageSize = (typeof PAGE_SIZES)[number];
 
 type Range = { start: string; end: string };
@@ -116,8 +115,10 @@ export function OperatorBookingsTimeline() {
   const narrow = nameW < 200;
   const today = todayIso();
   const startDate = useMemo(() => addDaysIso(todayIso(), -DAYS_BACK), []);
+  // Rolling two years: through the same month two years ahead.
+  const DAYS = useMemo(() => rollingDays(startDate), [startDate]);
   const windowEnd = addDaysIso(startDate, DAYS);
-  const days = useMemo(() => Array.from({ length: DAYS }, (_, i) => addDaysIso(startDate, i)), [startDate]);
+  const days = useMemo(() => Array.from({ length: DAYS }, (_, i) => addDaysIso(startDate, i)), [startDate, DAYS]);
   const todayCol = dayDiff(startDate, today);
 
   const [rows, setRows] = useState<Row[] | null>(null);
@@ -126,7 +127,7 @@ export function OperatorBookingsTimeline() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [direct, setDirect] = useState<{ listing: LiveListing; date: string; room?: DirectBookingRoom } | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
-  const [pageSize, setPageSize] = useState<PageSize>(() => remembered<PageSize>(PAGE_KEY, PAGE_SIZES, 20));
+  const [pageSize, setPageSize] = useState<PageSize>(() => remembered<PageSize>(PAGE_KEY, PAGE_SIZES, 5));
   const [groupBy, setGroupBy] = useState<GroupBy>(() => remembered<GroupBy>(GROUP_KEY, GROUP_OPTIONS.map((g) => g.value), "none"));
   const [page, setPage] = useState(0);
   const [roomsByHotel, setRoomsByHotel] = useState<Map<string, RoomType[]>>(new Map());
@@ -275,10 +276,17 @@ export function OperatorBookingsTimeline() {
 
   // ── Keyboard grid: roving focus across cells ─────────────────────────────────
   const [active, setActive] = useState<{ r: number; c: number }>({ r: 1, c: todayCol });
-  const focusCell = (r: number, c: number) => {
+  const focusCell = (r: number, c: number, tries = 0): boolean => {
     const root = scrollRef.current;
     const el = root?.querySelector<HTMLElement>(`[data-r="${r}"][data-c="${c}"]`);
-    if (!root || !el) return false;
+    if (!root) return false;
+    if (!el) {
+      // Off-screen days aren't drawn: scroll there, let it render, then focus.
+      setActive({ r, c });
+      root.scrollLeft = Math.max(0, c * CELL_W - (root.clientWidth - nameW) / 2);
+      if (tries < 6) requestAnimationFrame(() => focusCell(r, c, tries + 1));
+      return false;
+    }
     setActive({ r, c });
     el.focus({ preventScroll: true });
     // Keep the cell clear of the pinned name column and header.
@@ -290,6 +298,9 @@ export function OperatorBookingsTimeline() {
     else if (er.bottom > cr.bottom) root.scrollTop += er.bottom - cr.bottom;
     return true;
   };
+  // Only the days near the view are drawn (two years × every row is a lot of cells).
+  const { cols, from: colFrom, to: colTo } = useColumnWindow(scrollRef, CELL_W, nameW, DAYS, rows !== null && !loadError, active.c);
+
   const onGridKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const t = e.target as HTMLElement;
     const r = Number(t.dataset.r);
@@ -347,7 +358,8 @@ export function OperatorBookingsTimeline() {
     const boxes = (list: Range[]) => list.map((x) => spanBox(x.start, x.end)).filter(Boolean) as { left: number; width: number }[];
     return (
       <div role="presentation" className="relative shrink-0" style={{ width: DAYS * CELL_W, height: t.height }}>
-        {days.map((d, i) => {
+        {cols.map((i) => {
+          const d = days[i];
           const bk = bookingOn(d);
           const syncedNight = t.synced.some((x) => covers(x, d));
           const blockedNight = t.manual.some((x) => covers(x, d));
@@ -424,7 +436,8 @@ export function OperatorBookingsTimeline() {
     const r = ++rowIdx;
     return (
       <div role="presentation" className="relative shrink-0" style={{ width: DAYS * CELL_W, height: t.height }}>
-        {days.map((d, i) => {
+        {cols.map((i) => {
+          const d = days[i];
           const c = t.cell(d, i);
           const dt = new Date(d + "T00:00:00Z");
           return (
@@ -684,7 +697,9 @@ export function OperatorBookingsTimeline() {
           {/* Pinned date header */}
           <div role="row" className="sticky top-0 z-20 flex border-b border-basalt/12 bg-chalk">
             <div role="columnheader" aria-label="Listing" className={cn(nameCell, "z-30 bg-chalk")} style={{ width: nameW }} />
-            {days.map((d, i) => {
+            <div aria-hidden className="shrink-0" style={{ width: colFrom * CELL_W }} />
+            {days.slice(colFrom, colTo).map((d, k) => {
+              const i = colFrom + k;
               const dt = new Date(d + "T00:00:00Z");
               const isToday = d === today;
               const monthStart = i === 0 || dt.getUTCDate() === 1;
@@ -708,6 +723,7 @@ export function OperatorBookingsTimeline() {
                 </div>
               );
             })}
+            <div aria-hidden className="shrink-0" style={{ width: (DAYS - colTo) * CELL_W }} />
           </div>
 
           {/* Rows */}

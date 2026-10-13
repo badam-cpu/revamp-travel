@@ -4,6 +4,7 @@
  * (only when the operator has more than one type). Plus the compact per-night
  * price used in both grids (֏45k / $116).
  */
+import { useEffect, useMemo, useState, type RefObject } from "react";
 import { ChevronDown } from "lucide-react";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
@@ -186,4 +187,57 @@ export function applyGrouping<L extends { type: string; multiRoom?: boolean; cit
   if (group === "roomType") return { ordered: listings.filter((l) => l.type === "stay" && l.multiRoom), key };
   if (group === "none") return { ordered: listings, key };
   return { ordered: [...listings].sort((a, b) => key(a).localeCompare(key(b)) || a.title.localeCompare(b.title)), key };
+}
+
+/**
+ * Rolling two-year window: days from `startIso` to the end of the same month two
+ * years ahead (Oct 2026 → through Oct 2028).
+ */
+export function rollingDays(startIso: string): number {
+  const d = new Date(startIso + "T00:00:00Z");
+  const endExclusive = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 25, 1);
+  return Math.round((endExclusive - Date.parse(startIso + "T00:00:00Z")) / 86_400_000);
+}
+
+/**
+ * Which day columns to draw: the ones in view plus a buffer either side
+ * (two years × every row would be tens of thousands of cells). Snapped to
+ * blocks of 14 so scrolling re-renders only every couple of weeks of travel.
+ * `keep` (the keyboard's active column) is always drawn so the grid stays
+ * reachable with Tab.
+ */
+export function useColumnWindow(ref: RefObject<HTMLElement | null>, cellW: number, nameW: number, total: number, ready: boolean, keep: number): { cols: number[]; from: number; to: number } {
+  const BLOCK = 14;
+  const [win, setWin] = useState({ from: 0, to: Math.min(total, BLOCK * 4) });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !ready) return;
+    let raf = 0;
+    const calc = () => {
+      raf = 0;
+      const first = el.scrollLeft / cellW;
+      const last = (el.scrollLeft + Math.max(0, el.clientWidth - nameW)) / cellW;
+      const from = Math.max(0, Math.floor((first - BLOCK) / BLOCK) * BLOCK);
+      const to = Math.min(total, Math.ceil((last + BLOCK) / BLOCK) * BLOCK);
+      setWin((w) => (w.from === from && w.to === to ? w : { from, to }));
+    };
+    const on = () => {
+      if (!raf) raf = requestAnimationFrame(calc);
+    };
+    calc();
+    el.addEventListener("scroll", on, { passive: true });
+    const ro = new ResizeObserver(on);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", on);
+      ro.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [ref, cellW, nameW, total, ready]);
+  return useMemo(() => {
+    const cols: number[] = [];
+    for (let i = win.from; i < win.to; i++) cols.push(i);
+    if (keep >= 0 && keep < total && (keep < win.from || keep >= win.to)) cols.push(keep);
+    return { cols, from: win.from, to: win.to };
+  }, [win, keep, total]);
 }

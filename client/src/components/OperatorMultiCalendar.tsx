@@ -27,7 +27,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useListings, type BlockedRange, type LiveListing } from "@/contexts/ListingsContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import { applyGrouping, CalendarToolbar, GROUP_OPTIONS, groupOptionsFor, monthsOf, remember, remembered, ToolbarSelect, useCompactPrice, type GroupBy, type TypeFilter } from "@/components/CalendarToolbar";
+import { applyGrouping, CalendarToolbar, GROUP_OPTIONS, groupOptionsFor, monthsOf, remember, remembered, rollingDays, ToolbarSelect, useColumnWindow, useCompactPrice, type GroupBy, type TypeFilter } from "@/components/CalendarToolbar";
 import { fetchRoomTypes, updateRoomTypeRates, updateRoomUnitCalendar } from "@/lib/roomTypes";
 import { userMessage } from "@/lib/api";
 import type { RoomType, RoomUnit, SeasonalRate } from "@shared/listings";
@@ -37,11 +37,10 @@ const DAY_MS = 86_400_000;
 const CELL_W = 72; // px per day
 const ROW_H = 64;
 const DAYS_BACK = 1; // yesterday, faded — like Airbnb
-const DAYS = 366;
 const COLLAPSE_KEY = "revamp.calendarCollapsed";
-const PAGE_KEY = "revamp.calendarPageSize";
+const PAGE_KEY = "revamp.calendarPage"; // new key: everyone starts at the default of 5
 const GROUP_KEY = "revamp.calendarGroup"; // new key: "Room type" now shows only multi-room properties
-const PAGE_SIZES = [8, 20, 50, 100] as const;
+const PAGE_SIZES = [5, 20, 50, 100] as const; // 5 = the smallest and the default
 type PageSize = (typeof PAGE_SIZES)[number];
 
 const addDaysIso = (iso: string, n: number) => new Date(Date.parse(iso + "T00:00:00Z") + n * DAY_MS).toISOString().slice(0, 10);
@@ -141,11 +140,13 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
   const narrow = nameW < 200;
   const today = todayIso();
   const startDate = useMemo(() => addDaysIso(todayIso(), -DAYS_BACK), []);
+  // Rolling two years: through the same month two years ahead.
+  const DAYS = useMemo(() => rollingDays(startDate), [startDate]);
   const windowEnd = addDaysIso(startDate, DAYS);
-  const days = useMemo(() => Array.from({ length: DAYS }, (_, i) => addDaysIso(startDate, i)), [startDate]);
+  const days = useMemo(() => Array.from({ length: DAYS }, (_, i) => addDaysIso(startDate, i)), [startDate, DAYS]);
 
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
-  const [pageSize, setPageSize] = useState<PageSize>(() => remembered<PageSize>(PAGE_KEY, PAGE_SIZES, 20));
+  const [pageSize, setPageSize] = useState<PageSize>(() => remembered<PageSize>(PAGE_KEY, PAGE_SIZES, 5));
   const [groupBy, setGroupBy] = useState<GroupBy>(() => remembered<GroupBy>(GROUP_KEY, GROUP_OPTIONS.map((g) => g.value), "none"));
   const [page, setPage] = useState(0);
   const [bookings, setBookings] = useState<Bk[] | null>(null);
@@ -358,10 +359,17 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
   const jumpTo = (col: number) => scrollRef.current?.scrollTo({ left: Math.max(0, col * CELL_W), behavior: "smooth" });
 
   const [active, setActive] = useState<{ r: number; c: number }>({ r: 0, c: DAYS_BACK });
-  const focusCell = (r: number, c: number) => {
+  const focusCell = (r: number, c: number, tries = 0): void => {
     const root = scrollRef.current;
     const el = root?.querySelector<HTMLElement>(`[data-r="${r}"][data-c="${c}"]`);
-    if (!root || !el) return;
+    if (!root) return;
+    if (!el) {
+      // Off-screen days aren't drawn: scroll there, let it render, then focus.
+      setActive({ r, c });
+      root.scrollLeft = Math.max(0, c * CELL_W - (root.clientWidth - nameW) / 2);
+      if (tries < 6) requestAnimationFrame(() => focusCell(r, c, tries + 1));
+      return;
+    }
     setActive({ r, c });
     el.focus({ preventScroll: true });
     const cr = root.getBoundingClientRect();
@@ -371,6 +379,9 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
     if (er.top < cr.top + 64) root.scrollTop -= cr.top + 64 - er.top;
     else if (er.bottom > cr.bottom) root.scrollTop += er.bottom - cr.bottom;
   };
+  // Only the days near the view are drawn (two years × every row is a lot of cells).
+  const { cols, from: colFrom, to: colTo } = useColumnWindow(scrollRef, CELL_W, nameW, DAYS, bookings !== null && !loadError, active.c);
+
   const onGridKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const t = e.target as HTMLElement;
     const r = Number(t.dataset.r);
@@ -476,7 +487,10 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
 
   const dayCells = (row: CalRow) => {
     const r = ++rowIdx;
-    return days.map((d, i) => {
+    return (
+      <div role="presentation" className="relative shrink-0" style={{ width: DAYS * CELL_W, height: ROW_H }}>
+        {cols.map((i) => {
+      const d = days[i];
       const s = row.day(d);
       const past = d < today;
       const selected = inSel(row.key, d);
@@ -500,13 +514,13 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
           }}
           onPointerEnter={() => dragging.current && !past && sel?.key === row.key && setSel((x) => (x ? { ...x, b: d } : x))}
           className={cn(
-            "relative shrink-0 select-none border-r border-basalt/[0.08] outline-none focus-visible:z-[5] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-apricot",
+            "absolute top-0 select-none border-r border-basalt/[0.08] outline-none focus-visible:z-[5] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-apricot",
             i !== 0 && dt.getUTCDate() === 1 && "border-l border-l-basalt/25",
             !s.sellable && "cal-unavail",
             past ? "bg-basalt/[0.02]" : "cursor-pointer hover:bg-basalt/[0.03]",
             selected && "z-[3] bg-paper ring-2 ring-inset ring-basalt",
           )}
-          style={{ width: CELL_W, height: ROW_H }}
+          style={{ left: i * CELL_W, width: CELL_W, height: ROW_H }}
         >
           {priced && (s.sellable || selected) && (
             <span className={cn("absolute right-2 top-2 text-[13px] tabular-nums leading-none", past ? "text-basalt/35" : s.custom ? "font-semibold text-apricot" : "text-basalt")}>{compact(s.cents)}</span>
@@ -516,7 +530,9 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
           )}
         </div>
       );
-    });
+        })}
+      </div>
+    );
   };
 
   const panel = selRow && selStart && selEnd && (
@@ -599,7 +615,9 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
               <div role="columnheader" className={cn(nameCell, "z-30 flex items-end px-3 pb-2 text-[11px] font-semibold text-basalt/60")} style={{ width: nameW }}>
                 {allMine.length} listing{allMine.length === 1 ? "" : "s"}
               </div>
-              {days.map((d, i) => {
+              <div aria-hidden className="shrink-0" style={{ width: colFrom * CELL_W }} />
+              {days.slice(colFrom, colTo).map((d, k) => {
+                const i = colFrom + k;
                 const dt = new Date(d + "T00:00:00Z");
                 const isToday = d === today;
                 const monthStart = i === 0 || dt.getUTCDate() === 1;
@@ -615,6 +633,7 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
                   </div>
                 );
               })}
+              <div aria-hidden className="shrink-0" style={{ width: (DAYS - colTo) * CELL_W }} />
             </div>
 
             {groups.map((g, gi) => [
@@ -663,7 +682,8 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
                         <span className="block truncate text-[11px] text-basalt/60">Hotel · {hotel.rooms} rooms</span>
                       </span>
                     </div>
-                    {days.map((d) => {
+                    <div aria-hidden className="shrink-0" style={{ width: colFrom * CELL_W }} />
+                    {days.slice(colFrom, colTo).map((d) => {
                       const n = hotel.free(d);
                       return (
                         <div key={d} role="gridcell" aria-label={`${g.listing.title}, ${fmtDay(d)}, ${n} of ${hotel.rooms} rooms free`} className={cn("flex shrink-0 items-center justify-center border-r border-basalt/[0.08] text-[11px] tabular-nums", n === 0 ? "cal-unavail font-medium text-basalt/70" : "text-basalt/60", d < today && "opacity-50")} style={{ width: CELL_W, height: 44 }}>
@@ -671,6 +691,7 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
                         </div>
                       );
                     })}
+                    <div aria-hidden className="shrink-0" style={{ width: (DAYS - colTo) * CELL_W }} />
                   </div>
                   {open &&
                     g.rows.map((row) => (
