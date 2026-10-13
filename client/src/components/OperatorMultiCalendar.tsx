@@ -545,7 +545,7 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
           role="grid"
           aria-label="Prices and availability"
           aria-multiselectable
-          className="max-h-[min(78vh,calc(100dvh-210px))] min-w-0 flex-1 overflow-auto overscroll-contain border border-basalt/12 bg-paper"
+          className="grid-scroll max-h-[min(78vh,calc(100dvh-210px))] min-w-0 flex-1 overflow-auto overscroll-contain border border-basalt/12 bg-paper"
         >
           <div style={{ width: nameW + DAYS * CELL_W }}>
             {/* Pinned date header */}

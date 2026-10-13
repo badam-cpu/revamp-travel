@@ -489,7 +489,7 @@ export function OperatorBookingsTimeline() {
         role="grid"
         aria-label={`Bookings, ${fmtDay(startDate)} to ${fmtDay(addDaysIso(windowEnd, -1))}`}
         aria-rowcount={-1}
-        className="max-h-[min(78vh,calc(100dvh-210px))] overflow-auto overscroll-contain border border-basalt/12 bg-paper"
+        className="grid-scroll max-h-[min(78vh,calc(100dvh-210px))] overflow-auto overscroll-contain border border-basalt/12 bg-paper"
       >
         <div style={{ width: nameW + trackW }}>
           {/* Pinned date header */}
