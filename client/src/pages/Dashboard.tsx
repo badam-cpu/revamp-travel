@@ -23,7 +23,7 @@
  */
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, Check, ChevronDown, ChevronLeft, ExternalLink, MoreHorizontal, Copy, CreditCard, FileText, Gift, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, PanelLeftClose, PanelLeftOpen, Pencil, Plug, Plus, QrCode, RefreshCw, Route, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, CalendarDays, Check, ChevronDown, ChevronLeft, ExternalLink, MoreHorizontal, Copy, CreditCard, FileText, Gift, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, PanelLeftClose, PanelLeftOpen, Pencil, Plug, Plus, QrCode, RefreshCw, Route, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
 import { Inbox } from "@/components/Inbox";
 import { PartnerHub } from "@/components/PartnerHub";
 import { OperatorIntegrations } from "@/components/OperatorIntegrations";
@@ -1741,12 +1741,13 @@ function OperatorListingRow({ listing, deleting, onEdit, onDelete }: { listing: 
   );
 }
 
-type OperatorSection = "overview" | "listings" | "analytics" | "bookings" | "promos" | "messages" | "journey" | "documents" | "qr" | "hub" | "integrations" | "payouts" | "billing" | "referrals" | "settings";
+type OperatorSection = "overview" | "listings" | "analytics" | "bookings" | "calendar" | "promos" | "messages" | "journey" | "documents" | "qr" | "hub" | "integrations" | "payouts" | "billing" | "referrals" | "settings";
 const OPERATOR_SECTIONS: { key: OperatorSection; label: string; icon: typeof Home }[] = [
   { key: "overview", label: "Dashboard", icon: LayoutDashboard },
   { key: "listings", label: "Listings", icon: List },
   { key: "analytics", label: "Analytics", icon: BarChart3 },
   { key: "bookings", label: "Bookings", icon: CalendarCheck },
+  { key: "calendar", label: "Calendar", icon: CalendarDays },
   { key: "journey", label: "Customer journey", icon: Route },
   { key: "promos", label: "Promo codes", icon: Ticket },
   { key: "messages", label: "Messages", icon: MessageSquare },
@@ -1760,25 +1761,35 @@ const OPERATOR_SECTIONS: { key: OperatorSection; label: string; icon: typeof Hom
   { key: "settings", label: "Settings", icon: Settings },
 ];
 
-const BOOKINGS_VIEWS = [
+/** Bookings: the reservations list with its filters (OperatorBookings). */
+function BookingsSection() {
+  return (
+    <div>
+      <SectionHead title="Bookings" sub="Every reservation on your listings — search, filter by date, and open one to manage it." />
+      <OperatorBookings />
+    </div>
+  );
+}
+
+const CALENDAR_VIEWS = [
   { key: "timeline", label: "Timeline", blurb: "Your listings across the calendar — bookings and synced-blocked dates at a glance." },
   { key: "calendar", label: "Calendar", blurb: "Prices and availability for all your listings. Select a day, or drag across several, to change the price or block dates." },
-  { key: "list", label: "List", blurb: "Reservations on your listings, grouped by type." },
 ] as const;
-type BookingsView = (typeof BOOKINGS_VIEWS)[number]["key"];
+type CalendarView = (typeof CALENDAR_VIEWS)[number]["key"];
 
-function BookingsSection() {
-  const [view, setView] = useState<BookingsView>("timeline");
-  const blurb = BOOKINGS_VIEWS.find((v) => v.key === view)?.blurb ?? "";
+/** Calendar: the bookings timeline and the multi-listing price/availability calendar. */
+function CalendarViewsSection() {
+  const [view, setView] = useState<CalendarView>("timeline");
+  const blurb = CALENDAR_VIEWS.find((v) => v.key === view)?.blurb ?? "";
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-4xl leading-[0.95] tracking-[-0.03em] sm:text-5xl">Bookings</h1>
+          <h1 className="font-display text-4xl leading-[0.95] tracking-[-0.03em] sm:text-5xl">Calendar</h1>
           <p className="mt-3 max-w-xl text-base leading-7 text-basalt/60">{blurb}</p>
         </div>
         <div className="flex shrink-0 border border-basalt/15">
-          {BOOKINGS_VIEWS.map((v) => (
+          {CALENDAR_VIEWS.map((v) => (
             <button
               key={v.key}
               type="button"
@@ -1792,7 +1803,6 @@ function BookingsSection() {
       </div>
       {view === "timeline" && <OperatorBookingsTimeline />}
       {view === "calendar" && <CalendarSection />}
-      {view === "list" && <OperatorBookings />}
     </div>
   );
 }
@@ -1999,6 +2009,7 @@ function DashboardContent() {
               </div>
             )}
             {section === "bookings" && <BookingsSection />}
+            {section === "calendar" && <CalendarViewsSection />}
             {section === "promos" && <PromoCodes />}
 
             {section === "messages" && (
