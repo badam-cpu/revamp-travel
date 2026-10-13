@@ -346,7 +346,7 @@ export function sendJourneyEmail(
   const html = shell(
     m.subject,
     `${paragraphs}
-     ${m.tripLink ? `<p style="margin:6px 0 8px;"><a href="${esc(m.tripLink)}" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">${esc(m.ctaLabel)}</a></p>` : ""}
+     ${m.tripLink ? `<p style="margin:6px 0 8px;"><a href="${esc(m.tripLink)}" style="display:inline-block;background:#F15822;color:#fff;padding:12px 20px;border-radius:6px;text-decoration:none;font-weight:600;line-height:1.35;max-width:100%;box-sizing:border-box;">${esc(m.ctaLabel)}</a></p>` : ""}
      ${m.hostName ? `<p style="font-size:13px;line-height:1.6;margin:12px 0 0;color:#6B6357;">— ${esc(m.hostName)}, via Revamp</p>` : ""}`,
     site,
   );
