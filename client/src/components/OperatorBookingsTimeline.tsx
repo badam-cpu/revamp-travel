@@ -765,7 +765,7 @@ export function OperatorBookingsTimeline() {
           </button>
         </nav>
       )}
-            <p className="mt-3 text-xs text-basalt/45">Bars are your bookings; hatched blocks are nights booked on another channel (synced from a connected calendar). Click a free night to record a direct booking, or a bar for its details. Hotels and guesthouses open into one row per room.</p>
+            <p className="mt-3 text-xs text-basalt/60">Click a free night to record a direct booking, or a booking bar to open it.</p>
       <BookingDetailDialog bookingId={openId} onClose={() => setOpenId(null)} onChanged={() => setReload((k) => k + 1)} />
       <DirectBookingDialog listing={direct?.listing ?? null} startDate={direct?.date ?? null} room={direct?.room ?? null} onClose={() => setDirect(null)} onCreated={() => setReload((k) => k + 1)} />
     </div>

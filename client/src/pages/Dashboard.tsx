@@ -1786,7 +1786,7 @@ function BookingsSection() {
 
 const CALENDAR_VIEWS = [
   { key: "timeline", label: "Timeline", blurb: "Your listings across the calendar — bookings and synced-blocked dates at a glance." },
-  { key: "calendar", label: "Calendar", blurb: "Prices and availability for all your listings. Select a day, or drag across several, to change the price or block dates." },
+  { key: "calendar", label: "Prices & availability", blurb: "Prices and availability for all your listings. Select a day, or drag across several, to change the price or block dates." },
 ] as const;
 type CalendarView = (typeof CALENDAR_VIEWS)[number]["key"];
 
@@ -1801,13 +1801,18 @@ function CalendarViewsSection() {
           <h1 className="font-display text-4xl leading-[0.95] tracking-[-0.03em] sm:text-5xl">Calendar</h1>
           <p className="mt-3 max-w-xl text-base leading-7 text-basalt/60">{blurb}</p>
         </div>
-        <div className="flex shrink-0 border border-basalt/15">
+        {/* View switch — pills, same family as the toolbar below. */}
+        <div role="group" aria-label="View" className="inline-flex shrink-0 rounded-full border border-basalt/15 bg-paper p-1">
           {CALENDAR_VIEWS.map((v) => (
             <button
               key={v.key}
               type="button"
+              aria-pressed={view === v.key}
               onClick={() => setView(v.key)}
-              className={cn("px-4 py-2 text-xs font-bold uppercase tracking-[0.1em] transition-colors", view === v.key ? "bg-basalt text-paper" : "text-basalt/55 hover:text-basalt")}
+              className={cn(
+                "h-9 whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-apricot",
+                view === v.key ? "bg-basalt text-paper" : "text-basalt/70 hover:text-basalt",
+              )}
             >
               {v.label}
             </button>

@@ -598,7 +598,6 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
         <li className="inline-flex items-center gap-1.5"><span className="text-[13px] tabular-nums text-basalt">֏30k</span> Your price</li>
         <li className="inline-flex items-center gap-1.5"><span className="text-[13px] font-semibold tabular-nums text-apricot">֏35k</span> Custom price for that date</li>
         <li className="inline-flex items-center gap-1.5"><span className="cal-unavail h-4 w-6 border border-basalt/10" /> Not available — booked, synced from another site, or blocked</li>
-        <li className="hidden lg:list-item lg:list-none">Click a day or drag across several to change the price or availability</li>
       </ul>
 
       <div className="flex items-start gap-4">
