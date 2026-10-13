@@ -107,11 +107,11 @@ export function OperatorPayouts() {
 
   return (
     <section className="mb-12">
+      {/* The page header (Dashboard → Payouts) carries the title; this row is the explanation + statement. */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Wallet className="h-5 w-5 text-apricot" />
-          <h2 className="font-display text-2xl tracking-[-0.02em]">Payouts</h2>
-        </div>
+        <p className="max-w-2xl text-sm text-basalt/60">
+          Revamp collects payment and pays you separately — stays the day after check-in, tours &amp; experiences monthly.
+        </p>
         <button
           type="button"
           onClick={() => openPayoutStatement({ operatorName, payouts: visible.length ? visible : payouts, currency })}
@@ -120,10 +120,6 @@ export function OperatorPayouts() {
           <Download className="h-4 w-4" /> Download statement (PDF)
         </button>
       </div>
-
-      <p className="mb-4 max-w-2xl text-sm text-basalt/55">
-        Revamp collects payment and pays you separately — stays the day after check-in, tours &amp; experiences monthly.
-      </p>
 
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
         {([

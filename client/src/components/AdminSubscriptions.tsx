@@ -5,6 +5,7 @@
  * (service role, admin-gated); reads are admin-scoped Supabase selects.
  */
 import { useCallback, useEffect, useState } from "react";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -143,17 +144,17 @@ export function AdminSubscriptions() {
 
   return (
     <div>
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-display text-4xl leading-[0.95] tracking-[-0.03em] sm:text-5xl">Subscriptions</h1>
-          <p className="mt-3 max-w-xl text-base leading-7 text-basalt/60">Recurring plans operators pay for, billed monthly through PayLink.</p>
-        </div>
-        {!draft && (
-          <Button onClick={() => setDraft({ ...BLANK })}>
-            <Plus className="mr-1.5 h-4 w-4" /> New plan
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title="Subscriptions"
+        sub="Recurring plans operators pay for, billed monthly through PayLink."
+        actions={
+          !draft && (
+            <Button onClick={() => setDraft({ ...BLANK })}>
+              <Plus className="mr-1.5 h-4 w-4" /> New plan
+            </Button>
+          )
+        }
+      />
 
       {/* Default (non-subscriber) commission */}
       <div className="mb-8 flex flex-wrap items-end gap-3 border border-basalt/12 bg-chalk/60 px-5 py-4">
@@ -174,7 +175,7 @@ export function AdminSubscriptions() {
       {draft && (
         <div className="mb-10 border border-basalt/15 bg-paper p-6">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-display text-2xl">{draft.id ? "Edit plan" : "New plan"}</h2>
+            <h2 className="text-lg font-semibold leading-tight tracking-[-0.01em]">{draft.id ? "Edit plan" : "New plan"}</h2>
             <button type="button" onClick={() => setDraft(null)} className="text-basalt/40 hover:text-basalt" aria-label="Close">
               <X className="h-5 w-5" />
             </button>

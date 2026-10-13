@@ -3,6 +3,7 @@
  * listings. Writes straight to Supabase under the operator-manages-own RLS
  * policy (migration 0070). Codes are validated + applied server-side at checkout.
  */
+import { PageHeader } from "@/components/PageHeader";
 import { useEffect, useMemo, useState } from "react";
 import { Trash2, Plus, Pencil, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -177,10 +178,7 @@ export function PromoCodes() {
 
   return (
     <div className="grid gap-6">
-      <div>
-        <h2 className="font-display text-3xl font-normal text-basalt">Promo codes</h2>
-        <p className="mt-1 max-w-2xl text-sm text-basalt/55">Create discount codes for your listings. Guests enter them at checkout; the discount is applied to the booking. Optionally show a code as a badge on the listing to advertise the deal.</p>
-      </div>
+      <PageHeader className="mb-0" title="Promo codes" sub="Discount codes guests enter at checkout — optionally shown as a badge on the listing." />
 
       {/* Create / edit form */}
       <div className="grid gap-4 border border-basalt/12 bg-paper p-5">

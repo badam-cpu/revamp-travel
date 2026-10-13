@@ -7,6 +7,7 @@
  * own non-role fields. Admin accounts are not shown/editable here.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { PageHeader } from "@/components/PageHeader";
 import { supabase } from "@/lib/supabase";
 import { adminSetRole } from "@/lib/api";
 import { toast } from "sonner";
@@ -62,11 +63,7 @@ export function AdminAccounts() {
 
   return (
     <div>
-      <div className="mb-6">
-        <p className="eyebrow">Accounts</p>
-        <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">Accounts &amp; roles.</h2>
-        <p className="mt-2 max-w-xl text-sm text-basalt/55">Promote a traveler to an operator so they can own and manage listings — they'll then appear in the "assign products to operators" dropdown. Admin accounts aren't shown here.</p>
-      </div>
+      <PageHeader title="Accounts & roles" sub="Promote a traveler to an operator so they can own listings and appear in the operator dropdown. Admin accounts aren't shown." />
 
       <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name…" className="mb-5 h-11 max-w-md rounded-none" />
 

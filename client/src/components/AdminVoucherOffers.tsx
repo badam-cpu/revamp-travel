@@ -6,6 +6,7 @@
  * sold / redeemed vouchers and what's owed the restaurant (redeemed × (100−commission)).
  */
 import { useEffect, useMemo, useState } from "react";
+import { PageHeader } from "@/components/PageHeader";
 import { supabase } from "@/lib/supabase";
 import { useListings } from "@/contexts/ListingsContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
@@ -59,10 +60,7 @@ export function AdminVoucherOffers() {
 
   return (
     <div className="grid gap-5">
-      <div>
-        <h2 className="font-display text-3xl font-normal text-basalt">Dining vouchers</h2>
-        <p className="mt-1 max-w-2xl text-sm text-basalt/55">Enable prepaid vouchers per restaurant (consignment — you settle only redeemed ones). The customer discount is funded by the wholesale spread; commission is your cut of redeemed value.</p>
-      </div>
+      <PageHeader className="mb-0" title="Dining vouchers" sub="Prepaid vouchers per restaurant, on consignment (settle only redeemed ones). The wholesale spread funds the discount; commission is your cut." />
       <div className="grid gap-3">
         {eateries.map((l) => (
           <OfferEditor key={l.id} listing={l} offer={offers[l.id]} agg={aggByListing.get(l.id)} format={format} onSaved={load} />

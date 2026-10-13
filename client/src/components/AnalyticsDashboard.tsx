@@ -8,6 +8,7 @@
  * per-listing breakdown, with standard filters (date range / type / listing).
  * Real measured events only — no fabricated numbers.
  */
+import { PageHeader } from "@/components/PageHeader";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -167,14 +168,15 @@ export function AnalyticsDashboard({ scope }: { scope: "admin" | "operator" }) {
 
   return (
     <div className="grid gap-5">
-      <div>
-        <h2 className="font-display text-3xl font-normal text-basalt">Analytics</h2>
-        <p className="mt-1 max-w-2xl text-sm text-basalt/55">
-          {scope === "operator"
-            ? "How travelers engage with your listings — real measured events. Impressions are how often a card was seen; views are detail-page opens."
-            : "Per-listing engagement across the marketplace — real measured events. Filter by type or a single listing; the restaurant numbers are the pitch for featured placements."}
-        </p>
-      </div>
+      <PageHeader
+        className="mb-0"
+        title="Analytics"
+        sub={
+          scope === "operator"
+            ? "How travellers engage with your listings. Impressions: a card was seen; views: the listing page was opened."
+            : "Per-listing engagement across the marketplace. Filter by type or listing; restaurant numbers are the pitch for featured placements."
+        }
+      />
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border border-basalt/10 bg-paper p-4">

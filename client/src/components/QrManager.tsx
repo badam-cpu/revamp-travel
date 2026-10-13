@@ -4,6 +4,7 @@
  * (listing / instructions / custom); payment types (tip/service) arrive with the
  * payments increment. The QR image is generated client-side from the landing URL.
  */
+import { PageHeader } from "@/components/PageHeader";
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, QrCode, Trash2, Download, Copy, Check } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -117,11 +118,7 @@ export function QrManager({ scope = "operator" }: { scope?: "operator" | "admin"
 
   return (
     <div>
-      <div className="mb-6">
-        <p className="eyebrow">QR codes</p>
-        <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">Revamp QR codes.</h2>
-        <p className="mt-2 max-w-xl text-sm text-basalt/55">Create a code, print it, and place it in the room or on a flyer. Every scan opens a Revamp-powered page — link guests to your listing, share house info, collect tips, or charge for an add-on. Payment earnings (net of 12.5%) are paid out by the Revamp team.</p>
-      </div>
+      <PageHeader title="QR codes" sub="Print a code for the room or a flyer — link to your listing, share house info, take tips or sell an add-on. Payments (net of 12.5%) are paid out by Revamp." />
 
       {(totals.owed > 0 || totals.paidOut > 0) && (
         <div className="mb-6 flex flex-wrap gap-2">

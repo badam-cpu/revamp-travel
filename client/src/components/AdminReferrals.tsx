@@ -6,6 +6,7 @@
  */
 import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { adminListReferrals, adminPayReferral, adminSaveReferralSettings, type AdminReferralData, type AdminReferralRow } from "@/lib/referrals";
@@ -82,8 +83,7 @@ export function AdminReferrals() {
 
   return (
     <div>
-      <h2 className="font-display text-4xl font-normal tracking-tight">Referrals.</h2>
-      <p className="mt-1 max-w-2xl text-sm text-basalt/55">Operators refer other hosts. When a referred host gets their first confirmed booking, the referrer earns credit — paid out by the team alongside normal payouts.</p>
+      <PageHeader className="mb-0" title="Referrals" sub="Operators refer hosts. On a referred host's first confirmed booking, the referrer earns credit, paid out alongside normal payouts." />
 
       {/* Settings */}
       <div className="mt-6 rounded-none border border-basalt/12 bg-chalk/40 p-5">

@@ -200,7 +200,7 @@ export function OperatorSubscription() {
       {!liveSub && (
         <div>
           <div className="mb-6 max-w-2xl">
-            <h2 className="font-display text-2xl tracking-[-0.02em]">Choose how you sell on Revamp</h2>
+            <h2 className="text-lg font-semibold leading-tight tracking-[-0.01em]">Choose how you sell on Revamp</h2>
             <p className="mt-1.5 text-sm leading-6 text-basalt/60">
               Keep it simple with pay-as-you-go, or subscribe to lock in a lower per-booking commission. Switch whenever you like.
             </p>

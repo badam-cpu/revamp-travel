@@ -7,7 +7,8 @@
  * to a human show a "needs reply" flag.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MessagesSquare, Send } from "lucide-react";
+import { Send } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -94,14 +95,8 @@ export function AdminSupportInbox() {
   };
 
   return (
-    <section className="mt-14 border-t border-basalt/10 pt-10">
-      <div className="flex items-center gap-2">
-        <MessagesSquare className="h-5 w-5 text-apricot" />
-        <h2 className="font-display text-3xl tracking-[-0.03em]">Support inbox</h2>
-      </div>
-      <p className="mt-2 max-w-xl text-sm text-basalt/55">
-        Traveler messages to Revamp. The AI answers first; threads flagged “Needs reply” are waiting on a human.
-      </p>
+    <section>
+      <PageHeader className="mb-0" title="Support inbox" sub="Traveler messages to Revamp. The AI answers first; threads flagged “Needs reply” are waiting on a human." />
 
       {threads === null ? (
         <p className="mt-8 text-sm text-basalt/50">Loading…</p>

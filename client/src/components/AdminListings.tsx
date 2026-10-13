@@ -8,6 +8,7 @@
  * their recorded amounts.
  */
 import { useEffect, useMemo, useState } from "react";
+import { PageHeader } from "@/components/PageHeader";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -75,11 +76,7 @@ export function AdminListings() {
 
   return (
     <div>
-      <div className="mb-6">
-        <p className="eyebrow">Listings</p>
-        <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">Assign products to operators.</h2>
-        <p className="mt-2 max-w-xl text-sm text-basalt/55">Reassign any listing to a different operator. The new operator manages it from their dashboard and future payouts accrue to them. Only operator accounts are listed.</p>
-      </div>
+      <PageHeader title="Assign listings to operators" sub="Reassign any listing to another operator — they manage it and receive its future payouts. Only operator accounts are listed." />
 
       <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search listings by title…" className="mb-5 h-11 max-w-md rounded-none" />
 

@@ -8,6 +8,7 @@
  * RLS policy (0051). Requires migration 0084 (type='place' + category column).
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { PageHeader } from "@/components/PageHeader";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { adminPlaceDetails, adminTripadvisorMatch, ApiError } from "@/lib/api";
@@ -287,11 +288,10 @@ export function AdminPlaces() {
 
   return (
     <div>
-      <div className="mb-6">
-        <p className="eyebrow">Visit guide</p>
-        <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">{editingId ? "Edit place." : "Places to visit."}</h2>
-        <p className="mt-2 max-w-xl text-sm text-basalt/55">Free, curated venues — museums, galleries, libraries, coworking spaces and more. Search a place on Google to pull its rating, address and website, then pick a category and save.</p>
-      </div>
+      <PageHeader
+        title={editingId ? "Edit place" : "Places to visit"}
+        sub="Free, curated venues — museums, galleries, libraries, coworking and more. Pull rating, address and website from Google, then pick a category."
+      />
 
       <div className="listing-form grid gap-3 border border-basalt/12 bg-paper p-5">
         <div>

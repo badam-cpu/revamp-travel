@@ -7,6 +7,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Lock, Minus, Plus, Save } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { Slogan } from "@/components/Slogan";
 import { supabase } from "@/lib/supabase";
 import { useSiteSettings, DEFAULT_SERVICE_PARTNERS, type HeroSlideMeta } from "@/contexts/SiteSettingsContext";
@@ -335,12 +336,8 @@ export function AdminSiteContent() {
   );
 
   return (
-    <section className="mt-14 border-t border-basalt/10 pt-10">
-      <p className="eyebrow">Site content</p>
-      <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">Edit the home page.</h2>
-      <p className="mt-2 max-w-xl text-sm text-basalt/55">
-        Everything here is optional — leave a field blank to keep the built-in default. Changes go live immediately.
-      </p>
+    <section>
+      <PageHeader className="mb-0" title="Home page content" sub="Everything here is optional — leave a field blank to keep the built-in default. Changes go live immediately." />
 
       {/* Safety banner: if the current content couldn't be loaded, saving would
           overwrite it with defaults — block editing until a refresh succeeds. */}

@@ -6,6 +6,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FileText, Loader2, Trash2, Upload, Eye, Download } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { listDocuments, uploadDocument, getDocumentUrl, deleteDocument, DOC_CATEGORIES, type DocRow, type DocCategory } from "@/lib/documents";
@@ -92,11 +93,7 @@ export function AdminDocuments() {
 
   return (
     <div>
-      <div className="mb-6">
-        <p className="eyebrow">Documents</p>
-        <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">Operator documents.</h2>
-        <p className="mt-2 max-w-xl text-sm text-basalt/55">Share contracts, policies and guides with all operators, or send one to a specific operator. They appear in that operator's Dashboard → Documents, viewable online.</p>
-      </div>
+      <PageHeader title="Operator documents" sub="Share contracts, policies and guides with all operators or one. They appear in the operator's Dashboard → Documents." />
 
       <div className="grid gap-3 border border-basalt/12 bg-paper p-5">
         <div className="grid gap-3 sm:grid-cols-2">

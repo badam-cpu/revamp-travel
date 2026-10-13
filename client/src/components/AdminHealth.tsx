@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "wouter";
 import { Activity, AlertTriangle, Calendar, CheckCircle2, Clock, CreditCard, Plug, RefreshCw, XCircle } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { fetchAdminHealth, type AdminHealth } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -112,17 +113,16 @@ export function AdminHealth() {
 
   return (
     <div>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="font-display text-4xl font-normal tracking-tight">System health.</h2>
-          <p className="mt-1 max-w-2xl text-sm text-basalt/55">
-            Live status of the site's moving parts — scheduled jobs, calendar syncs, payments, and integrations. {data && <span className="text-basalt/40">Snapshot {relTime(data.time)}.</span>}
-          </p>
-        </div>
-        <Button type="button" variant="outline" size="sm" className="shrink-0 rounded-none border-basalt/15" disabled={loading} onClick={load}>
-          <RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} /> Refresh
-        </Button>
-      </div>
+      <PageHeader
+        className="mb-0"
+        title="System health"
+        sub={<>Live status of scheduled jobs, calendar syncs, payments and integrations. {data && <span className="text-basalt/40">Snapshot {relTime(data.time)}.</span>}</>}
+        actions={
+          <Button type="button" variant="outline" size="sm" className="shrink-0 rounded-none border-basalt/15" disabled={loading} onClick={load}>
+            <RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} /> Refresh
+          </Button>
+        }
+      />
 
       {error && <p className="mt-6 rounded-none border border-red-600/30 bg-red-600/5 px-4 py-3 text-sm text-red-700">{error}</p>}
       {!data && loading && <p className="mt-6 text-sm text-basalt/50">Loading health…</p>}

@@ -7,6 +7,7 @@
  * status and logs it, keeping the balance + full history.
  */
 import { useEffect, useMemo, useState } from "react";
+import { PageHeader } from "@/components/PageHeader";
 import { supabase } from "@/lib/supabase";
 import { adminVoidGiftCard } from "@/lib/api";
 import { useCurrency } from "@/contexts/CurrencyContext";
@@ -101,11 +102,7 @@ export function AdminGiftCards() {
 
   return (
     <div>
-      <div className="mb-6">
-        <p className="eyebrow">Gift cards</p>
-        <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">Issued gift cards.</h2>
-        <p className="mt-2 max-w-xl text-sm text-basalt/55">Every gift card, newest first. Expand one for its full audit trail. Voiding a card stops redemption but keeps the balance and history.</p>
-      </div>
+      <PageHeader title="Gift cards" sub="Every gift card, newest first — expand one for its audit trail. Voiding stops redemption but keeps the balance and history." />
 
       <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by code, recipient name or email…" className="mb-5 h-11 max-w-md rounded-none" />
 

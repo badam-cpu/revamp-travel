@@ -7,6 +7,7 @@
  * layout to Revamp's actual data.
  */
 import { useCallback, useEffect, useState } from "react";
+import { PageHeader } from "@/components/PageHeader";
 import { adminUsers, adminSetRole, ApiError, type AdminUserRow, type AdminUsersFilters } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -96,11 +97,7 @@ export function AdminUsers() {
 
   return (
     <div className="grid gap-6">
-      <div>
-        <p className="eyebrow">Users</p>
-        <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">User / manage.</h2>
-        <p className="mt-2 max-w-xl text-sm text-basalt/55">Search accounts by any field, filter by role or activity, and promote/demote operators. Email and phone come from the auth record; listings and bookings are live counts.</p>
-      </div>
+      <PageHeader className="mb-0" title="Users" sub="Search and filter accounts, and promote or demote operators. Email and phone come from auth; listing and booking counts are live." />
 
       {/* Filter panel */}
       <div className="grid gap-4 border border-basalt/12 bg-paper p-5">

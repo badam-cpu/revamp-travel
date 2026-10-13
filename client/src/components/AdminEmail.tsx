@@ -6,6 +6,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { Sparkles, Loader2, Upload, Mail, Send } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { supabase } from "@/lib/supabase";
 import { adminEmailPreview, adminEmailSend, adminEmailGenerate, adminEmailImportContacts, ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -183,10 +184,11 @@ export function AdminEmail() {
 
   return (
     <div className="grid gap-6">
-      <div>
-        <h2 className="font-display text-3xl font-normal text-basalt">Campaigns</h2>
-        <p className="mt-1 max-w-2xl text-sm text-basalt/55">Compose a message, preview it, and send it over email or Telegram. {isTg ? "Telegram goes to everyone who linked the Revamp bot." : "Unsubscribed recipients are excluded automatically."}</p>
-      </div>
+      <PageHeader
+        className="mb-0"
+        title="Campaigns"
+        sub={<>Compose, preview and send over email or Telegram. {isTg ? "Telegram goes to everyone who linked the Revamp bot." : "Unsubscribed recipients are excluded automatically."}</>}
+      />
 
       {/* Channel toggle */}
       <div className="inline-flex w-fit gap-1 border border-basalt/12 bg-chalk/40 p-1">

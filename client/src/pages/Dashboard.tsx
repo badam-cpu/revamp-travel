@@ -86,6 +86,7 @@ import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
 import { OperatorResponseStat } from "@/components/OperatorResponseStat";
 import { MessageTemplatesSettings } from "@/components/MessageTemplatesSettings";
 import { OperatorSettings } from "@/components/OperatorSettings";
+import { PageHeader, SubHeader } from "@/components/PageHeader";
 import { EXPERIENCE_PREFILL_STORAGE_KEY } from "@/pages/ExperienceOnboarding";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { toast } from "sonner";
@@ -1604,12 +1605,13 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
   };
 
   return (
-    <section className="border-t border-basalt/10 py-12">
+    <section className="border-t border-basalt/10 py-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="eyebrow">{title}</p>
-          <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">{items.length} listed</h2>
-          <p className="mt-2 max-w-md text-sm text-basalt/55">{description}</p>
+          <h2 className="text-lg font-semibold leading-tight tracking-[-0.01em]">
+            {title} <span className="font-normal tabular-nums text-basalt/50">· {items.length}</span>
+          </h2>
+          <p className="mt-1 max-w-md text-sm text-basalt/60">{description}</p>
         </div>
         <div className="flex flex-col items-end gap-2">
           <Button onClick={openAdd} className="rounded-none bg-apricot text-white hover:bg-apricot/90">
@@ -1632,9 +1634,9 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
       {importError && <p className="mt-2 text-right text-xs text-destructive">{importError}</p>}
 
       {items.length === 0 ? (
-        <p className="mt-8 border border-dashed border-basalt/20 bg-chalk px-6 py-10 text-center text-sm text-basalt/55">Nothing here yet — add your first one above.</p>
+        <p className="mt-5 border border-dashed border-basalt/20 bg-chalk px-6 py-10 text-center text-sm text-basalt/55">Nothing here yet — add your first one above.</p>
       ) : (
-        <ul className="mt-8 divide-y divide-basalt/10 border border-basalt/10 bg-paper">
+        <ul className="mt-5 divide-y divide-basalt/10 border border-basalt/10 bg-paper">
           {items.map((listing) => (
             <OperatorListingRow key={listing.id} listing={listing} onEdit={() => openEdit(listing)} />
           ))}
@@ -1796,12 +1798,11 @@ function CalendarViewsSection() {
   const blurb = CALENDAR_VIEWS.find((v) => v.key === view)?.blurb ?? "";
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-display text-4xl leading-[0.95] tracking-[-0.03em] sm:text-5xl">Calendar</h1>
-          <p className="mt-3 max-w-xl text-base leading-7 text-basalt/60">{blurb}</p>
-        </div>
-        {/* View switch — pills, same family as the toolbar below. */}
+      <PageHeader
+        title="Calendar"
+        sub={blurb}
+        actions={
+          /* View switch — pills, same family as the toolbar below. */
         <div role="group" aria-label="View" className="inline-flex shrink-0 rounded-full border border-basalt/15 bg-paper p-1">
           {CALENDAR_VIEWS.map((v) => (
             <button
@@ -1818,7 +1819,8 @@ function CalendarViewsSection() {
             </button>
           ))}
         </div>
-      </div>
+        }
+      />
       {view === "timeline" && <OperatorBookingsTimeline />}
       {view === "calendar" && <CalendarSection />}
     </div>
@@ -1846,13 +1848,9 @@ function CalendarSection() {
   );
 }
 
-function SectionHead({ title, sub }: { title: string; sub: string }) {
-  return (
-    <div className="mb-8">
-      <h1 className="font-display text-4xl leading-[0.95] tracking-[-0.03em] sm:text-5xl">{title}</h1>
-      <p className="mt-3 max-w-xl text-base leading-7 text-basalt/60">{sub}</p>
-    </div>
-  );
+/** Every dashboard page's header — see PageHeader (compact title, one line of description). */
+function SectionHead({ title, sub, actions }: { title: string; sub: string; actions?: React.ReactNode }) {
+  return <PageHeader title={title} sub={sub} actions={actions} />;
 }
 
 function StatTile({ n, label }: { n: number; label: string }) {
@@ -2005,7 +2003,7 @@ function DashboardContent() {
 
             {section === "listings" && (
               <div>
-                <SectionHead title="Listings" sub="Add, edit, or remove your own stays, tours, and experiences. A new listing goes through a quick review before it's visible; edits to a live listing save immediately." />
+                <SectionHead title="Listings" sub="Your stays, tours and experiences. New listings are reviewed before they go live; edits to live listings save right away." />
                 {offlineBanner}
                 <DashboardSection type="stay" title="Stays" description="Guesthouses, cabins, and small hotels shown on /explore/stay and the home page." />
                 <DashboardSection type="tour" title="Tours" description="Guided routes shown on /explore/tour and the home page." />
@@ -2017,11 +2015,11 @@ function DashboardContent() {
               <div className="grid gap-8">
                 <AnalyticsDashboard scope="operator" />
                 <div>
-                  <SectionHead title="Response metrics." sub="How fast you reply to guest inquiries — fast replies win bookings." />
+                  <SubHeader title="Response times" sub="How fast you reply to guest inquiries — fast replies win bookings." />
                   <OperatorResponseStat showEmpty />
                 </div>
                 <div>
-                  <SectionHead title="Bookings & revenue." sub="Your confirmed bookings and generated revenue over the last 12 months." />
+                  <SubHeader title="Bookings & revenue" sub="Confirmed bookings and revenue over the last 12 months." />
                   <OperatorAnalytics />
                 </div>
               </div>
@@ -2032,11 +2030,11 @@ function DashboardContent() {
 
             {section === "messages" && (
               <div>
-                <SectionHead title="Messages" sub="Talk with your guests about their bookings. Fast replies win bookings — aim for near-instant. Keep bookings and payments on Revamp — off-platform arrangements aren't covered by our protection." />
+                <SectionHead title="Messages" sub="Talk with guests about their bookings. Keep bookings and payments on Revamp — off-platform deals aren't protected." />
                 <OperatorResponseStat />
                 {user && <Inbox userId={user.id} />}
                 <div className="mt-10 border-t border-basalt/10 pt-8">
-                  <p className="mb-5 text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">Templates &amp; auto-reply</p>
+                  <SubHeader title="Templates & auto-reply" />
                   <MessageTemplatesSettings />
                 </div>
               </div>
@@ -2048,7 +2046,7 @@ function DashboardContent() {
 
             {section === "journey" && (
               <div>
-                <SectionHead title="Customer journey" sub="Check-in and meeting-point instructions, mid-stay check-ins and thank-you notes — sent by email and text, by hand or automatically." />
+                <SectionHead title="Customer journey" sub="Arrival instructions, check-ins and thank-you notes — sent by email and text, by hand or automatically." />
                 <CustomerJourney />
               </div>
             )}
@@ -2068,7 +2066,7 @@ function DashboardContent() {
 
             {section === "billing" && (
               <div>
-                <SectionHead title="Billing" sub="Your Revamp subscription and, if you're paid directly through your own PayLink, your monthly commission statements." />
+                <SectionHead title="Billing" sub="Your Revamp plan and, if guests pay you through your own PayLink, your monthly commission statements." />
                 <div className="grid gap-8">
                   <CommissionStatements />
                   <OperatorSubscription />

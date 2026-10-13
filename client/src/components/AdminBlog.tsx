@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "wouter";
 import { Bold, ExternalLink, Eye, Heading2, Image as ImageIcon, Italic, Link2, List, Loader2, Pencil, Plus, Quote, Trash2 } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { uploadImage } from "@/lib/imageUpload";
 import { PhotoUploader, type PhotoUploaderHandle } from "@/components/PhotoUploader";
 import { Button } from "@/components/ui/button";
@@ -54,15 +55,15 @@ export function AdminBlog() {
 
   return (
     <div>
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-display text-4xl leading-[0.95] tracking-[-0.03em] sm:text-5xl">Blog.</h1>
-          <p className="mt-3 max-w-xl text-base leading-7 text-basalt/60">Write and publish posts to revampvacations.com/blog. Drafts stay private until you publish.</p>
-        </div>
-        <Button onClick={() => setEditing("new")} className="rounded-none bg-apricot text-white hover:bg-apricot/90">
-          <Plus className="mr-1.5 h-4 w-4" /> New post
-        </Button>
-      </div>
+      <PageHeader
+        title="Blog"
+        sub="Write and publish posts to revampvacations.com/blog. Drafts stay private until you publish."
+        actions={
+          <Button onClick={() => setEditing("new")} className="rounded-none bg-apricot text-white hover:bg-apricot/90">
+            <Plus className="mr-1.5 h-4 w-4" /> New post
+          </Button>
+        }
+      />
 
       {posts === null ? (
         <p className="text-sm text-basalt/50">Loading…</p>

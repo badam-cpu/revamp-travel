@@ -3,6 +3,7 @@
  * they referred gets their first confirmed booking, the operator earns credit.
  * Referrer-only reward. Reads GET /api/referral/me.
  */
+import { PageHeader } from "@/components/PageHeader";
 import { useEffect, useState } from "react";
 import { Check, Copy, Gift, Share2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -67,10 +68,15 @@ export function OperatorReferrals() {
 
   return (
     <div>
-      <h2 className="font-display text-4xl font-normal tracking-tight">Refer a host, earn credit.</h2>
-      <p className="mt-1 max-w-2xl text-sm text-basalt/55">
-        Invite other hosts to list on Revamp. When a host you refer gets their <strong>first confirmed booking</strong>, you earn <strong className="text-apricot">{format(data.rewardCents)}</strong> in referral credit.
-      </p>
+      <PageHeader
+        className="mb-0"
+        title="Refer & earn"
+        sub={
+          <>
+            Invite other hosts to Revamp. When one gets their <strong>first confirmed booking</strong>, you earn <strong className="text-apricot">{format(data.rewardCents)}</strong> in credit.
+          </>
+        }
+      />
 
       {!data.enabled && (
         <p className="mt-4 rounded-none border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-700">The referral program is currently paused. Your existing referrals are safe and will still qualify when it resumes.</p>

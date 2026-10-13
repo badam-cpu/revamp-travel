@@ -4,6 +4,7 @@
  * category, with a reading pane rendering the article Markdown via the shared
  * safe renderer. The dashboard AI assistant is grounded in the same articles.
  */
+import { PageHeader } from "@/components/PageHeader";
 import { useEffect, useMemo, useState } from "react";
 import { useSearch } from "wouter";
 import { Loader2, Pin, ArrowLeft } from "lucide-react";
@@ -56,11 +57,7 @@ export function PartnerHub() {
   // Index view
   return (
     <div>
-      <div className="mb-6">
-        <p className="eyebrow">Partner Hub</p>
-        <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">Resources for hosts.</h2>
-        <p className="mt-2 max-w-xl text-sm text-basalt/55">Guides on listing quality, reviews, hosting standards, and the latest updates. Your dashboard assistant can answer questions from these too.</p>
-      </div>
+      <PageHeader title="Partner Hub" sub="Guides on listing quality, reviews and hosting standards, plus the latest updates. Your assistant can answer from these too." />
 
       <div className="mb-6 flex flex-wrap gap-2">
         <button type="button" onClick={() => setCat("all")} className={cn("rounded-none border px-3.5 py-1.5 text-sm font-semibold transition-colors", cat === "all" ? "border-apricot bg-apricot/5 text-basalt" : "border-basalt/15 text-basalt/60 hover:border-basalt/30")}>

@@ -6,6 +6,7 @@
  * Operators can't create these — only admins, via the RLS policy in 0051.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { PageHeader } from "@/components/PageHeader";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { adminPlaceDetails, adminTripadvisorMatch, ApiError } from "@/lib/api";
@@ -313,11 +314,10 @@ export function AdminEateries() {
 
   return (
     <div>
-      <div className="mb-6">
-        <p className="eyebrow">Eat guide</p>
-        <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">{editingId ? "Edit restaurant." : "Restaurant recommendations."}</h2>
-        <p className="mt-2 max-w-xl text-sm text-basalt/55">Free, curated picks — no bookings, no operator accounts. Search a place on Google to pull its rating, address and price band, then add a category and neighborhood.</p>
-      </div>
+      <PageHeader
+        title={editingId ? "Edit restaurant" : "Restaurant recommendations"}
+        sub="Free, curated picks — no bookings, no operator accounts. Pull rating, address and price band from Google, then add category and neighborhood."
+      />
 
       <div className="listing-form grid gap-3 border border-basalt/12 bg-paper p-5">
         <div>

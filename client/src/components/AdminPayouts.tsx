@@ -6,7 +6,7 @@
  * write; creation happens server-side on booking confirm.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Wallet } from "lucide-react";
+import { SubHeader } from "@/components/PageHeader";
 import { supabase } from "@/lib/supabase";
 import { payoutState, PAYOUT_STATE_LABEL, type PayoutState } from "@shared/payouts";
 import { cn } from "@/lib/utils";
@@ -89,14 +89,12 @@ export function AdminPayouts() {
   );
 
   return (
-    <section className="mt-14 border-t border-basalt/10 pt-10">
-      <div className="flex items-center gap-2">
-        <Wallet className="h-5 w-5 text-apricot" />
-        <h2 className="font-display text-3xl tracking-[-0.03em]">Payouts</h2>
-      </div>
-      <p className="mt-2 max-w-xl text-sm text-basalt/55">
-        What Revamp owes operators. <strong className="text-basalt">{money(dueTotal, rows?.[0]?.currency ?? "USD")}</strong> is currently due. Mark a payout paid once you've sent it.
-      </p>
+    <section>
+      <SubHeader
+        className="mb-0"
+        title="Booking payouts"
+        sub={<>What Revamp owes operators — <strong className="text-basalt">{money(dueTotal, rows?.[0]?.currency ?? "USD")}</strong> is currently due. Mark a payout paid once you've sent it.</>}
+      />
 
       <div className="mt-5 mb-3 flex gap-1.5">
         {(["unpaid", "pending", "paid", "all"] as const).map((f) => (

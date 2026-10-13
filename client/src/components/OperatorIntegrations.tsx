@@ -105,7 +105,7 @@ export function OperatorIntegrations() {
           <div className="flex items-start gap-3 border-b border-basalt/10 pb-4">
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-basalt text-paper"><g.icon className="h-4 w-4" /></span>
             <div>
-              <h2 id={`int-${g.key}`} className="font-display text-2xl leading-tight tracking-[-0.02em]">{g.label}</h2>
+              <h2 id={`int-${g.key}`} className="text-lg font-semibold leading-tight tracking-[-0.01em]">{g.label}</h2>
               <p className="mt-1 text-sm text-basalt/60">{g.blurb}</p>
             </div>
           </div>

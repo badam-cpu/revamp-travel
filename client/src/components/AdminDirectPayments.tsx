@@ -5,6 +5,7 @@
  * is marked paid out — or waive). Reads under admin RLS; every change goes
  * through an admin-only endpoint.
  */
+import { SubHeader } from "@/components/PageHeader";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Pause, Play, Wallet } from "lucide-react";
 import { toast } from "sonner";
@@ -91,13 +92,11 @@ export function AdminDirectPayments() {
 
   return (
     <section className="mt-12 grid gap-6">
-      <div className="flex items-start gap-3">
-        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-apricot/10 text-apricot"><Wallet className="h-5 w-5" /></div>
-        <div>
-          <h2 className="font-display text-2xl tracking-[-0.02em]">Direct payments</h2>
-          <p className="mt-1 max-w-2xl text-sm text-basalt/60">Operators paid straight to their own PayLink. Revamp's commission and add-ons are billed monthly; unpaid statements pause direct payments automatically after 14 days.</p>
-        </div>
-      </div>
+      <SubHeader
+        className="mb-0"
+        title="Direct payments"
+        sub="Operators paid straight to their own PayLink. Commission and add-ons are billed monthly; unpaid statements pause direct payments after 14 days."
+      />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="border border-basalt/10 bg-paper p-4"><p className="text-xs font-bold uppercase tracking-[0.12em] text-basalt/50">Connected</p><p className="mt-1 font-display text-2xl tabular-nums">{connected.length}</p></div>

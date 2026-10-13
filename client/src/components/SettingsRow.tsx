@@ -14,7 +14,8 @@ export function SettingsRow({ title, help, htmlFor, children }: { title: string;
         )}
         {help && <p className="mt-1 text-sm leading-6 text-basalt/60">{help}</p>}
       </div>
-      <div className="min-w-0">{children}</div>
+      {/* One control width for every row, so fields line up across tabs. */}
+      <div className="min-w-0 max-w-xl">{children}</div>
     </div>
   );
 }

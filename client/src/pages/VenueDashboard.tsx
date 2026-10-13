@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { BarChart3, Ticket, Copy, Loader2, Store, Wallet, AlertTriangle } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { useAuth } from "@/contexts/AuthContext";
@@ -96,18 +97,18 @@ export default function VenueDashboard() {
           </div>
         ) : (
           <>
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <p className="eyebrow flex items-center gap-1.5"><Store className="h-3.5 w-3.5" /> Venue dashboard</p>
-                <h1 className="mt-2 font-display text-4xl tracking-[-0.03em]">{currentVenue?.title}.</h1>
-                <p className="mt-1 text-sm text-basalt/55">{currentVenue?.city} · how diners engage with your Revamp listing.</p>
-              </div>
-              {venues.length > 1 && (
-                <select value={venueId ?? currentVenue?.id} onChange={(e) => setVenueId(e.target.value)} className="h-10 rounded-none border border-basalt/15 bg-paper px-3 text-sm">
-                  {venues.map((v) => <option key={v.id} value={v.id}>{v.title}</option>)}
-                </select>
-              )}
-            </div>
+            <PageHeader
+              className="mb-0"
+              title={currentVenue?.title}
+              sub={<>{currentVenue?.city} · how diners engage with your Revamp listing.</>}
+              actions={
+                venues.length > 1 && (
+                  <select value={venueId ?? currentVenue?.id} onChange={(e) => setVenueId(e.target.value)} className="h-10 rounded-none border border-basalt/15 bg-paper px-3 text-sm">
+                    {venues.map((v) => <option key={v.id} value={v.id}>{v.title}</option>)}
+                  </select>
+                )
+              }
+            />
 
             {/* Range filter */}
             <div className="mt-6 flex items-center gap-1.5">

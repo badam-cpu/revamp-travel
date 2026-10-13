@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { Activity, AlertTriangle, TextCursorInput, BarChart3, BookOpen, Check, CreditCard, ExternalLink, FileText, Gift, Home, Landmark, LayoutDashboard, ListChecks, Mail, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, QrCode, Ticket, Timer, UserSearch, Users, Utensils, Wallet, X } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { formatLocation } from "@/lib/region";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -208,7 +209,7 @@ function ReviewsPanel({ onCount }: { onCount?: (n: number) => void }) {
 
   return (
     <div>
-      <SectionHead title="Pending listings." sub="New stay, tour, and experience listings wait here until approved. Approving publishes a listing immediately; sending it back notifies the operator with your note so they can fix it and resubmit." />
+      <SectionHead title="Pending listings" sub="New listings wait here for approval. Approving publishes immediately; sending back notifies the operator with your note to fix and resubmit." />
       {error && (
         <div className="mb-6 flex items-start gap-2 border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {error}
@@ -231,10 +232,7 @@ function ReviewsPanel({ onCount }: { onCount?: (n: number) => void }) {
 
 function SectionHead({ title, sub }: { title: string; sub: string }) {
   return (
-    <div className="mb-8">
-      <h1 className="font-display text-4xl leading-[0.95] tracking-[-0.03em] sm:text-5xl">{title}</h1>
-      <p className="mt-3 max-w-xl text-base leading-7 text-basalt/60">{sub}</p>
-    </div>
+    <PageHeader title={title} sub={sub} />
   );
 }
 
@@ -289,7 +287,7 @@ function OverviewPanel({ go }: { go: (s: AdminSection) => void }) {
 
   return (
     <div>
-      <SectionHead title="Admin overview." sub="A snapshot of what needs your attention. Jump into any area from here." />
+      <SectionHead title="Admin overview" sub="A snapshot of what needs your attention. Jump into any area from here." />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatTile n={pending ?? "—"} label="Pending approvals" onClick={() => go("reviews")} />
         <StatTile n={published ?? "—"} label="Published listings" onClick={() => go("reviews")} />
@@ -380,13 +378,14 @@ function AdminConsole() {
             {section === "email" && <AdminEmail />}
             {section === "messages" && (
               <div>
-                <SectionHead title="All messages" sub="Every guest ↔ host conversation, for oversight. Flagged messages (contact details / off-platform hints) are marked. You can reply as Revamp to step in." />
+                <SectionHead title="All messages" sub="Every guest ↔ host conversation, for oversight. Off-platform contact attempts are flagged; reply as Revamp to step in." />
                 {user && <Inbox userId={user.id} admin />}
               </div>
             )}
             {section === "response" && <AdminResponseTimes />}
             {section === "payouts" && (
               <>
+                <PageHeader title="Payouts" sub="What Revamp owes operators, QR payment earnings, and direct-payment commission." />
                 <AdminPayouts />
                 <AdminQrEarnings />
                 <AdminDirectPayments />

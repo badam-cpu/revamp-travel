@@ -5,6 +5,7 @@
  * their own files (signed agreements, licenses, IDs) — stored as their own docs,
  * visible only to them and admins (RLS, migration 0085).
  */
+import { PageHeader } from "@/components/PageHeader";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FileText, Loader2, Trash2, Upload, Eye, Download } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -92,11 +93,7 @@ export function OperatorDocuments() {
 
   return (
     <div>
-      <div className="mb-6">
-        <p className="eyebrow">Documents</p>
-        <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">Your documents.</h2>
-        <p className="mt-2 max-w-xl text-sm text-basalt/55">Contracts, policies and guides Revamp has shared with you — view them here, or download a copy. You can also upload your own documents (signed agreements, licenses); only you and the Revamp team can see those.</p>
-      </div>
+      <PageHeader title="Documents" sub="Contracts, policies and guides from Revamp, plus your own uploads — only you and the Revamp team see yours." />
 
       {docs === null ? (
         <div className="grid place-items-center py-10 text-basalt/50"><Loader2 className="h-5 w-5 animate-spin" /></div>

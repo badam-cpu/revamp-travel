@@ -14,6 +14,7 @@
  * Not RequireRole: this page isn't role-gated, it's sign-in-gated. Signed-out
  * visitors are bounced to /login, matching RequireRole's own redirect.
  */
+import { PageHeader } from "@/components/PageHeader";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { Bookmark, LogOut, MapPin, MessageSquare, ShieldCheck, Star, Ticket, Utensils, User as UserIcon } from "lucide-react";
@@ -666,7 +667,7 @@ export default function Account() {
     return (
       <div className="container py-24 text-center">
         <p className="eyebrow">Checking access</p>
-        <h1 className="mt-4 font-display text-4xl">One moment.</h1>
+        <h1 className="mt-4 font-display text-[1.75rem] sm:text-[2rem]">One moment.</h1>
       </div>
     );
   }
@@ -677,13 +678,9 @@ export default function Account() {
     <div className="min-h-screen bg-paper text-basalt">
       <SiteHeader />
       <main className="container py-12 lg:py-16">
-        <p className="eyebrow">Your account</p>
-        <h1 className="mt-3 font-display text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl">Hi {first}.</h1>
-        <p className="mt-4 max-w-xl text-base leading-7 text-basalt/60">
-          Your trips, the places you've saved, and your profile — all in one spot.
-        </p>
+        <PageHeader className="mb-0" title={`Hi ${first}`} sub="Your trips, saved places and profile — all in one spot." />
 
-        <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)} className="mt-10">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)} className="mt-6">
           <TabsList className="flex h-auto flex-wrap justify-start gap-1 rounded-none border-b border-basalt/10 bg-transparent p-0">
             {[
               { key: "trips", label: "Trips", icon: Ticket },

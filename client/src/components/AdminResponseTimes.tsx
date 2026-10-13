@@ -6,6 +6,7 @@
  * reply minus the guest's first message.
  */
 import { useEffect, useMemo, useState } from "react";
+import { PageHeader } from "@/components/PageHeader";
 import { supabase } from "@/lib/supabase";
 import { fetchResponseConversations, summarize, responseSeconds, waitingSeconds, median, formatDuration, type ResponseConversation } from "@/lib/responseTime";
 
@@ -61,10 +62,11 @@ export function AdminResponseTimes() {
 
   return (
     <div className="grid gap-6">
-      <div>
-        <h2 className="font-display text-3xl font-normal text-basalt">Response metrics</h2>
-        <p className="mt-1 max-w-2xl text-sm text-basalt/55">How fast guest inquiries get a first operator reply — fast replies win bookings. Across {overall?.total ?? 0} inquiries.</p>
-      </div>
+      <PageHeader
+        className="mb-0"
+        title="Response metrics"
+        sub={<>How fast guest inquiries get a first operator reply — fast replies win bookings. Across {overall?.total ?? 0} inquiries.</>}
+      />
 
       {overall && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

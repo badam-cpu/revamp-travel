@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, ExternalLink, Loader2, RefreshCw, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { CharCount } from "@/components/CharCount";
@@ -140,13 +141,7 @@ export function AdminTextFixes() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="font-display text-4xl leading-[0.95] tracking-[-0.03em] sm:text-5xl">Text fixes.</h1>
-        <p className="mt-3 max-w-2xl text-base leading-7 text-basalt/60">
-          Published listings whose title, category label or short description doesn't fit the card rules. Aha suggests a version that fits with the
-          same facts — review it, edit if you like, then approve. Nothing changes on a listing until you approve it.
-        </p>
-      </div>
+      <PageHeader title="Text fixes" sub="Published listings whose text breaks the card rules. Aha suggests a fit with the same facts; nothing changes until you approve." />
 
       {listings === null ? (
         <p className="inline-flex items-center gap-2 text-sm text-basalt/55"><Loader2 className="h-4 w-4 animate-spin" /> Checking listings…</p>

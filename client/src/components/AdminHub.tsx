@@ -5,6 +5,7 @@
  * side). Admin-only writes by RLS.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,14 +31,11 @@ export function AdminHub() {
 
   return (
     <div>
-      <div className="mb-6 flex items-end justify-between gap-4">
-        <div>
-          <p className="eyebrow">Partner Hub</p>
-          <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">Knowledge base.</h2>
-          <p className="mt-2 max-w-xl text-sm text-basalt/55">Articles operators see in their dashboard. The operator AI assistant is grounded in the published ones.</p>
-        </div>
-        <Button onClick={() => setEditing("new")} className="shrink-0 rounded-none bg-apricot text-white hover:bg-apricot/90">New article</Button>
-      </div>
+      <PageHeader
+        title="Knowledge base"
+        sub="Articles operators see in their dashboard. The operator AI assistant is grounded in the published ones."
+        actions={<Button onClick={() => setEditing("new")} className="shrink-0 rounded-none bg-apricot text-white hover:bg-apricot/90">New article</Button>}
+      />
 
       {items === null ? (
         <div className="grid place-items-center py-16 text-basalt/50"><Loader2 className="h-5 w-5 animate-spin" /></div>

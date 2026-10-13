@@ -5,7 +5,7 @@
  * owed per operator and marks it paid out. Reads /api/qr-earnings*.
  */
 import { useEffect, useState } from "react";
-import { QrCode } from "lucide-react";
+import { SubHeader } from "@/components/PageHeader";
 import { adminListQrEarnings, adminSettleQrEarnings, type QrEarningsData } from "@/lib/qr";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { toast } from "sonner";
@@ -44,13 +44,11 @@ export function AdminQrEarnings() {
 
   return (
     <section className="mt-14 border-t border-basalt/10 pt-10">
-      <div className="flex items-center gap-2">
-        <QrCode className="h-5 w-5 text-apricot" />
-        <h2 className="font-display text-3xl tracking-[-0.03em]">QR payment earnings</h2>
-      </div>
-      <p className="mt-2 max-w-xl text-sm text-basalt/55">
-        Tips &amp; service payments collected via QR, net of the 12.5% commission. <strong className="text-basalt">{format(data.totals.owedCents)}</strong> is owed to operators. Mark paid once you've sent it.
-      </p>
+      <SubHeader
+        className="mb-0"
+        title="QR payment earnings"
+        sub={<>Tips &amp; service payments via QR, net of the 12.5% commission — <strong className="text-basalt">{format(data.totals.owedCents)}</strong> is owed to operators. Mark paid once sent.</>}
+      />
 
       {owing.length === 0 ? (
         <p className="mt-5 border border-dashed border-basalt/20 bg-chalk px-6 py-8 text-center text-sm text-basalt/55">Nothing owed right now.</p>

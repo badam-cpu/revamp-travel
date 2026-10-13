@@ -179,7 +179,7 @@ function AccountSettings() {
         <p className="flex h-12 items-center text-base text-basalt">{user?.email}</p>
       </SettingsRow>
       <SettingsRow title="Password" help="At least 6 characters.">
-        <form onSubmit={changePassword} className="grid max-w-md gap-3">
+        <form onSubmit={changePassword} className="grid gap-3">
           <label className="grid gap-1.5 text-sm font-semibold">
             New password
             <PasswordInput value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" className="h-12 rounded-none text-base font-normal" />
