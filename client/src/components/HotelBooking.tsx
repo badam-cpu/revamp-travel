@@ -9,7 +9,7 @@ import { useState } from "react";
 import { Calendar, ChevronRight, Minus, Plus, Users } from "lucide-react";
 import type { BlockedRange, LiveListing } from "@/contexts/ListingsContext";
 import type { RoomType } from "@shared/listings";
-import { typeFromCents } from "@shared/rooms";
+import { maxPartySize, typeFromCents } from "@shared/rooms";
 import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
 import { AskHostButton } from "@/components/AskHostButton";
 import { Button } from "@/components/ui/button";
@@ -130,7 +130,9 @@ export function HotelBookingPanel({
   const { format } = useCurrency();
   const [datesOpen, setDatesOpen] = useState(false);
   const fromCents = rooms.length ? Math.min(...rooms.map(typeFromCents)) : Math.round(listing.price * 100);
-  const maxGuests = rooms.length ? Math.max(...rooms.map((r) => r.maxGuests)) : listing.maxGuests ?? 8;
+  // Groups larger than the biggest room book several rooms of one type (0097).
+  const biggestRoom = rooms.length ? Math.max(...rooms.map((r) => r.maxGuests)) : listing.maxGuests ?? 8;
+  const maxGuests = rooms.length ? maxPartySize(rooms) : biggestRoom;
 
   return (
     <div id="book" className="brand-notch sticky top-[104px] border border-basalt/12 bg-chalk p-6 shadow-[0_20px_55px_rgba(35,35,33,0.1)] lg:max-h-[calc(100vh_-_124px)] lg:overflow-y-auto">
@@ -165,6 +167,9 @@ export function HotelBookingPanel({
           <Users className="h-3.5 w-3.5 text-tuff" /> Guests
         </span>
         <GuestStepper guests={stay.guests} max={maxGuests} onChange={(guests) => onStayChange({ ...stay, guests })} />
+        {stay.guests > biggestRoom && (
+          <p className="mt-2 text-xs leading-5 text-basalt/60">No single room fits {stay.guests} guests — the room list shows how many rooms you'd need.</p>
+        )}
       </div>
 
       <Button onClick={onChooseRoom} disabled={rooms.length === 0} className="mt-5 h-12 w-full rounded-none bg-apricot text-white hover:bg-apricot/90">

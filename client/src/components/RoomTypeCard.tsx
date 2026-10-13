@@ -12,7 +12,7 @@ import { formatBeds } from "@shared/listings";
 import type { LiveListing } from "@/contexts/ListingsContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { imgAttrs } from "@/lib/responsiveImg";
-import { bestRoomFor, typeFromCents, type RoomAvailability } from "@shared/rooms";
+import { bestRoomFor, bestRoomsFor, roomsFreeFor, splitGuests, typeFromCents, type RoomAvailability } from "@shared/rooms";
 import type { HotelStay } from "@/components/HotelBooking";
 import { cn } from "@/lib/utils";
 
@@ -46,11 +46,21 @@ function RoomTypeCard({
   const { format } = useCurrency();
   const photo = roomPhotos(room, listing.image)[0];
   const hasDates = !!(stay.start && stay.end);
-  // With dates: the room the guest would get (cheapest free one) and its price.
-  const best = hasDates ? bestRoomFor(listing, room, availability, stay.start!, stay.end!, stay.guests) : null;
-  const available = !hasDates || !!best;
-  const tooSmall = stay.guests > room.maxGuests;
-  const quote = best?.quote ?? null;
+  // A party bigger than this room → the fewest rooms of this type that fit it
+  // (4 guests in 2-guest rooms → 2 rooms), booked together (0097).
+  const split = stay.guests > room.maxGuests ? splitGuests(stay.guests, room.maxGuests) : null;
+  const multi = !!split && split.length > 1;
+  const tooSmall = stay.guests > room.maxGuests && !split;
+  // With dates: the room(s) the guest would get (cheapest free ones) and the price.
+  const best = hasDates && !multi ? bestRoomFor(listing, room, availability, stay.start!, stay.end!, stay.guests) : null;
+  const group = hasDates && multi ? bestRoomsFor(listing, room, availability, stay.start!, stay.end!, split!) : null;
+  const available = !hasDates || (multi ? !!group : !!best);
+  const freeRooms = hasDates && multi && !group ? roomsFreeFor(room, availability, stay.start!, stay.end!) : 0;
+  const quote = multi
+    ? group
+      ? { nights: group[0].quote.nights, totalCents: group.reduce((a, p) => a + p.quote.totalCents, 0) }
+      : null
+    : best?.quote ?? null;
 
   return (
     <button
@@ -59,6 +69,7 @@ function RoomTypeCard({
       className={cn(
         "group flex w-full flex-col gap-4 border border-basalt/12 bg-paper p-3 text-left transition-colors hover:border-apricot/60 sm:flex-row sm:items-center",
         (!available || tooSmall) && "opacity-70",
+        multi && available && "border-apricot/40",
       )}
     >
       <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-basalt/5 sm:w-36">
@@ -72,7 +83,13 @@ function RoomTypeCard({
         <h3 className="font-semibold text-basalt group-hover:text-apricot">{room.name}</h3>
         <p className="mt-1 text-sm text-basalt/60">{roomSummary(room)}</p>
         {!available ? (
-          <p className="mt-1.5 text-sm font-semibold text-apricot">Sold out for your dates</p>
+          <p className="mt-1.5 text-sm font-semibold text-apricot">
+            {multi && freeRooms > 0 ? `Only ${freeRooms} free — not enough for ${stay.guests} guests` : "Sold out for your dates"}
+          </p>
+        ) : multi ? (
+          <p className="mt-1.5 text-sm font-semibold text-apricot">
+            Book {split!.length} rooms for {stay.guests} guests ({split!.join(" + ")})
+          </p>
         ) : tooSmall ? (
           <p className="mt-1.5 text-sm font-semibold text-apricot">Fits up to {room.maxGuests} {room.maxGuests === 1 ? "guest" : "guests"}</p>
         ) : (
@@ -84,18 +101,18 @@ function RoomTypeCard({
           <p>
             <strong className="font-display text-xl font-normal">{format(quote.totalCents)}</strong>
             <span className="block text-xs text-basalt/50">
-              for {quote.nights} {quote.nights === 1 ? "night" : "nights"}
+              for {multi ? `${split!.length} rooms · ` : ""}{quote.nights} {quote.nights === 1 ? "night" : "nights"}
             </span>
           </p>
         ) : (
           <p>
             {/* "from" when this type's rooms aren't all the same price. */}
             {room.units.some((u) => u.priceCents != null && u.priceCents !== room.priceCents) && <span className="text-xs text-basalt/50">from </span>}
-            <strong className="font-display text-xl font-normal">{format(typeFromCents(room))}</strong>
-            <span className="text-sm text-basalt/50"> / night</span>
+            <strong className="font-display text-xl font-normal">{format(typeFromCents(room) * (multi && available ? split!.length : 1))}</strong>
+            <span className="text-sm text-basalt/50"> / night{multi && available ? ` · ${split!.length} rooms` : ""}</span>
           </p>
         )}
-        <span className="inline-flex items-center rounded-none bg-apricot px-4 py-2 text-sm font-semibold text-white transition-colors group-hover:bg-apricot/90">View room</span>
+        <span className="inline-flex items-center rounded-none bg-apricot px-4 py-2 text-sm font-semibold text-white transition-colors group-hover:bg-apricot/90">{multi && available ? `View ${split!.length} rooms` : "View room"}</span>
       </div>
     </button>
   );
@@ -115,7 +132,10 @@ export function RoomTypeList({
   onOpen: (id: string) => void;
 }) {
   const [showAll, setShowAll] = useState(false);
-  const visible = showAll || rooms.length <= INITIAL_VISIBLE ? rooms : rooms.slice(0, INITIAL_VISIBLE);
+  // Rooms that fit the whole party on their own stay on top; smaller rooms
+  // (offered as several rooms) follow, in the operator's order otherwise.
+  const ordered = [...rooms].sort((a, b) => Number(stay.guests > a.maxGuests) - Number(stay.guests > b.maxGuests));
+  const visible = showAll || ordered.length <= INITIAL_VISIBLE ? ordered : ordered.slice(0, INITIAL_VISIBLE);
   return (
     <div className="grid gap-3">
       {visible.map((room) => (

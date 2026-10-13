@@ -246,3 +246,20 @@ export function roomsFreeFor(type: RoomType, avail: RoomAvailability, startDate:
   if (type.units.length) return freeUnitCount(type, avail.byUnit, startDate, endDate);
   return Math.max(0, type.quantity - maxNightlyOccupancy(avail.byType.get(type.id) ?? [], startDate, endDate));
 }
+
+/**
+ * Split a party across the fewest rooms of a type: 4 guests in 2-guest rooms →
+ * [2, 2]; 5 → [2, 2, 1]. Null when it would take more rooms than one checkout allows.
+ */
+export function splitGuests(total: number, maxPerRoom: number): number[] | null {
+  const max = Math.max(1, maxPerRoom);
+  const n = Math.max(1, Math.ceil(total / max));
+  if (n > MAX_ROOMS_PER_BOOKING) return null;
+  const base = Math.floor(total / n);
+  return Array.from({ length: n }, (_, i) => base + (i < total % n ? 1 : 0));
+}
+
+/** Largest party one checkout can take: one room type, several of its rooms (capped). */
+export function maxPartySize(types: Pick<RoomType, "maxGuests" | "quantity" | "units">[]): number {
+  return Math.max(1, ...types.map((t) => t.maxGuests * Math.min(typeCapacity(t), MAX_ROOMS_PER_BOOKING)));
+}

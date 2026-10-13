@@ -16,7 +16,7 @@ import type { RoomType } from "@shared/listings";
 import { describeCancellationPolicy, nightsBetween } from "@shared/bookings";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { imgAttrs } from "@/lib/responsiveImg";
-import { MAX_ROOMS_PER_BOOKING, bestRoomFor, bestRoomsFor, roomsFreeFor, typeCapacity, typeFromCents, typeUnavailableNights, type RoomAvailability } from "@shared/rooms";
+import { MAX_ROOMS_PER_BOOKING, bestRoomFor, bestRoomsFor, roomsFreeFor, splitGuests, typeCapacity, typeFromCents, typeUnavailableNights, type RoomAvailability } from "@shared/rooms";
 import { trackEvent } from "@/lib/analytics";
 import { roomPhotos, roomSummary } from "@/components/RoomTypeCard";
 import { fmtShort, GuestStepper, StayDatesPicker, type HotelStay } from "@/components/HotelBooking";
@@ -41,14 +41,22 @@ export function RoomDetailDialog({
   const [, navigate] = useLocation();
   const [lead, setLead] = useState(0);
   const [datesOpen, setDatesOpen] = useState(false);
-  // Several rooms of this type (0097): guests in each extra room (room 1 uses stay.guests).
-  const [extraRooms, setExtraRooms] = useState<number[]>([]);
+  // Several rooms of this type (0097): guests in each room. Opens on the fewest
+  // rooms that fit the party (4 guests, 2-guest rooms → 2 rooms of 2).
+  const [roomGuests, setRoomGuestsState] = useState<number[]>([1]);
   const roomId = room?.id;
   useEffect(() => {
     setLead(0);
     setDatesOpen(false);
-    setExtraRooms([]);
+    if (room) setRoomGuestsState(stay.guests > room.maxGuests ? splitGuests(stay.guests, room.maxGuests) ?? [room.maxGuests] : [stay.guests]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
+  // Keep the page's guest count (side panel) equal to the party total.
+  const setRoomGuests = (next: number[]) => {
+    setRoomGuestsState(next);
+    const total = next.reduce((a, b) => a + b, 0);
+    if (total !== stay.guests) onStayChange({ ...stay, guests: total });
+  };
 
   if (!room) return <Dialog open={false} />;
 
@@ -57,17 +65,16 @@ export function RoomDetailDialog({
   const grid = photos.length ? Array.from({ length: Math.min(4, photos.length) }, (_, i) => photos[(lead + i) % photos.length]) : [];
 
   const hasDates = !!(stay.start && stay.end);
-  const roomGuests = [stay.guests, ...extraRooms];
   const roomCount = roomGuests.length;
   // How many rooms the guest may pick: what's free for these dates (else the type's size), capped.
   const freeRooms = hasDates ? roomsFreeFor(room, availability, stay.start!, stay.end!) : typeCapacity(room);
   const maxRooms = Math.max(1, Math.min(MAX_ROOMS_PER_BOOKING, freeRooms));
   const setRoomCount = (n: number) => {
     const next = Math.max(1, Math.min(maxRooms, n));
-    setExtraRooms((prev) => (next - 1 > prev.length ? [...prev, ...Array(next - 1 - prev.length).fill(Math.min(2, room.maxGuests))] : prev.slice(0, next - 1)));
+    setRoomGuests(next > roomGuests.length ? [...roomGuests, ...Array(next - roomGuests.length).fill(Math.min(2, room.maxGuests))] : roomGuests.slice(0, next));
   };
   // The room(s) the guest gets (cheapest free ones for every night) and the price.
-  const best = hasDates && roomCount === 1 ? bestRoomFor(listing, room, availability, stay.start!, stay.end!, stay.guests) : null;
+  const best = hasDates && roomCount === 1 ? bestRoomFor(listing, room, availability, stay.start!, stay.end!, roomGuests[0]) : null;
   const group = hasDates && roomCount > 1 ? bestRoomsFor(listing, room, availability, stay.start!, stay.end!, roomGuests) : null;
   const available = !hasDates || (roomCount > 1 ? !!group : !!best);
   const tooSmall = roomGuests.some((g) => g > room.maxGuests);
@@ -209,7 +216,7 @@ export function RoomDetailDialog({
                 </h3>
                 {roomCount === 1 ? (
                   <div className="mt-3 max-w-xs">
-                    <GuestStepper guests={stay.guests} max={room.maxGuests} onChange={(guests) => onStayChange({ ...stay, guests })} />
+                    <GuestStepper guests={roomGuests[0]} max={room.maxGuests} onChange={(guests) => setRoomGuests([guests])} />
                   </div>
                 ) : (
                   <div className="mt-3 grid max-w-sm gap-2">
@@ -219,7 +226,7 @@ export function RoomDetailDialog({
                         <GuestStepper
                           guests={g}
                           max={room.maxGuests}
-                          onChange={(n) => (i === 0 ? onStayChange({ ...stay, guests: n }) : setExtraRooms((prev) => prev.map((v, j) => (j === i - 1 ? n : v))))}
+                          onChange={(n) => setRoomGuests(roomGuests.map((v, j) => (j === i ? n : v)))}
                         />
                       </div>
                     ))}
