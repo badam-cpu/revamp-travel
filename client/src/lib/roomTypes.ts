@@ -56,6 +56,8 @@ interface RoomTypeRow {
   gallery: string[] | null;
   amenities: string[] | null;
   sort_order: number | null;
+  /** 0100 — absent before that migration (rows come from select("*")). */
+  seasonal_rates?: SeasonalRate[] | null;
   room_units?: RoomUnitRow[] | null;
 }
 
@@ -84,6 +86,7 @@ export function mapRoomTypeRow(row: RoomTypeRow): RoomType {
     sizeM2: row.size_m2 ?? undefined,
     priceCents: row.price_cents,
     priceUnit: row.price_unit || "night",
+    seasonalRates: Array.isArray(row.seasonal_rates) ? row.seasonal_rates : [],
     quantity: row.quantity,
     image: row.image ?? undefined,
     gallery: Array.isArray(row.gallery) ? row.gallery : [],
@@ -173,6 +176,16 @@ async function persistUnits(roomTypeId: string, units: RoomTypeInput["units"]): 
     const { error } = u.id ? await supabase.from("room_units").update(row).eq("id", u.id) : await supabase.from("room_units").insert(row);
     if (error) throw new Error(error.message);
   }
+}
+
+/** Save a room TYPE's per-date prices (0100) — they apply to every room of the type. */
+export async function updateRoomTypeRates(typeId: string, rates: SeasonalRate[]): Promise<SeasonalRate[]> {
+  const { data, error } = await supabase.from("room_types").update({ seasonal_rates: rates }).eq("id", typeId).select("seasonal_rates").single();
+  if (error || !data) {
+    console.error("[room_types] rates save failed", error?.message);
+    throw new Error("Couldn't save the room type's prices. Please try again.");
+  }
+  return Array.isArray((data as { seasonal_rates?: unknown }).seasonal_rates) ? ((data as { seasonal_rates: SeasonalRate[] }).seasonal_rates) : [];
 }
 
 /** Save one room's calendar edits (per-date prices and/or blocked dates). */

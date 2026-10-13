@@ -36,7 +36,7 @@ export interface RoomGroupInput {
   currency: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   listing: any;
-  roomType: { id: string; max_guests: number; price_cents: number; price_unit: string | null; quantity: number };
+  roomType: { id: string; max_guests: number; price_cents: number; price_unit: string | null; quantity: number; seasonal_rates?: { start: string; end: string; priceCents: number }[] | null };
   startDate: string;
   endDate: string;
   /** Guests in each room, one entry per room. */
@@ -116,7 +116,7 @@ export async function startRoomGroupCheckout(i: RoomGroupInput): Promise<RoomGro
       arr.push({ start: b.start_date, end: b.end_date });
       bookedByUnit.set(b.room_unit_id, arr);
     }
-    const type = { priceCents: rt.price_cents, units } as Pick<RoomType, "priceCents" | "units">;
+    const type = { priceCents: rt.price_cents, seasonalRates: Array.isArray(rt.seasonal_rates) ? rt.seasonal_rates : [], units } as Pick<RoomType, "priceCents" | "units" | "seasonalRates">;
     const got = cheapestAvailableUnits(quoteListing, type, bookedByUnit, startDate, endDate, roomsGuests);
     if (!got) {
       const free = freeUnitCount(type, bookedByUnit, startDate, endDate);
@@ -136,7 +136,7 @@ export async function startRoomGroupCheckout(i: RoomGroupInput): Promise<RoomGro
     const live = (clashes ?? []).filter((c) => c.status === "confirmed" || Date.parse(c.created_at) > holdCutoff).map((c) => ({ start: c.start_date as string, end: c.end_date as string }));
     const free = (rt.quantity ?? 1) - maxNightlyOccupancy(live, startDate, endDate);
     if (free < n) return fail(409, free > 0 ? `Only ${free} room${free === 1 ? "" : "s"} of this type ${free === 1 ? "is" : "are"} free for those nights.` : "That room just sold out for those dates. Try other dates or another room.");
-    picks = roomsGuests.map((g) => ({ unit: null, guests: g, quote: quoteRoom(quoteListing, { priceCents: rt.price_cents, priceUnit: rt.price_unit || "night" }, startDate, endDate, g) }));
+    picks = roomsGuests.map((g) => ({ unit: null, guests: g, quote: quoteRoom(quoteListing, { priceCents: rt.price_cents, priceUnit: rt.price_unit || "night", seasonalRates: Array.isArray(rt.seasonal_rates) ? rt.seasonal_rates : [] }, startDate, endDate, g) }));
   }
   if (picks.some((p) => p.quote.accommodationCents <= 0)) return fail(400, "This listing is rate-on-request — contact the operator to book.");
 

@@ -1380,7 +1380,7 @@ export function registerApiRoutes(app: Express) {
     // The guest books ONE room type: it must belong to this listing and fit the
     // party; price and availability below come from the room, not the listing.
     // `multi_room` is undefined before 0092 runs, so ordinary stays never enter.
-    let room: { id: string; max_guests: number; price_cents: number; price_unit: string | null; quantity: number } | null = null;
+    let room: { id: string; max_guests: number; price_cents: number; price_unit: string | null; quantity: number; seasonal_rates?: { start: string; end: string; priceCents: number }[] | null } | null = null;
     // The specific room assigned (the cheapest of the type free for every night,
     // counting confirmed bookings AND live holds). Null for a type that has no
     // individual rooms yet — it falls back to the type's count further down.
@@ -1391,7 +1391,7 @@ export function registerApiRoutes(app: Express) {
       if (!parsed.data.roomTypeId) return res.status(400).json({ error: "Choose a room first." });
       const { data: rt } = await roomAdmin
         .from("room_types")
-        .select("id, listing_id, max_guests, price_cents, price_unit, quantity")
+        .select("*") // * so the 0100 seasonal_rates column is read when present
         .eq("id", parsed.data.roomTypeId)
         .maybeSingle();
       if (!rt || rt.listing_id !== listingId) return res.status(404).json({ error: "That room wasn't found." });
@@ -1470,7 +1470,7 @@ export function registerApiRoutes(app: Express) {
             discountStart: listing.discount_start,
             discountEnd: listing.discount_end,
           },
-          { priceCents: rt.price_cents, units },
+          { priceCents: rt.price_cents, seasonalRates: Array.isArray(rt.seasonal_rates) ? rt.seasonal_rates : [], units },
           bookedByUnit,
           startDate,
           endDate,
@@ -1502,7 +1502,9 @@ export function registerApiRoutes(app: Express) {
             // The assigned room's nightly price: its per-date rates, else its own
             // base, else the type's (shared/rooms.ts unitPricing — the same input
             // the guest's preview used). No extra-guest fees on rooms in v1.
-            ...(unit ? unitPricing({ priceCents: room.price_cents }, unit) : { priceCents: room.price_cents, priceUnit: room.price_unit || "night", seasonalRates: [] }),
+            ...(unit
+              ? unitPricing({ priceCents: room.price_cents, seasonalRates: Array.isArray(room.seasonal_rates) ? room.seasonal_rates : [] }, unit)
+              : { priceCents: room.price_cents, priceUnit: room.price_unit || "night", seasonalRates: Array.isArray(room.seasonal_rates) ? room.seasonal_rates : [] }),
             cancellationPolicy: listing.cancellation_policy ?? "flexible",
             nonrefundableDiscountPercent: listing.nonrefundable_discount_percent ?? 0,
           }

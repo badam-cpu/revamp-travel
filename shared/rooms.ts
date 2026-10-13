@@ -40,9 +40,22 @@ export interface RoomQuote {
   undiscountedTotalCents: number;
 }
 
-/** The nightly price input for a room: its own base (or the type's) plus its per-date rates. */
-export function unitPricing(type: Pick<RoomType, "priceCents">, unit: Pick<RoomUnit, "priceCents" | "seasonalRates">) {
-  return { priceCents: unit.priceCents ?? type.priceCents, priceUnit: "night", seasonalRates: unit.seasonalRates ?? [] };
+/**
+ * The nightly price input for a room. Per night: the room's own per-date rate →
+ * the room TYPE's per-date rate (0100) → the room's base → the type's base. The
+ * room's rates come last because a matching rate is resolved last-wins.
+ */
+export function unitPricing(type: Pick<RoomType, "priceCents" | "seasonalRates">, unit: Pick<RoomUnit, "priceCents" | "seasonalRates">) {
+  return { priceCents: unit.priceCents ?? type.priceCents, priceUnit: "night", seasonalRates: [...(type.seasonalRates ?? []), ...(unit.seasonalRates ?? [])] };
+}
+
+/** One night's price for a room (same rule as `unitPricing`) — for calendars and the timeline. */
+export function unitNightCents(type: Pick<RoomType, "priceCents" | "seasonalRates">, unit: Pick<RoomUnit, "priceCents" | "seasonalRates">, night: string): { cents: number; source: "room" | "type" | "base" } {
+  const own = (unit.seasonalRates ?? []).filter((r) => r.start <= night && night <= r.end).pop();
+  if (own) return { cents: own.priceCents, source: "room" };
+  const t = (type.seasonalRates ?? []).filter((r) => r.start <= night && night <= r.end).pop();
+  if (t) return { cents: t.priceCents, source: "type" };
+  return { cents: unit.priceCents ?? type.priceCents, source: "base" };
 }
 
 /** A room's base nightly price (before per-date rates). */
@@ -76,12 +89,12 @@ function quote(listing: QuoteListing, pricing: { priceCents: number; priceUnit: 
 }
 
 /** Price of a room type with no individual rooms (legacy: the type's flat nightly price). */
-export function quoteRoom(listing: QuoteListing, room: Pick<RoomType, "priceCents" | "priceUnit">, startDate: string, endDate: string, guests: number): RoomQuote {
-  return quote(listing, { priceCents: room.priceCents, priceUnit: room.priceUnit, seasonalRates: [] }, startDate, endDate, guests);
+export function quoteRoom(listing: QuoteListing, room: Pick<RoomType, "priceCents" | "priceUnit" | "seasonalRates">, startDate: string, endDate: string, guests: number): RoomQuote {
+  return quote(listing, { priceCents: room.priceCents, priceUnit: room.priceUnit, seasonalRates: room.seasonalRates ?? [] }, startDate, endDate, guests);
 }
 
 /** Price of one specific room for the dates (its per-date rates, own base, or the type's price). */
-export function quoteUnit(listing: QuoteListing, type: Pick<RoomType, "priceCents">, unit: Pick<RoomUnit, "priceCents" | "seasonalRates">, startDate: string, endDate: string, guests: number): RoomQuote {
+export function quoteUnit(listing: QuoteListing, type: Pick<RoomType, "priceCents" | "seasonalRates">, unit: Pick<RoomUnit, "priceCents" | "seasonalRates">, startDate: string, endDate: string, guests: number): RoomQuote {
   return quote(listing, unitPricing(type, unit), startDate, endDate, guests);
 }
 
@@ -100,7 +113,7 @@ export function unitFree(unit: Pick<RoomUnit, "active" | "manualBlockedRanges" |
  */
 export function cheapestAvailableUnit(
   listing: QuoteListing,
-  type: Pick<RoomType, "priceCents" | "units">,
+  type: Pick<RoomType, "priceCents" | "units" | "seasonalRates">,
   bookedByUnit: Map<string, Range[]>,
   startDate: string,
   endDate: string,
@@ -187,7 +200,7 @@ export const MAX_ROOMS_PER_BOOKING = 6;
  */
 export function cheapestAvailableUnits(
   listing: QuoteListing,
-  type: Pick<RoomType, "priceCents" | "units">,
+  type: Pick<RoomType, "priceCents" | "units" | "seasonalRates">,
   bookedByUnit: Map<string, Range[]>,
   startDate: string,
   endDate: string,
@@ -196,7 +209,7 @@ export function cheapestAvailableUnits(
   const picked: { unit: RoomUnit; quote: RoomQuote; guests: number }[] = [];
   let remaining = [...type.units];
   for (const guests of guestsPerRoom) {
-    const best = cheapestAvailableUnit(listing, { priceCents: type.priceCents, units: remaining }, bookedByUnit, startDate, endDate, guests);
+    const best = cheapestAvailableUnit(listing, { priceCents: type.priceCents, seasonalRates: type.seasonalRates, units: remaining }, bookedByUnit, startDate, endDate, guests);
     if (!best) return null;
     picked.push({ ...best, guests });
     remaining = remaining.filter((u) => u.id !== best.unit.id);

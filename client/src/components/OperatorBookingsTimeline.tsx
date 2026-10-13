@@ -26,7 +26,7 @@ import { BookingDetailDialog } from "@/components/BookingDetailDialog";
 import { DirectBookingDialog, type DirectBookingRoom } from "@/components/DirectBookingDialog";
 import { fetchRoomTypes } from "@/lib/roomTypes";
 import type { RoomType, SeasonalRate } from "@shared/listings";
-import { roomUnitLabel, unitBaseCents } from "@shared/rooms";
+import { roomUnitLabel, unitBaseCents, unitNightCents, unitPricing } from "@shared/rooms";
 import type { LiveListing } from "@/contexts/ListingsContext";
 import { cn } from "@/lib/utils";
 
@@ -91,6 +91,13 @@ export function OperatorBookingsTimeline() {
   // Hotels: their room types + rooms, and which hotels are collapsed to the summary row.
   const [roomsByHotel, setRoomsByHotel] = useState<Map<string, RoomType[]>>(new Map());
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggleKey = (k: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
   const [reload, setReload] = useState(0);
   const [typeFilter, setTypeFilter] = useState<"all" | "stay" | "tour" | "experience">("all");
 
@@ -426,25 +433,64 @@ export function OperatorBookingsTimeline() {
                   </div>
                 </div>
                 {isOpen &&
-                  rooms.map(({ type, unit }) => {
-                    const roomLabel = `${type.name} · ${roomUnitLabel(unit.name)}`;
-                    const base = unitBaseCents(type, unit);
-                    const priceAt = (d: string) => unit.seasonalRates.filter((r) => r.start <= d && d <= r.end).pop()?.priceCents ?? base;
+                  groupByType(rooms).map(({ type, units }) => {
+                    const typeKey = `${listing.id}:${type.id}`;
+                    const typeOpen = !collapsed.has(typeKey);
+                    const typeRates = type.seasonalRates ?? [];
+                    const typeFree = (d: string) =>
+                      units.filter((u) => !bookings.some((b) => b.room_unit_id === u.id && b.start_date <= d && d < b.end_date) && !(u.blockedRanges ?? []).some((r) => r.start <= d && d < r.end) && !u.manualBlockedRanges.some((r) => r.start <= d && d < r.end)).length;
                     return (
-                      <div key={unit.id} className="flex border-t border-basalt/6">
-                        <div className="sticky left-0 z-10 flex shrink-0 flex-col justify-center border-r border-basalt/12 bg-paper py-2 pl-10 pr-3" style={{ width: NAME_W }}>
-                          <span className="truncate text-sm font-semibold text-basalt">{roomUnitLabel(unit.name)}</span>
-                          <span className="truncate text-[11px] text-basalt/45">{type.name}</span>
+                      <div key={type.id}>
+                        {/* Room type row: the type's price per night (all its rooms) and rooms free. */}
+                        <div className="flex border-t border-basalt/8 bg-chalk/40">
+                          <button
+                            type="button"
+                            onClick={() => toggleKey(typeKey)}
+                            aria-expanded={typeOpen}
+                            className="sticky left-0 z-10 flex shrink-0 items-center gap-2 border-r border-basalt/12 bg-chalk py-2 pl-6 pr-3 text-left hover:bg-chalk/70"
+                            style={{ width: NAME_W }}
+                          >
+                            {typeOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-basalt/45" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-basalt/45" />}
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm font-semibold text-basalt">{type.name}</span>
+                              <span className="block truncate text-[11px] text-basalt/45">Room type · {units.length} room{units.length === 1 ? "" : "s"}</span>
+                            </span>
+                          </button>
+                          <div className="relative shrink-0" style={{ width: trackW, height: 46 }}>
+                            {days.map((d, i) => {
+                              const rate = typeRates.filter((r) => r.start <= d && d <= r.end).pop();
+                              const n = typeFree(d);
+                              return (
+                                <div key={d} className={cn("absolute top-0 flex h-full flex-col items-center justify-center border-r border-basalt/8", d === today && "bg-apricot/[0.06]")} style={{ left: i * CELL_W, width: CELL_W }} title={`${type.name}: ${n} of ${units.length} free`}>
+                                  {d >= today && <span className={cn("text-[10px] font-bold tabular-nums", rate ? "text-apricot" : "text-basalt/70")}>{compact(rate ? rate.priceCents : type.priceCents)}</span>}
+                                  <span className={cn("text-[9px] tabular-nums", n === 0 ? "font-semibold text-tuff" : "text-basalt/40")}>{n}/{units.length}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
-                        {track({
-                          height: 52,
-                          bookings: bookings.filter((b) => b.room_unit_id === unit.id),
-                          synced: unit.blockedRanges ?? [],
-                          manual: unit.manualBlockedRanges,
-                          base,
-                          rates: unit.seasonalRates,
-                          onDay: (d) => setDirect({ listing, date: d, room: { unitId: unit.id, label: roomLabel, nightlyCents: priceAt(d) } }),
-                        })}
+                        {typeOpen &&
+                          units.map((unit) => {
+                            const roomLabel = `${type.name} · ${roomUnitLabel(unit.name)}`;
+                            return (
+                              <div key={unit.id} className="flex border-t border-basalt/6">
+                                <div className="sticky left-0 z-10 flex shrink-0 flex-col justify-center border-r border-basalt/12 bg-paper py-2 pl-12 pr-3" style={{ width: NAME_W }}>
+                                  <span className="truncate text-sm font-semibold text-basalt">{roomUnitLabel(unit.name)}</span>
+                                  <span className="truncate text-[11px] text-basalt/45">{unit.seasonalRates.length ? "Own prices on some dates" : type.name}</span>
+                                </div>
+                                {track({
+                                  height: 52,
+                                  bookings: bookings.filter((b) => b.room_unit_id === unit.id),
+                                  synced: unit.blockedRanges ?? [],
+                                  manual: unit.manualBlockedRanges,
+                                  base: unitBaseCents(type, unit),
+                                  // Type prices first, the room's own last (they win) — shared/rooms.ts unitPricing.
+                                  rates: unitPricing(type, unit).seasonalRates,
+                                  onDay: (d) => setDirect({ listing, date: d, room: { unitId: unit.id, label: roomLabel, nightlyCents: unitNightCents(type, unit, d).cents } }),
+                                })}
+                              </div>
+                            );
+                          })}
                       </div>
                     );
                   })}
@@ -468,4 +514,15 @@ export function OperatorBookingsTimeline() {
       <DirectBookingDialog listing={direct?.listing ?? null} startDate={direct?.date ?? null} room={direct?.room ?? null} onClose={() => setDirect(null)} onCreated={() => setReload((k) => k + 1)} />
     </div>
   );
+}
+
+/** A hotel's rooms grouped under their room type, in order. */
+function groupByType(rooms: { type: RoomType; unit: RoomType["units"][number] }[]): { type: RoomType; units: RoomType["units"] }[] {
+  const out: { type: RoomType; units: RoomType["units"] }[] = [];
+  for (const r of rooms) {
+    const g = out.find((x) => x.type.id === r.type.id);
+    if (g) g.units.push(r.unit);
+    else out.push({ type: r.type, units: [r.unit] });
+  }
+  return out;
 }

@@ -167,6 +167,8 @@ export interface RoomType {
   /** Default nightly price for this type's rooms (a room may override it). */
   priceCents: number;
   priceUnit: string;
+  /** Per-date prices for ALL this type's rooms (0100); a room's own per-date rates win where set. */
+  seasonalRates?: SeasonalRate[];
   /** Legacy count, only used while a type has no individual rooms. */
   quantity: number;
   image?: string;
