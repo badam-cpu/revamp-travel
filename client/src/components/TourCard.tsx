@@ -40,14 +40,20 @@ export function TourCard({ listing, surface = "tours" }: { listing: Listing; sur
   const step = (delta: number, event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
+    setWarm(true);
     setIndex((current) => (current + delta + images.length) % images.length);
   };
+  // Only the visible photo is downloaded; the next one too once the visitor
+  // shows interest (hover / touch / arrow). Rendering every carousel photo up
+  // front made each card fetch its whole gallery (Supabase Storage egress).
+  const [warm, setWarm] = useState(false);
+  const loadPhoto = (i: number) => i === index || (warm && i === (index + 1) % images.length);
 
   return (
     <article ref={impressionRef} className="group flex h-full flex-col overflow-hidden rounded-2xl border border-basalt/12 bg-paper transition-all duration-200 hover:-translate-y-1 hover:border-basalt/20 hover:shadow-[0_18px_40px_rgba(33,33,33,0.14)]">
       <Link href={`/listing/${listing.slug}`} onClick={() => trackListing(listing.id, "card_click", surface)} className="flex h-full flex-col focus-visible:outline-none">
-        <div className="relative aspect-[4/3] overflow-hidden bg-basalt/5">
-          {images.map((src, i) => (
+        <div className="relative aspect-[4/3] overflow-hidden bg-basalt/5" onMouseEnter={() => setWarm(true)} onTouchStart={() => setWarm(true)}>
+          {images.map((src, i) => !loadPhoto(i) ? null : (
             <img
               key={src + i}
               {...imgAttrs(src, "(min-width:1024px) 33vw, (min-width:640px) 50vw, 100vw")}

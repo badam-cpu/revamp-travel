@@ -97,7 +97,10 @@ function HeroCarousel({ photos, title, onOpen, badge, coverFocus }: { photos: st
             onClick={() => onOpen(i)}
             className="h-full w-full shrink-0"
           >
-            <img {...imgAttrs(src, "(min-width:1024px) 1100px, 100vw")} alt={idx === 0 ? title : ""} loading={idx === 0 ? undefined : "lazy"} style={idx === 0 ? { objectPosition: coverFocus || undefined } : undefined} className="h-full w-full object-cover" />
+            {/* Only the current photo and its neighbours are fetched (not the whole gallery). */}
+            {Math.min(Math.abs(idx - i), total - Math.abs(idx - i)) <= 1 && (
+              <img {...imgAttrs(src, "(min-width:1024px) 1100px, 100vw")} alt={idx === 0 ? title : ""} loading={idx === 0 ? undefined : "lazy"} style={idx === 0 ? { objectPosition: coverFocus || undefined } : undefined} className="h-full w-full object-cover" />
+            )}
           </button>
         ))}
       </div>

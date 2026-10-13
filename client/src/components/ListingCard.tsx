@@ -43,8 +43,14 @@ export function ListingCard({ listing, large = false, active = false, onHover, s
   const step = (delta: number, event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
+    setWarm(true);
     setIndex((current) => (current + delta + images.length) % images.length);
   };
+  // Only the visible photo is downloaded; the next one too once the visitor
+  // shows interest (hover / touch / arrow). Rendering every carousel photo up
+  // front made each card fetch its whole gallery (Supabase Storage egress).
+  const [warm, setWarm] = useState(false);
+  const loadPhoto = (i: number) => i === index || (warm && i === (index + 1) % images.length);
   // Headline shows the LOWEST upcoming nightly rate ("from ֏X") when the stay
   // uses seasonal/daily pricing; otherwise just the base price.
   const priceRange = nightlyPriceRange({ priceCents: Math.round(listing.price * 100), priceUnit: listing.priceUnit, seasonalRates: listing.seasonalRates });
@@ -57,8 +63,8 @@ export function ListingCard({ listing, large = false, active = false, onHover, s
       onMouseLeave={() => onHover?.(undefined)}
     >
       <Link href={`/listing/${listing.slug}`} onClick={() => trackListing(listing.id, "card_click", surface)} className="flex h-full flex-col focus-visible:outline-none">
-        <div className={cn("listing-image brand-notch relative overflow-hidden bg-basalt/5", large ? "aspect-[16/10]" : "aspect-[4/3]")}> 
-          {images.map((src, i) => (
+        <div className={cn("listing-image brand-notch relative overflow-hidden bg-basalt/5", large ? "aspect-[16/10]" : "aspect-[4/3]")} onMouseEnter={() => setWarm(true)} onTouchStart={() => setWarm(true)}> 
+          {images.map((src, i) => !loadPhoto(i) ? null : (
             <img
               key={src + i}
               {...imgAttrs(src, large ? "(min-width:1024px) 66vw, 100vw" : "(min-width:1024px) 33vw, (min-width:640px) 50vw, 100vw")}
