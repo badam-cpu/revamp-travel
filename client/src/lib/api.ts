@@ -1030,7 +1030,7 @@ export interface TripPageData {
   mapUrl: string;
   messages: { step: string; label: string; subject: string; body: string; sentAt: string }[];
   surveys: { step: string; label: string; rating: number | null }[];
-  reviewLinks: { google: string; tripadvisor: string; revamp: string };
+  reviewLinks: { buttons: { label: string; url: string }[]; revamp: string };
 }
 export function getTripPage(token: string): Promise<TripPageData> {
   return request<TripPageData>(`/api/trip?token=${encodeURIComponent(token)}`);

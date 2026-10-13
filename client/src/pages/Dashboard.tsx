@@ -23,7 +23,7 @@
  */
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, CreditCard, FileText, Gift, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, Pencil, Plug, Plus, QrCode, RefreshCw, Route, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, Check, ChevronDown, Copy, CreditCard, FileText, Gift, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, PanelLeftClose, PanelLeftOpen, Pencil, Plug, Plus, QrCode, RefreshCw, Route, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
 import { Inbox } from "@/components/Inbox";
 import { PartnerHub } from "@/components/PartnerHub";
 import { OperatorIntegrations } from "@/components/OperatorIntegrations";
@@ -1840,6 +1840,25 @@ function DashboardContent() {
     navigate(s === "overview" ? "/dashboard" : `/dashboard?section=${s}`);
   };
 
+  // Desktop menu can shrink to an icon rail (more room for the timeline/calendar);
+  // remembered per browser. Phones keep the horizontal scrolling menu.
+  const [navCollapsed, setNavCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("revamp.dashboardNavCollapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleNav = () =>
+    setNavCollapsed((c) => {
+      try {
+        localStorage.setItem("revamp.dashboardNavCollapsed", c ? "0" : "1");
+      } catch {
+        /* private mode — just don't remember */
+      }
+      return !c;
+    });
+
   const mine = useMemo(() => listings.filter((l) => l.operatorId === user?.id), [listings, user?.id]);
   const published = mine.filter((l) => l.status === "published").length;
   const pending = mine.filter((l) => l.status === "pending").length;
@@ -1855,12 +1874,24 @@ function DashboardContent() {
     <div className="min-h-screen bg-paper text-basalt">
       <SiteHeader minimal wide />
       <main className="mx-auto w-full max-w-[1680px] px-4 py-10 sm:px-6 lg:px-10 lg:py-14">
-        <div className="grid gap-8 lg:grid-cols-[210px_minmax(0,1fr)]">
+        <div className={cn("grid gap-8", navCollapsed ? "lg:grid-cols-[44px_minmax(0,1fr)] lg:gap-6" : "lg:grid-cols-[210px_minmax(0,1fr)]")}>
           <aside className="lg:sticky lg:top-[96px] lg:self-start">
-            <p className="hidden px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-basalt/40 lg:block">Operator</p>
+            <div className={cn("hidden items-center lg:flex", navCollapsed ? "justify-center" : "justify-between pl-3")}>
+              {!navCollapsed && <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-basalt/40">Operator</p>}
+              <button
+                type="button"
+                onClick={toggleNav}
+                aria-label={navCollapsed ? "Expand menu" : "Collapse menu"}
+                aria-expanded={!navCollapsed}
+                title={navCollapsed ? "Expand menu" : "Collapse menu"}
+                className="grid h-8 w-8 place-items-center text-basalt/45 transition-colors hover:bg-chalk hover:text-basalt focus-visible:outline-2 focus-visible:outline-apricot"
+              >
+                {navCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+              </button>
+            </div>
             <nav className="mt-0 flex gap-1 overflow-x-auto pb-1 lg:mt-3 lg:flex-col lg:overflow-visible lg:pb-0">
-              <Link href="/" className="flex items-center gap-2.5 whitespace-nowrap px-3 py-2.5 text-sm font-semibold text-basalt/60 transition-colors hover:bg-chalk hover:text-basalt">
-                <Home className="h-4 w-4" /> Homepage
+              <Link href="/" title={navCollapsed ? "Homepage" : undefined} className={cn("flex items-center gap-2.5 whitespace-nowrap px-3 py-2.5 text-sm font-semibold text-basalt/60 transition-colors hover:bg-chalk hover:text-basalt", navCollapsed && "lg:justify-center lg:px-0")}>
+                <Home className="h-4 w-4 shrink-0" /> <span className={cn(navCollapsed && "lg:sr-only")}>Homepage</span>
               </Link>
               {OPERATOR_SECTIONS.map(({ key, label, icon: Icon }) => (
                 <button
@@ -1868,12 +1899,14 @@ function DashboardContent() {
                   type="button"
                   onClick={() => go(key)}
                   aria-current={section === key}
+                  title={navCollapsed ? label : undefined}
                   className={cn(
                     "flex items-center gap-2.5 whitespace-nowrap px-3 py-2.5 text-sm font-semibold transition-colors",
                     section === key ? "bg-basalt text-paper" : "text-basalt/60 hover:bg-chalk hover:text-basalt",
+                    navCollapsed && "lg:justify-center lg:px-0",
                   )}
                 >
-                  <Icon className="h-4 w-4" /> {label}
+                  <Icon className="h-4 w-4 shrink-0" /> <span className={cn(navCollapsed && "lg:sr-only")}>{label}</span>
                 </button>
               ))}
             </nav>

@@ -20,8 +20,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   JOURNEY_STEPS,
   buildJourneyVars,
-  googleReviewUrl,
   missingPlaceholders,
+  resolveReviewButtons,
   renderTemplate,
   resolveTemplate,
   rowToTemplate,
@@ -89,6 +89,8 @@ interface Settings {
   tripadvisor_url: string;
   google_review_url: string;
   reply_to_email: string;
+  /** 0099 — the operator's review sites, in order (absent before it runs). */
+  review_links?: unknown;
 }
 
 export interface JourneyContext {
@@ -327,7 +329,8 @@ export interface TripPage {
   mapUrl: string;
   messages: { step: JourneyStep; label: string; subject: string; body: string; sentAt: string }[];
   surveys: { step: JourneyStep; label: string; rating: number | null }[];
-  reviewLinks: { google: string; tripadvisor: string; revamp: string };
+  /** Review sites shown to every survey respondent, in the operator's order (+ Revamp for signed-in guests). */
+  reviewLinks: { buttons: { label: string; url: string }[]; revamp: string };
 }
 
 /** Find a booking by its trip token; null when unknown or expired. */
@@ -385,11 +388,7 @@ export async function tripPageData(admin: SupabaseClient, ctx: JourneyContext): 
     mapUrl: messages.length && where ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(where)}` : "",
     messages,
     surveys,
-    reviewLinks: {
-      google: ctx.settings?.google_review_url || googleReviewUrl(ctx.googlePlaceId),
-      tripadvisor: ctx.settings?.tripadvisor_url ?? "",
-      revamp,
-    },
+    reviewLinks: { buttons: resolveReviewButtons(ctx.settings, ctx.googlePlaceId), revamp },
   };
 }
 

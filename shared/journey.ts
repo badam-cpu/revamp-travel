@@ -487,3 +487,59 @@ export function googleReviewUrl(placeId: string | null | undefined): string {
   const id = (placeId ?? "").trim();
   return id ? `https://search.google.com/local/writereview?placeid=${encodeURIComponent(id)}` : "";
 }
+
+// ── Review sites (where guests are invited to review, after the survey) ──────
+//
+// Only sites where ANY guest may review. Airbnb / Booking.com / GetYourGuide /
+// Viator reviews require a booking made through them, and Yelp forbids asking
+// for reviews, so they're not offered. Every survey respondent sees these
+// buttons regardless of score (no review gating).
+
+export type ReviewPlatform = "google" | "tripadvisor" | "trustpilot" | "facebook" | "other";
+export interface ReviewLink {
+  platform: ReviewPlatform;
+  url: string;
+  /** Button name for "other" (e.g. "Yell.am"). */
+  label?: string;
+}
+
+export const REVIEW_PLATFORMS: Record<ReviewPlatform, { name: string; hosts: RegExp | null; hint: string }> = {
+  google: { name: "Google", hosts: /(^|\.)(google\.[a-z.]+|g\.page|goo\.gl|maps\.app\.goo\.gl)$/i, hint: "Your Google Business “Ask for reviews” link (g.page/r/…/review)" },
+  tripadvisor: { name: "Tripadvisor", hosts: /(^|\.)tripadvisor\.[a-z.]+$/i, hint: "Your Tripadvisor “Write a review” link" },
+  trustpilot: { name: "Trustpilot", hosts: /(^|\.)trustpilot\.com$/i, hint: "trustpilot.com/evaluate/your-domain" },
+  facebook: { name: "Facebook", hosts: /(^|\.)(facebook\.com|fb\.com|fb\.me)$/i, hint: "Your Facebook page's Reviews tab" },
+  other: { name: "Other site", hosts: null, hint: "Any review page where all guests may post" },
+};
+export const MAX_REVIEW_LINKS = 5;
+
+/** Why a review link can't be saved, or null when it's fine. */
+export function reviewLinkProblem(l: ReviewLink): string | null {
+  const meta = REVIEW_PLATFORMS[l.platform];
+  if (!meta) return "Pick a review site.";
+  let u: URL;
+  try {
+    u = new URL(l.url.trim());
+  } catch {
+    return `${meta.name}: enter the full link, starting with https://`;
+  }
+  if (u.protocol !== "https:") return `${meta.name}: the link must start with https://`;
+  if (meta.hosts && !meta.hosts.test(u.hostname)) return `That doesn't look like a ${meta.name} link.`;
+  if (l.platform === "other" && !(l.label ?? "").trim()) return "Name the site for the “Other” link.";
+  return null;
+}
+
+/** The buttons a guest sees: the operator's list (in their order), else the legacy fields, plus Google from the Place ID if not listed. */
+export function resolveReviewButtons(
+  s: { review_links?: unknown; google_review_url?: string; tripadvisor_url?: string } | null,
+  googlePlaceId: string | null,
+): { label: string; url: string }[] {
+  const list = (Array.isArray(s?.review_links) ? (s!.review_links as ReviewLink[]) : []).filter((l) => l && !reviewLinkProblem(l));
+  const out = list.map((l) => ({ label: l.platform === "other" ? (l.label ?? "").trim() : REVIEW_PLATFORMS[l.platform].name, url: l.url.trim() }));
+  if (!list.length) {
+    if (s?.google_review_url) out.push({ label: "Google", url: s.google_review_url });
+    if (s?.tripadvisor_url) out.push({ label: "Tripadvisor", url: s.tripadvisor_url });
+  }
+  const auto = googleReviewUrl(googlePlaceId);
+  if (auto && !out.some((b) => b.label === "Google")) out.unshift({ label: "Google", url: auto });
+  return out.slice(0, MAX_REVIEW_LINKS + 1);
+}

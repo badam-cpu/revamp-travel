@@ -5,7 +5,7 @@
  * server (client/src/lib/api.ts → server/journey.ts).
  */
 import { supabase } from "@/lib/supabase";
-import { rowToTemplate, templateToRow, type JourneyStep, type JourneyTemplate, type JourneyTemplateRow } from "@shared/journey";
+import { rowToTemplate, templateToRow, type JourneyStep, type JourneyTemplate, type JourneyTemplateRow, type ReviewLink } from "@shared/journey";
 
 /** The operator's saved templates; null when the feature isn't set up yet (pre-0097). */
 export async function fetchJourneyTemplates(operatorId: string): Promise<JourneyTemplate[] | null> {
@@ -82,14 +82,27 @@ export interface JourneySettings {
   tripadvisor_url: string;
   google_review_url: string;
   reply_to_email: string;
+  /** 0099 — review sites in the operator's order. */
+  review_links: ReviewLink[];
 }
 export async function fetchJourneySettings(operatorId: string): Promise<{ settings: JourneySettings; googlePlaceId: string }> {
   const [{ data: s }, { data: p }] = await Promise.all([
-    supabase.from("journey_settings").select("tripadvisor_url, google_review_url, reply_to_email").eq("operator_id", operatorId).maybeSingle(),
+    supabase.from("journey_settings").select("*").eq("operator_id", operatorId).maybeSingle(),
     supabase.from("profiles").select("google_place_id").eq("id", operatorId).maybeSingle(),
   ]);
+  const row = s as (Partial<JourneySettings> & { review_links?: unknown }) | null;
+  // Before any list was saved, start from the two single fields (0098).
+  const legacy: ReviewLink[] = [
+    ...(row?.google_review_url ? [{ platform: "google" as const, url: row.google_review_url }] : []),
+    ...(row?.tripadvisor_url ? [{ platform: "tripadvisor" as const, url: row.tripadvisor_url }] : []),
+  ];
   return {
-    settings: (s as JourneySettings | null) ?? { tripadvisor_url: "", google_review_url: "", reply_to_email: "" },
+    settings: {
+      tripadvisor_url: row?.tripadvisor_url ?? "",
+      google_review_url: row?.google_review_url ?? "",
+      reply_to_email: row?.reply_to_email ?? "",
+      review_links: Array.isArray(row?.review_links) && (row!.review_links as unknown[]).length ? (row!.review_links as ReviewLink[]) : legacy,
+    },
     googlePlaceId: (p as { google_place_id?: string } | null)?.google_place_id ?? "",
   };
 }

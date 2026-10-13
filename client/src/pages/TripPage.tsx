@@ -181,10 +181,9 @@ function SurveyCard({
   };
 
   const reviewButtons = [
-    links.google && { href: links.google, label: "Review on Google" },
-    links.tripadvisor && { href: links.tripadvisor, label: "Review on Tripadvisor" },
-    links.revamp && { href: links.revamp, label: "Review on Revamp" },
-  ].filter(Boolean) as { href: string; label: string }[];
+    ...links.buttons.map((b) => ({ href: b.url, label: `Review on ${b.label}` })),
+    ...(links.revamp ? [{ href: links.revamp, label: "Review on Revamp" }] : []),
+  ];
 
   if (result != null) {
     const low = result <= 3;

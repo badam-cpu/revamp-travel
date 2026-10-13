@@ -46,6 +46,12 @@ import {
   PLACEHOLDERS,
   googleReviewUrl,
   listingPreviewVars,
+  MAX_REVIEW_LINKS,
+  REVIEW_PLATFORMS,
+  resolveReviewButtons,
+  reviewLinkProblem,
+  type ReviewLink,
+  type ReviewPlatform,
   renderTemplate,
   resolveTemplate,
   sampleVars,
@@ -534,14 +540,31 @@ function LinksTab({ operatorId }: { operatorId: string }) {
   }, [operatorId]);
   if (!s) return <p className="text-sm text-basalt/55">Loading…</p>;
   const auto = googleReviewUrl(placeId);
+  const links = s.review_links;
+  const setLinks = (next: ReviewLink[]) => setS({ ...s, review_links: next });
+  const update = (i: number, patch: Partial<ReviewLink>) => setLinks(links.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+  const move = (i: number, d: -1 | 1) => {
+    const j = i + d;
+    if (j < 0 || j >= links.length) return;
+    const next = [...links];
+    [next[i], next[j]] = [next[j], next[i]];
+    setLinks(next);
+  };
+  const used = new Set(links.map((l) => l.platform));
+  const nextPlatform = (["google", "tripadvisor", "trustpilot", "facebook", "other"] as ReviewPlatform[]).find((p) => p === "other" || !used.has(p)) ?? "other";
+  const buttons = resolveReviewButtons({ review_links: links.filter((l) => !reviewLinkProblem(l)) }, placeId);
+
   const save = async () => {
-    for (const u of [s.tripadvisor_url, s.google_review_url]) {
-      if (u && !/^https:\/\//i.test(u)) return toast("Links must start with https://");
+    const cleaned = links.filter((l) => l.url.trim()).map((l) => ({ ...l, url: l.url.trim(), label: l.label?.trim() || undefined }));
+    for (const l of cleaned) {
+      const p = reviewLinkProblem(l);
+      if (p) return toast(p);
     }
     if (s.reply_to_email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s.reply_to_email)) return toast("Enter a valid reply-to email.");
     setBusy(true);
     try {
-      await saveJourneySettings(operatorId, s);
+      await saveJourneySettings(operatorId, { ...s, review_links: cleaned });
+      setS({ ...s, review_links: cleaned });
       toast.success("Saved.");
     } catch (e) {
       toast(e instanceof Error ? e.message : "Couldn't save.");
@@ -549,20 +572,71 @@ function LinksTab({ operatorId }: { operatorId: string }) {
       setBusy(false);
     }
   };
+
   return (
-    <div className="listing-form grid max-w-2xl gap-4">
-      <p className="text-sm leading-6 text-basalt/60">After a guest answers your survey, they see buttons to review you on these sites — every guest, whatever their score (Google and Tripadvisor don't allow only asking happy guests).</p>
-      <div className="grid gap-1.5">
-        <Label htmlFor="cj-google" className="text-sm font-semibold">Google review link</Label>
-        <Input id="cj-google" value={s.google_review_url} placeholder={auto || "https://g.page/r/…/review"} onChange={(e) => setS({ ...s, google_review_url: e.target.value.trim() })} className={FIELD} />
-        <p className="text-xs text-basalt/45">
-          {auto ? <>Leave empty to use your Google Place ID from Integrations <Check className="inline h-3 w-3 text-sevan" /></> : "Or add your Google Place ID in Integrations → Reviews and we'll build it."}
-        </p>
+    <div className="listing-form grid max-w-3xl gap-5">
+      <p className="text-sm leading-6 text-basalt/60">
+        After a guest answers your survey, they see a button for each site below — every guest, whatever their score. Google, Tripadvisor, Trustpilot and Facebook don't allow asking only happy guests, so the buttons are never hidden for low scores.
+      </p>
+
+      <div className="grid gap-3">
+        <span className="text-sm font-semibold">Review sites <span className="font-normal text-basalt/45">(in this order, up to {MAX_REVIEW_LINKS})</span></span>
+        {auto && !links.some((l) => l.platform === "google") && (
+          <p className="flex items-center gap-2 border border-basalt/10 bg-chalk/60 px-3 py-2 text-sm">
+            <Check className="h-4 w-4 shrink-0 text-sevan" /> Google is added automatically from your Place ID (Integrations → Reviews). Add a Google row to use a different link.
+          </p>
+        )}
+        {links.length === 0 && !auto && <p className="text-sm text-basalt/50">No review sites yet — add one below.</p>}
+        {links.map((l, i) => {
+          const problem = l.url.trim() ? reviewLinkProblem(l) : null;
+          return (
+            <div key={i} className="grid gap-2 border border-basalt/12 bg-paper p-3">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[11rem_minmax(0,1fr)]">
+                <select
+                  value={l.platform}
+                  onChange={(e) => update(i, { platform: e.target.value as ReviewPlatform })}
+                  className="h-12 w-full rounded-[0.875rem] border border-basalt/15 bg-paper px-3 text-base"
+                  aria-label={`Review site ${i + 1}`}
+                >
+                  {(Object.keys(REVIEW_PLATFORMS) as ReviewPlatform[]).map((p) => (
+                    <option key={p} value={p} disabled={p !== "other" && p !== l.platform && used.has(p)}>{REVIEW_PLATFORMS[p].name}</option>
+                  ))}
+                </select>
+                <Input value={l.url} onChange={(e) => update(i, { url: e.target.value })} placeholder={REVIEW_PLATFORMS[l.platform].hint} className={FIELD} aria-label={`${REVIEW_PLATFORMS[l.platform].name} link`} />
+              </div>
+              {l.platform === "other" && (
+                <Input value={l.label ?? ""} onChange={(e) => update(i, { label: e.target.value })} placeholder="Site name shown on the button, e.g. Yell.am" maxLength={40} className={FIELD} aria-label="Site name" />
+              )}
+              <div className="flex flex-wrap items-center gap-3 text-xs">
+                {problem ? <span className="text-destructive">{problem}</span> : <span className="text-basalt/45">{REVIEW_PLATFORMS[l.platform].hint}</span>}
+                <span className="ml-auto flex items-center gap-3">
+                  <button type="button" onClick={() => move(i, -1)} disabled={i === 0} className="font-semibold text-basalt/55 hover:text-basalt disabled:opacity-30">Move up</button>
+                  <button type="button" onClick={() => move(i, 1)} disabled={i === links.length - 1} className="font-semibold text-basalt/55 hover:text-basalt disabled:opacity-30">Move down</button>
+                  <button type="button" onClick={() => setLinks(links.filter((_, j) => j !== i))} className="font-semibold text-basalt/55 hover:text-destructive">Remove</button>
+                </span>
+              </div>
+            </div>
+          );
+        })}
+        {links.length < MAX_REVIEW_LINKS && (
+          <button type="button" onClick={() => setLinks([...links, { platform: nextPlatform, url: "" }])} className="justify-self-start rounded-full border border-basalt/20 px-4 py-2 text-sm font-semibold hover:border-apricot hover:text-apricot">
+            + Add a review site
+          </button>
+        )}
+        <p className="text-xs text-basalt/45">Airbnb, Booking.com, GetYourGuide and Viator only accept reviews from their own bookings, and Yelp forbids asking for reviews — so they aren't offered here.</p>
       </div>
-      <div className="grid gap-1.5">
-        <Label htmlFor="cj-ta" className="text-sm font-semibold">Tripadvisor review link</Label>
-        <Input id="cj-ta" value={s.tripadvisor_url} placeholder="https://www.tripadvisor.com/UserReviewEdit-…" onChange={(e) => setS({ ...s, tripadvisor_url: e.target.value.trim() })} className={FIELD} />
-      </div>
+
+      {buttons.length > 0 && (
+        <div className="grid gap-2">
+          <span className="text-xs font-semibold text-basalt/55">Guests will see</span>
+          <div className="flex flex-wrap gap-2">
+            {buttons.map((b) => (
+              <span key={b.label + b.url} className="inline-flex min-h-10 items-center rounded-[0.875rem] bg-apricot px-4 text-sm font-semibold text-white">Review on {b.label}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-1.5">
         <Label htmlFor="cj-reply" className="text-sm font-semibold">Guests' email replies go to</Label>
         <Input id="cj-reply" type="email" value={s.reply_to_email} placeholder="you@yourguesthouse.am" onChange={(e) => setS({ ...s, reply_to_email: e.target.value.trim() })} className={FIELD} />
