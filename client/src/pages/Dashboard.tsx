@@ -1772,7 +1772,7 @@ const OPERATOR_SECTIONS: { key: OperatorSection; label: string; icon: typeof Hom
   { key: "integrations", label: "Integrations", icon: Plug },
   { key: "payouts", label: "Payouts", icon: Wallet },
   { key: "billing", label: "Billing", icon: CreditCard },
-  { key: "referrals", label: "Refer & earn", icon: Gift },
+  { key: "referrals", label: "Refer & Earn", icon: Gift },
   { key: "settings", label: "Settings", icon: Settings },
 ];
 

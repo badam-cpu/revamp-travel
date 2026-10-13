@@ -1,5 +1,5 @@
 /**
- * Dashboard → Refer & earn. An operator shares their referral link; when a host
+ * Dashboard → Refer & Earn. An operator shares their referral link; when a host
  * they referred gets their first confirmed booking, the operator earns credit.
  * Referrer-only reward. Reads GET /api/referral/me.
  */
@@ -70,7 +70,7 @@ export function OperatorReferrals() {
     <div>
       <PageHeader
         className="mb-0"
-        title="Refer & earn"
+        title="Refer & Earn"
         sub={
           <>
             Invite other hosts to Revamp. When one gets their <strong>first confirmed booking</strong>, you earn <strong className="text-apricot">{format(data.rewardCents)}</strong> in credit.
