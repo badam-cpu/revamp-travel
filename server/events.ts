@@ -135,11 +135,40 @@ interface FoundEvent {
   name_on_source?: unknown;
 }
 
-const PROMPT = (today: string, until: string) => `Today is ${today}. Using web search, build a list of PUBLIC events in Armenia between ${today} and ${until} that could bring visitors to a city — especially Yerevan, but also Gyumri, Dilijan, Tsaghkadzor, Jermuk, Sevan, Goris, Areni and elsewhere.
+/**
+ * Discovery runs as four focused searches — one broad search spreads its budget
+ * too thin (the first live run found 8). Each area has its own guidance and
+ * search budget (EVENTS_SEARCHES_PER_AREA, default 8); results are merged.
+ */
+export const DISCOVERY_AREAS = [
+  {
+    key: "performances",
+    focus: "concerts and performing arts",
+    guidance: `Arena and stadium concerts, tours by well-known Armenian, Russian and international artists, big club nights, opera, ballet, philharmonic and theatre premieres and festivals. Venues: Karen Demirchyan Sports Complex, Republic Square stages, Armenian National Opera and Ballet Theatre, Aram Khachaturian Concert Hall, Philharmonic, big clubs. Ticketing: tomsarkgh.am, ticketon.am, tkt.am, eventix.am. Searches like "Yerevan concert December 2026", "Ереван концерт ноябрь 2026", "Երևան համերգ 2026".`,
+  },
+  {
+    key: "festivals",
+    focus: "festivals, culture and religious feasts",
+    guidance: `Wine, food, brandy, beer and cheese festivals (e.g. Yerevan Wine Days, Areni Wine Festival, Gata festival), film festivals (Golden Apricot), folk, craft and cultural festivals, New Year and Christmas markets, regional festivals in Gyumri, Dilijan, Goris, Jermuk, Tsaghkadzor, Sevan, and Armenian Apostolic feasts that draw crowds (e.g. Vardavar, Trndez). Searches like "Armenia festival 2027", "Фестиваль Армения 2026", "փառատոն 2026".`,
+  },
+  {
+    key: "sports",
+    focus: "sports",
+    guidance: `National team football matches (UEFA Nations League, qualifiers) and other international matches held in Armenia, tournaments and championships, marathons, trail races, cycling and ski events (Tsaghkadzor), chess events. Searches like "Armenia national team home match 2026", "Yerevan marathon 2027", "турнир Ереван 2026".`,
+  },
+  {
+    key: "business",
+    focus: "conferences, forums and exhibitions",
+    guidance: `International conferences, summits and UN or government forums held in Armenia, tech events (e.g. DIGITEC), trade shows and expos, medical and academic congresses, and major museum and art exhibitions. Searches like "conference Yerevan 2026", "форум Ереван 2026", "Expo Yerevan 2027", "համաժողով Երևան".`,
+  },
+] as const;
+export type DiscoveryArea = (typeof DISCOVERY_AREAS)[number];
 
-Cover: festivals (wine, food, music, film, cultural — e.g. Yerevan Wine Days, Golden Apricot, Areni Wine Festival, Vardavar, Gata festival, New Year/Christmas markets), concerts and tours by well-known artists (Karen Demirchyan Sports Complex, Opera, Philharmonic, big clubs), international football/sports matches and tournaments, conferences, trade shows and forums, major exhibitions, marathons, and religious feasts that draw crowds.
+const PROMPT = (today: string, until: string, area: DiscoveryArea) => `Today is ${today}. Using web search, find PUBLIC ${area.focus} in Armenia between ${today} and ${until} that could bring visitors to a city — especially Yerevan, but also Gyumri, Dilijan, Tsaghkadzor, Jermuk, Sevan, Goris, Areni and elsewhere.
 
-How to search (spend your searches well): search month by month and by category, in English, Armenian and Russian (e.g. "Yerevan concerts December 2026", "Երևան համերգ դեկտեմբեր", "Ереван концерт декабрь 2026", "Armenia festival 2027", "Yerevan conference 2026", "Armenia national team match"). Use ticketing sites (tomsarkgh.am, ticketon.am, tkt.am), venue sites, official festival sites and news. Aim for 20–40 events.
+What to look for: ${area.guidance}
+
+How to search: spend your searches well — go month by month across the window and use English, Armenian and Russian. Prefer official sites, venue and ticketing pages, and reputable news. Aim for 10–25 events in this area.
 
 Rules:
 - Only events with a CONFIRMED date in that window. Skip anything past, rumoured, or without a date.
@@ -205,14 +234,14 @@ function str(v: unknown, max: number): string | null {
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Ask Claude (with web search) for upcoming events; returns raw candidates. */
-export async function discoverWithAi(today = isoDay(new Date()), days = 183): Promise<{ events: FoundEvent[]; hits: SearchHit[] }> {
+export async function discoverWithAi(area: DiscoveryArea, today = isoDay(new Date()), days = 183): Promise<{ events: FoundEvent[]; hits: SearchHit[]; searches: number }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
   const client = new Anthropic({ apiKey });
   const until = addDays(today, days);
   // Hard cost cap for the WHOLE run (max_uses is per request, and a paused turn
   // continues in a new request — so pass only the searches left each time).
-  const budget = Math.max(1, Number(process.env.EVENTS_MAX_SEARCHES || 15));
+  const budget = Math.max(1, Number(process.env.EVENTS_SEARCHES_PER_AREA || process.env.EVENTS_MAX_SEARCHES || 8));
   let used = 0;
   // The SDK pinned here predates the web-search tool types; the API accepts it as-is.
   const tools = (maxUses: number) =>
@@ -228,7 +257,7 @@ export async function discoverWithAi(today = isoDay(new Date()), days = 183): Pr
     ] as unknown as Anthropic.Tool[];
   const searchesIn = (m: Anthropic.Message) => Number((m.usage as unknown as { server_tool_use?: { web_search_requests?: number } }).server_tool_use?.web_search_requests ?? 0);
   const model = process.env.EVENTS_MODEL || process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5";
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: PROMPT(today, until) }];
+  const messages: Anthropic.MessageParam[] = [{ role: "user", content: PROMPT(today, until, area) }];
   // A long search turn can come back with stop_reason "pause_turn": send the
   // paused assistant message back unchanged and let it continue (a few rounds max).
   const hits: SearchHit[] = [];
@@ -252,8 +281,8 @@ export async function discoverWithAi(today = isoDay(new Date()), days = 183): Pr
     .map((b) => (b as { text: string }).text)
     .join("\n");
   const events = parseEventsJson(text);
-  console.log(`[events] web searches used: ${used}/${budget}; search results: ${hits.length}; events in reply: ${events.length}; stop: ${msg.stop_reason}`);
-  return { events, hits };
+  console.log(`[events] ${area.key}: web searches ${used}/${budget}; search results ${hits.length}; events in reply ${events.length}; stop ${msg.stop_reason}`);
+  return { events, hits, searches: used };
 }
 
 // Month names a page might use for the event's date (English, Russian genitive, Armenian).
@@ -330,28 +359,50 @@ export function searchConfirms(hits: SearchHit[], url: string, title: string, na
 }
 
 /** Validate, verify against the cited page, de-duplicate and store AI-found events. */
-export async function discoverEvents(admin: SupabaseClient, today = isoDay(new Date())): Promise<{ found: number; verified: number; stored: number }> {
-  const { events: raw, hits } = await discoverWithAi(today);
+export async function discoverEvents(admin: SupabaseClient, today = isoDay(new Date())): Promise<{ found: number; verified: number; stored: number; searches: number; areaErrors: string[] }> {
+  // Four focused searches, one after another; one failing doesn't stop the rest.
+  const raw: FoundEvent[] = [];
+  const hits: SearchHit[] = [];
+  const areaErrors: string[] = [];
+  let searches = 0;
+  for (const area of DISCOVERY_AREAS) {
+    try {
+      const r = await discoverWithAi(area, today);
+      raw.push(...r.events);
+      hits.push(...r.hits);
+      searches += r.searches;
+    } catch (e) {
+      areaErrors.push(`${area.key}: ${e instanceof Error ? e.message.slice(0, 160) : String(e)}`);
+    }
+  }
+  if (areaErrors.length === DISCOVERY_AREAS.length) throw new Error(areaErrors.join(" | "));
   const horizon = addDays(today, 200);
   const { data: existing } = await admin.from("events").select("id, dedupe_key, title, start_date").gte("end_date", today);
   const known = (existing ?? []) as { id: string; dedupe_key: string; title: string; start_date: string }[];
 
-  let verified = 0;
-  let stored = 0;
-  const seen = new Set<string>();
-  for (const e of raw.slice(0, 80)) {
+  // 1. Validate and de-duplicate across the four areas (same day + similar name = same event).
+  type Cand = { e: FoundEvent; title: string; start: string; end: string; url: string; key: string; nameOnSource: string | null };
+  const cands: Cand[] = [];
+  for (const e of raw.slice(0, 150)) {
     const title = str(e.title, 160);
     const start = str(e.start_date, 10);
     const end = str(e.end_date, 10) ?? start;
     const url = str(e.source_url, 600);
     if (!title || !start || !ISO.test(start) || !end || !ISO.test(end) || !url || !/^https?:\/\//.test(url)) continue;
     if (end < today || start > horizon || end < start) continue;
-    const key = dedupeKey("event", start, title);
-    if (seen.has(key)) continue;
-    seen.add(key);
+    if (cands.some((c) => c.start === start && titleOverlap(c.title, title) >= 0.6)) continue;
+    cands.push({ e, title, start, end, url, key: dedupeKey("event", start, title), nameOnSource: str(e.name_on_source, 160) });
+  }
 
-    const nameOnSource = str(e.name_on_source, 160);
-    const ok = (await sourceMentions(url, title, start, nameOnSource)) || searchConfirms(hits, url, title, nameOnSource);
+  // 2. Check each against real evidence — six at a time, so a long list still fits the time limit.
+  const oks = await mapPool(cands, 6, async (c) => (await sourceMentions(c.url, c.title, c.start, c.nameOnSource)) || searchConfirms(hits, c.url, c.title, c.nameOnSource));
+
+  // 3. Store (or refresh) each one.
+  let verified = 0;
+  let stored = 0;
+  for (let n = 0; n < cands.length; n++) {
+    const { e, title, start, end, url, key } = cands[n];
+    const ok = oks[n];
     if (ok) verified++;
     const category = (EVENT_CATEGORIES as readonly string[]).includes(String(e.category)) ? (e.category as EventCategory) : "other";
     const impact: EventImpact = e.impact === "high" || e.impact === "medium" ? e.impact : "low";
@@ -379,7 +430,7 @@ export async function discoverEvents(admin: SupabaseClient, today = isoDay(new D
       })(),
       verified: ok,
     };
-    // Same event found again under a slightly different name → update that row.
+    // Same event found in an earlier run under a slightly different name → update that row.
     const twin = known.find((k) => k.start_date === start && titleOverlap(k.title, title) >= 0.6);
     const { error } = twin
       ? await admin.from("events").update({ ...row, dedupe_key: twin.dedupe_key, last_seen_at: new Date().toISOString() }).eq("id", twin.id)
@@ -387,14 +438,28 @@ export async function discoverEvents(admin: SupabaseClient, today = isoDay(new D
     if (error) console.error("[events] store failed", title, error.message);
     else stored++;
   }
-  return { found: raw.length, verified, stored };
+  return { found: cands.length, verified, stored, searches, areaErrors };
+}
+
+/** Run `fn` over items with at most `limit` in flight; results keep the input order. */
+async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
 }
 
 /** Holidays + AI discovery. Each half runs even if the other fails. */
-export async function syncEvents(admin: SupabaseClient): Promise<{ holidays: number; found: number; verified: number; stored: number; errors: string[] }> {
+export async function syncEvents(admin: SupabaseClient): Promise<{ holidays: number; found: number; verified: number; stored: number; searches: number; errors: string[] }> {
   const errors: string[] = [];
   let holidays = 0;
-  let disc = { found: 0, verified: 0, stored: 0 };
+  let disc = { found: 0, verified: 0, stored: 0, searches: 0, areaErrors: [] as string[] };
   try {
     holidays = await syncHolidays(admin);
   } catch (e) {
@@ -405,8 +470,12 @@ export async function syncEvents(admin: SupabaseClient): Promise<{ holidays: num
   } catch (e) {
     errors.push(`discovery: ${e instanceof Error ? e.message : String(e)}`);
   }
-  return { holidays, ...disc, errors };
+  errors.push(...disc.areaErrors.map((a) => `discovery ${a}`));
+  const { areaErrors: _unused, ...rest } = disc;
+  return { holidays, ...rest, errors };
 }
+
+
 
 /** Shared secret for invoking the background sync (derived — no extra env var). */
 export async function eventsSyncToken(): Promise<string | null> {

@@ -52,6 +52,17 @@ const median = (xs: number[]) => {
   const m = Math.floor(s.length / 2);
   return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2);
 };
+/**
+ * Does this event matter for this listing type? Stays: every event. Tours and
+ * experiences: events that bring visitors with free time (conferences,
+ * festivals, sports, exhibitions, crowd-drawing feasts) and big holidays —
+ * not one-evening concerts, which barely move daytime tours.
+ */
+function mattersFor(l: LiveListing, e: MarketEvent): boolean {
+  if (l.type === "stay") return true;
+  if (e.kind === "holiday") return e.impact === "high";
+  return ["conference", "festival", "sports", "exhibition", "religious"].includes(e.category);
+}
 const MARKUPS = [10, 20, 30];
 const MARKUP_KEY = "revamp.eventMarkup";
 const roundAmd = (cents: number) => Math.round(cents / 100_000) * 100_000; // nearest ֏1,000
@@ -74,19 +85,19 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
     () =>
       events
         .filter((e) => e.impact !== "low" && e.end >= from)
-        .map((e) => ({ e, listings: mine.filter((l) => eventAffects(e, l.city, l.region)) }))
+        .map((e) => ({ e, listings: mine.filter((l) => eventAffects(e, l.city, l.region) && mattersFor(l, e)) }))
         .filter((x) => x.listings.length > 0)
         .slice(0, 40),
     [events, mine, from],
   );
 
-  const apply = async (l: LiveListing, e: MarketEvent, cents: number) => {
+  /** Set a per-date price for [start, end] (the event dates; tours: the days around it too). */
+  const apply = async (l: LiveListing, e: MarketEvent, cents: number, start: string, end: string) => {
     const key = `${l.id}:${e.id}`;
     setApplying(key);
     try {
-      const start = e.start < from ? from : e.start;
-      await setSeasonalRates(l.id, [...withoutDays(l.seasonalRates ?? [], start, e.end), { start, end: e.end, priceCents: cents, label: e.title.slice(0, 60) }]);
-      toast.success(`${l.title}: ${format(cents)} set for ${fmtRange(start, e.end)}.`);
+      await setSeasonalRates(l.id, [...withoutDays(l.seasonalRates ?? [], start, end), { start, end, priceCents: cents, label: e.title.slice(0, 60) }]);
+      toast.success(`${l.title}: ${format(cents)} set for ${fmtRange(start, end)}.`);
     } catch (err) {
       toast(userMessage(err, "Couldn't save the price."));
     } finally {
@@ -118,17 +129,25 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
   // Per event and listing: market comparison when ≥3 similar listings exist, else your usual price + the markup.
   const rowsFor = (e: MarketEvent, ls: LiveListing[]) =>
     ls.map((l) => {
-      const ds = days(e.start < from ? from : e.start, e.end);
+      const activity = l.type !== "stay";
+      // Tours/experiences: visitors book on the days AROUND an event (free day before/after), not during it.
+      const winStart = activity ? addDays(e.start, -1) : e.start;
+      const winEnd = activity ? addDays(e.end, 1) : e.end;
+      const ds = days(winStart < from ? from : winStart, winEnd);
       const yours = askOver(l, ds);
       const usual = Math.round(l.price * 100);
       const peers = market.filter((m) => m.type === l.type && m.city.trim().toLowerCase() === l.city.trim().toLowerCase());
       const enough = peers.length >= 3;
       const med = enough ? median(peers.map((p) => askOver(p, ds))) : 0;
-      const pct = pctFor(e);
+      // A sharp jump loses tour bookings faster than hotel nights: half the stay markup.
+      const pct = activity ? Math.max(5, Math.round(pctFor(e) / 2 / 5) * 5) : pctFor(e);
       const target = enough ? roundAmd(med) : roundAmd(usual * (1 + pct / 100));
       const priced = yours > 0 && yours >= (enough ? med * 0.95 : target);
       const suggest = !l.multiRoom && usual > 0 && !priced ? target : 0;
-      return { l, ds, yours, usual, pct, peers: peers.length, enough, med, suggest, priced, unit: l.type === "stay" ? "night" : l.priceUnit || "person" };
+      const hints: string[] = [];
+      if (activity && e.end > e.start && (e.category === "conference" || e.category === "festival" || e.category === "sports" || e.category === "exhibition")) hints.push("Visitors in town for several days — consider opening extra sessions or dates.");
+      if (activity && e.category === "sports" && e.city) hints.push(`Road closures are likely in ${e.city} on the event day — check your route.`);
+      return { l, ds, yours, usual, pct, peers: peers.length, enough, med, suggest, priced, hints, activity, unit: l.type === "stay" ? "night" : l.priceUnit || "person" };
     });
   const [open, setOpen] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
@@ -231,7 +250,10 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
                         <div className="mt-2 divide-y divide-basalt/8">
                           {cmp.map((r) => (
                             <div key={r.l.id} className="grid grid-cols-2 items-center gap-x-6 gap-y-1.5 py-2.5 text-sm lg:grid-cols-[minmax(0,1fr)_10rem_15rem_10rem]">
-                              <span className="col-span-2 min-w-0 truncate font-medium lg:col-span-1">{r.l.title}</span>
+                              <span className="col-span-2 min-w-0 truncate font-medium lg:col-span-1">
+                                {r.l.title}
+                                {r.activity && <span className="block text-xs font-normal text-basalt/60">{fmtRange(r.ds[0], r.ds[r.ds.length - 1])} (around the event)</span>}
+                              </span>
                               <span className="tabular-nums text-basalt/70">You: <strong className="text-basalt">{r.yours > 0 ? format(r.yours) : "—"}</strong> / {r.unit}</span>
                               {r.enough ? (
                                 <span className="tabular-nums text-basalt/70">Similar: <strong className="text-basalt">{format(r.med)}</strong> <span className="text-basalt/50">({r.peers})</span></span>
@@ -242,9 +264,9 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
                                 <button
                                   type="button"
                                   disabled={applying === `${r.l.id}:${e.id}`}
-                                  onClick={() => void apply(r.l, e, r.suggest)}
+                                  onClick={() => void apply(r.l, e, r.suggest, r.ds[0], r.ds[r.ds.length - 1])}
                                   className="col-span-2 inline-flex h-9 items-center justify-center gap-1.5 justify-self-start rounded-none bg-basalt px-3 text-xs font-semibold text-paper hover:bg-basalt/90 disabled:opacity-50 lg:col-span-1 lg:justify-self-end"
-                                  title={`Sets ${format(r.suggest)} per ${r.unit} for ${fmtRange(r.ds[0], e.end)}`}
+                                  title={`Sets ${format(r.suggest)} per ${r.unit} for ${fmtRange(r.ds[0], r.ds[r.ds.length - 1])}`}
                                 >
                                   <Sparkles className="h-3.5 w-3.5 text-apricot" /> {applying === `${r.l.id}:${e.id}` ? "Applying…" : `Apply ${format(r.suggest)}`}
                                 </button>
@@ -253,6 +275,7 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
                                   {r.l.multiRoom ? "Set room-type prices in Calendar" : r.usual <= 0 ? "No price set" : r.enough ? "In line with similar listings" : "Already priced for the event"}
                                 </span>
                               )}
+                              {r.hints.length > 0 && <p className="col-span-2 text-xs text-basalt/60 lg:col-span-4">{r.hints.join(" ")}</p>}
                             </div>
                           ))}
                         </div>

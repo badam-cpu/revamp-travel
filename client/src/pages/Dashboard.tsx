@@ -21,6 +21,7 @@
  * step stays mounted (just `hidden`), so FormData at submit reads them all;
  * step gating is handled by validateStep(), and the server still Zod-validates.
  */
+import { PriceLog } from "@/components/PriceLog";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, CalendarDays, Check, ChevronDown, ChevronLeft, ExternalLink, MoreHorizontal, PauseCircle, PlayCircle, Copy, CreditCard, FileText, Gift, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, PanelLeftClose, PanelLeftOpen, Pencil, Plug, Plus, QrCode, RefreshCw, Route, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
@@ -1790,6 +1791,7 @@ function BookingsSection() {
 const CALENDAR_VIEWS = [
   { key: "timeline", label: "Timeline", blurb: "Your listings across the calendar — bookings and synced-blocked dates at a glance." },
   { key: "calendar", label: "Prices & availability", blurb: "Prices and availability for all your listings. Select a day, or drag across several, to change the price or block dates." },
+  { key: "pricelog", label: "Price log", blurb: "Every change to your prices — what changed, when, and who or what made it." },
 ] as const;
 type CalendarView = (typeof CALENDAR_VIEWS)[number]["key"];
 
@@ -1883,6 +1885,7 @@ function CalendarViewsSection() {
       />
       {view === "timeline" && <OperatorBookingsTimeline />}
       {view === "calendar" && <CalendarSection />}
+      {view === "pricelog" && <PriceLog scope="operator" />}
     </div>
   );
 }
