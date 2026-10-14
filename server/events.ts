@@ -131,20 +131,73 @@ interface FoundEvent {
   expected_attendance?: unknown;
   summary?: unknown;
   source_url?: unknown;
+  /** The event's name exactly as the source page writes it (may be Armenian/Russian). */
+  name_on_source?: unknown;
 }
 
-const PROMPT = (today: string, until: string) => `Today is ${today}. Using web search, find PUBLIC events in Armenia that will happen between ${today} and ${until} and could bring visitors to a city — especially Yerevan, but also Gyumri, Dilijan, Tsaghkadzor, Jermuk, Sevan, Goris and elsewhere.
+const PROMPT = (today: string, until: string) => `Today is ${today}. Using web search, build a list of PUBLIC events in Armenia between ${today} and ${until} that could bring visitors to a city — especially Yerevan, but also Gyumri, Dilijan, Tsaghkadzor, Jermuk, Sevan, Goris, Areni and elsewhere.
 
-Look for: festivals (wine, food, music, film — e.g. Yerevan Wine Days, Golden Apricot, Areni wine festival, Vardavar), big concerts and tours by well-known artists, international sports matches and tournaments, conferences and trade shows, major exhibitions, and religious festivals that draw crowds. Search in English, Armenian and Russian. Prefer official sites, venue/ticketing pages and reputable news.
+Cover: festivals (wine, food, music, film, cultural — e.g. Yerevan Wine Days, Golden Apricot, Areni Wine Festival, Vardavar, Gata festival, New Year/Christmas markets), concerts and tours by well-known artists (Karen Demirchyan Sports Complex, Opera, Philharmonic, big clubs), international football/sports matches and tournaments, conferences, trade shows and forums, major exhibitions, marathons, and religious feasts that draw crowds.
+
+How to search (spend your searches well): search month by month and by category, in English, Armenian and Russian (e.g. "Yerevan concerts December 2026", "Երևան համերգ դեկտեմբեր", "Ереван концерт декабрь 2026", "Armenia festival 2027", "Yerevan conference 2026", "Armenia national team match"). Use ticketing sites (tomsarkgh.am, ticketon.am, tkt.am), venue sites, official festival sites and news. Aim for 20–40 events.
 
 Rules:
 - Only events with a CONFIRMED date in that window. Skip anything past, rumoured, or without a date.
-- Each event needs the URL of a public page you actually found that states the event and its date (official site, venue, ticketing, or news). Never invent or guess a URL.
+- source_url must be a page from your search results that states the event and its date. Never invent or guess a URL.
+- name_on_source: the event's name exactly as written on that page, in the page's language.
 - Do not list ordinary public holidays (they come from another source), weekly markets, or small private events.
 - impact: "high" = draws thousands / fills hotels (major festival, stadium concert, international match, big conference); "medium" = hundreds to a few thousand; "low" = smaller.
 
 When you are done searching, reply with ONLY a JSON array (no prose, no markdown) of objects:
-{"title": string, "category": "festival"|"concert"|"sports"|"conference"|"exhibition"|"religious"|"other", "city": string, "region": string|null, "venue": string|null, "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD", "impact": "low"|"medium"|"high", "expected_attendance": number|null, "summary": string (max 140 chars, factual), "source_url": string}`;
+{"title": string (English), "name_on_source": string, "category": "festival"|"concert"|"sports"|"conference"|"exhibition"|"religious"|"other", "city": string, "region": string|null, "venue": string|null, "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD", "impact": "low"|"medium"|"high", "expected_attendance": number|null, "summary": string (max 120 chars, factual), "source_url": string}`;
+
+/** Parse the model's JSON array — or, if it was cut off, every complete {...} object in it. */
+export function parseEventsJson(text: string): FoundEvent[] {
+  const start = text.indexOf("[");
+  if (start < 0) return [];
+  const body = text.slice(start);
+  try {
+    const arr = JSON.parse(body.slice(0, body.lastIndexOf("]") + 1));
+    if (Array.isArray(arr)) return arr as FoundEvent[];
+  } catch {
+    /* fall through to object-by-object */
+  }
+  const out: FoundEvent[] = [];
+  let depth = 0;
+  let from = -1;
+  let inStr = false;
+  for (let i = 1; i < body.length; i++) {
+    const c = body[i];
+    if (inStr) {
+      if (c === "\\") i++;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === "{") {
+      if (depth === 0) from = i;
+      depth++;
+    } else if (c === "}") {
+      depth--;
+      if (depth === 0 && from >= 0) {
+        try {
+          out.push(JSON.parse(body.slice(from, i + 1)));
+        } catch {
+          /* skip a malformed one */
+        }
+        from = -1;
+      }
+    }
+  }
+  return out;
+}
+
+/** A search result the API itself returned (URL + page title) — evidence that isn't model-written. */
+export interface SearchHit {
+  url: string;
+  title: string;
+}
+const normUrl = (u: string) => u.replace(/^https?:\/\/(www\.)?/i, "").replace(/[?#].*$/, "").replace(/\/+$/, "").toLowerCase();
 
 function str(v: unknown, max: number): string | null {
   return typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null;
@@ -152,7 +205,7 @@ function str(v: unknown, max: number): string | null {
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Ask Claude (with web search) for upcoming events; returns raw candidates. */
-export async function discoverWithAi(today = isoDay(new Date()), days = 183): Promise<FoundEvent[]> {
+export async function discoverWithAi(today = isoDay(new Date()), days = 183): Promise<{ events: FoundEvent[]; hits: SearchHit[] }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
   const client = new Anthropic({ apiKey });
@@ -176,43 +229,72 @@ export async function discoverWithAi(today = isoDay(new Date()), days = 183): Pr
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: PROMPT(today, until) }];
   // A long search turn can come back with stop_reason "pause_turn": send the
   // paused assistant message back unchanged and let it continue (a few rounds max).
-  let msg = await client.messages.create({ model, max_tokens: 8000, tools: tools(budget), messages });
+  const hits: SearchHit[] = [];
+  const collect = (m: Anthropic.Message) => {
+    for (const b of m.content as unknown as { type: string; content?: unknown }[]) {
+      if (b.type !== "web_search_tool_result" || !Array.isArray(b.content)) continue;
+      for (const r of b.content as { url?: string; title?: string }[]) if (r.url) hits.push({ url: r.url, title: r.title ?? "" });
+    }
+  };
+  let msg = await client.messages.create({ model, max_tokens: 16000, tools: tools(budget), messages });
   used += searchesIn(msg);
+  collect(msg);
   for (let round = 0; (msg.stop_reason as string) === "pause_turn" && round < 4 && used < budget; round++) {
     messages.push({ role: "assistant", content: msg.content as Anthropic.MessageParam["content"] });
-    msg = await client.messages.create({ model, max_tokens: 8000, tools: tools(budget - used), messages });
+    msg = await client.messages.create({ model, max_tokens: 16000, tools: tools(budget - used), messages });
     used += searchesIn(msg);
+    collect(msg);
   }
-  console.log(`[events] web searches used: ${used}/${budget}`);
   const text = msg.content
     .filter((b) => b.type === "text")
     .map((b) => (b as { text: string }).text)
     .join("\n");
-  const json = text.slice(text.indexOf("["), text.lastIndexOf("]") + 1);
-  if (!json) return [];
-  try {
-    const arr = JSON.parse(json);
-    return Array.isArray(arr) ? (arr as FoundEvent[]) : [];
-  } catch {
-    console.error("[events] model reply wasn't JSON");
-    return [];
-  }
+  const events = parseEventsJson(text);
+  console.log(`[events] web searches used: ${used}/${budget}; search results: ${hits.length}; events in reply: ${events.length}; stop: ${msg.stop_reason}`);
+  return { events, hits };
 }
 
-const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+// Month names a page might use for the event's date (English, Russian genitive, Armenian).
+const MONTH_NAMES: string[][] = [
+  ["january", "jan", "января", "январь", "հունվար"],
+  ["february", "feb", "февраля", "февраль", "փետրվար"],
+  ["march", "mar", "марта", "март", "մարտ"],
+  ["april", "apr", "апреля", "апрель", "ապրիլ"],
+  ["may", "мая", "май", "մայիս"],
+  ["june", "jun", "июня", "июнь", "հունիս"],
+  ["july", "jul", "июля", "июль", "հուլիս"],
+  ["august", "aug", "августа", "август", "օգոստոս"],
+  ["september", "sep", "sept", "сентября", "сентябрь", "սեպտեմբեր"],
+  ["october", "oct", "октября", "октябрь", "հոկտեմբեր"],
+  ["november", "nov", "ноября", "ноябрь", "նոյեմբեր"],
+  ["december", "dec", "декабря", "декабрь", "դեկտեմբեր"],
+];
+/** Does this text carry the event's date (year, a month name in any language, or dd.mm / dd/mm)? */
+export function mentionsDate(text: string, start: string): boolean {
+  const [y, m, d] = start.split("-");
+  const dd = String(Number(d));
+  if (text.includes(y)) return true;
+  if (MONTH_NAMES[Number(m) - 1].some((n) => text.includes(n))) return true;
+  return [`${d}.${m}`, `${dd}.${m}`, `${d}/${m}`, `${dd}/${m}`].some((p) => text.includes(p));
+}
+/** Share of the name's words found in the text. */
+const nameHit = (text: string, name: string) => {
+  const words = titleTokens(name);
+  return words.length ? words.filter((w) => text.includes(w)).length / words.length : 0;
+};
 
 /**
  * Does the cited page really talk about this event? One plain GET (public
- * address only, 10s, first 1.5 MB), then: most of the title's words appear,
- * and the event's year or month name appears too.
+ * address only, 10s, first 1.5 MB), then: most of the event's name (English
+ * title OR the name as written on the source) appears, and its date does too.
  */
-export async function sourceMentions(url: string, title: string, start: string): Promise<boolean> {
+export async function sourceMentions(url: string, title: string, start: string, nameOnSource?: string | null): Promise<boolean> {
   try {
     const safe = await assertSafeUrl(url);
     const res = await fetch(safe.toString(), {
       redirect: "follow",
       signal: AbortSignal.timeout(10_000),
-      headers: { "user-agent": "RevampVacationsBot/1.0 (+https://revampvacations.com; event source check)", accept: "text/html,*/*" },
+      headers: { "user-agent": "Mozilla/5.0 (compatible; RevampVacationsBot/1.0; +https://revampvacations.com) event source check", accept: "text/html,*/*", "accept-language": "en,hy;q=0.9,ru;q=0.8" },
     });
     if (!res.ok || !res.body) return false;
     const reader = res.body.getReader();
@@ -224,21 +306,30 @@ export async function sourceMentions(url: string, title: string, start: string):
       html += dec.decode(value, { stream: true });
     }
     reader.cancel().catch(() => {});
-    const text = html.replace(/<[^>]+>/g, " ").toLowerCase();
-    const words = titleTokens(title);
-    if (!words.length) return false;
-    const hit = words.filter((w) => text.includes(w)).length / words.length;
-    const year = start.slice(0, 4);
-    const month = MONTHS[Number(start.slice(5, 7)) - 1];
-    return hit >= 0.6 && (text.includes(year) || text.includes(month) || text.includes(month.slice(0, 3)));
+    const text = html.replace(/<[^>]+>/g, " ").toLowerCase().normalize("NFKD");
+    const named = Math.max(nameHit(text, title), nameOnSource ? nameHit(text, nameOnSource) : 0) >= 0.6;
+    return named && mentionsDate(text, start);
   } catch {
     return false;
   }
 }
 
+/**
+ * Fallback evidence when a site blocks or JS-renders its page: the cited URL is
+ * one the web-search API itself returned in this run, and that result's title
+ * names the event. Search results come from the API, not from the model's text.
+ */
+export function searchConfirms(hits: SearchHit[], url: string, title: string, nameOnSource?: string | null): boolean {
+  const u = normUrl(url);
+  const hit = hits.find((h) => normUrl(h.url) === u);
+  if (!hit) return false;
+  const t = hit.title.toLowerCase().normalize("NFKD");
+  return Math.max(nameHit(t, title), nameOnSource ? nameHit(t, nameOnSource) : 0) >= 0.5;
+}
+
 /** Validate, verify against the cited page, de-duplicate and store AI-found events. */
 export async function discoverEvents(admin: SupabaseClient, today = isoDay(new Date())): Promise<{ found: number; verified: number; stored: number }> {
-  const raw = await discoverWithAi(today);
+  const { events: raw, hits } = await discoverWithAi(today);
   const horizon = addDays(today, 200);
   const { data: existing } = await admin.from("events").select("id, dedupe_key, title, start_date").gte("end_date", today);
   const known = (existing ?? []) as { id: string; dedupe_key: string; title: string; start_date: string }[];
@@ -257,7 +348,8 @@ export async function discoverEvents(admin: SupabaseClient, today = isoDay(new D
     if (seen.has(key)) continue;
     seen.add(key);
 
-    const ok = await sourceMentions(url, title, start);
+    const nameOnSource = str(e.name_on_source, 160);
+    const ok = (await sourceMentions(url, title, start, nameOnSource)) || searchConfirms(hits, url, title, nameOnSource);
     if (ok) verified++;
     const category = (EVENT_CATEGORIES as readonly string[]).includes(String(e.category)) ? (e.category as EventCategory) : "other";
     const impact: EventImpact = e.impact === "high" || e.impact === "medium" ? e.impact : "low";

@@ -1793,6 +1793,65 @@ const CALENDAR_VIEWS = [
 ] as const;
 type CalendarView = (typeof CALENDAR_VIEWS)[number]["key"];
 
+const ANALYTICS_TABS = [
+  { key: "engagement", label: "Engagement", sub: "How travellers engage with your listings. Impressions: a card was seen; views: the listing page was opened." },
+  { key: "bookings", label: "Bookings & revenue", sub: "Confirmed bookings and revenue over the last 12 months." },
+  { key: "events", label: "Events & pricing", sub: "Holidays, festivals, concerts and matches found automatically from public sources — and how your prices compare on those dates." },
+  { key: "response", label: "Response times", sub: "How fast you reply to guest inquiries — fast replies win bookings." },
+] as const;
+type AnalyticsTab = (typeof ANALYTICS_TABS)[number]["key"];
+const ANALYTICS_TAB_KEY = "revamp.analyticsTab";
+
+/** Analytics: one section at a time behind pill tabs (same pattern as Calendar and Settings). */
+function AnalyticsSection() {
+  const [tab, setTab] = useState<AnalyticsTab>(() => {
+    try {
+      const v = localStorage.getItem(ANALYTICS_TAB_KEY);
+      return ANALYTICS_TABS.some((t) => t.key === v) ? (v as AnalyticsTab) : "engagement";
+    } catch {
+      return "engagement";
+    }
+  });
+  const choose = (t: AnalyticsTab) => {
+    setTab(t);
+    try {
+      localStorage.setItem(ANALYTICS_TAB_KEY, t);
+    } catch {
+      /* private mode — not remembered */
+    }
+  };
+  return (
+    <div>
+      <PageHeader
+        title="Analytics"
+        sub={ANALYTICS_TABS.find((t) => t.key === tab)?.sub}
+        actions={
+          <div role="group" aria-label="Section" className="inline-flex max-w-full flex-wrap rounded-[1.25rem] border border-basalt/15 bg-paper p-1">
+            {ANALYTICS_TABS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                aria-pressed={tab === t.key}
+                onClick={() => choose(t.key)}
+                className={cn(
+                  "h-9 whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-apricot",
+                  tab === t.key ? "bg-basalt text-paper" : "text-basalt/70 hover:text-basalt",
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        }
+      />
+      {tab === "engagement" && <AnalyticsDashboard scope="operator" embedded />}
+      {tab === "bookings" && <OperatorAnalytics />}
+      {tab === "events" && <EventInsights embedded />}
+      {tab === "response" && <OperatorResponseStat showEmpty />}
+    </div>
+  );
+}
+
 /** Calendar: the bookings timeline and the multi-listing price/availability calendar. */
 function CalendarViewsSection() {
   const [view, setView] = useState<CalendarView>("timeline");
@@ -2012,20 +2071,7 @@ function DashboardContent() {
               </div>
             )}
 
-            {section === "analytics" && (
-              <div className="grid gap-8">
-                <AnalyticsDashboard scope="operator" />
-                <EventInsights />
-                <div>
-                  <SubHeader title="Response times" sub="How fast you reply to guest inquiries — fast replies win bookings." />
-                  <OperatorResponseStat showEmpty />
-                </div>
-                <div>
-                  <SubHeader title="Bookings & revenue" sub="Confirmed bookings and revenue over the last 12 months." />
-                  <OperatorAnalytics />
-                </div>
-              </div>
-            )}
+            {section === "analytics" && <AnalyticsSection />}
             {section === "bookings" && <BookingsSection />}
             {section === "calendar" && <CalendarViewsSection />}
             {section === "promos" && <PromoCodes />}

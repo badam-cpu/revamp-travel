@@ -70,7 +70,8 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
   );
 }
 
-export function AnalyticsDashboard({ scope }: { scope: "admin" | "operator" }) {
+/** `embedded`: the page around it supplies the header (Dashboard → Analytics tabs). */
+export function AnalyticsDashboard({ scope, embedded = false }: { scope: "admin" | "operator"; embedded?: boolean }) {
   const { user } = useAuth();
   const { listings } = useListings();
   const [rows, setRows] = useState<Row[] | null>(null);
@@ -168,7 +169,7 @@ export function AnalyticsDashboard({ scope }: { scope: "admin" | "operator" }) {
 
   return (
     <div className="grid gap-5">
-      <PageHeader
+      {!embedded && <PageHeader
         className="mb-0"
         title="Analytics"
         sub={
@@ -176,7 +177,7 @@ export function AnalyticsDashboard({ scope }: { scope: "admin" | "operator" }) {
             ? "How travellers engage with your listings. Impressions: a card was seen; views: the listing page was opened."
             : "Per-listing engagement across the marketplace. Filter by type or listing; restaurant numbers are the pitch for featured placements."
         }
-      />
+      />}
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border border-basalt/10 bg-paper p-4">
