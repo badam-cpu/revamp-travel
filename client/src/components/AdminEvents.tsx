@@ -20,9 +20,13 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 const plus = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
 const fmt = (iso: string) => new Date(iso + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
+type Tab = "events" | "holidays" | "cancelled" | "unverified";
+const inTab = (e: MarketEvent, t: Tab) =>
+  t === "holidays" ? e.kind === "holiday" : t === "cancelled" ? e.kind === "event" && e.status === "cancelled" : t === "unverified" ? e.kind === "event" && !e.verified && e.status !== "cancelled" : e.kind === "event" && e.verified && e.status !== "cancelled";
+
 export function AdminEvents() {
   const [events, setEvents] = useState<MarketEvent[] | null>(null);
-  const [filter, setFilter] = useState<"events" | "holidays" | "unverified">("events");
+  const [filter, setFilter] = useState<Tab>("events");
   const [lastRun, setLastRun] = useState<{ at: string | null; ok: boolean | null; detail: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -54,13 +58,19 @@ export function AdminEvents() {
     setEvents((all) => (all ?? []).map((x) => (x.id === ev.id ? { ...x, hidden } : x)));
   };
 
-  const shown = (events ?? []).filter((e) => (filter === "holidays" ? e.kind === "holiday" : filter === "unverified" ? e.kind === "event" && !e.verified : e.kind === "event" && e.verified));
+  const shown = (events ?? []).filter((e) => inTab(e, filter));
+  const restore = async (ev: MarketEvent) => {
+    // Same text as RESTORED_BY_ADMIN in server/events.ts — the weekly re-check then leaves it alone.
+    const { error } = await supabase.from("events").update({ status: "active", status_reason: "Restored by an admin", hidden: false }).eq("id", ev.id);
+    if (error) return toast(userMessage(error, "Couldn't restore that event."));
+    setEvents((all) => (all ?? []).map((x) => (x.id === ev.id ? { ...x, status: "active", statusReason: "Restored by an admin", hidden: false } : x)));
+  };
 
   return (
     <div>
       <PageHeader
         title="Events"
-        sub="Holidays and public events across Armenia, found automatically every week from open sources. Operators see verified ones next to their pricing."
+        sub="Holidays and public events across Armenia for the next 12 months, found and re-checked automatically every week. Operators see verified ones next to their pricing."
         actions={
           <button type="button" onClick={() => void refresh()} disabled={busy} className="inline-flex h-10 items-center gap-2 rounded-none border border-basalt/20 px-4 text-sm font-semibold hover:border-basalt/40 disabled:opacity-50">
             <RefreshCw className={cn("h-4 w-4", busy && "animate-spin")} /> Refresh now
@@ -81,10 +91,11 @@ export function AdminEvents() {
         {([
           ["events", "Events"],
           ["holidays", "Holidays"],
+          ["cancelled", "Cancelled"],
           ["unverified", "Couldn't verify"],
         ] as const).map(([k, label]) => (
           <button key={k} type="button" aria-pressed={filter === k} onClick={() => setFilter(k)} className={cn("h-9 rounded-full px-4 text-sm font-semibold", filter === k ? "bg-basalt text-paper" : "text-basalt/70 hover:text-basalt")}>
-            {label} <span className="tabular-nums opacity-60">{(events ?? []).filter((e) => (k === "holidays" ? e.kind === "holiday" : k === "unverified" ? e.kind === "event" && !e.verified : e.kind === "event" && e.verified)).length}</span>
+            {label} <span className="tabular-nums opacity-60">{(events ?? []).filter((e) => inTab(e, k)).length}</span>
           </button>
         ))}
       </div>
@@ -102,15 +113,20 @@ export function AdminEvents() {
                   {fmt(e.start)}{e.end !== e.start ? ` – ${fmt(e.end)}` : ""} · {e.city ?? "Nationwide"} · {e.category} · {IMPACT_LABEL[e.impact]}
                 </p>
                 {e.summary && <p className="mt-0.5 text-sm text-basalt/70">{e.summary}</p>}
+                {e.statusReason && <p className={cn("mt-0.5 text-xs font-semibold", e.status === "cancelled" || e.hidden ? "text-apricot" : "text-basalt/60")}>{e.statusReason}</p>}
               </div>
               {e.sourceUrl && (
                 <a href={e.sourceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-basalt/60 hover:text-apricot">
                   {e.sourceName ?? "Source"} <ExternalLink className="h-3 w-3" />
                 </a>
               )}
-              <button type="button" onClick={() => void setHidden(e, !e.hidden)} className="text-xs font-semibold text-basalt/60 hover:text-basalt">
-                {e.hidden ? "Show" : "Hide"}
-              </button>
+              {e.status === "cancelled" ? (
+                <button type="button" onClick={() => void restore(e)} className="text-xs font-semibold text-basalt/60 hover:text-basalt">Restore</button>
+              ) : (
+                <button type="button" onClick={() => void setHidden(e, !e.hidden)} className="text-xs font-semibold text-basalt/60 hover:text-basalt">
+                  {e.hidden ? "Show" : "Hide"}
+                </button>
+              )}
             </li>
           ))}
         </ul>

@@ -25,17 +25,22 @@ export interface MarketEvent {
   sourceName: string | null;
   verified: boolean;
   hidden: boolean;
+  /** 0104: "cancelled" when the source page is gone or says cancelled/postponed. */
+  status: "active" | "cancelled";
+  statusReason: string | null;
 }
 
 type Row = {
   id: string; kind: "holiday" | "event"; title: string; category: string; city: string | null; region: string | null; venue: string | null;
   start_date: string; end_date: string; impact: EventImpact; expected_attendance: number | null; summary: string | null;
   source_url: string | null; source_name: string | null; verified: boolean; hidden: boolean;
+  status?: "active" | "cancelled" | null; status_reason?: string | null;
 };
 const map = (r: Row): MarketEvent => ({
   id: r.id, kind: r.kind, title: r.title, category: r.category, city: r.city, region: r.region, venue: r.venue,
   start: r.start_date, end: r.end_date, impact: r.impact, expectedAttendance: r.expected_attendance, summary: r.summary,
   sourceUrl: r.source_url, sourceName: r.source_name, verified: r.verified, hidden: r.hidden,
+  status: r.status === "cancelled" ? "cancelled" : "active", statusReason: r.status_reason ?? null,
 });
 
 /** Events overlapping [from, to] (inclusive ISO days), soonest first. */
@@ -60,9 +65,9 @@ export function useEvents(from: string, to: string): MarketEvent[] {
   return events;
 }
 
-/** Events on one day, for calendar markers. */
+/** Events on one day, for calendar markers (cancelled ones left out). */
 export function eventsOn(events: MarketEvent[], day: string): MarketEvent[] {
-  return events.filter((e) => e.start <= day && day <= e.end);
+  return events.filter((e) => e.status !== "cancelled" && e.start <= day && day <= e.end);
 }
 
 /** Does this event matter for a listing in `city`? Nationwide (no city) events and same-city ones do. */

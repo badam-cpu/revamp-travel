@@ -183,7 +183,7 @@ export function PricingCalendar({ listing, room }: { listing: LiveListing; room?
     setSaving(true);
     try {
       const kept = rates.filter((r) => !(r.start >= selStart && r.end <= selEnd));
-      await saveRates([...kept, { start: selStart, end: selEnd, priceCents: amd * 100 }]);
+      await saveRates([...kept, { start: selStart, end: selEnd, priceCents: amd * 100, source: "manual" }]);
       toast(`Price set for ${selNights} day${selNights === 1 ? "" : "s"}.`);
       clearSel();
     } catch (e) {

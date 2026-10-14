@@ -73,7 +73,7 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
   const { listings, setSeasonalRates } = useListings();
   const { format } = useCurrency();
   const from = todayIso();
-  const to = addDays(from, 120);
+  const to = addDays(from, 365);
   const events = useEvents(from, to);
   const [applying, setApplying] = useState<string | null>(null);
 
@@ -84,19 +84,19 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
   const relevant = useMemo(
     () =>
       events
-        .filter((e) => e.impact !== "low" && e.end >= from)
+        .filter((e) => e.status !== "cancelled" && e.impact !== "low" && e.end >= from)
         .map((e) => ({ e, listings: mine.filter((l) => eventAffects(e, l.city, l.region) && mattersFor(l, e)) }))
         .filter((x) => x.listings.length > 0)
-        .slice(0, 40),
+        .slice(0, 80),
     [events, mine, from],
   );
 
   /** Set a per-date price for [start, end] (the event dates; tours: the days around it too). */
-  const apply = async (l: LiveListing, e: MarketEvent, cents: number, start: string, end: string) => {
+  const apply = async (l: LiveListing, e: MarketEvent, cents: number, start: string, end: string, source: "event_market" | "event_markup", basis: string) => {
     const key = `${l.id}:${e.id}`;
     setApplying(key);
     try {
-      await setSeasonalRates(l.id, [...withoutDays(l.seasonalRates ?? [], start, end), { start, end, priceCents: cents, label: e.title.slice(0, 60) }]);
+      await setSeasonalRates(l.id, [...withoutDays(l.seasonalRates ?? [], start, end), { start, end, priceCents: cents, label: e.title.slice(0, 60), source, basis }]);
       toast.success(`${l.title}: ${format(cents)} set for ${fmtRange(start, end)}.`);
     } catch (err) {
       toast(userMessage(err, "Couldn't save the price."));
@@ -149,6 +149,31 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
       if (activity && e.category === "sports" && e.city) hints.push(`Road closures are likely in ${e.city} on the event day — check your route.`);
       return { l, ds, yours, usual, pct, peers: peers.length, enough, med, suggest, priced, hints, activity, unit: l.type === "stay" ? "night" : l.priceUnit || "person" };
     });
+  // Cancelled events where the operator had applied an event price (rates labelled with the event's name).
+  const cancelledPrices = useMemo(
+    () =>
+      events
+        .filter((e) => e.status === "cancelled" && e.end >= addDays(from, -1))
+        .flatMap((e) =>
+          mine
+            .map((l) => ({ e, l, rates: (l.seasonalRates ?? []).filter((r) => r.label === e.title.slice(0, 60) && r.end >= addDays(e.start, -1) && r.start <= addDays(e.end, 1)) }))
+            .filter((x) => x.rates.length > 0),
+        ),
+    [events, mine, from],
+  );
+  const removeEventPrice = async (l: LiveListing, e: MarketEvent) => {
+    const key = `rm:${l.id}:${e.id}`;
+    setApplying(key);
+    try {
+      const label = e.title.slice(0, 60);
+      await setSeasonalRates(l.id, (l.seasonalRates ?? []).filter((r) => !(r.label === label && r.end >= addDays(e.start, -1) && r.start <= addDays(e.end, 1))));
+      toast.success(`${l.title}: back to your usual price on those dates.`);
+    } catch (err) {
+      toast(userMessage(err, "Couldn't remove the event price."));
+    } finally {
+      setApplying(null);
+    }
+  };
   const [open, setOpen] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [bigOnly, setBigOnly] = useState(false);
@@ -188,11 +213,25 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
         return embedded ? (
           (filter || markupPicker) && <div className="mb-3 flex flex-wrap items-center justify-between gap-3">{markupPicker ?? <span />}{filter}</div>
         ) : (
-          <SubHeader title="Upcoming events & pricing" sub="Holidays, festivals, concerts and matches found automatically from public sources, next four months." actions={filter} />
+          <SubHeader title="Upcoming events & pricing" sub="Holidays, festivals, concerts and matches found automatically from public sources, next 12 months." actions={filter} />
         );
       })()}
+      {cancelledPrices.length > 0 && (
+        <ul className="mb-4 grid gap-2" aria-label="Cancelled events with your event prices">
+          {cancelledPrices.map(({ e, l, rates }) => (
+            <li key={`${e.id}:${l.id}`} className="flex flex-wrap items-center justify-between gap-3 border border-apricot/40 bg-apricot/[0.06] px-4 py-3 text-sm">
+              <span className="min-w-0">
+                <strong>{e.title}</strong> was cancelled{e.statusReason ? ` (${e.statusReason.charAt(0).toLowerCase()}${e.statusReason.slice(1)})` : ""}. Your event price for <strong>{l.title}</strong> is still set on {rates.map((r) => fmtRange(r.start, r.end)).join(", ")}.
+              </span>
+              <button type="button" disabled={applying === `rm:${l.id}:${e.id}`} onClick={() => void removeEventPrice(l, e)} className="h-9 shrink-0 rounded-none bg-basalt px-3 text-xs font-semibold text-paper hover:bg-basalt/90 disabled:opacity-50">
+                {applying === `rm:${l.id}:${e.id}` ? "Removing…" : "Remove event price"}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       {list.length === 0 ? (
-        <p className="border border-dashed border-basalt/20 bg-chalk px-5 py-6 text-sm text-basalt/70">No notable events near your listings in the next four months yet. The list refreshes every week.</p>
+        <p className="border border-dashed border-basalt/20 bg-chalk px-5 py-6 text-sm text-basalt/70">No notable events near your listings in the next 12 months yet. The list refreshes every week.</p>
       ) : (
         <>
           {anyMarkup && (
@@ -264,7 +303,7 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
                                 <button
                                   type="button"
                                   disabled={applying === `${r.l.id}:${e.id}`}
-                                  onClick={() => void apply(r.l, e, r.suggest, r.ds[0], r.ds[r.ds.length - 1])}
+                                  onClick={() => void apply(r.l, e, r.suggest, r.ds[0], r.ds[r.ds.length - 1], r.enough ? "event_market" : "event_markup", r.enough ? `median of ${r.peers} similar listings (${format(r.med)})` : `+${r.pct}% on usual ${format(r.usual)}`)}
                                   className="col-span-2 inline-flex h-9 items-center justify-center gap-1.5 justify-self-start rounded-none bg-basalt px-3 text-xs font-semibold text-paper hover:bg-basalt/90 disabled:opacity-50 lg:col-span-1 lg:justify-self-end"
                                   title={`Sets ${format(r.suggest)} per ${r.unit} for ${fmtRange(r.ds[0], r.ds[r.ds.length - 1])}`}
                                 >

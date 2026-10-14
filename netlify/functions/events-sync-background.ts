@@ -23,7 +23,7 @@ export default async (req: Request): Promise<void> => {
   try {
     const r = await syncEvents(admin);
     console.log("[events-sync]", JSON.stringify(r));
-    await recordCronRun(admin, JOB, r.errors.length === 0, r.errors.length ? r.errors.join(" | ").slice(0, 500) : `holidays ${r.holidays}, found ${r.found}, verified ${r.verified}, searches ${r.searches}`);
+    await recordCronRun(admin, JOB, r.errors.length === 0, r.errors.length ? r.errors.join(" | ").slice(0, 500) : `holidays ${r.holidays}, found ${r.found}, verified ${r.verified}, searches ${r.searches}, cancelled ${r.cancelled}, hidden ${r.hidden}`);
   } catch (e) {
     console.error("[events-sync] failed", e);
     await recordCronRun(admin, JOB, false, e instanceof Error ? e.message : String(e));

@@ -216,7 +216,16 @@ export interface SeasonalRate {
   end: string;
   priceCents: number;
   label?: string;
+  /**
+   * Where this per-date price came from (price log, 0103): set by hand, applied
+   * from an event suggestion (market comparison or usual price + markup), or
+   * synced from PriceLabs. Absent on rates saved before tagging existed.
+   */
+  source?: RateSource;
+  /** What a suggestion was based on, e.g. "median of 4 similar listings" or "+20% on usual ֏45,000". */
+  basis?: string;
 }
+export type RateSource = "manual" | "event_market" | "event_markup" | "pricelabs";
 
 /** An additional location for a multi-branch eat listing (chain). */
 export interface Branch {

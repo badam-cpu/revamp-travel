@@ -437,7 +437,7 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
     if (!selRow || !selStart || !selEnd) return;
     const cents = Math.round(amd) * 100;
     const kept = withoutDays(selRow.rates, selStart, selEnd);
-    const next = cents === selRow.base ? kept : [...kept, { start: selStart, end: selEnd, priceCents: cents }];
+    const next = cents === selRow.base ? kept : [...kept, { start: selStart, end: selEnd, priceCents: cents, source: "manual" as const }];
     void run(() => saveRates(selRow, next), `Price saved for ${nightsLabel(selCount, selRow)}.`, "Couldn't save the price.");
   };
   const resetPrice = () => {

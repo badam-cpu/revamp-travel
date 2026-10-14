@@ -168,7 +168,7 @@ const PROMPT = (today: string, until: string, area: DiscoveryArea) => `Today is 
 
 What to look for: ${area.guidance}
 
-How to search: spend your searches well — go month by month across the window and use English, Armenian and Russian. Prefer official sites, venue and ticketing pages, and reputable news. Aim for 10–25 events in this area.
+How to search: spend your searches well — go month by month across the window and use English, Armenian and Russian. Prefer official sites, venue and ticketing pages, and reputable news. Cover the whole 12 months (major annual events are often announced far ahead). Aim for 15–30 events in this area.
 
 Rules:
 - Only events with a CONFIRMED date in that window. Skip anything past, rumoured, or without a date.
@@ -234,14 +234,14 @@ function str(v: unknown, max: number): string | null {
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Ask Claude (with web search) for upcoming events; returns raw candidates. */
-export async function discoverWithAi(area: DiscoveryArea, today = isoDay(new Date()), days = 183): Promise<{ events: FoundEvent[]; hits: SearchHit[]; searches: number }> {
+export async function discoverWithAi(area: DiscoveryArea, today = isoDay(new Date()), days = 365): Promise<{ events: FoundEvent[]; hits: SearchHit[]; searches: number }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
   const client = new Anthropic({ apiKey });
   const until = addDays(today, days);
   // Hard cost cap for the WHOLE run (max_uses is per request, and a paused turn
   // continues in a new request — so pass only the searches left each time).
-  const budget = Math.max(1, Number(process.env.EVENTS_SEARCHES_PER_AREA || process.env.EVENTS_MAX_SEARCHES || 8));
+  const budget = Math.max(1, Number(process.env.EVENTS_SEARCHES_PER_AREA || 10));
   let used = 0;
   // The SDK pinned here predates the web-search tool types; the API accepts it as-is.
   const tools = (maxUses: number) =>
@@ -376,7 +376,7 @@ export async function discoverEvents(admin: SupabaseClient, today = isoDay(new D
     }
   }
   if (areaErrors.length === DISCOVERY_AREAS.length) throw new Error(areaErrors.join(" | "));
-  const horizon = addDays(today, 200);
+  const horizon = addDays(today, 380);
   const { data: existing } = await admin.from("events").select("id, dedupe_key, title, start_date").gte("end_date", today);
   const known = (existing ?? []) as { id: string; dedupe_key: string; title: string; start_date: string }[];
 
@@ -455,8 +455,81 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise
   return out;
 }
 
+// ── 3. Weekly re-check: cancelled, postponed, stale ─────────────────────────
+const CANCEL_WORDS = ["cancelled", "canceled", "cancellation", "postponed", "called off", "отмен", "перенес", "перенос", "չեղարկ", "հետաձգ"];
+const STALE_DAYS = 21; // not re-found by any weekly search for 3 weeks
+/** Set by Admin → Events → Restore (client/src/components/AdminEvents.tsx); the re-check skips these. */
+export const RESTORED_BY_ADMIN = "Restored by an admin";
+
+/**
+ * What the source page says about an event now: "gone" (404/410), "cancelled"
+ * (a cancel/postpone word within ~250 characters of the event's name), "ok"
+ * (still mentions it with its date), or "unknown" (blocked, timeout, etc.).
+ */
+export async function sourceStatus(url: string, title: string, start: string, nameOnSource?: string | null): Promise<"gone" | "cancelled" | "ok" | "unknown"> {
+  try {
+    const safe = await assertSafeUrl(url);
+    const res = await fetch(safe.toString(), {
+      redirect: "follow",
+      signal: AbortSignal.timeout(10_000),
+      headers: { "user-agent": "Mozilla/5.0 (compatible; RevampVacationsBot/1.0; +https://revampvacations.com) event source check", accept: "text/html,*/*" },
+    });
+    if (res.status === 404 || res.status === 410) return "gone";
+    if (!res.ok || !res.body) return "unknown";
+    const html = (await res.text()).slice(0, 1_500_000);
+    const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").toLowerCase().normalize("NFKD");
+    // Cancel words near the event's name (not elsewhere on a long listing page).
+    const words = [...titleTokens(title), ...(nameOnSource ? titleTokens(nameOnSource) : [])];
+    for (const w of words) {
+      let at = text.indexOf(w);
+      while (at >= 0) {
+        const near = text.slice(Math.max(0, at - 250), at + 250);
+        if (CANCEL_WORDS.some((c) => near.includes(c))) return "cancelled";
+        at = text.indexOf(w, at + w.length);
+      }
+    }
+    const named = Math.max(nameHit(text, title), nameOnSource ? nameHit(text, nameOnSource) : 0) >= 0.6;
+    return named && mentionsDate(text, start) ? "ok" : "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+/** Mark upcoming events cancelled (source gone / says cancelled) or hide stale ones. */
+export async function recheckEvents(admin: SupabaseClient, today = isoDay(new Date())): Promise<{ checked: number; cancelled: number; hidden: number }> {
+  const { data } = await admin
+    .from("events")
+    .select("id, title, start_date, source_url, last_seen_at, status_reason")
+    .eq("kind", "event")
+    .eq("status", "active")
+    .eq("hidden", false)
+    .gte("end_date", today)
+    .limit(300);
+  // An admin's "Restore" sticks — the re-check never overrides it.
+  const rows = ((data ?? []) as { id: string; title: string; start_date: string; source_url: string | null; last_seen_at: string; status_reason: string | null }[]).filter(
+    (r) => r.status_reason !== RESTORED_BY_ADMIN,
+  );
+  const verdicts = await mapPool(rows, 6, (r) => (r.source_url ? sourceStatus(r.source_url, r.title, r.start_date) : Promise.resolve("unknown" as const)));
+  let cancelled = 0;
+  let hidden = 0;
+  const now = new Date().toISOString();
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const v = verdicts[i];
+    if (v === "gone" || v === "cancelled") {
+      const reason = v === "gone" ? "The source page was removed" : "The source now says it's cancelled or postponed";
+      const { error } = await admin.from("events").update({ status: "cancelled", status_reason: reason, status_changed_at: now }).eq("id", r.id);
+      if (!error) cancelled++;
+    } else if (v !== "ok" && Date.parse(r.last_seen_at) < Date.now() - STALE_DAYS * DAY) {
+      const { error } = await admin.from("events").update({ hidden: true, status_reason: "Not confirmed by any search for 3 weeks", status_changed_at: now }).eq("id", r.id);
+      if (!error) hidden++;
+    }
+  }
+  return { checked: rows.length, cancelled, hidden };
+}
+
 /** Holidays + AI discovery. Each half runs even if the other fails. */
-export async function syncEvents(admin: SupabaseClient): Promise<{ holidays: number; found: number; verified: number; stored: number; searches: number; errors: string[] }> {
+export async function syncEvents(admin: SupabaseClient): Promise<{ holidays: number; found: number; verified: number; stored: number; searches: number; cancelled: number; hidden: number; errors: string[] }> {
   const errors: string[] = [];
   let holidays = 0;
   let disc = { found: 0, verified: 0, stored: 0, searches: 0, areaErrors: [] as string[] };
@@ -471,8 +544,15 @@ export async function syncEvents(admin: SupabaseClient): Promise<{ holidays: num
     errors.push(`discovery: ${e instanceof Error ? e.message : String(e)}`);
   }
   errors.push(...disc.areaErrors.map((a) => `discovery ${a}`));
+  // After discovery (so re-found events have a fresh last_seen_at): cancellations & stale ones.
+  let re = { checked: 0, cancelled: 0, hidden: 0 };
+  try {
+    re = await recheckEvents(admin);
+  } catch (e) {
+    errors.push(`recheck: ${e instanceof Error ? e.message : String(e)}`);
+  }
   const { areaErrors: _unused, ...rest } = disc;
-  return { holidays, ...rest, errors };
+  return { holidays, ...rest, cancelled: re.cancelled, hidden: re.hidden, errors };
 }
 
 

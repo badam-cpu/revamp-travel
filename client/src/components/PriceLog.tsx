@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useCurrency } from "@/contexts/CurrencyContext";
-import { describeRateChange } from "@shared/priceLog";
+import { describeRateChange, rateChangeKind, type ChangeKind } from "@shared/priceLog";
 import { roomUnitLabel } from "@shared/rooms";
 import { cn } from "@/lib/utils";
 
@@ -49,6 +49,7 @@ export function PriceLog({ scope }: { scope: "operator" | "admin" }) {
   const [period, setPeriod] = useState<number>(30);
   const [listing, setListing] = useState("");
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [kindFilter, setKindFilter] = useState<"all" | "manual" | "suggestion" | "automatic">("all");
 
   useEffect(() => {
     let live = true;
@@ -85,7 +86,7 @@ export function PriceLog({ scope }: { scope: "operator" | "admin" }) {
     (rows ?? []).forEach((r) => m.set(r.listing_id, r.listings?.title ?? "Listing"));
     return Array.from(m.entries()).sort((a, b) => a[1].localeCompare(b[1]));
   }, [rows]);
-  const shown = (rows ?? []).filter((r) => !listing || r.listing_id === listing);
+  const shown = (rows ?? []).filter((r) => (!listing || r.listing_id === listing) && matchesKind(r));
   const byDay = useMemo(() => {
     const out: { day: string; rows: Row[] }[] = [];
     for (const r of shown) {
@@ -104,14 +105,34 @@ export function PriceLog({ scope }: { scope: "operator" | "admin" }) {
     if (scope === "operator") return name;
     return r.listings && r.changed_by !== r.listings.operator_id ? `${name} (admin)` : name;
   };
-  const what = (r: Row): { title: string; lines: string[] } => {
+  type Line = { text: string; kind: ChangeKind; tag: string; basis?: string };
+  const what = (r: Row): { title: string; lines: Line[]; kinds: ChangeKind[]; tag?: { kind: ChangeKind; text: string } } => {
     const target = r.room_unit_id ? "Room price" : r.room_type_id ? "Room type price" : "Base price";
-    if (r.field === "base_price") return { title: `${target}: ${r.room_unit_id && r.old_value == null ? "type price" : money(r.old_value)} → ${r.room_unit_id && r.new_value == null ? "type price" : money(r.new_value)}`, lines: [] };
-    if (r.field === "extra_fee") return { title: `Extra fee: ${money(r.old_value)} → ${money(r.new_value)}`, lines: [] };
-    if (r.field === "extra_guest_fee") return { title: `Extra-guest fee: ${money(r.old_value)} → ${money(r.new_value)}`, lines: [] };
+    const simple = (title: string) => {
+      const kind: ChangeKind = r.changed_by ? "manual" : "automatic";
+      return { title, lines: [], kinds: [kind], tag: { kind, text: kind === "manual" ? "Manual" : "Automatic" } };
+    };
+    if (r.field === "base_price") return simple(`${target}: ${r.room_unit_id && r.old_value == null ? "type price" : money(r.old_value)} → ${r.room_unit_id && r.new_value == null ? "type price" : money(r.new_value)}`);
+    if (r.field === "extra_fee") return simple(`Extra fee: ${money(r.old_value)} → ${money(r.new_value)}`);
+    if (r.field === "extra_guest_fee") return simple(`Extra-guest fee: ${money(r.old_value)} → ${money(r.new_value)}`);
     const changes = describeRateChange(r.old_value, r.new_value);
-    const lines = changes.map((c) => `${fmtRange(c.start, c.end)}: ${c.from == null ? "usual price" : format(c.from)} → ${c.to == null ? "usual price" : format(c.to)}${c.label ? ` · ${c.label}` : ""}`);
-    return { title: `Date prices${r.room_unit_id ? " (this room)" : r.room_type_id ? " (room type)" : ""}: ${changes.length} change${changes.length === 1 ? "" : "s"}`, lines };
+    const lines: Line[] = changes.map((c) => {
+      const k = rateChangeKind(c, !!r.changed_by);
+      const label = c.label ?? (k.kind === "removed" ? c.fromLabel : undefined);
+      return {
+        text: `${fmtRange(c.start, c.end)}: ${c.from == null ? "usual price" : format(c.from)} → ${c.to == null ? "usual price" : format(c.to)}${label ? ` · ${label}` : ""}`,
+        kind: k.kind,
+        tag: k.text,
+        basis: k.kind === "suggestion" ? c.basis : undefined,
+      };
+    });
+    return { title: `Date prices${r.room_unit_id ? " (this room)" : r.room_type_id ? " (room type)" : ""}: ${changes.length} change${changes.length === 1 ? "" : "s"}`, lines, kinds: Array.from(new Set(lines.map((l) => l.kind))) };
+  };
+  // "Event suggestions" covers applied suggestions and removed event prices.
+  const matchesKind = (r: Row) => {
+    if (kindFilter === "all") return true;
+    const kinds = what(r).kinds;
+    return kindFilter === "suggestion" ? kinds.includes("suggestion") || kinds.includes("removed") : kinds.includes(kindFilter);
   };
 
   return (
@@ -121,6 +142,18 @@ export function PriceLog({ scope }: { scope: "operator" | "admin" }) {
           {PERIODS.map((p) => (
             <button key={p.days} type="button" aria-pressed={period === p.days} onClick={() => setPeriod(p.days)} className={cn("h-8 rounded-full px-3 text-xs font-semibold", period === p.days ? "bg-basalt text-paper" : "text-basalt/70 hover:text-basalt")}>
               {p.label}
+            </button>
+          ))}
+        </div>
+        <div role="group" aria-label="Source" className="inline-flex rounded-full border border-basalt/15 bg-paper p-1">
+          {([
+            ["all", "All"],
+            ["manual", "Manual"],
+            ["suggestion", "Event suggestions"],
+            ["automatic", "Automatic"],
+          ] as const).map(([k, label]) => (
+            <button key={k} type="button" aria-pressed={kindFilter === k} onClick={() => setKindFilter(k)} className={cn("h-8 rounded-full px-3 text-xs font-semibold", kindFilter === k ? "bg-basalt text-paper" : "text-basalt/70 hover:text-basalt")}>
+              {label}
             </button>
           ))}
         </div>
@@ -162,11 +195,18 @@ export function PriceLog({ scope }: { scope: "operator" | "admin" }) {
                           {r.room_types?.name ? <span className="font-normal text-basalt/60"> · {r.room_types.name}</span> : null}
                           {r.room_units?.name ? <span className="font-normal text-basalt/60"> · {roomUnitLabel(r.room_units.name)}</span> : null}
                         </p>
-                        <p className="text-basalt/80">{w.title}</p>
+                        <p className="flex flex-wrap items-center gap-2 text-basalt/80">
+                          {w.title}
+                          {w.tag && <SourceChip kind={w.tag.kind} text={w.tag.text} />}
+                        </p>
                         {w.lines.length > 0 && (
-                          <ul className="mt-1 grid gap-0.5 tabular-nums text-basalt/70">
+                          <ul className="mt-1 grid gap-1 tabular-nums text-basalt/70">
                             {(open ? w.lines : w.lines.slice(0, 3)).map((l, i) => (
-                              <li key={i}>{l}</li>
+                              <li key={i} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                <SourceChip kind={l.kind} text={l.tag} />
+                                <span>{l.text}</span>
+                                {l.basis && <span className="text-xs text-basalt/55">({l.basis})</span>}
+                              </li>
                             ))}
                           </ul>
                         )}
@@ -189,5 +229,19 @@ export function PriceLog({ scope }: { scope: "operator" | "admin" }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** Small source tag for a price-log line: Manual / Event suggestion / Event price removed / Automatic. */
+function SourceChip({ kind, text }: { kind: ChangeKind; text: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
+        kind === "suggestion" ? "bg-apricot/15 text-apricot" : kind === "removed" ? "border border-apricot/40 text-apricot" : kind === "automatic" ? "bg-basalt/10 text-basalt/70" : "border border-basalt/20 text-basalt/70",
+      )}
+    >
+      {text}
+    </span>
   );
 }

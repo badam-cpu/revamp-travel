@@ -118,7 +118,7 @@ export async function syncOperatorPrices(admin: SupabaseClient, operatorId: stri
   for (const m of maps as { revamp_listing_id: string; pricelabs_listing_id: string; pricelabs_pms: string }[]) {
     try {
       const { currency, rows } = await pricelabsPrices(apiKey, m.pricelabs_listing_id, m.pricelabs_pms, dateFrom, dateTo);
-      const seasonal: { start: string; end: string; priceCents: number }[] = [];
+      const seasonal: { start: string; end: string; priceCents: number; source: "pricelabs" }[] = [];
       let unconvertible = false;
       for (const r of rows) {
         const cents = toAmdCents(r.price, currency, rate);
@@ -126,7 +126,7 @@ export async function syncOperatorPrices(admin: SupabaseClient, operatorId: stri
           unconvertible = true;
           break;
         }
-        seasonal.push({ start: r.date, end: r.date, priceCents: cents });
+        seasonal.push({ start: r.date, end: r.date, priceCents: cents, source: "pricelabs" });
       }
       if (unconvertible) {
         result.skipped.push(`${m.revamp_listing_id}:currency`);
