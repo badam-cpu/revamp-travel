@@ -221,7 +221,9 @@ export async function discoverWithAi(today = isoDay(new Date()), days = 183): Pr
         type: "web_search_20250305",
         name: "web_search",
         max_uses: maxUses,
-        user_location: { type: "approximate", country: "AM", city: "Yerevan", timezone: "Asia/Yerevan" },
+        // Armenia ("AM") isn't a supported country code for search localisation (the API
+        // rejects the request), so localise by time zone only; the prompt names Armenia.
+        user_location: { type: "approximate", timezone: "Asia/Yerevan" },
       },
     ] as unknown as Anthropic.Tool[];
   const searchesIn = (m: Anthropic.Message) => Number((m.usage as unknown as { server_tool_use?: { web_search_requests?: number } }).server_tool_use?.web_search_requests ?? 0);

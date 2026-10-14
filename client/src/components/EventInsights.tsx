@@ -8,6 +8,9 @@
  *   - a suggestion when you're noticeably below them, with "Apply" that writes
  *     a per-date price for the event dates. Never automatic; honest wording:
  *     it's what similar hosts ASK, not a promise of bookings.
+ *   - with fewer than 3 comparables (early marketplace), a rule-of-thumb
+ *     suggestion instead: your usual price + an event markup the operator picks
+ *     (+10/20/30% on big-demand dates, half on others), labelled as such.
  * Hotels (priced per room type) link to the Calendar instead of applying.
  */
 import { useMemo, useState } from "react";
@@ -49,6 +52,8 @@ const median = (xs: number[]) => {
   const m = Math.floor(s.length / 2);
   return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2);
 };
+const MARKUPS = [10, 20, 30];
+const MARKUP_KEY = "revamp.eventMarkup";
 const roundAmd = (cents: number) => Math.round(cents / 100_000) * 100_000; // nearest ֏1,000
 
 /** `embedded`: the page supplies the title/description (Dashboard → Analytics → Events & pricing); only the filter shows here. */
@@ -90,22 +95,47 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
   };
 
   // Per event: each affected listing's price vs similar Revamp listings, and a suggestion.
+  // Event markup (rule of thumb) for when there aren't 3 comparable listings yet:
+  // the chosen % on big-demand dates, half of it (rounded to 5) on smaller ones.
+  const [markup, setMarkup] = useState<number>(() => {
+    try {
+      const v = Number(localStorage.getItem(MARKUP_KEY));
+      return MARKUPS.includes(v) ? v : 20;
+    } catch {
+      return 20;
+    }
+  });
+  const chooseMarkup = (v: number) => {
+    setMarkup(v);
+    try {
+      localStorage.setItem(MARKUP_KEY, String(v));
+    } catch {
+      /* private mode — not remembered */
+    }
+  };
+  const pctFor = (e: MarketEvent) => (e.impact === "high" ? markup : Math.max(5, Math.round(markup / 2 / 5) * 5));
+
+  // Per event and listing: market comparison when ≥3 similar listings exist, else your usual price + the markup.
   const rowsFor = (e: MarketEvent, ls: LiveListing[]) =>
     ls.map((l) => {
       const ds = days(e.start < from ? from : e.start, e.end);
       const yours = askOver(l, ds);
+      const usual = Math.round(l.price * 100);
       const peers = market.filter((m) => m.type === l.type && m.city.trim().toLowerCase() === l.city.trim().toLowerCase());
       const enough = peers.length >= 3;
       const med = enough ? median(peers.map((p) => askOver(p, ds))) : 0;
-      const suggest = enough && !l.multiRoom && yours > 0 && yours < med * 0.95 ? roundAmd(med) : 0;
-      return { l, ds, yours, peers: peers.length, enough, med, suggest, unit: l.type === "stay" ? "night" : l.priceUnit || "person" };
+      const pct = pctFor(e);
+      const target = enough ? roundAmd(med) : roundAmd(usual * (1 + pct / 100));
+      const priced = yours > 0 && yours >= (enough ? med * 0.95 : target);
+      const suggest = !l.multiRoom && usual > 0 && !priced ? target : 0;
+      return { l, ds, yours, usual, pct, peers: peers.length, enough, med, suggest, priced, unit: l.type === "stay" ? "night" : l.priceUnit || "person" };
     });
   const [open, setOpen] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [bigOnly, setBigOnly] = useState(false);
   const list = relevant.filter((x) => !bigOnly || x.e.impact === "high");
   const shown = showAll ? list : list.slice(0, 6);
-  const anyComparison = relevant.some(({ e, listings: ls }) => rowsFor(e, ls).some((r) => r.enough));
+  const anyMarkup = relevant.some(({ e, listings: ls }) => rowsFor(e, ls).some((r) => !r.enough));
 
   if (!mine.length) return null;
 
@@ -124,8 +154,20 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
               ))}
             </div>
           ) : undefined;
+        const markupPicker = anyMarkup ? (
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-basalt/70">Event markup</span>
+            <div role="group" aria-label="Event markup on big-demand dates" className="inline-flex rounded-full border border-basalt/15 bg-paper p-1">
+              {MARKUPS.map((v) => (
+                <button key={v} type="button" aria-pressed={markup === v} onClick={() => chooseMarkup(v)} className={cn("h-8 rounded-full px-3 text-xs font-semibold tabular-nums", markup === v ? "bg-basalt text-paper" : "text-basalt/70 hover:text-basalt")}>
+                  +{v}%
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null;
         return embedded ? (
-          filter && <div className="mb-3 flex justify-end">{filter}</div>
+          (filter || markupPicker) && <div className="mb-3 flex flex-wrap items-center justify-between gap-3">{markupPicker ?? <span />}{filter}</div>
         ) : (
           <SubHeader title="Upcoming events & pricing" sub="Holidays, festivals, concerts and matches found automatically from public sources, next four months." actions={filter} />
         );
@@ -134,15 +176,16 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
         <p className="border border-dashed border-basalt/20 bg-chalk px-5 py-6 text-sm text-basalt/70">No notable events near your listings in the next four months yet. The list refreshes every week.</p>
       ) : (
         <>
-          {!anyComparison && (
-            <p className="mb-3 text-sm text-basalt/60">Price comparisons appear once at least 3 similar Revamp listings (same type, same city) are live — until then, use these dates to set your own event prices in Calendar.</p>
+          {anyMarkup && (
+            <p className="mb-3 text-sm text-basalt/60">
+              Where there aren't yet 3 similar Revamp listings to compare with, suggestions add the markup to your usual price: +{markup}% on big-demand dates, +{Math.max(5, Math.round(markup / 2 / 5) * 5)}% on others. It's a starting point, not market data.
+            </p>
           )}
           <ul className="divide-y divide-basalt/10 border border-basalt/10 bg-paper">
             {shown.map(({ e, listings: ls }) => {
               const rows = rowsFor(e, ls);
               const sugg = rows.filter((r) => r.suggest > 0);
-              const cmp = rows.filter((r) => r.enough);
-              const noCmp = rows.filter((r) => !r.enough);
+              const cmp = rows;
               const isOpen = open === e.id;
               const d = new Date(e.start + "T00:00:00Z");
               return (
@@ -190,7 +233,11 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
                             <div key={r.l.id} className="grid grid-cols-2 items-center gap-x-6 gap-y-1.5 py-2.5 text-sm lg:grid-cols-[minmax(0,1fr)_10rem_15rem_10rem]">
                               <span className="col-span-2 min-w-0 truncate font-medium lg:col-span-1">{r.l.title}</span>
                               <span className="tabular-nums text-basalt/70">You: <strong className="text-basalt">{r.yours > 0 ? format(r.yours) : "—"}</strong> / {r.unit}</span>
-                              <span className="tabular-nums text-basalt/70">Similar: <strong className="text-basalt">{format(r.med)}</strong> <span className="text-basalt/50">({r.peers})</span></span>
+                              {r.enough ? (
+                                <span className="tabular-nums text-basalt/70">Similar: <strong className="text-basalt">{format(r.med)}</strong> <span className="text-basalt/50">({r.peers})</span></span>
+                              ) : (
+                                <span className="tabular-nums text-basalt/70">Usual {r.usual > 0 ? format(r.usual) : "—"} <span className="text-basalt/50">+{r.pct}%</span></span>
+                              )}
                               {r.suggest ? (
                                 <button
                                   type="button"
@@ -202,17 +249,13 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
                                   <Sparkles className="h-3.5 w-3.5 text-apricot" /> {applying === `${r.l.id}:${e.id}` ? "Applying…" : `Apply ${format(r.suggest)}`}
                                 </button>
                               ) : (
-                                <span className="col-span-2 text-xs text-basalt/60 lg:col-span-1 lg:text-right">{r.l.multiRoom ? "Set room-type prices in Calendar" : "In line with similar listings"}</span>
+                                <span className="col-span-2 text-xs text-basalt/60 lg:col-span-1 lg:text-right">
+                                  {r.l.multiRoom ? "Set room-type prices in Calendar" : r.usual <= 0 ? "No price set" : r.enough ? "In line with similar listings" : "Already priced for the event"}
+                                </span>
                               )}
                             </div>
                           ))}
                         </div>
-                      )}
-                      {noCmp.length > 0 && (
-                        <p className="mt-2 text-sm text-basalt/60">
-                          {cmp.length > 0 ? "Also affects " : "Affects "}
-                          {noCmp.length === 1 ? noCmp[0].l.title : `${noCmp.length} of your listings`} — not enough similar Revamp listings nearby to compare yet.
-                        </p>
                       )}
                     </div>
                   )}
@@ -227,7 +270,7 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
           )}
         </>
       )}
-      <p className="mt-3 text-xs text-basalt/55">Suggestions compare what similar Revamp listings ask — they aren't a promise of bookings. Nothing changes until you click Apply.</p>
+      <p className="mt-3 text-xs text-basalt/55">Suggestions are a starting point — they aren't a promise of bookings. Nothing changes until you click Apply.</p>
     </section>
   );
 }
