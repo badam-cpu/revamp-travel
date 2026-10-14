@@ -1175,8 +1175,9 @@ export function registerApiRoutes(app: Express) {
     if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
     // Cost guard: each run uses up to EVENTS_MAX_SEARCHES paid web searches, so a
     // manual refresh is allowed at most once an hour (the weekly cron is separate).
-    const { data: last } = await admin.from("cron_runs").select("last_run_at").eq("job", "events-sync").maybeSingle();
-    const lastAt = last?.last_run_at ? Date.parse(last.last_run_at as string) : 0;
+    // Only a SUCCESSFUL run starts the cooldown — after a failed one, retrying right away is fine.
+    const { data: last } = await admin.from("cron_runs").select("last_success_at").eq("job", "events-sync").maybeSingle();
+    const lastAt = last?.last_success_at ? Date.parse(last.last_success_at as string) : 0;
     if (lastAt && Date.now() - lastAt < 60 * 60_000) {
       const mins = Math.ceil((60 * 60_000 - (Date.now() - lastAt)) / 60_000);
       return res.status(429).json({ error: `Events were refreshed recently — you can run it again in about ${mins} minute${mins === 1 ? "" : "s"}.` });
