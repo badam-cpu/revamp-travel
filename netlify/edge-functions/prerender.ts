@@ -38,6 +38,34 @@ const BOT_TOKENS = [
 
 const UA_REGEX = new RegExp(BOT_TOKENS.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "i");
 
+/**
+ * Declared inline (not in netlify.toml) so it can fail OPEN: `onError: "bypass"`
+ * sends the request on to the static SPA if this function ever crashes, times
+ * out or fails to boot (e.g. right after a deploy) — a visitor must never get
+ * Netlify's "Request ID" error page because of SEO plumbing. Private app pages
+ * are excluded outright: they're noindex and never prerendered, so refreshing
+ * the dashboard/admin/account never touches this function.
+ */
+export const config = {
+  path: "/*",
+  excludedPath: [
+    "/api/*",
+    "/assets/*",
+    "/images/*",
+    "/brand/*",
+    "/dashboard",
+    "/dashboard/*",
+    "/admin",
+    "/admin/*",
+    "/account",
+    "/account/*",
+    "/venue",
+    "/venue/*",
+    "/trip/*",
+  ],
+  onError: "bypass",
+};
+
 export default async (request: Request): Promise<Response | undefined> => {
   const url = new URL(request.url);
   const path = url.pathname;

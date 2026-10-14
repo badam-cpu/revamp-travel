@@ -29,10 +29,10 @@
 # Bot-prerender edge function: runs on every page route, but returns real
 # HTML only for a recognized crawler UA (see the file's header). excludedPath
 # keeps it off the API and static assets so real-visitor latency is untouched.
-[[edge_functions]]
-  path = "/*"
-  function = "prerender"
-  excludedPath = ["/api/*", "/assets/*", "/images/*", "/brand/*"]
+# The bot-prerender edge function declares its own path/exclusions/onError in
+# netlify/edge-functions/prerender.ts (inline `config`) — onError "bypass" is
+# only available inline, and it keeps a failing edge function from ever
+# showing visitors Netlify's error page.
 
 # SEO: the auto-generated Netlify subdomain serves the whole site and would
 # otherwise be indexed as duplicate content competing with the custom domain
