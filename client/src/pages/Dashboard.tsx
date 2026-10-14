@@ -87,6 +87,7 @@ import { OperatorResponseStat } from "@/components/OperatorResponseStat";
 import { MessageTemplatesSettings } from "@/components/MessageTemplatesSettings";
 import { OperatorSettings } from "@/components/OperatorSettings";
 import { PageHeader, SubHeader } from "@/components/PageHeader";
+import { EventInsights } from "@/components/EventInsights";
 import { EXPERIENCE_PREFILL_STORAGE_KEY } from "@/pages/ExperienceOnboarding";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { toast } from "sonner";
@@ -2014,6 +2015,7 @@ function DashboardContent() {
             {section === "analytics" && (
               <div className="grid gap-8">
                 <AnalyticsDashboard scope="operator" />
+                <EventInsights />
                 <div>
                   <SubHeader title="Response times" sub="How fast you reply to guest inquiries — fast replies win bookings." />
                   <OperatorResponseStat showEmpty />

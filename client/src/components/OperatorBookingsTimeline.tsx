@@ -35,6 +35,7 @@ import { roomUnitLabel, unitBaseCents, unitNightCents, unitPricing } from "@shar
 import type { LiveListing } from "@/contexts/ListingsContext";
 import { cn } from "@/lib/utils";
 import { suspensionBlocked } from "@/components/SuspensionNotice";
+import { eventsOn, useEvents } from "@/lib/events";
 import { applyGrouping, CalendarToolbar, GROUP_OPTIONS, groupOptionsFor, monthsOf, remember, remembered, rollingDays, ToolbarSelect, useColumnWindow, useCompactPrice, type GroupBy, type TypeFilter } from "@/components/CalendarToolbar";
 
 const DAY_MS = 86_400_000;
@@ -120,6 +121,8 @@ export function OperatorBookingsTimeline() {
   const DAYS = useMemo(() => rollingDays(startDate), [startDate]);
   const windowEnd = addDaysIso(startDate, DAYS);
   const days = useMemo(() => Array.from({ length: DAYS }, (_, i) => addDaysIso(startDate, i)), [startDate, DAYS]);
+  // Holidays / festivals / concerts on each day (0102) — a dot in the date header.
+  const events = useEvents(startDate, windowEnd);
   const todayCol = dayDiff(startDate, today);
 
   const [rows, setRows] = useState<Row[] | null>(null);
@@ -685,6 +688,7 @@ export function OperatorBookingsTimeline() {
         <li className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border border-basalt/25 bg-basalt/[0.15]" /> Blocked by you</li>
         <li className="inline-flex items-center gap-1.5"><span className="text-[11px] font-semibold text-basalt/45">֏30k</span> Your price per night</li>
         <li className="inline-flex items-center gap-1.5"><span className="text-[11px] font-semibold text-apricot">֏35k</span> Custom price for that date</li>
+        <li className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-apricot" /> Holiday or event (hover the date)</li>
       </ul>
 
       {/* Grid */}
@@ -708,14 +712,17 @@ export function OperatorBookingsTimeline() {
               const isToday = d === today;
               const monthStart = i === 0 || dt.getUTCDate() === 1;
               const n = availByDay[i];
+              const evs = eventsOn(events, d);
               return (
                 <div
                   key={d}
                   role="columnheader"
-                  aria-label={`${fmtDay(d)}${isToday ? ", today" : ""}, ${n} of ${totalUnits} free`}
+                  title={evs.length ? evs.map((e) => e.title).join(" · ") : undefined}
+                  aria-label={`${fmtDay(d)}${isToday ? ", today" : ""}, ${n} of ${totalUnits} free${evs.length ? `, ${evs.map((e) => e.title).join(", ")}` : ""}`}
                   style={{ width: CELL_W }}
                   className={cn("relative shrink-0 border-r border-basalt/8 py-1.5 text-center", monthStart && i !== 0 && "border-l-2 border-l-basalt/25", [0, 6].includes(dt.getUTCDay()) && "bg-basalt/[0.03]", isToday && "bg-apricot/10")}
                 >
+                  {evs.length > 0 && <span aria-hidden className={cn("absolute right-1 top-1 h-1.5 w-1.5 rounded-full", evs.some((e) => e.impact === "high") ? "bg-apricot" : "bg-basalt/40")} />}
                   {monthStart && (
                     <span aria-hidden className="absolute left-0 top-0 whitespace-nowrap px-1 text-[9px] font-bold uppercase tracking-wide text-apricot">
                       {dt.toLocaleDateString(undefined, { month: "short", timeZone: "UTC" })}

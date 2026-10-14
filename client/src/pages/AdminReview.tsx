@@ -14,9 +14,10 @@
  * Wrapped in RequireRole role="admin" — there's no self-serve admin signup;
  * that migration's header documents the one-line SQL to promote an account.
  */
+import { AdminEvents } from "@/components/AdminEvents";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { Activity, AlertTriangle, TextCursorInput, BarChart3, BookOpen, Check, CreditCard, ExternalLink, FileText, Gift, Home, Landmark, LayoutDashboard, ListChecks, Mail, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, QrCode, Ticket, Timer, UserSearch, Users, Utensils, Wallet, X } from "lucide-react";
+import { Activity, AlertTriangle, CalendarDays, TextCursorInput, BarChart3, BookOpen, Check, CreditCard, ExternalLink, FileText, Gift, Home, Landmark, LayoutDashboard, ListChecks, Mail, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, QrCode, Ticket, Timer, UserSearch, Users, Utensils, Wallet, X } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { formatLocation } from "@/lib/region";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -245,10 +246,11 @@ function StatTile({ n, label, onClick }: { n: number | string; label: string; on
   );
 }
 
-type AdminSection = "overview" | "health" | "reviews" | "listings" | "textfixes" | "eateries" | "places" | "analytics" | "vouchers" | "users" | "accounts" | "giftcards" | "subscriptions" | "referrals" | "support" | "messages" | "response" | "email" | "documents" | "qr" | "payouts" | "blog" | "hub" | "site";
+type AdminSection = "overview" | "health" | "events" | "reviews" | "listings" | "textfixes" | "eateries" | "places" | "analytics" | "vouchers" | "users" | "accounts" | "giftcards" | "subscriptions" | "referrals" | "support" | "messages" | "response" | "email" | "documents" | "qr" | "payouts" | "blog" | "hub" | "site";
 const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: typeof Home }[] = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
   { key: "health", label: "Health", icon: Activity },
+  { key: "events", label: "Events", icon: CalendarDays },
   { key: "reviews", label: "Approvals", icon: ListChecks },
   { key: "listings", label: "Listings", icon: Package },
   { key: "textfixes", label: "Text fixes", icon: TextCursorInput },
@@ -356,6 +358,7 @@ function AdminConsole() {
           <div className="min-w-0">
             {section === "overview" && <OverviewPanel go={go} />}
             {section === "health" && <AdminHealth />}
+            {section === "events" && <AdminEvents />}
             {section === "reviews" && <ReviewsPanel />}
             {section === "listings" && <AdminListings />}
             {section === "textfixes" && <AdminTextFixes />}

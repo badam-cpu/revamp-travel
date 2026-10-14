@@ -12,6 +12,8 @@ Browsing, search, filtering, and the SVG atlas work with no secrets at all (they
 | `SEED_OPERATOR_EMAIL` / `SEED_OPERATOR_PASSWORD` | Credentials for the house "Revamp" operator account (created by hand at `/signup` first) that `pnpm seed:catalog` signs in as to import the seed catalog. Local/one-time use only. | Only to run `pnpm seed:catalog`. | none |
 | `ANTHROPIC_API_KEY` | Server-side key used by `server/planner.ts` to call the Anthropic Messages API for `/plan` (`POST /api/plan-trip`). Never sent to the browser. | Only to use `/plan` — the rest of the site works without it, and the endpoint returns a clear 503 instead of crashing if it's missing. | none |
 | `ANTHROPIC_MODEL` | Overrides the model used for trip planning. | No | `claude-sonnet-4-5` |
+| `EVENTS_MODEL` | Model for the weekly upcoming-events web search (server/events.ts). Falls back to `ANTHROPIC_MODEL`. Requires web search to be enabled for the org in the Anthropic Console. | No | `ANTHROPIC_MODEL` |
+| `EVENTS_MAX_SEARCHES` | Max web searches per weekly events run. | No | `15` |
 | `API_PORT` | Port the Express API listens on **in development**, proxied to by Vite. Not used in production (see `PORT`). | No | `3001` |
 | `PORT` | Port the single Express process listens on **in production** (`pnpm start`), serving both the built SPA and `/api/plan-trip`. | No | `3000` |
 | `PAYLINK_PARTNER_ID` / `PAYLINK_PARTNER_KEY` | PayLink.am partner credentials (server-side only) for the booking checkout (`server/paylink.ts`). Without them `POST /api/start-checkout` returns 503 and the rest of the site is unaffected. Production has no sandbox — a completed payment is a real charge. | To take bookings. | none |

@@ -32,6 +32,7 @@ import { fetchRoomTypes, updateRoomTypeRates, updateRoomUnitCalendar } from "@/l
 import { userMessage } from "@/lib/api";
 import type { RoomType, RoomUnit, SeasonalRate } from "@shared/listings";
 import { isSuspendedOn } from "@shared/listings";
+import { eventsOn, useEvents } from "@/lib/events";
 import { cn } from "@/lib/utils";
 
 const DAY_MS = 86_400_000;
@@ -50,7 +51,7 @@ const covers = (r: BlockedRange, d: string) => r.start <= d && d < r.end;
 const fmtDay = (iso: string) => new Date(iso + "T00:00:00Z").toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 
 /** A rate list with the days [s, e] (inclusive) taken out — partial overlaps are trimmed, not dropped. */
-function withoutDays(rates: SeasonalRate[], s: string, e: string): SeasonalRate[] {
+export function withoutDays(rates: SeasonalRate[], s: string, e: string): SeasonalRate[] {
   const out: SeasonalRate[] = [];
   for (const r of rates) {
     if (r.end < s || r.start > e) {
@@ -145,6 +146,8 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
   const DAYS = useMemo(() => rollingDays(startDate), [startDate]);
   const windowEnd = addDaysIso(startDate, DAYS);
   const days = useMemo(() => Array.from({ length: DAYS }, (_, i) => addDaysIso(startDate, i)), [startDate, DAYS]);
+  // Holidays / festivals / concerts on each day (0102) — a dot in the date header.
+  const events = useEvents(startDate, windowEnd);
 
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [pageSize, setPageSize] = useState<PageSize>(() => remembered<PageSize>(PAGE_KEY, PAGE_SIZES, 5));
@@ -597,6 +600,7 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
       <ul className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-basalt/60" aria-label="Legend">
         <li className="inline-flex items-center gap-1.5"><span className="text-[13px] tabular-nums text-basalt">֏30k</span> Your price</li>
         <li className="inline-flex items-center gap-1.5"><span className="text-[13px] font-semibold tabular-nums text-apricot">֏35k</span> Custom price for that date</li>
+        <li className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-apricot" /> Holiday or event (hover the date)</li>
         <li className="inline-flex items-center gap-1.5"><span className="cal-unavail h-4 w-6 border border-basalt/10" /> Not available — booked, synced from another site, or blocked</li>
       </ul>
 
@@ -622,13 +626,15 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
                 const dt = new Date(d + "T00:00:00Z");
                 const isToday = d === today;
                 const monthStart = i === 0 || dt.getUTCDate() === 1;
+                const evs = eventsOn(events, d);
                 return (
-                  <div key={d} role="columnheader" aria-label={`${fmtDay(d)}${isToday ? ", today" : ""}`} style={{ width: CELL_W }} className={cn("relative flex shrink-0 flex-col items-center pb-1.5 pt-5", monthStart && i !== 0 && "border-l border-l-basalt/25")}>
+                  <div key={d} role="columnheader" title={evs.length ? evs.map((e) => e.title).join(" · ") : undefined} aria-label={`${fmtDay(d)}${isToday ? ", today" : ""}${evs.length ? `, ${evs.map((e) => e.title).join(", ")}` : ""}`} style={{ width: CELL_W }} className={cn("relative flex shrink-0 flex-col items-center pb-1.5 pt-5", monthStart && i !== 0 && "border-l border-l-basalt/25")}>
                     {monthStart && (
                       <span aria-hidden className="absolute left-1.5 top-1 whitespace-nowrap text-[11px] font-bold uppercase tracking-wide text-basalt">
                         {dt.toLocaleDateString(undefined, { month: "short", year: dt.getUTCMonth() === 0 ? "numeric" : undefined, timeZone: "UTC" })}
                       </span>
                     )}
+                    {evs.length > 0 && <span aria-hidden className={cn("absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full", evs.some((e) => e.impact === "high") ? "bg-apricot" : "bg-basalt/40")} />}
                     <span aria-hidden className="text-[11px] font-medium text-basalt/60">{dt.toLocaleDateString(undefined, { weekday: "narrow", timeZone: "UTC" })}</span>
                     <span aria-hidden className={cn("mt-0.5 grid h-7 min-w-7 place-items-center rounded-full px-1 text-sm font-semibold tabular-nums", isToday ? "bg-basalt text-paper" : d < today ? "text-basalt/40" : "text-basalt")}>{dt.getUTCDate()}</span>
                   </div>

@@ -63,6 +63,7 @@ import { cheapestAvailableUnit, roomUnitLabel, unitPricing } from "../shared/roo
 import type { RoomUnit } from "../shared/listings.js";
 import { overlapsSuspension } from "../shared/listings.js";
 import { changeListingStatus, upcomingBookings } from "./listingStatus.js";
+import { eventsSyncToken } from "./events.js";
 import { planTrip, PlannerError } from "./planner.js";
 import { fetchPrefill, PrefillError } from "./urlPrefill.js";
 import { fetchMergedBlockedRanges, buildIcalFeed, type IcalFeed } from "./ical.js";
@@ -1159,6 +1160,40 @@ export function registerApiRoutes(app: Express) {
 
   // POST /api/room-calendars/sync { listingId, unitId? } — the owning operator (or
   // an admin) re-pulls one room's feeds, or every connected room of the hotel.
+  // POST /api/admin-events/refresh — admin-only: run the events discovery now
+  // (holidays + AI web search, server/events.ts) instead of waiting for the
+  // weekly cron. Fire-and-forget into the background function (it can take a
+  // few minutes); results appear in Admin → Events when it finishes.
+  app.post("/api/admin-events/refresh", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId) return res.status(401).json({ error: "Sign in as an admin." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "This isn't available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+    // Cost guard: each run uses up to EVENTS_MAX_SEARCHES paid web searches, so a
+    // manual refresh is allowed at most once every 6 hours (the weekly cron is separate).
+    const { data: last } = await admin.from("cron_runs").select("last_run_at").eq("job", "events-sync").maybeSingle();
+    const lastAt = last?.last_run_at ? Date.parse(last.last_run_at as string) : 0;
+    if (lastAt && Date.now() - lastAt < 6 * 3_600_000) {
+      const hrs = Math.ceil((6 * 3_600_000 - (Date.now() - lastAt)) / 3_600_000);
+      return res.status(429).json({ error: `Events were refreshed recently — you can run it again in about ${hrs} hour${hrs === 1 ? "" : "s"}.` });
+    }
+    const syncToken = await eventsSyncToken();
+    const base = process.env.URL || process.env.DEPLOY_PRIME_URL;
+    if (!syncToken || !base) return res.status(503).json({ error: "Event discovery isn't configured on this server." });
+    try {
+      const r = await fetch(`${base}/.netlify/functions/events-sync-background`, { method: "POST", headers: { "x-events-token": syncToken } });
+      if (r.status >= 400) throw new Error(`background ${r.status}`);
+      res.json({ started: true });
+    } catch (e) {
+      console.error("[admin-events/refresh]", e);
+      res.status(502).json({ error: "Couldn't start the refresh. Please try again." });
+    }
+  });
+
   // POST /api/listing-availability — operator (or admin) switches a listing
   // off/on or suspends/resumes its bookings (0101). Existing bookings stand;
   // the admins are emailed on every change. See server/listingStatus.ts.

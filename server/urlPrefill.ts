@@ -71,7 +71,8 @@ function isPrivateAddress(address: string, family: number): boolean {
   return false;
 }
 
-async function assertSafeUrl(rawUrl: string): Promise<URL> {
+/** Parse + SSRF-guard a URL (public http(s) only). Also used by server/events.ts to check event sources. */
+export async function assertSafeUrl(rawUrl: string): Promise<URL> {
   let url: URL;
   try {
     url = new URL(rawUrl);
