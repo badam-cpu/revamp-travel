@@ -86,18 +86,6 @@ export function PriceLog({ scope }: { scope: "operator" | "admin" }) {
     (rows ?? []).forEach((r) => m.set(r.listing_id, r.listings?.title ?? "Listing"));
     return Array.from(m.entries()).sort((a, b) => a[1].localeCompare(b[1]));
   }, [rows]);
-  const shown = (rows ?? []).filter((r) => (!listing || r.listing_id === listing) && matchesKind(r));
-  const byDay = useMemo(() => {
-    const out: { day: string; rows: Row[] }[] = [];
-    for (const r of shown) {
-      const day = r.changed_at.slice(0, 10);
-      const last = out[out.length - 1];
-      if (last && last.day === day) last.rows.push(r);
-      else out.push({ day, rows: [r] });
-    }
-    return out;
-  }, [shown]);
-
   const money = (v: unknown) => (typeof v === "number" ? format(v) : "—");
   const who = (r: Row) => {
     if (!r.changed_by) return "Automatic (e.g. PriceLabs sync)";
@@ -134,6 +122,19 @@ export function PriceLog({ scope }: { scope: "operator" | "admin" }) {
     const kinds = what(r).kinds;
     return kindFilter === "suggestion" ? kinds.includes("suggestion") || kinds.includes("removed") : kinds.includes(kindFilter);
   };
+
+  // After what()/matchesKind() exist — they are used while filtering.
+  const shown = (rows ?? []).filter((r) => (!listing || r.listing_id === listing) && matchesKind(r));
+  const byDay = useMemo(() => {
+    const out: { day: string; rows: Row[] }[] = [];
+    for (const r of shown) {
+      const day = r.changed_at.slice(0, 10);
+      const last = out[out.length - 1];
+      if (last && last.day === day) last.rows.push(r);
+      else out.push({ day, rows: [r] });
+    }
+    return out;
+  }, [shown]);
 
   return (
     <div>
