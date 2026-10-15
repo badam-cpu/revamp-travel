@@ -50,7 +50,7 @@ import { listAdminUsers } from "./adminUsers.js";
 import { endImpersonation, startImpersonation } from "./impersonation.js";
 import { listManagedVenues, venueSummary } from "./restaurant.js";
 import { isAllowedGiftAmount } from "../shared/giftcards.js";
-import { bookingCredit, returnCreditForBooking, creditBalanceFor } from "./credit.js";
+import { bookingCredit, returnCreditForBooking, creditBalanceFor, reviewCredit } from "./credit.js";
 import { redeemForCheckout, releaseRedeemed, redeemedColumns, redeemedTotal, coveredProvider, noteRedeemed } from "./redemption.js";
 import { payoutState } from "../shared/payouts.js";
 import { sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, sendJourneyEmail, type BookingEmailInfo } from "./email.js";
@@ -1850,8 +1850,13 @@ export function registerApiRoutes(app: Express) {
       // Insert the pending hold as the traveler (RLS allows own + pending only).
       // A direct-account hold is written by the server so the issuing-account
       // column can't be set from a client.
-      // So is a hold that spends credit (its hold id must not be client-settable).
-      const writer = (account.owner || red.creditHold) && adminClient ? adminClient : supa;
+      // Every booking is written by the server (0106 removed the guest insert
+      // policy — a guest could otherwise insert a booking with any price).
+      if (!adminClient) {
+        await releaseRedeemed(adminClient, red);
+        return res.status(503).json({ error: "Booking isn't available right now." });
+      }
+      const writer = adminClient;
       const { data: pendingRow, error: insErr } = await writer
         .from("bookings")
         .insert({
@@ -1876,6 +1881,28 @@ export function registerApiRoutes(app: Express) {
       console.error("[start-checkout]", err);
       res.status(502).json({ error: "Couldn't start checkout." });
     }
+  });
+
+  // POST /api/admin-credit/review — admin-only (0106): approve a credit held for
+  // review (it becomes spendable; the guest is emailed) or void a credit (its
+  // unspent part can't be used any more). Recorded on the lot with who + note.
+  app.post("/api/admin-credit/review", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId) return res.status(401).json({ error: "Sign in." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+    const parsed = z
+      .object({ lotId: z.string().uuid(), action: z.enum(["approve", "void"]), note: z.string().trim().max(500).optional() })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Pick a credit and an action." });
+    if (parsed.data.action === "void" && !parsed.data.note) return res.status(400).json({ error: "Add a short note saying why it's voided." });
+    const r = await reviewCredit(admin, { lotId: parsed.data.lotId, action: parsed.data.action, note: parsed.data.note ?? "", adminId: userId });
+    if (!r.ok) return res.status(r.status).json({ error: r.error });
+    res.json({ ok: true, spentCents: r.spentCents });
   });
 
   // POST /api/confirm-checkout — server-verified confirmation. Called when the

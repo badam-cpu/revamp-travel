@@ -1062,3 +1062,15 @@ export function getTripPage(token: string): Promise<TripPageData> {
 export function submitTripSurvey(token: string, step: string, rating: number, comment: string): Promise<{ ok: boolean; rating: number; low: boolean }> {
   return request("/api/trip/survey", { method: "POST", body: JSON.stringify({ token, step, rating, comment }) });
 }
+
+/** Admin (0106): approve a held Revamp credit or void a credit (note required for void). */
+export async function adminReviewCredit(lotId: string, action: "approve" | "void", note?: string): Promise<{ ok: boolean; spentCents: number }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in again.");
+  return request<{ ok: boolean; spentCents: number }>("/api/admin-credit/review", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ lotId, action, ...(note ? { note } : {}) }),
+  });
+}

@@ -256,7 +256,8 @@ export async function startRoomGroupCheckout(i: RoomGroupInput): Promise<RoomGro
       await releaseRedeemed(admin, red);
       return fail(502, "Couldn't start checkout.");
     }
-    const writer = account.owner || red.creditHold ? admin : i.supa;
+    // Every booking is written by the server (0106 removed the guest insert policy).
+    const writer = admin;
     const { error: insErr } = await writer.from("bookings").insert(
       rows.map((r) => ({
         ...r,

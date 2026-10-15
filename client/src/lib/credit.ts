@@ -17,6 +17,8 @@ export interface CreditLot {
   createdAt: string;
   note: string | null;
   listingTitle: string | null;
+  /** 0106: active = spendable; held = waiting for Revamp's review; void = cancelled by Revamp. */
+  status: "active" | "held" | "void";
 }
 export interface CreditUse {
   id: number;
@@ -39,6 +41,7 @@ export interface CreditState {
 
 type LotRow = {
   id: string; source: "earned" | "adjustment"; amount_cents: number; remaining_cents: number; expires_at: string; created_at: string; note: string | null;
+  status?: "active" | "held" | "void" | null;
   bookings: { listings: { title: string } | null } | null;
 };
 type UseRow = { id: number; hold_id: string; amount_cents: number; status: "applied" | "returned"; created_at: string; returned_at: string | null; bookings: { listings: { title: string } | null } | null };
@@ -59,7 +62,8 @@ export function useRevampCredit(): CreditState {
       const [lotsRes, usesRes] = await Promise.all([
         supabase
           .from("credit_lots")
-          .select("id, source, amount_cents, remaining_cents, expires_at, created_at, note, bookings(listings(title))")
+          // * so the 0106 status column is read when present.
+          .select("*, bookings(listings(title))")
           .order("created_at", { ascending: false })
           .limit(200),
         supabase
@@ -84,6 +88,7 @@ export function useRevampCredit(): CreditState {
         createdAt: r.created_at,
         note: r.note,
         listingTitle: r.bookings?.listings?.title ?? null,
+        status: r.status ?? "active",
       }));
       const uses: CreditUse[] = ((usesRes.data ?? []) as unknown as UseRow[]).map((r) => ({
         id: r.id,
@@ -95,8 +100,8 @@ export function useRevampCredit(): CreditState {
         listingTitle: r.bookings?.listings?.title ?? null,
       }));
       const now = Date.now();
-      const balanceCents = creditBalance(lots.map((l) => ({ remaining_cents: l.remainingCents, expires_at: l.expiresAt })), now);
-      const liveLots = lots.filter((l) => l.remainingCents > 0 && Date.parse(l.expiresAt) > now).sort((a, b) => a.expiresAt.localeCompare(b.expiresAt));
+      const balanceCents = creditBalance(lots.map((l) => ({ remaining_cents: l.remainingCents, expires_at: l.expiresAt, status: l.status })), now);
+      const liveLots = lots.filter((l) => l.status === "active" && l.remainingCents > 0 && Date.parse(l.expiresAt) > now).sort((a, b) => a.expiresAt.localeCompare(b.expiresAt));
       const nextExpiry = liveLots.length ? { date: liveLots[0].expiresAt, cents: liveLots[0].remainingCents } : null;
       setState({ loading: false, balanceCents, nextExpiry, lots, uses });
     })();

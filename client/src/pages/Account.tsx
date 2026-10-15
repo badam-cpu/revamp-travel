@@ -127,7 +127,16 @@ function CreditTab() {
       label: l.source === "earned" ? `Earned from ${l.listingTitle ?? "a trip"}` : l.note || "Added by Revamp",
       cents: l.amountCents,
       sign: "+" as const,
-      note: Date.parse(l.expiresAt) <= now ? (l.remainingCents > 0 ? `${format(l.remainingCents)} expired ${longDate(l.expiresAt)}` : null) : `Valid until ${longDate(l.expiresAt)}`,
+      note:
+        l.status === "held"
+          ? "Being checked by our team — usually within a day"
+          : l.status === "void"
+            ? "Cancelled by Revamp — contact us if you have a question"
+            : Date.parse(l.expiresAt) <= now
+              ? l.remainingCents > 0
+                ? `${format(l.remainingCents)} expired ${longDate(l.expiresAt)}`
+                : null
+              : `Valid until ${longDate(l.expiresAt)}`,
     })),
     ...Array.from(byHold.entries()).map(([hold, h]) => ({
       key: `use-${hold}`,

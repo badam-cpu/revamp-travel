@@ -347,6 +347,26 @@ export function sendCreditEarned(to: string, c: { listingTitle: string; earnedCe
   return send(to, `You earned ${amd(c.earnedCents)} Revamp credit`, html);
 }
 
+/** Revamp credit guardrail (0106): tell admins a credit was held for review or refused. */
+export function sendCreditReviewAlert(to: string, a: { kind: "held" | "refused"; listingTitle: string; cents: number; reason: string; bookingId: string }) {
+  const site = SITE();
+  const amd = `֏${Math.round(a.cents / 100).toLocaleString("en-US")}`;
+  const title = a.kind === "held" ? `Revamp credit held for review: ${amd}` : `Revamp credit refused: ${amd}`;
+  const html = shell(
+    title,
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 6px;">A guest's trip to <strong>${esc(a.listingTitle)}</strong> would earn <strong>${amd}</strong> in Revamp credit — ${esc(a.reason)}.</p>
+     <p style="font-size:15px;line-height:1.6;margin:0 0 16px;">${
+       a.kind === "held"
+         ? "It's on hold: the guest can't spend it until you approve it."
+         : "It breaks a hard ceiling, so it was not created. Check the booking — its price may be wrong."
+     }</p>
+     <p style="font-size:13px;color:#6B6357;margin:0 0 16px;">Booking #${esc(a.bookingId.slice(0, 8).toUpperCase())}</p>
+     <p style="margin:0 0 8px;"><a href="${esc(site)}/admin?section=credit" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Open Guest credit</a></p>`,
+    site,
+  );
+  return send(to, title, html);
+}
+
 /** Customer Journey (0097): an operator's step message (check-in, meeting point,
  *  mid-stay, checkout, thank-you). The body is operator text: escaped, `**bold**`
  *  kept, line breaks kept. The button opens the guest's private trip page.
