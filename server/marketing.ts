@@ -401,12 +401,14 @@ export async function sendTelegramCampaign(
 /** Send a campaign to the resolved recipients via Resend batch (chunks of 100). */
 export async function sendCampaign(
   opts: { subject: string; markdown: string; recipients: Recipient[]; siteUrl: string; subjectPrefix?: string; visual?: CampaignVisual },
-): Promise<{ sent: number; failed: number }> {
+): Promise<{ sent: number; failed: number; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
-  if (!apiKey || !from) return { sent: 0, failed: opts.recipients.length };
+  if (!apiKey || !from) return { sent: 0, failed: opts.recipients.length, error: "Email isn't configured (RESEND_API_KEY / EMAIL_FROM)." };
   let sent = 0;
   let failed = 0;
+  // The email service's own reason for the last failed batch (admins see it on a test send).
+  let error: string | undefined;
   // One marker for this whole campaign — unique vs. any other send, so Gmail
   // won't collapse the repeated header/footer across campaigns in a thread.
   const nonce = `rv-${Date.now().toString(36)}-${crypto.randomBytes(4).toString("hex")}`;
@@ -432,12 +434,21 @@ export async function sendCampaign(
       if (res.ok) sent += chunk.length;
       else {
         failed += chunk.length;
-        console.warn("[marketing] batch", res.status, (await res.text().catch(() => "")).slice(0, 200));
+        const text = (await res.text().catch(() => "")).slice(0, 400);
+        console.warn("[marketing] batch", res.status, text);
+        let reason = text;
+        try {
+          reason = (JSON.parse(text) as { message?: string }).message || text;
+        } catch {
+          /* not JSON */
+        }
+        error = `${res.status}: ${reason || "no details"}`.slice(0, 300);
       }
     } catch (e) {
       failed += chunk.length;
       console.warn("[marketing] batch error", e);
+      error = "Couldn't reach the email service.";
     }
   }
-  return { sent, failed };
+  return { sent, failed, error };
 }

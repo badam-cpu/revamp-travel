@@ -567,11 +567,11 @@ export async function adminEmailSend(input: { audience: string; subject: string;
 }
 
 /** Admin: send the composed campaign email to test addresses ("[TEST]" subject, not recorded). */
-export async function adminEmailTest(input: { subject: string; body: string; to: string[]; name?: string; visual?: CampaignVisual }): Promise<{ sent: number; failed: number }> {
+export async function adminEmailTest(input: { subject: string; body: string; to: string[]; name?: string; visual?: CampaignVisual }): Promise<{ sent: number; failed: number; from: string | null }> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new ApiError("Sign in.");
-  return request<{ sent: number; failed: number }>("/api/admin-email/test", {
+  return request<{ sent: number; failed: number; from: string | null }>("/api/admin-email/test", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify(input),

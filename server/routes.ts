@@ -3939,9 +3939,10 @@ export function registerApiRoutes(app: Express) {
     if (!marketingConfigured()) return res.status(503).json({ error: "Email isn't configured (set RESEND_API_KEY + EMAIL_FROM)." });
     const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
     const recipients = Array.from(new Set(parsed.data.to)).map((email) => ({ email, name: parsed.data.name || null }));
-    const { sent, failed } = await sendCampaign({ subject: parsed.data.subject, markdown: parsed.data.body, recipients, siteUrl: site, subjectPrefix: "[TEST] ", visual: parsed.data.visual });
-    if (sent === 0) return res.status(502).json({ error: "The test didn't send — try again in a moment." });
-    res.json({ sent, failed });
+    const { sent, failed, error } = await sendCampaign({ subject: parsed.data.subject, markdown: parsed.data.body, recipients, siteUrl: site, subjectPrefix: "[TEST] ", visual: parsed.data.visual });
+    // Admin-only route: the email service's own reason helps fix sender/domain issues.
+    if (sent === 0) return res.status(502).json({ error: `The email service didn't accept the test (${error ?? "unknown reason"}).` });
+    res.json({ sent, failed, from: process.env.EMAIL_FROM ?? null });
   });
 
   // POST /api/admin-email/send — admin-only: send a composed email to an audience.

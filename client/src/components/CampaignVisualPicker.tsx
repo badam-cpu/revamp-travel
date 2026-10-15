@@ -108,7 +108,7 @@ export function CampaignVisualPicker({ value, onChange }: { value: CampaignVisua
   };
 
   return (
-    <div className="grid gap-4 border border-basalt/10 p-4">
+    <div className="grid gap-4">
       <div className="grid gap-1.5 sm:max-w-[260px]">
         <Label htmlFor="cv-layout" className="text-xs font-semibold">Layout</Label>
         <Select value={value.layout} onValueChange={(v) => onChange({ ...value, layout: v as CampaignLayout })}>
