@@ -330,6 +330,23 @@ export function sendReviewRequest(
   return send(to, `How was your ${noun}?`, html);
 }
 
+/** Revamp credit (0105): the guest earned credit from a finished trip. */
+export function sendCreditEarned(to: string, c: { listingTitle: string; earnedCents: number; balanceCents: number; expiresAt: string }) {
+  const site = SITE();
+  const amd = (cents: number) => `֏${Math.round(cents / 100).toLocaleString("en-US")}`;
+  const until = new Date(c.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Yerevan" });
+  const html = shell(
+    `You earned ${amd(c.earnedCents)} Revamp credit`,
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 6px;">Thanks for travelling with us — your trip to <strong>${esc(c.listingTitle)}</strong> earned you <strong>${amd(c.earnedCents)}</strong> in Revamp credit.</p>
+     <p style="font-size:15px;line-height:1.6;margin:0 0 6px;">Your balance is now <strong>${amd(c.balanceCents)}</strong>. It's applied automatically at checkout on your next stay, tour or experience.</p>
+     <p style="font-size:13px;line-height:1.6;color:#6B6357;margin:0 0 16px;">This credit is valid until ${esc(until)}.</p>
+     <p style="margin:0 0 8px;"><a href="${esc(site)}/explore" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Plan your next trip</a></p>
+     <p style="font-size:12px;line-height:1.6;color:#8B8478;margin:14px 0 0;">See your credit any time in <a href="${esc(site)}/account?tab=credit" style="color:#8B8478;">your account</a>.</p>`,
+    site,
+  );
+  return send(to, `You earned ${amd(c.earnedCents)} Revamp credit`, html);
+}
+
 /** Customer Journey (0097): an operator's step message (check-in, meeting point,
  *  mid-stay, checkout, thank-you). The body is operator text: escaped, `**bold**`
  *  kept, line breaks kept. The button opens the guest's private trip page.

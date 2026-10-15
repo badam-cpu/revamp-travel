@@ -21,7 +21,7 @@ import type { RoomType, RoomUnit } from "../shared/listings.js";
 import { addonUnitCost, maxNightlyOccupancy, nightsBetween, type Addon } from "../shared/bookings.js";
 import { MAX_ROOMS_PER_BOOKING, cheapestAvailableUnits, freeUnitCount, quoteRoom, splitGroupCharges, type RoomQuote } from "../shared/rooms.js";
 import { promoDiscountCents } from "../shared/promo.js";
-import { lookupRedeemableGift, reserveGift, releaseGift, logGiftEvent } from "./giftcards.js";
+import { redeemForCheckout, releaseRedeemed, redeemedColumns, redeemedTotal, coveredProvider, noteRedeemed } from "./redemption.js";
 import { resolvePaymentAccount } from "./paymentAccounts.js";
 import { finalizeConfirmedBooking } from "./bookings.js";
 
@@ -47,6 +47,7 @@ export interface RoomGroupInput {
   messagingConsent: boolean;
   addons?: { id: string; qty: number }[];
   giftCode?: string;
+  useCredit?: boolean;
   promo: { id: string; discount_type: "percent" | "amount"; discount_value: number } | null;
   expectedTotalCents?: number;
 }
@@ -166,19 +167,11 @@ export async function startRoomGroupCheckout(i: RoomGroupInput): Promise<RoomGro
     return fail(409, "The price for these dates just changed. Go back to review it, then try again.");
   }
 
-  // ── Gift card (applied to the whole group; held on the first room) ─────────
-  let giftId: string | null = null;
-  let giftApplied = 0;
-  let giftBalanceAfter = 0;
-  if (i.giftCode) {
-    const look = await lookupRedeemableGift(admin, i.giftCode, i.currency);
-    if ("error" in look) return fail(400, look.error);
-    giftApplied = Math.min(look.balanceCents, groupTotal);
-    if (!(await reserveGift(admin, look.id, giftApplied))) return fail(409, "That gift card balance just changed — please try again.");
-    giftId = look.id;
-    giftBalanceAfter = look.balanceCents - giftApplied;
-  }
-  const remaining = groupTotal - giftApplied;
+  // ── Gift card + Revamp credit (whole group; held on the first room) ────────
+  const redeem = await redeemForCheckout(admin, { userId: i.userId, giftCode: i.giftCode, useCredit: i.useCredit, totalCents: groupTotal, currency: i.currency });
+  if (!redeem.ok) return fail(redeem.status, redeem.error);
+  const red = redeem.r;
+  const remaining = groupTotal - redeemedTotal(red);
 
   // ── Rows ───────────────────────────────────────────────────────────────────
   const ids = picks.map(() => crypto.randomUUID());
@@ -201,8 +194,7 @@ export async function startRoomGroupCheckout(i: RoomGroupInput): Promise<RoomGro
       currency: i.currency,
       cancellation_policy: listing.cancellation_policy ?? "flexible",
       free_cancel_days: listing.free_cancel_days ?? 7,
-      gift_card_id: idx === 0 ? giftId : null,
-      gift_applied_cents: idx === 0 ? giftApplied : 0,
+      ...(idx === 0 ? redeemedColumns(red) : { gift_card_id: null, gift_applied_cents: 0 }),
       promo_code_id: idx === 0 ? i.promo?.id ?? null : null,
       promo_discount_cents: bases[idx] - c.baseCents,
       messaging_consent: i.messagingConsent,
@@ -220,12 +212,12 @@ export async function startRoomGroupCheckout(i: RoomGroupInput): Promise<RoomGro
     await admin.from("bookings").update({ status: "cancelled" }).in("id", ids);
   };
 
-  // Fully covered by the gift card → hold every room, then confirm each through
+  // Fully covered by gift card / credit → hold every room, then confirm each through
   // the capacity-safe confirm; if any room can't be confirmed, undo the lot.
-  if (remaining <= 0 && giftId) {
-    const { error: holdErr } = await admin.from("bookings").insert(rows.map((r) => ({ ...r, status: "pending_payment", provider: "gift" })));
+  if (remaining <= 0 && (red.giftId || red.creditHold)) {
+    const { error: holdErr } = await admin.from("bookings").insert(rows.map((r) => ({ ...r, status: "pending_payment", provider: coveredProvider(red) })));
     if (holdErr) {
-      await releaseGift(admin, giftId, giftApplied);
+      await releaseRedeemed(admin, red);
       console.error("[room-group] gift-covered hold failed", holdErr.message);
       return fail(500, "Couldn't record your booking.");
     }
@@ -233,13 +225,13 @@ export async function startRoomGroupCheckout(i: RoomGroupInput): Promise<RoomGro
       const { data: outcome, error: rpcErr } = await admin.rpc("confirm_room_booking", { p_booking_id: id });
       if (rpcErr || outcome !== "confirmed") {
         await cancelAll();
-        await releaseGift(admin, giftId, giftApplied);
+        await releaseRedeemed(admin, red);
         if (outcome === "capacity") return fail(409, "One of those rooms just sold out. Try fewer rooms or other dates.");
         console.error("[room-group] gift-covered confirm failed", rpcErr?.message ?? outcome);
         return fail(500, "Couldn't record your booking.");
       }
     }
-    await logGiftEvent(admin, giftId, "redeemed", { amountCents: giftApplied, balanceAfter: giftBalanceAfter, bookingId: groupId, detail: `Fully covered ${n} rooms · ${listing.title}` });
+    await noteRedeemed(admin, red, groupId, `Fully covered ${n} rooms · ${listing.title}`);
     for (const id of ids) {
       try {
         await finalizeConfirmedBooking(admin, id);
@@ -261,10 +253,10 @@ export async function startRoomGroupCheckout(i: RoomGroupInput): Promise<RoomGro
       info: `Revamp booking · ${listing.title} · ${n} rooms`,
     });
     if (!pay.redirectUrl) {
-      if (giftId) await releaseGift(admin, giftId, giftApplied);
+      await releaseRedeemed(admin, red);
       return fail(502, "Couldn't start checkout.");
     }
-    const writer = account.owner ? admin : i.supa;
+    const writer = account.owner || red.creditHold ? admin : i.supa;
     const { error: insErr } = await writer.from("bookings").insert(
       rows.map((r) => ({
         ...r,
@@ -276,14 +268,14 @@ export async function startRoomGroupCheckout(i: RoomGroupInput): Promise<RoomGro
       })),
     );
     if (insErr) {
-      if (giftId) await releaseGift(admin, giftId, giftApplied);
+      await releaseRedeemed(admin, red);
       console.error("[room-group] insert failed", insErr.message);
       return fail(500, "Couldn't record your booking.");
     }
-    if (giftId) await logGiftEvent(admin, giftId, "redeemed", { amountCents: giftApplied, balanceAfter: giftBalanceAfter, bookingId: groupId, detail: `Applied to ${n} rooms · ${listing.title}` });
+    await noteRedeemed(admin, red, groupId, `Applied to ${n} rooms · ${listing.title}`);
     return { status: 200, body: { redirectUrl: pay.redirectUrl } };
   } catch (err) {
-    if (giftId) await releaseGift(admin, giftId, giftApplied);
+    await releaseRedeemed(admin, red);
     console.error("[room-group] checkout failed", err);
     return fail(502, "Couldn't start checkout. Please try again.");
   }

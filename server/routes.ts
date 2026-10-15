@@ -50,6 +50,8 @@ import { listAdminUsers } from "./adminUsers.js";
 import { endImpersonation, startImpersonation } from "./impersonation.js";
 import { listManagedVenues, venueSummary } from "./restaurant.js";
 import { isAllowedGiftAmount } from "../shared/giftcards.js";
+import { bookingCredit, returnCreditForBooking, creditBalanceFor } from "./credit.js";
+import { redeemForCheckout, releaseRedeemed, redeemedColumns, redeemedTotal, coveredProvider, noteRedeemed } from "./redemption.js";
 import { payoutState } from "../shared/payouts.js";
 import { sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, sendJourneyEmail, type BookingEmailInfo } from "./email.js";
 import { notifyBooking } from "./notify.js";
@@ -132,6 +134,8 @@ const startCheckoutSchema = z.object({
   addons: z.array(z.object({ id: z.string().max(80), qty: z.number().int().min(1).max(20) })).max(20).optional(),
   // Optional gift-card code to apply to this booking.
   giftCode: z.string().trim().max(40).optional(),
+  // Apply the guest's Revamp credit (0105) — the server decides the amount.
+  useCredit: z.boolean().optional(),
   // Optional operator promo code (discount).
   promoCode: z.string().trim().max(40).optional(),
 });
@@ -1422,34 +1426,76 @@ export function registerApiRoutes(app: Express) {
         return res.json({ requested: true, bookingId: created.id });
       }
 
-      // Instant: charge via PayLink now.
+      // Instant: gift card / Revamp credit first (reserved before any charge —
+      // the slot path used to ignore a gift code the checkout had shown), then
+      // PayLink for the rest, or confirm now when they cover it all.
+      const redeem = await redeemForCheckout(admin, {
+        userId,
+        giftCode: parsed.data.giftCode,
+        useCredit: parsed.data.useCredit,
+        totalCents: slotCharge.totalCents,
+        currency,
+      });
+      if (!redeem.ok) {
+        await releaseSeats(admin, sessionId, guests);
+        return res.status(redeem.status).json({ error: redeem.error });
+      }
+      const red = redeem.r;
+      const slotDue = slotCharge.totalCents - redeemedTotal(red);
+      Object.assign(slotRow, redeemedColumns(red));
+      const failSlot = async () => {
+        await releaseRedeemed(admin, red);
+        await releaseSeats(admin, sessionId, guests);
+      };
+
+      if (slotDue <= 0 && (red.giftId || red.creditHold)) {
+        const { data: created, error: insErr } = await admin
+          .from("bookings")
+          .insert({ ...slotRow, status: "confirmed", provider: coveredProvider(red), paid_at: new Date().toISOString() })
+          .select("id")
+          .single();
+        if (insErr || !created) {
+          await failSlot();
+          console.error("[start-checkout] covered slot insert failed", insErr?.message);
+          return res.status(500).json({ error: "Couldn't record your booking." });
+        }
+        await noteRedeemed(admin, red, created.id, `Fully covered booking · ${listing.title}`);
+        try {
+          await finalizeConfirmedBooking(admin, created.id);
+        } catch (e) {
+          console.error("[start-checkout] covered slot finalize failed", e);
+        }
+        return res.json({ confirmed: true, fullyCovered: true, bookingId: created.id });
+      }
+
       const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
       try {
         // The operator's own PayLink if connected (0094), else Revamp's.
         const account = await resolvePaymentAccount(admin, listing.operator_id);
         const pay = await account.client.registerPayment({
-          amount: currency === "AMD" ? Math.round(slotCharge.totalCents / 100) : slotCharge.totalCents / 100,
+          amount: currency === "AMD" ? Math.round(slotDue / 100) : slotDue / 100,
           currency,
           returnUrl: `${site}/account?checkout=return`,
           info: `Revamp booking · ${listing.title}`,
         });
         if (!pay.redirectUrl) {
-          await releaseSeats(admin, sessionId, guests);
+          await failSlot();
           return res.status(502).json({ error: "Couldn't start checkout." });
         }
-        const { error: insErr } = await admin
+        const { data: held, error: insErr } = await admin
           .from("bookings")
           .insert({ ...slotRow, status: "pending_payment", provider: "paylink", paylink_request_id: pay.requestId, paylink_order_id: pay.orderId, ...(account.owner ? { paylink_account_owner: account.owner } : {}) })
           .select("id")
           .maybeSingle();
         if (insErr) {
-          await releaseSeats(admin, sessionId, guests);
+          await failSlot();
           console.error("[start-checkout] slot insert failed", insErr.message);
           return res.status(500).json({ error: "Couldn't record your booking." });
         }
+        await noteRedeemed(admin, red, held?.id ?? null, `Applied to booking · ${listing.title}`);
         return res.json({ redirectUrl: pay.redirectUrl });
       } catch (err) {
-        await releaseSeats(admin, sessionId, guests);
+        await failSlot();
         console.error("[start-checkout] slot", err);
         return res.status(502).json({ error: "Couldn't start checkout." });
       }
@@ -1492,6 +1538,7 @@ export function registerApiRoutes(app: Express) {
           messagingConsent,
           addons,
           giftCode: parsed.data.giftCode,
+          useCredit: parsed.data.useCredit,
           promo: promoResolved,
           expectedTotalCents: parsed.data.expectedTotalCents,
         });
@@ -1694,25 +1741,20 @@ export function registerApiRoutes(app: Express) {
     const currency = process.env.PAYLINK_CURRENCY || DEFAULT_CURRENCY;
     const adminClient = supabaseAdmin();
 
-    // --- Optional gift-card redemption ---------------------------------
-    // Validate + reserve the applied amount up front (conditional decrement, so
-    // no double-spend). Released again on any path where the booking doesn't
-    // stand (register/insert failure, later payment failure, expiry). Gift cards
-    // are non-refundable, so a *cancelled confirmed* booking forfeits the gift.
-    let giftId: string | null = null;
-    let giftApplied = 0;
-    let giftBalanceAfter = 0;
-    if (parsed.data.giftCode) {
-      if (!adminClient) return res.status(503).json({ error: "Gift cards aren't available right now." });
-      const look = await lookupRedeemableGift(adminClient, parsed.data.giftCode, currency);
-      if ("error" in look) return res.status(400).json({ error: look.error });
-      giftApplied = Math.min(look.balanceCents, finalTotalCents);
-      const reserved = await reserveGift(adminClient, look.id, giftApplied);
-      if (!reserved) return res.status(409).json({ error: "That gift card balance just changed — please try again." });
-      giftId = look.id;
-      giftBalanceAfter = look.balanceCents - giftApplied;
-    }
-    const remainingCents = finalTotalCents - giftApplied;
+    // --- Gift card + Revamp credit (server/redemption.ts) -----------------
+    // Validated and reserved up front (no double-spend), released on any path
+    // where the booking doesn't stand. Gift cards are non-refundable (a
+    // cancelled confirmed booking forfeits them); credit goes back to the guest.
+    const redeem = await redeemForCheckout(adminClient, {
+      userId,
+      giftCode: parsed.data.giftCode,
+      useCredit: parsed.data.useCredit,
+      totalCents: finalTotalCents,
+      currency,
+    });
+    if (!redeem.ok) return res.status(redeem.status).json({ error: redeem.error });
+    const red = redeem.r;
+    const remainingCents = finalTotalCents - redeemedTotal(red);
 
     // Shared booking fields. Snapshot the cancellation terms so a later listing
     // change can't alter them.
@@ -1730,8 +1772,7 @@ export function registerApiRoutes(app: Express) {
       currency,
       cancellation_policy: listing.cancellation_policy ?? "flexible",
       free_cancel_days: listing.free_cancel_days ?? 7,
-      gift_card_id: giftId,
-      gift_applied_cents: giftApplied,
+      ...redeemedColumns(red),
       promo_code_id: promoResolved?.id ?? null,
       promo_discount_cents: promoDisc,
     };
@@ -1745,22 +1786,22 @@ export function registerApiRoutes(app: Express) {
     if (room) baseRow.room_type_id = room.id;
     if (unit) baseRow.room_unit_id = unit.id;
 
-    // Fully covered by the gift card → no PayLink charge; confirm server-side now.
-    if (remainingCents <= 0 && giftId && adminClient) {
+    // Fully covered by gift card and/or credit → no PayLink charge; confirm server-side now.
+    if (remainingCents <= 0 && (red.giftId || red.creditHold) && adminClient) {
       let created: { id: string } | null = null;
       if (room) {
         // A room can't be inserted straight as confirmed — that would skip the
         // capacity check. Hold it, then confirm through confirm_room_booking.
-        const { data: held, error: holdErr } = await adminClient.from("bookings").insert({ ...baseRow, status: "pending_payment", provider: "gift" }).select("id").single();
+        const { data: held, error: holdErr } = await adminClient.from("bookings").insert({ ...baseRow, status: "pending_payment", provider: coveredProvider(red) }).select("id").single();
         if (holdErr || !held) {
-          await releaseGift(adminClient, giftId, giftApplied);
+          await releaseRedeemed(adminClient, red);
           console.error("[start-checkout] gift-covered room hold failed", holdErr?.message);
           return res.status(500).json({ error: "Couldn't record your booking." });
         }
         const { data: outcome, error: rpcErr } = await adminClient.rpc("confirm_room_booking", { p_booking_id: held.id });
         if (rpcErr || outcome !== "confirmed") {
           await adminClient.from("bookings").update({ status: "cancelled" }).eq("id", held.id);
-          await releaseGift(adminClient, giftId, giftApplied);
+          await releaseRedeemed(adminClient, red);
           if (outcome === "capacity") return res.status(409).json({ error: "That room just sold out for those dates. Try other dates or another room." });
           console.error("[start-checkout] gift-covered room confirm failed", rpcErr?.message ?? outcome);
           return res.status(500).json({ error: "Couldn't record your booking." });
@@ -1769,18 +1810,18 @@ export function registerApiRoutes(app: Express) {
       } else {
         const { data: inserted, error: insErr } = await adminClient
           .from("bookings")
-          .insert({ ...baseRow, status: "confirmed", provider: "gift", paid_at: new Date().toISOString() })
+          .insert({ ...baseRow, status: "confirmed", provider: coveredProvider(red), paid_at: new Date().toISOString() })
           .select("id")
           .single();
         if (insErr || !inserted) {
-          await releaseGift(adminClient, giftId, giftApplied);
+          await releaseRedeemed(adminClient, red);
           if ((insErr as { code?: string } | null)?.code === "23P01") return res.status(409).json({ error: "Those dates were just taken. Try different dates." });
           console.error("[start-checkout] gift-covered insert failed", insErr?.message);
           return res.status(500).json({ error: "Couldn't record your booking." });
         }
         created = inserted;
       }
-      await logGiftEvent(adminClient, giftId, "redeemed", { amountCents: giftApplied, balanceAfter: giftBalanceAfter, bookingId: created.id, detail: `Fully covered booking · ${listing.title}` });
+      await noteRedeemed(adminClient, red, created.id, `Fully covered booking · ${listing.title}`);
       try {
         await finalizeConfirmedBooking(adminClient, created.id);
       } catch (e) {
@@ -1796,20 +1837,21 @@ export function registerApiRoutes(app: Express) {
       const pay = await account.client.registerPayment({
         // PayLink's `amount` is in major currency units. AMD (our settlement
         // currency) has no minor unit, so round to a whole dram — every stored
-        // *_cents value is AMD hundredths. Charge only the amount left after any gift.
+        // *_cents value is AMD hundredths. Charge only what's left after gift card / credit.
         amount: currency === "AMD" ? Math.round(remainingCents / 100) : remainingCents / 100,
         currency,
         returnUrl: `${site}/account?checkout=return`,
         info: `Revamp booking · ${listing.title}`,
       });
       if (!pay.redirectUrl) {
-        if (giftId && adminClient) await releaseGift(adminClient, giftId, giftApplied);
+        await releaseRedeemed(adminClient, red);
         return res.status(502).json({ error: "Couldn't start checkout." });
       }
       // Insert the pending hold as the traveler (RLS allows own + pending only).
       // A direct-account hold is written by the server so the issuing-account
       // column can't be set from a client.
-      const writer = account.owner && adminClient ? adminClient : supa;
+      // So is a hold that spends credit (its hold id must not be client-settable).
+      const writer = (account.owner || red.creditHold) && adminClient ? adminClient : supa;
       const { data: pendingRow, error: insErr } = await writer
         .from("bookings")
         .insert({
@@ -1823,16 +1865,14 @@ export function registerApiRoutes(app: Express) {
         .select("id")
         .maybeSingle();
       if (insErr) {
-        if (giftId && adminClient) await releaseGift(adminClient, giftId, giftApplied);
+        await releaseRedeemed(adminClient, red);
         console.error("[start-checkout] insert failed", insErr.message);
         return res.status(500).json({ error: "Couldn't record your booking." });
       }
-      if (giftId && adminClient) {
-        await logGiftEvent(adminClient, giftId, "redeemed", { amountCents: giftApplied, balanceAfter: giftBalanceAfter, bookingId: pendingRow?.id ?? null, detail: `Applied to booking · ${listing.title}` });
-      }
+      await noteRedeemed(adminClient, red, pendingRow?.id ?? null, `Applied to booking · ${listing.title}`);
       res.json({ redirectUrl: pay.redirectUrl });
     } catch (err) {
-      if (giftId && adminClient) await releaseGift(adminClient, giftId, giftApplied);
+      await releaseRedeemed(adminClient, red);
       console.error("[start-checkout]", err);
       res.status(502).json({ error: "Couldn't start checkout." });
     }
@@ -2269,8 +2309,11 @@ export function registerApiRoutes(app: Express) {
     // guest actually paid (total minus the gift portion) can be refunded per
     // policy — the gift value is forfeited. (A never-completed pending hold is
     // different: its gift reservation is released below, no cash was captured.)
+    // Revamp credit (0105) isn't cash either: it goes back to the guest's
+    // account below, so it's excluded from the money refund too.
+    const { appliedCents: creditApplied } = await bookingCredit(admin, booking.id);
     if (booking.status === "confirmed") {
-      refundCents = Math.max(0, Math.min(refundCents, booking.amount_cents - giftApplied));
+      refundCents = Math.max(0, Math.min(refundCents, booking.amount_cents - giftApplied - creditApplied));
     } else {
       refundCents = 0;
     }
@@ -2289,6 +2332,9 @@ export function registerApiRoutes(app: Express) {
     // A never-completed pending hold releases its gift reservation (no purchase
     // happened). A confirmed booking's gift is non-refundable → left forfeited.
     if (booking.status === "pending_payment" && giftApplied > 0) await refundGiftForBooking(admin, booking.id);
+    // Revamp credit always comes back to the guest — pending or confirmed.
+    // (A room group's credit sits on its first room: it returns when that room is cancelled.)
+    if (creditApplied > 0) await returnCreditForBooking(admin, booking.id, isTraveler ? "cancelled by guest" : isOperator ? "cancelled by host" : "cancelled by Revamp");
     // Slot booking → free the seats it was holding, regardless of prior status.
     if (booking.session_id) await releaseSeats(admin, booking.session_id, booking.guests);
 

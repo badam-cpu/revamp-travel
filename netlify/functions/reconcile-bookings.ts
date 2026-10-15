@@ -22,6 +22,7 @@ import { reconcileAllVouchers } from "../../server/vouchers.js";
 import { reconcileQrPayments } from "../../server/qrPayments.js";
 import { runCommissionStatements } from "../../server/commissionStatements.js";
 import { runJourneyAutomations } from "../../server/journey.js";
+import { awardTravelCredits } from "../../server/credit.js";
 import { recordCronRun, checkAndAlertStaleCrons } from "../../server/alerts.js";
 
 const JOB = "reconcile-bookings";
@@ -61,12 +62,19 @@ export default async (): Promise<Response> => {
     } catch (err) {
       console.error("[reconcile-bookings] journey failed", err);
     }
-    console.log("[reconcile-bookings]", { ...result, reviewEmails: reviews.sent, gifts, giftExpiry, subs, subAmounts, vouchers, qrPays, statements, journey });
+    // Revamp credit (0105): 2% back on finished trips, once each (no-op before 0105).
+    let credit = { awarded: 0, checked: 0 };
+    try {
+      credit = await awardTravelCredits(admin, { limit: 200 });
+    } catch (err) {
+      console.error("[reconcile-bookings] credit failed", err);
+    }
+    console.log("[reconcile-bookings]", { ...result, reviewEmails: reviews.sent, gifts, giftExpiry, subs, subAmounts, vouchers, qrPays, statements, journey, credit });
     // Heartbeat + cron watchdog. This job runs every 10 min, so it's the primary
     // watcher that notices the daily refresh-ical going silent.
     await recordCronRun(admin, JOB, true, `bookings ${result.confirmed ?? 0}c/${result.expired ?? 0}x`);
     await checkAndAlertStaleCrons(admin);
-    return Response.json({ ...result, reviewEmails: reviews.sent, gifts, giftExpiry, subs, subAmounts, vouchers, qrPays, statements });
+    return Response.json({ ...result, reviewEmails: reviews.sent, gifts, giftExpiry, subs, subAmounts, vouchers, qrPays, statements, credit });
   } catch (err) {
     console.error("[reconcile-bookings] failed", err);
     await recordCronRun(admin, JOB, false, String(err).slice(0, 200));

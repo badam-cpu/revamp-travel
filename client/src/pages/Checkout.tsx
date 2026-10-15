@@ -15,7 +15,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { ArrowLeft, Minus, Plus } from "lucide-react";
+import { ArrowLeft, Coins, Gift, Minus, Plus, Tag } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,9 @@ import {
 } from "@shared/bookings";
 import { formatSlotTime } from "@shared/sessions";
 import { cn } from "@/lib/utils";
+import { Switch } from "@/components/ui/switch";
+import { useRevampCredit } from "@/lib/credit";
+import { CREDIT_PERCENT, creditEarnedCents, creditToApply } from "@shared/credit";
 import { toast } from "sonner";
 import { useRoomAvailability, useRoomTypes } from "@/hooks/useRoomTypes";
 import { bestRoomFor, bestRoomsFor, splitGroupCharges, unitPricing } from "@shared/rooms";
@@ -114,6 +117,9 @@ export default function Checkout({ slug }: { slug: string }) {
   const [promoCode, setPromoCode] = useState("");
   const [promoInfo, setPromoInfo] = useState<{ discountType: "percent" | "amount"; discountValue: number } | null>(null);
   const [promoApplying, setPromoApplying] = useState(false);
+  // Revamp credit (0105): applied by default when the guest has some.
+  const credit = useRevampCredit();
+  const [useCredit, setUseCredit] = useState(true);
 
   // --- pricing (mirrors BookingPanel / the server) --------------------------
   const valid = !!listing && isBookableType(listing.type) && !!startDate && !!endDate && listing.price > 0 && (!isHotel || (!!room && (isGroup ? !!groupPicks && roomGuests.every((g) => g <= room.maxGuests) : guests <= room.maxGuests && !!bestRoom)));
@@ -153,7 +159,7 @@ export default function Checkout({ slug }: { slug: string }) {
 
   // What the summary shows — the single booking, or the sum of the rooms.
   const shown = (() => {
-    if (!groupPicks) return { accommodation: roomCents, saleDiscount: promo.active ? promo.discountCents : 0, cleaning: cleaningCents, promoCode: promoCodeDiscountCents, tax: charge.taxCents, total: charge.totalCents };
+    if (!groupPicks) return { accommodation: roomCents, saleDiscount: promo.active ? promo.discountCents : 0, cleaning: cleaningCents, promoCode: promoCodeDiscountCents, tax: charge.taxCents, total: charge.totalCents, base: charge.baseCents };
     const bases = groupPicks.map((p) => p.quote.charge.baseCents);
     const sumBase = bases.reduce((a, b) => a + b, 0);
     const promoCode = promoInfo ? computePromoCodeDiscount(sumBase, promoInfo.discountType, promoInfo.discountValue) : 0;
@@ -166,6 +172,7 @@ export default function Checkout({ slug }: { slug: string }) {
       promoCode: sumBase - charges.reduce((a, c) => a + c.baseCents, 0),
       tax: charges.reduce((a, c) => a + c.taxCents, 0),
       total: charges.reduce((a, c) => a + c.totalCents, 0),
+      base: charges.reduce((a, c) => a + c.baseCents, 0),
     };
   })();
 
@@ -223,7 +230,14 @@ export default function Checkout({ slug }: { slug: string }) {
 
   // Gift card preview (server re-validates + reserves authoritatively at pay).
   const giftAppliedCents = giftBalance != null ? Math.min(giftBalance, amountCents) : 0;
-  const dueCents = Math.max(0, amountCents - giftAppliedCents);
+  // Revamp credit for what's left (same rule as the server: shared/credit.ts).
+  // Not on request-to-book (nothing is charged now) or without a real account.
+  const creditOffered = !isGuest && !isRequest && credit.balanceCents > 0;
+  const creditAppliedCents = creditOffered && useCredit ? creditToApply(credit.balanceCents, amountCents - giftAppliedCents) : 0;
+  const dueCents = Math.max(0, amountCents - giftAppliedCents - creditAppliedCents);
+  const coveredCents = giftAppliedCents + creditAppliedCents;
+  // What this trip will earn (after the trip; 2% of the pre-tax price paid in money).
+  const earnCents = creditEarnedCents({ baseCents: shown.base, amountCents, giftAppliedCents, creditAppliedCents });
 
   const applyGift = async () => {
     const code = giftCode.trim();
@@ -288,6 +302,7 @@ export default function Checkout({ slug }: { slug: string }) {
         ...(isGroup ? { rooms: roomGuests.map((g) => ({ guests: g })) } : {}),
         ...(addonSel.length ? { addons: addonSel } : {}),
         ...(giftBalance != null && giftCode.trim() ? { giftCode: giftCode.trim() } : {}),
+        ...(creditAppliedCents > 0 ? { useCredit: true } : {}),
         ...(promoInfo && promoCode.trim() ? { promoCode: promoCode.trim() } : {}),
         ...(isGuest ? { guestName: guestName.trim(), guestEmail: guestEmail.trim(), guestPhone: guestPhone.trim(), messagingConsent: notifyConsent } : {}),
       });
@@ -297,9 +312,9 @@ export default function Checkout({ slug }: { slug: string }) {
         navigate("/account?tab=trips");
         return;
       }
-      // Fully covered by the gift card → no PayLink; already confirmed server-side.
+      // Fully covered by gift card / credit → no PayLink; already confirmed server-side.
       if (result.confirmed) {
-        toast("Booking confirmed with your gift card!");
+        toast(giftAppliedCents > 0 ? "Booking confirmed with your gift card!" : "Booking confirmed with your Revamp credit!");
         navigate("/account?tab=trips");
         return;
       }
@@ -400,50 +415,67 @@ export default function Checkout({ slug }: { slug: string }) {
               </section>
             )}
 
-            {/* Gift card redemption */}
-            <section>
-              <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-basalt/50">Gift card</h2>
-              <p className="mt-1 text-sm text-basalt/55">Have a Revamp gift card? Apply it to this booking.</p>
-              <div className="mt-3 flex items-start gap-2">
-                <Input
-                  value={giftCode}
-                  onChange={(e) => {
-                    setGiftCode(e.target.value.toUpperCase());
-                    setGiftBalance(null);
-                  }}
-                  placeholder="RV-XXXX-XXXX-XXXX"
-                  className="h-12 flex-1 rounded-none font-mono uppercase"
-                />
-                <Button type="button" variant="outline" onClick={applyGift} disabled={giftApplying || !giftCode.trim()} className="h-12 shrink-0 rounded-none border-basalt/20">
-                  {giftApplying ? "…" : "Apply"}
-                </Button>
-              </div>
-              {giftBalance != null && (
-                <p className="mt-2 text-xs font-semibold text-apricot">Applied — {format(giftAppliedCents)} covered{dueCents === 0 ? " (fully covered)" : ""}.</p>
-              )}
-            </section>
+            {/* Discounts & credit — one compact block: credit is a switch; a promo
+                code and a gift card open their field only when asked for, and
+                show as a removable line once applied. */}
+            <section aria-labelledby="co-discounts">
+              <h2 id="co-discounts" className="text-xs font-bold uppercase tracking-[0.12em] text-basalt/50">Discounts &amp; credit</h2>
+              <div className="mt-3 divide-y divide-basalt/10 border border-basalt/12 bg-paper">
+                {creditOffered && (
+                  <div className="flex items-center justify-between gap-4 px-4 py-3.5">
+                    <label htmlFor="use-credit" className="flex min-w-0 cursor-pointer items-start gap-3">
+                      <Coins className="mt-0.5 h-4 w-4 shrink-0 text-apricot" aria-hidden />
+                      <span>
+                        <span className="block text-sm font-semibold text-basalt">Revamp credit</span>
+                        <span className="block text-sm text-basalt/55">
+                          {format(credit.balanceCents)} available{useCredit && creditAppliedCents > 0 ? ` · ${format(creditAppliedCents)} applied` : ""}
+                        </span>
+                      </span>
+                    </label>
+                    <Switch id="use-credit" checked={useCredit} onCheckedChange={setUseCredit} aria-label="Use my Revamp credit" />
+                  </div>
+                )}
 
-            {/* Promo code */}
-            <section>
-              <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-basalt/50">Promo code</h2>
-              <p className="mt-1 text-sm text-basalt/55">Have a discount code from the host? Apply it here.</p>
-              <div className="mt-3 flex items-start gap-2">
-                <Input
+                <CodeRow
+                  icon={Tag}
+                  addLabel="Add a promo code"
+                  label="Promo code"
+                  placeholder="e.g. SUMMER10"
                   value={promoCode}
-                  onChange={(e) => {
-                    setPromoCode(e.target.value.toUpperCase());
+                  onChange={(v) => {
+                    setPromoCode(v);
                     setPromoInfo(null);
                   }}
-                  placeholder="e.g. SUMMER10"
-                  className="h-12 flex-1 rounded-none uppercase"
+                  onApply={applyPromo}
+                  applying={promoApplying}
+                  applied={promoInfo && shown.promoCode > 0 ? `${promoCode} · ${format(shown.promoCode)} off` : null}
+                  onRemove={() => {
+                    setPromoInfo(null);
+                    setPromoCode("");
+                  }}
+                  hint="A discount code from the host."
                 />
-                <Button type="button" variant="outline" onClick={applyPromo} disabled={promoApplying || !promoCode.trim()} className="h-12 shrink-0 rounded-none border-basalt/20">
-                  {promoApplying ? "…" : "Apply"}
-                </Button>
+
+                <CodeRow
+                  icon={Gift}
+                  addLabel="Use a gift card"
+                  label="Gift card"
+                  placeholder="RV-XXXX-XXXX-XXXX"
+                  mono
+                  value={giftCode}
+                  onChange={(v) => {
+                    setGiftCode(v);
+                    setGiftBalance(null);
+                  }}
+                  onApply={applyGift}
+                  applying={giftApplying}
+                  applied={giftBalance != null ? `${giftCode} · ${format(giftAppliedCents)} covered` : null}
+                  onRemove={() => {
+                    setGiftBalance(null);
+                    setGiftCode("");
+                  }}
+                />
               </div>
-              {promoInfo && shown.promoCode > 0 && (
-                <p className="mt-2 text-xs font-semibold text-apricot">Applied — {format(shown.promoCode)} off.</p>
-              )}
             </section>
           </div>
 
@@ -523,19 +555,37 @@ export default function Checkout({ slug }: { slug: string }) {
                   <strong className="font-display text-xl font-normal">{format(amountCents)}</strong>
                 </div>
                 {giftAppliedCents > 0 && (
-                  <>
-                    <div className="flex items-center justify-between font-semibold text-apricot">
-                      <span>Gift card</span>
-                      <span>−{format(giftAppliedCents)}</span>
-                    </div>
-                    <div className="flex items-center justify-between border-t border-basalt/10 pt-1.5">
-                      <span className="font-semibold">Due today</span>
-                      <strong className="font-display text-xl font-normal">{format(dueCents)}</strong>
-                    </div>
-                  </>
+                  <div className="flex items-center justify-between font-semibold text-apricot">
+                    <span>Gift card</span>
+                    <span>−{format(giftAppliedCents)}</span>
+                  </div>
+                )}
+                {creditAppliedCents > 0 && (
+                  <div className="flex items-center justify-between font-semibold text-apricot">
+                    <span>Revamp credit</span>
+                    <span>−{format(creditAppliedCents)}</span>
+                  </div>
+                )}
+                {coveredCents > 0 && (
+                  <div className="flex items-center justify-between border-t border-basalt/10 pt-1.5">
+                    <span className="font-semibold">Due today</span>
+                    <strong className="font-display text-xl font-normal">{format(dueCents)}</strong>
+                  </div>
                 )}
               </div>
 
+              {earnCents > 0 && !isRequest && (
+                <p className="mt-3 text-xs leading-5 text-basalt/65">
+                  {isGuest ? (
+                    <>
+                      <Link href={`/login?redirect=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`} className="font-semibold text-apricot hover:underline">Sign in</Link>{" "}
+                      to earn {format(earnCents)} Revamp credit on this trip ({CREDIT_PERCENT}% back).
+                    </>
+                  ) : (
+                    <>You'll earn <span className="font-semibold text-basalt">{format(earnCents)} Revamp credit</span> after this trip ({CREDIT_PERCENT}% back).</>
+                  )}
+                </p>
+              )}
               <p className="mt-3 text-xs leading-5 text-basalt/55">
                 {listing!.cancellationPolicy === "non_refundable" ? "🔒 " : "✓ "}
                 {policyText}.
@@ -546,7 +596,7 @@ export default function Checkout({ slug }: { slug: string }) {
                 disabled={submitting || authLoading}
                 className={cn("mt-5 h-12 w-full rounded-none bg-apricot text-white hover:bg-apricot/90", (submitting || authLoading) && "opacity-60")}
               >
-                {submitting ? (isRequest ? "Sending request…" : "Taking you to payment…") : isRequest ? "Request to book" : dueCents === 0 && giftAppliedCents > 0 ? "Complete booking (gift card)" : `Pay · ${format(dueCents)}`}
+                {submitting ? (isRequest ? "Sending request…" : "Taking you to payment…") : isRequest ? "Request to book" : dueCents === 0 && coveredCents > 0 ? (giftAppliedCents > 0 ? "Complete booking (gift card)" : "Complete booking (credit)") : `Pay · ${format(dueCents)}`}
               </Button>
               {isRequest ? (
                 <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">
@@ -567,6 +617,86 @@ export default function Checkout({ slug }: { slug: string }) {
         </div>
       </main>
       <SiteFooter />
+    </div>
+  );
+}
+
+/** One discount line: a link that opens a code field; once applied, the code + a Remove button. */
+function CodeRow(p: {
+  icon: typeof Tag;
+  addLabel: string;
+  label: string;
+  placeholder: string;
+  mono?: boolean;
+  value: string;
+  onChange: (v: string) => void;
+  onApply: () => void;
+  applying: boolean;
+  applied: string | null;
+  onRemove: () => void;
+  hint?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const Icon = p.icon;
+  const id = `code-${p.label.toLowerCase().replace(/\s+/g, "-")}`;
+  if (p.applied) {
+    return (
+      <div className="flex items-center justify-between gap-4 px-4 py-3.5">
+        <span className="flex min-w-0 items-start gap-3">
+          <Icon className="mt-0.5 h-4 w-4 shrink-0 text-apricot" aria-hidden />
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-basalt">{p.label}</span>
+            <span className={cn("block truncate text-sm text-basalt/60", p.mono && "font-mono")}>{p.applied}</span>
+          </span>
+        </span>
+        <button type="button" onClick={p.onRemove} className="shrink-0 text-sm font-semibold text-basalt/55 underline-offset-4 hover:text-apricot hover:underline">
+          Remove
+        </button>
+      </div>
+    );
+  }
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="flex w-full items-center gap-3 px-4 py-3.5 text-left text-sm font-semibold text-basalt/70 transition-colors hover:bg-chalk/50 hover:text-apricot">
+        <Icon className="h-4 w-4 shrink-0" aria-hidden /> {p.addLabel}
+      </button>
+    );
+  }
+  return (
+    <div className="px-4 py-3.5">
+      <label htmlFor={id} className="flex items-center gap-3 text-sm font-semibold text-basalt">
+        <Icon className="h-4 w-4 shrink-0 text-apricot" aria-hidden /> {p.label}
+      </label>
+      {p.hint && <p className="mt-0.5 pl-7 text-xs text-basalt/50">{p.hint}</p>}
+      <form
+        className="mt-2.5 flex items-start gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (p.value.trim()) p.onApply();
+        }}
+      >
+        <Input
+          id={id}
+          autoFocus
+          value={p.value}
+          onChange={(e) => p.onChange(e.target.value.toUpperCase())}
+          placeholder={p.placeholder}
+          className={cn("h-12 flex-1 rounded-none uppercase placeholder:normal-case", p.mono && "font-mono")}
+        />
+        <Button type="submit" variant="outline" disabled={p.applying || !p.value.trim()} className="h-12 shrink-0 rounded-none border-basalt/20">
+          {p.applying ? "…" : "Apply"}
+        </Button>
+      </form>
+      <button
+        type="button"
+        onClick={() => {
+          setOpen(false);
+          p.onChange("");
+        }}
+        className="mt-2 text-xs font-semibold text-basalt/50 hover:text-basalt"
+      >
+        Cancel
+      </button>
     </div>
   );
 }

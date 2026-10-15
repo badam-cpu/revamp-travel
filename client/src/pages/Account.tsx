@@ -17,7 +17,9 @@
 import { PageHeader } from "@/components/PageHeader";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { Bookmark, LogOut, MapPin, MessageSquare, ShieldCheck, Star, Ticket, Utensils, User as UserIcon } from "lucide-react";
+import { Bookmark, Coins, LogOut, MapPin, MessageSquare, ShieldCheck, Star, Ticket, Utensils, User as UserIcon } from "lucide-react";
+import { useRevampCredit } from "@/lib/credit";
+import { CREDIT_PERCENT, CREDIT_TERMS } from "@shared/credit";
 import { Inbox } from "@/components/Inbox";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -79,7 +81,7 @@ function fmtMoney(cents: number, currency: string): string {
   return currency === "USD" ? `$${n}` : currency === "AMD" ? `֏${n}` : `${n} ${currency}`;
 }
 
-const VALID_TABS = ["trips", "messages", "saved", "vouchers", "profile", "security"] as const;
+const VALID_TABS = ["trips", "messages", "saved", "credit", "vouchers", "profile", "security"] as const;
 type TabKey = (typeof VALID_TABS)[number];
 
 interface VoucherListRow {
@@ -101,6 +103,96 @@ const VOUCHER_STATUS: Record<string, { label: string; cls: string }> = {
   pending_payment: { label: "Pending payment", cls: "bg-tuff text-white" },
   cancelled: { label: "Cancelled", cls: "bg-basalt/15 text-basalt/50" },
 };
+
+const longDate = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+
+/** Revamp credit (0105): balance, what's expiring, and the history of earning/using it. */
+function CreditTab() {
+  const { format } = useCurrency();
+  const credit = useRevampCredit();
+  if (credit.loading) return <p className="text-sm text-basalt/45">Loading…</p>;
+
+  // History: earnings (one line per lot) + uses (one line per checkout = per hold).
+  const byHold = new Map<string, { cents: number; status: "applied" | "returned"; at: string; returnedAt: string | null; title: string | null }>();
+  for (const u of credit.uses) {
+    const h = byHold.get(u.holdId);
+    if (h) h.cents += u.amountCents;
+    else byHold.set(u.holdId, { cents: u.amountCents, status: u.status, at: u.createdAt, returnedAt: u.returnedAt, title: u.listingTitle });
+  }
+  const now = Date.now();
+  const history = [
+    ...credit.lots.map((l) => ({
+      key: `lot-${l.id}`,
+      at: l.createdAt,
+      label: l.source === "earned" ? `Earned from ${l.listingTitle ?? "a trip"}` : l.note || "Added by Revamp",
+      cents: l.amountCents,
+      sign: "+" as const,
+      note: Date.parse(l.expiresAt) <= now ? (l.remainingCents > 0 ? `${format(l.remainingCents)} expired ${longDate(l.expiresAt)}` : null) : `Valid until ${longDate(l.expiresAt)}`,
+    })),
+    ...Array.from(byHold.entries()).map(([hold, h]) => ({
+      key: `use-${hold}`,
+      at: h.at,
+      label: `Used on ${h.title ?? "a booking"}`,
+      cents: h.cents,
+      sign: "−" as const,
+      note: h.status === "returned" ? `Returned to your credit${h.returnedAt ? ` on ${longDate(h.returnedAt)}` : ""} (booking not completed or cancelled)` : null,
+    })),
+  ].sort((a, b) => b.at.localeCompare(a.at));
+
+  return (
+    <div className="grid max-w-2xl gap-6">
+      <section className="border border-basalt/10 bg-chalk/50 p-6">
+        <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-basalt/45">Your Revamp credit</p>
+        <p className="mt-1 font-display text-5xl font-normal tabular-nums text-basalt">{format(credit.balanceCents)}</p>
+        {credit.nextExpiry ? (
+          <p className="mt-2 text-sm text-basalt/60">
+            Applied automatically at checkout. The soonest to expire is {format(credit.nextExpiry.cents)}, on {longDate(credit.nextExpiry.date)}.
+          </p>
+        ) : (
+          <p className="mt-2 text-sm text-basalt/60">Earn {CREDIT_PERCENT}% back on every trip you book on Revamp — it's added the day after your stay or tour.</p>
+        )}
+        <Button asChild className="mt-4 rounded-none bg-apricot text-white hover:bg-apricot/90">
+          <Link href="/explore">{credit.balanceCents > 0 ? "Use it on your next trip" : "Find your next trip"}</Link>
+        </Button>
+      </section>
+
+      {history.length > 0 && (
+        <section>
+          <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-basalt/50">History</h2>
+          <ul className="mt-3 divide-y divide-basalt/10 border-y border-basalt/10">
+            {history.map((h) => (
+              <li key={h.key} className="flex items-start justify-between gap-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-basalt">{h.label}</p>
+                  <p className="text-xs text-basalt/50">
+                    {longDate(h.at)}
+                    {h.note ? ` · ${h.note}` : ""}
+                  </p>
+                </div>
+                <span className={cn("shrink-0 text-sm font-semibold tabular-nums", h.sign === "+" ? "text-sevan" : "text-basalt/70")}>
+                  {h.sign}
+                  {format(h.cents)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <section>
+        <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-basalt/50">How it works</h2>
+        <ul className="mt-3 grid gap-2">
+          {CREDIT_TERMS.map((t) => (
+            <li key={t} className="flex gap-2.5 text-sm leading-6 text-basalt/70">
+              <span className="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-apricot" />
+              <span>{t}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+  );
+}
 
 function VouchersTab({ reloadKey }: { reloadKey: number }) {
   const { user } = useAuth();
@@ -686,6 +778,7 @@ export default function Account() {
               { key: "trips", label: "Trips", icon: Ticket },
               { key: "messages", label: "Messages", icon: MessageSquare },
               { key: "saved", label: "Saved", icon: Bookmark },
+              { key: "credit", label: "Credit", icon: Coins },
               { key: "vouchers", label: "Vouchers", icon: Utensils },
               { key: "profile", label: "Profile", icon: UserIcon },
               { key: "security", label: "Security", icon: ShieldCheck },
@@ -703,6 +796,7 @@ export default function Account() {
           <TabsContent value="trips" className="mt-8"><TripsTab reloadKey={tripsReload} /></TabsContent>
           <TabsContent value="messages" className="mt-8">{user && <Inbox userId={user.id} />}</TabsContent>
           <TabsContent value="saved" className="mt-8"><SavedTab /></TabsContent>
+          <TabsContent value="credit" className="mt-8"><CreditTab /></TabsContent>
           <TabsContent value="vouchers" className="mt-8"><VouchersTab reloadKey={voucherReload} /></TabsContent>
           <TabsContent value="profile" className="mt-8"><ProfileTab /></TabsContent>
           <TabsContent value="security" className="mt-8"><SecurityTab /></TabsContent>

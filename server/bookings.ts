@@ -21,6 +21,7 @@ import { payoutDueDate } from "../shared/payouts.js";
 import { computeBookingCharge, DEFAULT_CURRENCY } from "../shared/bookings.js";
 import type { ListingType } from "../shared/listings.js";
 import { refundGiftForBooking } from "./giftcards.js";
+import { returnCreditForBooking } from "./credit.js";
 import { resolveOperatorCommissionPercent } from "./subscriptions.js";
 import { releaseSeats } from "./sessions.js";
 import { formatSlotTime } from "../shared/sessions.js";
@@ -55,10 +56,13 @@ export interface BookingRow {
  * reads "Revamp's account" and nothing changes.
  */
 async function directPaymentInfo(admin: SupabaseClient, bookingId: string): Promise<{ owner: string | null; addonsCents: number; giftAppliedCents: number }> {
-  const { data, error } = await admin.from("bookings").select("paylink_account_owner, addons_cents, gift_applied_cents").eq("id", bookingId).maybeSingle();
+  // select("*") so the 0105 credit column is read when present.
+  const { data, error } = await admin.from("bookings").select("*").eq("id", bookingId).maybeSingle();
   if (error || !data) return { owner: null, addonsCents: 0, giftAppliedCents: 0 };
-  const d = data as { paylink_account_owner?: string | null; addons_cents?: number | null; gift_applied_cents?: number | null };
-  return { owner: d.paylink_account_owner ?? null, addonsCents: d.addons_cents ?? 0, giftAppliedCents: d.gift_applied_cents ?? 0 };
+  const d = data as { paylink_account_owner?: string | null; addons_cents?: number | null; gift_applied_cents?: number | null; credit_applied_cents?: number | null };
+  // Revamp-funded part the guest didn't pay the operator: gift card + Revamp
+  // credit (0105). Revamp owes it to the operator on their statement.
+  return { owner: d.paylink_account_owner ?? null, addonsCents: d.addons_cents ?? 0, giftAppliedCents: (d.gift_applied_cents ?? 0) + (d.credit_applied_cents ?? 0) };
 }
 
 // Columns every confirm/reconcile query needs (row detail for the emails too).
@@ -277,6 +281,7 @@ export async function confirmBookingRow(admin: SupabaseClient, row: BookingRow):
     if (TERMINAL_FAIL.test(String(check.status))) {
       await admin.from("bookings").update({ status: "payment_failed" }).eq("id", row.id).in("status", payableStatuses);
       await refundGiftForBooking(admin, row.id); // release any gift-card hold
+      await returnCreditForBooking(admin, row.id, "payment failed"); // and any Revamp credit
       if (row.session_id) await releaseSeats(admin, row.session_id, row.guests); // free the slot
       return { granted: false, status: "payment_failed" };
     }
@@ -431,6 +436,7 @@ export async function reconcileAllPendingBookings(
         if (upd && upd.length) {
           expired++;
           await refundGiftForBooking(admin, row.id); // release any gift-card hold
+          await returnCreditForBooking(admin, row.id, "payment never completed"); // and any Revamp credit
           if (row.session_id) await releaseSeats(admin, row.session_id, row.guests); // free the slot
           await logBookingEvent(admin, row.id, "status_expired", `Unpaid hold expired after ${expireAfterHours}h`);
         }
