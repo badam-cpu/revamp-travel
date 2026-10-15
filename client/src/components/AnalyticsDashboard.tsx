@@ -6,6 +6,8 @@
  * own listings (which never includes restaurants, since operators can't own
  * 'eat'). Shows KPI tiles, a daily trend graph for a selectable metric, and a
  * per-listing breakdown, with standard filters (date range / type / listing).
+ * On top: the "Listing performance" funnel (PerformanceFunnel — impressions →
+ * click-through → page visits → conversion → bookings, with a trend line).
  * Real measured events only — no fabricated numbers.
  */
 import { PageHeader } from "@/components/PageHeader";
@@ -16,12 +18,13 @@ import { useListings } from "@/contexts/ListingsContext";
 import { InfoTip } from "@/components/InfoTip";
 import { METRIC_INFO } from "@/lib/metricInfo";
 import { cn } from "@/lib/utils";
+import { PerformanceFunnel } from "@/components/PerformanceFunnel";
 
 type Row = { listing_id: string; day: string; kind: string; count: number };
 const help = (kind: string) => METRIC_INFO[kind]?.help ?? "";
 
-const TYPE_ORDER = ["stay", "tour", "experience", "eat"] as const;
-const TYPE_LABEL: Record<string, string> = { stay: "Stays", tour: "Tours", experience: "Experiences", eat: "Restaurants" };
+const TYPE_ORDER = ["stay", "tour", "experience", "eat", "place"] as const;
+const TYPE_LABEL: Record<string, string> = { stay: "Stays", tour: "Tours", experience: "Experiences", eat: "Restaurants", place: "Places" };
 
 // Metrics shown as KPI tiles / graph options. The first six apply to every
 // listing type; the eat intents (website/call/menu) only render when present.
@@ -221,6 +224,9 @@ export function AnalyticsDashboard({ scope, embedded = false }: { scope: "admin"
         </div>
       ) : (
         <>
+          {/* Impressions → page visits → bookings, with a trend for the chosen step */}
+          <PerformanceFunnel rows={rows} listingMeta={listingMeta} ids={filteredIds} days={days} />
+
           {/* KPI tiles — click to graph that metric */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {metrics.map((m) => (

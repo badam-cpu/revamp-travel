@@ -4,11 +4,11 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch, useLocation } from "wouter";
 import { useEffect } from "react";
-import { initAnalytics, trackPageView } from "./lib/analytics";
+import { DEFAULT_TITLE, initAnalytics, isPrivatePath, setInternalTraffic, trackPageView } from "./lib/analytics";
 import { storeReferralCode } from "./lib/referrals";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import { AuthProvider } from "./contexts/AuthContext";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { ListingsProvider } from "./contexts/ListingsContext";
 import { SavedPlacesProvider } from "./contexts/SavedPlacesContext";
 import { SiteSettingsProvider } from "./contexts/SiteSettingsContext";
@@ -58,16 +58,39 @@ function SiteHome() {
   return useSite() === "stay" ? <StayHome /> : <Home />;
 }
 
-/** Loads GA4 (if configured) and reports a page view on every route change. */
+/**
+ * Loads GA4 (if configured) and reports a page view on every route change —
+ * once the page has set its own <title> (route components load lazily, so an
+ * immediate report would be filed under the site's default title), or after
+ * 1.5 s, or when the visitor moves on. Private pages are skipped inside
+ * trackPageView; signed-in operators/admins are tagged as internal traffic.
+ */
 function AnalyticsTracker() {
   const [location] = useLocation();
+  const { profile } = useAuth();
   useEffect(() => {
     initAnalytics();
   }, []);
   useEffect(() => {
-    // Defer so the per-page <title> (set by useDocumentMeta) is current.
-    const t = setTimeout(() => trackPageView(location), 0);
-    return () => clearTimeout(t);
+    setInternalTraffic(profile?.role === "admin" || profile?.role === "operator");
+  }, [profile?.role]);
+  useEffect(() => {
+    if (isPrivatePath(location)) return;
+    const before = document.title;
+    let sent = false;
+    const send = () => {
+      if (sent) return;
+      sent = true;
+      obs.disconnect();
+      clearTimeout(timer);
+      trackPageView(location);
+    };
+    const obs = new MutationObserver(() => {
+      if (document.title !== before && document.title !== DEFAULT_TITLE) send();
+    });
+    obs.observe(document.head, { subtree: true, childList: true, characterData: true });
+    const timer = setTimeout(send, 1500);
+    return send; // leaving quickly still counts the view
   }, [location]);
   return null;
 }

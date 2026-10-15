@@ -5,6 +5,14 @@
  * only fires on the first load — we disable it and send one manually on every
  * client-side route change (see AnalyticsTracker in App.tsx).
  *
+ * Clean numbers (2026-10-15): private pages never send page views — the
+ * operator dashboard, admin, venue, account and sign-in screens are people
+ * USING the product, not travellers finding it, and the guest trip / voucher
+ * pages carry a private token in the URL that must never reach Google. A
+ * signed-in operator/admin is tagged traffic_type=internal on everything they
+ * send, so GA4's "Internal traffic" data filter (Admin → Data filters, set to
+ * Active) drops them wherever they browse from.
+ *
  * To enable: create a GA4 property at analytics.google.com, copy its
  * Measurement ID (G-XXXXXXXXXX), and set VITE_GA_MEASUREMENT_ID in the Netlify
  * build environment. No code change needed.
@@ -14,6 +22,23 @@ import { analyticsAllowed } from "./consent";
 const GA_ID = import.meta.env.VITE_GA_MEASUREMENT_ID as string | undefined;
 
 export const analyticsEnabled = Boolean(GA_ID);
+
+/** Pages that are never reported (private app screens, and URLs with a private token). */
+const PRIVATE_PATHS = [/^\/dashboard(\/|$)/, /^\/admin(\/|$)/, /^\/account(\/|$)/, /^\/venue(\/|$)/, /^\/(login|signup|reset-password)(\/|$)/, /^\/redeem\//, /^\/trip\//];
+export function isPrivatePath(path: string): boolean {
+  const p = path.split(/[?#]/)[0];
+  return PRIVATE_PATHS.some((re) => re.test(p));
+}
+
+/** The site's default <title> (index.html) — a page view is held until the page sets its own. */
+export const DEFAULT_TITLE = "Revamp Vacations — Stays, Tours & Experiences in Armenia";
+
+let internal = false;
+/** Signed-in operators/admins: tag their events so GA4's internal-traffic filter can drop them. */
+export function setInternalTraffic(on: boolean): void {
+  internal = on;
+}
+const tag = (params: Record<string, unknown>) => (internal ? { ...params, traffic_type: "internal" } : params);
 
 let started = false;
 
@@ -46,11 +71,16 @@ export function trackPageView(path: string): void {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const w = window as any;
   if (!GA_ID || typeof window === "undefined" || typeof w.gtag !== "function") return;
-  w.gtag("event", "page_view", {
-    page_path: path,
-    page_location: window.location.href,
-    page_title: document.title,
-  });
+  if (isPrivatePath(path)) return;
+  w.gtag(
+    "event",
+    "page_view",
+    tag({
+      page_path: path,
+      page_location: window.location.href,
+      page_title: document.title,
+    }),
+  );
 }
 
 /**
@@ -62,5 +92,6 @@ export function trackEvent(name: string, params: Record<string, unknown> = {}): 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const w = window as any;
   if (!GA_ID || typeof window === "undefined" || typeof w.gtag !== "function") return;
-  w.gtag("event", name, params);
+  if (isPrivatePath(window.location.pathname)) return;
+  w.gtag("event", name, tag(params));
 }
