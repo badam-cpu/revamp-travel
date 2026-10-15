@@ -18,7 +18,8 @@
  * the JSON-LD block gets its own separate escaping (see jsonLdScript()).
  */
 import type { PublicListing } from "./supabase.js";
-import { getPublishedCatalog, getPublishedPosts, getPublishedPostBySlug, getSiteFaq, getPartnerOperators, getSitePartners, getRoomTypesBySlug, type PublicPost } from "./supabase.js";
+import { getPublishedCatalog, getPublishedPosts, getPublishedPostBySlug, getSiteFaq, getPartnerOperators, getSitePartners, getRoomTypesBySlug, getUpcomingEvents, type PublicPost } from "./supabase.js";
+import { EVENTS_PAGE_DESCRIPTION, buildEventsJsonLd, categoryLabel, eventsPageTitle, formatEventDates, groupByMonth, safeSourceUrl, sourceLabel, staysLink } from "../shared/eventsPage.js";
 import { filterForSite, siteFromHost } from "./site.js";
 import { regions, typeLabels, ARMENIA_REGIONS, formatBeds, type RoomType } from "../shared/listings.js";
 import { typeFromCents } from "../shared/rooms.js";
@@ -45,6 +46,7 @@ export type PageKind =
   | "eat-region"
   | "eat-cuisine"
   | "guide-hub"
+  | "events"
   | "guide"
   | "host-hub"
   | "host"
@@ -87,6 +89,7 @@ export function matchRoute(pathname: string): MatchedRoute {
   if (eatCuisineMatch) return { kind: "eat-cuisine", slug: decodeURIComponent(eatCuisineMatch[1]) };
   const eatRegionMatch = path.match(/^\/eat\/([^/]+)$/);
   if (eatRegionMatch) return { kind: "eat-region", slug: decodeURIComponent(eatRegionMatch[1]) };
+  if (path === "/events") return { kind: "events" };
   if (path === "/guide") return { kind: "guide-hub" };
   const guideMatch = path.match(/^\/guide\/([^/]+)$/);
   if (guideMatch) return { kind: "guide", slug: decodeURIComponent(guideMatch[1]) };
@@ -156,6 +159,8 @@ export async function renderForBot(pathname: string, origin: string): Promise<Re
     }
     case "guide-hub":
       return { status: 200, body: renderGuideHub(origin) };
+    case "events":
+      return { status: 200, body: await renderEvents(origin) };
     case "guide": {
       const g = route.slug ? findGuide(route.slug) : undefined;
       if (!g) return { status: 404, body: renderNotFound(origin) };
@@ -414,6 +419,52 @@ function renderPlan(origin: string): string {
     description: "Generate a day-by-day Armenia itinerary grounded in Revamp Vacations's live, published catalog.",
     canonical: `${origin}/plan`,
     ogImage: `${origin}${OG_IMAGE}`,
+    bodyHtml,
+  });
+}
+
+async function renderEvents(origin: string): Promise<string> {
+  const events = await getUpcomingEvents();
+  const months = groupByMonth(events);
+  const row = (e: (typeof events)[number]) => {
+    const place = [e.venue, e.city].filter(Boolean).join(", ");
+    const src = safeSourceUrl(e.sourceUrl);
+    const srcName = sourceLabel(e);
+    return `<li><h3>${escapeHtml(e.title)}</h3><p>${escapeHtml(formatEventDates(e))} · ${escapeHtml(categoryLabel(e))}${place ? ` · ${escapeHtml(place)}` : ""}</p>${
+      e.summary ? `<p>${escapeHtml(e.summary)}</p>` : ""
+    }<p><a href="${origin}${escapeHtml(staysLink(e))}">Stays for these dates</a>${src && srcName ? ` · Source: <a href="${escapeHtml(src)}" rel="nofollow">${escapeHtml(srcName)}</a>` : ""}</p></li>`;
+  };
+  const bodyHtml = `
+<nav aria-label="Breadcrumb"><a href="${origin}/">Home</a> › Events in Armenia</nav>
+<h1>Events in Armenia</h1>
+<p>Concerts, festivals, big matches, conferences and public holidays in Yerevan and across Armenia over the next 12 months. Plan your trip around one — or know what's on while you're here.</p>
+${
+  months.length
+    ? months
+        .map((m) => {
+          const evs = m.events.filter((e) => e.kind === "event");
+          const hols = m.events.filter((e) => e.kind === "holiday");
+          return `<section><h2>${escapeHtml(m.label)}</h2>${evs.length ? `<ul>${evs.map(row).join("")}</ul>` : ""}${
+            hols.length ? `<h3>Holidays &amp; memorial days</h3><ul>${hols.map((e) => `<li>${escapeHtml(formatEventDates(e))} — ${escapeHtml(e.title)}</li>`).join("")}</ul>` : ""
+          }</section>`;
+        })
+        .join("\n")
+    : "<p>New events are added every week.</p>"
+}
+<p><a href="${origin}/plan">Plan a trip around an event</a> · <a href="${origin}/guide/public-holidays">Public holidays explained</a> · <a href="${origin}/explore/tour">Tours and experiences</a></p>
+<p>Events are collected automatically every week from public sources and each one is checked against its own source page. Dates can change — confirm with the organiser before you travel. Revamp isn't the organiser and doesn't sell event tickets.</p>`;
+  return renderPageShell({
+    title: eventsPageTitle(new Date().toISOString().slice(0, 10)),
+    description: EVENTS_PAGE_DESCRIPTION,
+    canonical: `${origin}/events`,
+    ogImage: `${origin}${OG_IMAGE}`,
+    jsonLd: [
+      ...(events.length ? [buildEventsJsonLd(origin, events)] : []),
+      buildBreadcrumbJsonLd(origin, [
+        { name: "Home", path: "/" },
+        { name: "Events in Armenia", path: "/events" },
+      ]),
+    ],
     bodyHtml,
   });
 }

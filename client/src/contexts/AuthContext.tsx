@@ -112,12 +112,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(data ? mapProfile(data) : null);
   }, []);
 
-  // Keep engagement tracking off for signed-in operators/admins so their own
-  // browsing never inflates the per-listing analytics shown to real users/owners.
-  // Travelers and signed-out visitors are tracked normally.
+  // Keep engagement tracking off for operators/admins (and any browser they've
+  // used) so their own browsing never inflates the per-listing analytics shown
+  // to owners. Tracking waits for this — so it runs only once auth has resolved.
   useEffect(() => {
+    if (loading) return;
     setTrackingSuppressed(profile?.role === "operator" || profile?.role === "admin");
-  }, [profile?.role]);
+  }, [loading, profile?.role]);
 
   useEffect(() => {
     let active = true;

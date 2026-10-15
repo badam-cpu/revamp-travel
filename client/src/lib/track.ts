@@ -29,17 +29,45 @@ const queue: QueuedEvent[] = [];
 const seenImpressions = new Set<string>(); // dedupe impressions per page-session
 let timer: ReturnType<typeof setTimeout> | null = null;
 
-// When true, no events are recorded at all. Flipped on by AuthContext for
-// signed-in operators/admins so their own browsing (dashboard, admin, QA,
-// previewing their listings) never inflates the per-listing engagement numbers
-// shown to real users/owners. Travelers and signed-out visitors are tracked
-// normally. There's no auth on /api/track (anonymous sendBeacon), so this
-// identity-aware exclusion has to happen here on the client.
+// Our own team's browsing (operators/admins) must never inflate the numbers
+// shown to owners. Two guards, both client-side because /api/track is an
+// anonymous sendBeacon:
+//  1. Nothing is sent until auth has resolved (`setTrackingSuppressed` is
+//     called once the profile is known) — otherwise the first page a team
+//     member opens is counted before we know who they are.
+//  2. A browser that has ever been signed in as an operator/admin is remembered
+//     as a team device (localStorage) and stays excluded when signed out too.
+// Travelers and signed-out visitors on other devices are tracked normally.
+const TEAM_DEVICE_KEY = "revamp.teamDevice";
 let suppressed = false;
+let resolved = false;
 
-/** Enable/disable all engagement tracking (operators/admins → suppressed). */
-export function setTrackingSuppressed(value: boolean): void {
-  suppressed = value;
+/** This browser has been used by an operator/admin account. */
+export function isTeamDevice(): boolean {
+  try {
+    return typeof localStorage !== "undefined" && localStorage.getItem(TEAM_DEVICE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Called by AuthContext once auth has resolved: `team` = signed in as an
+ * operator/admin. Team accounts mark the device; queued events are dropped for
+ * team devices and sent otherwise.
+ */
+export function setTrackingSuppressed(team: boolean): void {
+  if (team) {
+    try {
+      localStorage.setItem(TEAM_DEVICE_KEY, "1");
+    } catch {
+      /* private mode — the signed-in check still applies */
+    }
+  }
+  suppressed = team || isTeamDevice();
+  resolved = true;
+  if (suppressed) queue.length = 0;
+  else if (queue.length && !timer) timer = setTimeout(flush, 1500);
 }
 
 function flush() {
@@ -47,6 +75,7 @@ function flush() {
     clearTimeout(timer);
     timer = null;
   }
+  if (!resolved || suppressed) return; // wait until we know who's browsing
   if (!queue.length || typeof navigator === "undefined") return;
   const events = queue.splice(0, queue.length);
   const body = JSON.stringify({ events });
@@ -63,14 +92,14 @@ function flush() {
 
 /** Record a listing engagement event (batched). */
 export function trackListing(listingId: string, kind: ListingEventKind, surface = ""): void {
-  if (suppressed || !listingId) return;
+  if (suppressed || !listingId || isTeamDevice()) return;
   queue.push({ listingId, kind, surface });
-  if (!timer) timer = setTimeout(flush, 1500);
+  if (resolved && !timer) timer = setTimeout(flush, 1500);
 }
 
 /** Record an impression at most once per listing+surface per page-session. */
 export function trackImpressionOnce(listingId: string, surface = ""): void {
-  if (suppressed) return;
+  if (suppressed || isTeamDevice()) return;
   const key = `${listingId}:${surface}`;
   if (seenImpressions.has(key)) return;
   seenImpressions.add(key);

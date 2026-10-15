@@ -26,6 +26,7 @@ const FOOTER_EXPLORE: [string, string][] = [
 const FOOTER_PLAN: [string, string][] = [
   ["/plan", "AI trip planner"],
   ["/guide", "Travel guide"],
+  ["/events", "Events in Armenia"],
   ["/gift-cards", "Gift cards"],
 ];
 const FOOTER_COMPANY: [string, string][] = [

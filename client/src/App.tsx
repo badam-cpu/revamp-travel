@@ -6,6 +6,7 @@ import { Route, Switch, useLocation } from "wouter";
 import { useEffect } from "react";
 import { DEFAULT_TITLE, initAnalytics, isPrivatePath, setInternalTraffic, trackPageView } from "./lib/analytics";
 import { storeReferralCode } from "./lib/referrals";
+import { isTeamDevice } from "./lib/track";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
@@ -45,6 +46,7 @@ import Partners from "./pages/Partners";
 import GiftCards from "./pages/GiftCards";
 import Region from "./pages/Region";
 import Guide from "./pages/Guide";
+import Events from "./pages/Events";
 import Host from "./pages/Host";
 import RedeemStation from "./pages/RedeemStation";
 import TripPage from "./pages/TripPage";
@@ -72,7 +74,7 @@ function AnalyticsTracker() {
     initAnalytics();
   }, []);
   useEffect(() => {
-    setInternalTraffic(profile?.role === "admin" || profile?.role === "operator");
+    setInternalTraffic(profile?.role === "admin" || profile?.role === "operator" || isTeamDevice());
   }, [profile?.role]);
   useEffect(() => {
     if (isPrivatePath(location)) return;
@@ -151,6 +153,7 @@ function Router() {
       <Route path="/partners" component={Partners} />
       <Route path="/gift-cards" component={GiftCards} />
       <Route path="/region/:slug">{(params) => <Region slug={params.slug} />}</Route>
+      <Route path="/events" component={Events} />
       <Route path="/guide">{() => <Guide />}</Route>
       <Route path="/guide/:slug">{(params) => <Guide slug={params.slug} />}</Route>
       <Route path="/host">{() => <Host />}</Route>

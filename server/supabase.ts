@@ -11,6 +11,7 @@
  * server at all — the client talks to Supabase directly under RLS (see
  * client/src/contexts/ListingsContext.tsx).
  */
+import type { PublicEvent } from "../shared/eventsPage.js";
 import { createClient } from "@supabase/supabase-js";
 import type { Listing, ListingType, OfferType, Furnished, SaleStatus, RoomBed, RoomType } from "../shared/listings.js";
 import { isDiscoverable, suspensionRange } from "../shared/listings.js";
@@ -300,6 +301,42 @@ export async function getPublishedPosts(): Promise<PublicPost[]> {
           updatedAt: r.updated_at,
         }));
   postsCache = { data: rows, expiresAt: Date.now() + CATALOG_TTL_MS };
+  return rows;
+}
+
+let eventsCache: { data: PublicEvent[]; expiresAt: number } | null = null;
+
+/**
+ * Upcoming events for /events (0102/0104) — anon client, so RLS returns only
+ * verified, not-hidden rows; cancelled ones are dropped here. 30-minute cache
+ * (the table changes weekly). [] on any error or before the migration.
+ */
+export async function getUpcomingEvents(): Promise<PublicEvent[]> {
+  if (eventsCache && eventsCache.expiresAt > Date.now()) return eventsCache.data;
+  if (!client) return [];
+  const today = new Date().toISOString().slice(0, 10);
+  const until = new Date(Date.now() + 365 * 86_400_000).toISOString().slice(0, 10);
+  const { data, error } = await client
+    .from("events")
+    .select("*")
+    .lte("start_date", until)
+    .gte("end_date", today)
+    .order("start_date")
+    .limit(500);
+  type EventDbRow = {
+    id: string; kind: "holiday" | "event"; title: string; category: string; city: string | null; region: string | null; venue: string | null;
+    start_date: string; end_date: string; summary: string | null; source_url: string | null; source_name: string | null; status?: string | null;
+  };
+  const rows: PublicEvent[] =
+    error || !data
+      ? []
+      : (data as EventDbRow[])
+          .filter((r) => r.status !== "cancelled")
+          .map((r) => ({
+            id: r.id, kind: r.kind, title: r.title, category: r.category, city: r.city, region: r.region, venue: r.venue,
+            start: r.start_date, end: r.end_date, summary: r.summary, sourceUrl: r.source_url, sourceName: r.source_name,
+          }));
+  eventsCache = { data: rows, expiresAt: Date.now() + 30 * 60 * 1000 };
   return rows;
 }
 
