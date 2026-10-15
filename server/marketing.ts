@@ -8,6 +8,7 @@
  * captured on bookings, inquiries, gift cards, vouchers — people who transacted
  * without an account), or everyone (the union). Admins are never marketed to.
  */
+import { type CampaignVisual, httpsUrl, layoutBlocks, layoutHasImage } from "../shared/campaignVisual.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
@@ -261,6 +262,26 @@ function esc(s: string): string {
 // A per-send marker keeps the header/footer boilerplate from being byte-identical
 // across campaigns, so Gmail doesn't fold it away as repeated/quoted content when
 // two emails land in the same conversation. `nonce` is hidden; `sentLabel` shows.
+/**
+ * The campaign content in its layout (0107): title (the subject), optional
+ * image, then the body — same order as the composer's preview. No visual (old
+ * callers) = the body alone, exactly as before.
+ */
+function composeVisual(visual: CampaignVisual | undefined, subject: string, bodyHtml: string, imageLink: string | null): string {
+  if (!visual) return bodyHtml;
+  const img = layoutHasImage(visual.layout) ? httpsUrl(visual.imageUrl) : null;
+  const parts = layoutBlocks(visual.layout).map((b) => {
+    if (b === "title") return `<h1 style="font-size:26px;line-height:1.22;letter-spacing:-.02em;margin:0 0 16px;color:#212121;">${esc(subject)}</h1>`;
+    if (b === "image") {
+      if (!img) return "";
+      const tag = `<img src="${esc(img)}" alt="${esc(visual.imageAlt || "")}" width="544" style="display:block;width:100%;max-width:544px;height:auto;border:0;border-radius:10px;margin:0 0 18px;" />`;
+      return imageLink ? `<a href="${esc(imageLink)}" target="_blank" rel="noopener noreferrer" style="display:block;">${tag}</a>` : tag;
+    }
+    return bodyHtml;
+  });
+  return parts.join("\n");
+}
+
 function shell(bodyHtml: string, siteUrl: string, unsubUrl: string, nonce: string, sentLabel: string): string {
   return `<!doctype html><html><body style="margin:0;background:#F5F2EC;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#212121;">
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${esc(nonce)}</div>
@@ -379,7 +400,7 @@ export async function sendTelegramCampaign(
 
 /** Send a campaign to the resolved recipients via Resend batch (chunks of 100). */
 export async function sendCampaign(
-  opts: { subject: string; markdown: string; recipients: Recipient[]; siteUrl: string },
+  opts: { subject: string; markdown: string; recipients: Recipient[]; siteUrl: string; subjectPrefix?: string; visual?: CampaignVisual },
 ): Promise<{ sent: number; failed: number }> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
@@ -392,12 +413,15 @@ export async function sendCampaign(
   const sentLabel = `Sent ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`;
   // Tag in-site links once for GA attribution (utm_source=email …).
   const taggedMarkdown = tagMarkdownLinks(opts.markdown, { source: "email", medium: "campaign", campaign: campaignSlug(opts.subject) }, hostOf(opts.siteUrl));
+  const rawLink = httpsUrl(opts.visual?.imageLink);
+  const imageLink = rawLink ? addUtm(rawLink, { source: "email", medium: "campaign", campaign: campaignSlug(opts.subject) }, hostOf(opts.siteUrl)) : null;
   for (let i = 0; i < opts.recipients.length; i += 100) {
     const chunk = opts.recipients.slice(i, i + 100);
     const batch = chunk.map((r) => {
       const unsubUrl = `${opts.siteUrl}/api/email/unsubscribe?e=${encodeURIComponent(r.email)}&t=${unsubToken(r.email)}`;
-      const html = shell(styleEmailLinks(renderMarkdown(personalize(taggedMarkdown, r))), opts.siteUrl, unsubUrl, nonce, sentLabel);
-      return { from, to: r.email, subject: personalize(opts.subject, r), html, headers: { "List-Unsubscribe": `<${unsubUrl}>` } };
+      const bodyHtml = styleEmailLinks(renderMarkdown(personalize(taggedMarkdown, r)));
+      const html = shell(composeVisual(opts.visual, personalize(opts.subject, r), bodyHtml, imageLink), opts.siteUrl, unsubUrl, nonce, sentLabel);
+      return { from, to: r.email, subject: `${opts.subjectPrefix ?? ""}${personalize(opts.subject, r)}`, html, headers: { "List-Unsubscribe": `<${unsubUrl}>` } };
     });
     try {
       const res = await fetch(RESEND_BATCH_URL, {

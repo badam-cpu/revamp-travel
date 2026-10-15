@@ -26,14 +26,21 @@ function safeUrl(url: string): string {
 /** Inline spans. `text` is already HTML-escaped. */
 function inline(text: string): string {
   let t = text;
-  t = t.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_m, alt, u) => `<img src="${safeUrl(u)}" alt="${alt}" loading="lazy" />`);
-  t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, label, u) => `<a href="${safeUrl(u)}" target="_blank" rel="noopener noreferrer">${label}</a>`);
+  // Finished tags (an image, a link's opening tag) are set aside while the
+  // emphasis rules run, then put back — otherwise an underscore or asterisk
+  // inside a URL (e.g. ?utm_source=email&utm_medium=…) or in target="_blank"
+  // is read as italics and the link breaks. The link's LABEL still gets
+  // bold/italics. (\u0000 can't occur in the escaped source.)
+  const kept: string[] = [];
+  const keep = (html: string) => `\u0000${kept.push(html) - 1}\u0000`;
+  t = t.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_m, alt, u) => keep(`<img src="${safeUrl(u)}" alt="${alt}" loading="lazy" />`));
+  t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, label, u) => `${keep(`<a href="${safeUrl(u)}" target="_blank" rel="noopener noreferrer">`)}${label}</a>`);
   t = t.replace(/~~([^~]+)~~/g, "<del>$1</del>");
   t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   t = t.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
   t = t.replace(/(^|[^_])_([^_\n]+)_/g, "$1<em>$2</em>");
   t = t.replace(/`([^`]+)`/g, "<code>$1</code>");
-  return t;
+  return t.replace(/\u0000(\d+)\u0000/g, (_m, i) => kept[Number(i)]);
 }
 
 export function renderMarkdown(src: string): string {

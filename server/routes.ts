@@ -210,11 +210,22 @@ const voucherRedeemSchema = z.object({ voucherId: z.string().uuid() });
 const voucherRedeemStaffSchema = z.object({ token: z.string().trim().min(8).max(64), code: z.string().trim().min(1).max(40) });
 
 const emailAudienceSchema = z.object({ audience: z.enum(["everyone", "operators", "travelers", "guests", "contacts"]) });
+// Campaign visual (0107): layout + optional image (https only) and image link.
+const campaignVisualSchema = z
+  .object({
+    layout: z.enum(["title_body", "title_image_body", "image_title_body", "body"]),
+    imageUrl: z.string().trim().url().max(1000).refine((u) => u.startsWith("https://"), "Images must be https.").nullish(),
+    imageLink: z.string().trim().url().max(1000).refine((u) => u.startsWith("https://"), "The image link must start with https://.").nullish(),
+    imageAlt: z.string().trim().max(200).nullish(),
+  })
+  .optional();
+
 const emailSendSchema = z.object({
   audience: z.enum(["everyone", "operators", "travelers", "guests", "contacts"]),
   subject: z.string().trim().min(1).max(200),
   body: z.string().trim().min(1).max(20000),
   channel: z.enum(["email", "telegram"]).optional().default("email"),
+  visual: campaignVisualSchema,
 });
 
 const trackSchema = z.object({
@@ -3901,6 +3912,38 @@ export function registerApiRoutes(app: Express) {
     res.json({ imported, skipped, total: count ?? imported });
   });
 
+  // POST /api/admin-email/test — admin-only: send the composed email to up to 5
+  // test addresses, through the SAME builder as the real send (layout, links,
+  // footer, {first_name}) with "[TEST]" in the subject. Not recorded as a
+  // campaign and ignores the unsubscribe list (it's the admin's own inbox).
+  app.post("/api/admin-email/test", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+    if (rateLimited(giftPurchaseHits, `emailtest:${userId}`, 10)) return res.status(429).json({ error: "That's a lot of tests — wait a minute." });
+    const parsed = z
+      .object({
+        subject: z.string().trim().min(1, "Add a subject first.").max(200),
+        body: z.string().trim().min(1, "Write the message first.").max(20000),
+        to: z.array(z.string().trim().toLowerCase().email("One of the test addresses isn't a valid email.")).min(1, "Add a test address.").max(5, "Up to 5 test addresses."),
+        name: z.string().trim().max(80).optional(),
+        visual: campaignVisualSchema,
+      })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    if (!marketingConfigured()) return res.status(503).json({ error: "Email isn't configured (set RESEND_API_KEY + EMAIL_FROM)." });
+    const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
+    const recipients = Array.from(new Set(parsed.data.to)).map((email) => ({ email, name: parsed.data.name || null }));
+    const { sent, failed } = await sendCampaign({ subject: parsed.data.subject, markdown: parsed.data.body, recipients, siteUrl: site, subjectPrefix: "[TEST] ", visual: parsed.data.visual });
+    if (sent === 0) return res.status(502).json({ error: "The test didn't send — try again in a moment." });
+    res.json({ sent, failed });
+  });
+
   // POST /api/admin-email/send — admin-only: send a composed email to an audience.
   app.post("/api/admin-email/send", async (req: Request, res: Response) => {
     const authHeader = req.get("authorization") || "";
@@ -3936,8 +3979,8 @@ export function registerApiRoutes(app: Express) {
     const recipients = await resolveAudience(admin, parsed.data.audience);
     if (recipients.length === 0) return res.status(400).json({ error: "No recipients in that audience." });
     const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
-    const { sent, failed } = await sendCampaign({ subject: parsed.data.subject, markdown: parsed.data.body, recipients, siteUrl: site });
-    await admin.from("email_campaigns").insert({
+    const { sent, failed } = await sendCampaign({ subject: parsed.data.subject, markdown: parsed.data.body, recipients, siteUrl: site, visual: parsed.data.visual });
+    const record = {
       subject: parsed.data.subject,
       body: parsed.data.body,
       audience: parsed.data.audience,
@@ -3945,7 +3988,10 @@ export function registerApiRoutes(app: Express) {
       recipient_count: recipients.length,
       sent_count: sent,
       created_by: userId,
-    });
+    };
+    // layout/image_url are 0107 columns — record without them if they aren't there yet.
+    const { error: recErr } = await admin.from("email_campaigns").insert({ ...record, layout: parsed.data.visual?.layout ?? null, image_url: parsed.data.visual?.imageUrl ?? null });
+    if (recErr) await admin.from("email_campaigns").insert(record);
     res.json({ total: recipients.length, sent, failed });
   });
 

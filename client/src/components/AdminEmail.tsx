@@ -8,7 +8,11 @@ import { useEffect, useRef, useState } from "react";
 import { Sparkles, Loader2, Upload, Mail, Send } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { supabase } from "@/lib/supabase";
-import { adminEmailPreview, adminEmailSend, adminEmailGenerate, adminEmailImportContacts, ApiError } from "@/lib/api";
+import { adminEmailPreview, adminEmailSend, adminEmailGenerate, adminEmailImportContacts, adminEmailTest, ApiError } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
+import { CampaignVisualPicker } from "@/components/CampaignVisualPicker";
+import { displaySrc } from "@/lib/campaignImage";
+import { httpsUrl, layoutBlocks, layoutHasImage, type CampaignVisual } from "@shared/campaignVisual";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -73,6 +77,8 @@ export function AdminEmail() {
   const [channel, setChannel] = useState<Channel>("email");
   const [audience, setAudience] = useState("everyone");
   const [subject, setSubject] = useState("");
+  // Email layout + optional image (0107). "Title · Body" matches what the preview always showed.
+  const [visual, setVisual] = useState<CampaignVisual>({ layout: "title_body" });
   const [body, setBody] = useState("");
   const [prompt, setPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
@@ -86,6 +92,32 @@ export function AdminEmail() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const isTg = channel === "telegram";
+
+  // Test send: defaults to the signed-in admin's own inbox and first name.
+  const { user, profile } = useAuth();
+  const [testTo, setTestTo] = useState("");
+  const [testName, setTestName] = useState("");
+  const [testing, setTesting] = useState(false);
+  useEffect(() => {
+    if (user?.email) setTestTo((v) => v || user.email!);
+    if (profile?.displayName) setTestName((v) => v || profile.displayName!.split(/\s+/)[0]);
+  }, [user?.email, profile?.displayName]);
+  const sendTest = async () => {
+    const to = testTo.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean);
+    if (!subject.trim() || !body.trim()) return toast("Add a subject and a message first.");
+    if (!to.length) return toast("Add an email address to send the test to.");
+    const v = cleanVisual();
+    if (typeof v === "string") return toast(v);
+    setTesting(true);
+    try {
+      await adminEmailTest({ subject, body, to, name: testName.trim() || undefined, visual: v });
+      toast.success(`Test sent to ${to.join(", ")} — check the inbox (and spam) for "[TEST] ${subject.trim()}".`);
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : "Couldn't send the test.");
+    } finally {
+      setTesting(false);
+    }
+  };
 
   const loadCampaigns = () => {
     supabase.from("email_campaigns").select("id, subject, audience, channel, recipient_count, sent_count, created_at").order("created_at", { ascending: false }).limit(30).then(({ data }) => setCampaigns((data as CampaignRow[]) ?? []));
@@ -160,6 +192,19 @@ export function AdminEmail() {
     finally { setPreviewing(false); }
   };
 
+  /** The visual to send, or an error message. An image layout without an image is sent without one. */
+  const cleanVisual = (): CampaignVisual | string => {
+    const link = (visual.imageLink ?? "").trim();
+    if (link && !httpsUrl(link)) return "The image link must be a full address starting with https://";
+    const withImg = layoutHasImage(visual.layout) && !!visual.imageUrl;
+    return {
+      layout: layoutHasImage(visual.layout) && !visual.imageUrl ? "title_body" : visual.layout,
+      imageUrl: withImg ? visual.imageUrl : null,
+      imageLink: withImg && link ? link : null,
+      imageAlt: withImg ? (visual.imageAlt ?? "").trim() || null : null,
+    };
+  };
+
   const doSend = async () => {
     if (!subject.trim() || !body.trim()) return toast("Add a subject and a message.");
     const count = preview?.count;
@@ -168,12 +213,15 @@ export function AdminEmail() {
     const msg = count != null
       ? `Send "${subject.trim()}" to ${count} ${who}${count === 1 ? "" : "s"}? This can't be undone.`
       : `Send "${subject.trim()}" ${target}? This can't be undone.`;
+    const v = cleanVisual();
+    if (!isTg && typeof v === "string") return toast(v);
+    if (!isTg && layoutHasImage(visual.layout) && !visual.imageUrl && !window.confirm("This layout has no image chosen — send it as Title · Body?")) return;
     if (!window.confirm(msg)) return;
     setSending(true);
     try {
-      const r = await adminEmailSend({ audience, subject: subject.trim(), body: body.trim(), channel });
+      const r = await adminEmailSend({ audience, subject: subject.trim(), body: body.trim(), channel, ...(!isTg && typeof v !== "string" ? { visual: v } : {}) });
       toast.success(`Sent to ${r.sent} of ${r.total}${r.failed ? ` (${r.failed} failed)` : ""}.`);
-      setSubject(""); setBody(""); setPrompt(""); setPreview(null);
+      setSubject(""); setBody(""); setPrompt(""); setPreview(null); setVisual({ layout: "title_body" });
       loadCampaigns();
     } catch (e) {
       toast(e instanceof ApiError || e instanceof Error ? e.message : "Couldn't send.");
@@ -250,6 +298,13 @@ export function AdminEmail() {
             <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder={isTg ? "New stays just landed on Revamp" : "A little something from Revamp…"} className="h-10 rounded-none" />
           </div>
 
+          {!isTg && (
+            <div className="grid gap-1.5">
+              <Label className="text-xs font-semibold">Visual</Label>
+              <CampaignVisualPicker value={visual} onChange={setVisual} />
+            </div>
+          )}
+
           {/* AI draft */}
           <div className="grid gap-1.5 border border-basalt/10 bg-chalk/50 p-3">
             <Label className="flex items-center gap-1.5 text-xs font-semibold text-basalt/70"><Sparkles className="h-3.5 w-3.5 text-apricot" /> Draft with AI</Label>
@@ -266,6 +321,28 @@ export function AdminEmail() {
             </div>
             <Textarea ref={bodyRef} rows={12} value={body} onChange={(e) => setBody(e.target.value)} placeholder={"Hi {first_name},\n\nWe just added new stays in Dilijan…\n\n[Explore now](https://revampvacations.com/explore)"} className="rounded-none text-base" />
           </div>
+
+          {!isTg && (
+            <div className="grid gap-3 border border-basalt/10 bg-chalk/50 p-4">
+              <div>
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-basalt/70"><Mail className="h-3.5 w-3.5 text-apricot" /> Send a test first</p>
+                <p className="mt-0.5 text-xs text-basalt/50">Exactly what recipients get, with <span className="font-semibold">[TEST]</span> in the subject. Not recorded as a campaign.</p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_160px_auto]">
+                <div className="grid gap-1">
+                  <Label htmlFor="test-to" className="text-[11px] font-semibold text-basalt/55">Send to (up to 5, comma-separated)</Label>
+                  <Input id="test-to" type="text" inputMode="email" value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="you@revampvacations.com" className="h-10 rounded-none" />
+                </div>
+                <div className="grid gap-1">
+                  <Label htmlFor="test-name" className="text-[11px] font-semibold text-basalt/55">Name for {"{first_name}"}</Label>
+                  <Input id="test-name" value={testName} onChange={(e) => setTestName(e.target.value)} placeholder="Anna" className="h-10 rounded-none" />
+                </div>
+                <Button type="button" variant="outline" onClick={sendTest} disabled={testing} className="h-10 self-end rounded-none border-basalt/25 bg-paper">
+                  {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Send className="mr-1.5 h-3.5 w-3.5" /> Send test</>}
+                </Button>
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-3">
             <Button onClick={doSend} disabled={sending} className="rounded-none bg-apricot text-white hover:bg-apricot/90">{sending ? "Sending…" : isTg ? "Send Telegram broadcast" : "Send email"}</Button>
@@ -290,12 +367,25 @@ export function AdminEmail() {
             <div className="overflow-hidden rounded-[14px] border border-basalt/12 bg-[#F5F2EC] p-4">
               <div className="mx-auto max-w-[600px] overflow-hidden rounded-[14px] border border-basalt/10 bg-white">
                 <div className="border-b border-basalt/8 px-6 py-4"><span className="font-display text-xl">revamp.</span></div>
-                <div className="px-6 py-4">
-                  <p className="font-display text-2xl leading-tight text-basalt">{previewText(subject) || "Subject"}</p>
-                  <div
-                    className="prose-blog mt-3 text-sm leading-6 text-basalt/80 [&_a]:text-apricot [&_a]:underline"
-                    dangerouslySetInnerHTML={{ __html: body.trim() ? renderMarkdown(previewText(body)) : "<p style='color:#9a958c'>The body text will be displayed here.</p>" }}
-                  />
+                <div className="grid gap-3 px-6 py-4">
+                  {/* Same order as the email the server builds (shared/campaignVisual.ts). */}
+                  {layoutBlocks(visual.layout).map((b) =>
+                    b === "title" ? (
+                      <p key="t" className="font-display text-2xl leading-tight text-basalt">{previewText(subject) || "Subject"}</p>
+                    ) : b === "image" ? (
+                      visual.imageUrl ? (
+                        <img key="i" src={displaySrc(visual.imageUrl)} alt={visual.imageAlt ?? ""} className="w-full rounded-[10px]" />
+                      ) : (
+                        <div key="i" className="grid aspect-[2/1] w-full place-items-center rounded-[10px] border border-dashed border-basalt/20 bg-chalk text-xs text-basalt/45">Your image · 1200 × 600 px</div>
+                      )
+                    ) : (
+                      <div
+                        key="b"
+                        className="prose-blog text-sm leading-6 text-basalt/80 [&_a]:text-apricot [&_a]:underline"
+                        dangerouslySetInnerHTML={{ __html: body.trim() ? renderMarkdown(previewText(body)) : "<p style='color:#9a958c'>The body text will be displayed here.</p>" }}
+                      />
+                    ),
+                  )}
                 </div>
                 <div className="border-t border-basalt/8 px-6 py-3 text-[11px] text-basalt/45">
                   Revamp Vacations · revampvacations.com · Sent {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}<br />Don't want these emails? <span className="underline">Unsubscribe</span>.

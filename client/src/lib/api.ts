@@ -5,6 +5,7 @@
  * that listings read/write straight from Supabase under Row-Level Security
  * (see client/src/contexts/ListingsContext.tsx).
  */
+import type { CampaignVisual } from "@shared/campaignVisual";
 import { supabase } from "@/lib/supabase";
 
 export class ApiError extends Error {}
@@ -554,11 +555,23 @@ export async function adminEmailGenerate(prompt: string): Promise<{ body: string
 }
 
 /** Admin: send a composed email or Telegram broadcast to an audience segment. */
-export async function adminEmailSend(input: { audience: string; subject: string; body: string; channel?: "email" | "telegram" }): Promise<{ total: number; sent: number; failed: number }> {
+export async function adminEmailSend(input: { audience: string; subject: string; body: string; channel?: "email" | "telegram"; visual?: CampaignVisual }): Promise<{ total: number; sent: number; failed: number }> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new ApiError("Sign in.");
   return request<{ total: number; sent: number; failed: number }>("/api/admin-email/send", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(input),
+  });
+}
+
+/** Admin: send the composed campaign email to test addresses ("[TEST]" subject, not recorded). */
+export async function adminEmailTest(input: { subject: string; body: string; to: string[]; name?: string; visual?: CampaignVisual }): Promise<{ sent: number; failed: number }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<{ sent: number; failed: number }>("/api/admin-email/test", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify(input),
