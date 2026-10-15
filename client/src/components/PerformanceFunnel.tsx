@@ -31,10 +31,46 @@ import {
 } from "@/lib/funnel";
 
 type Row = { listing_id: string; day: string; kind: string; count: number };
-type BookingRow = { id: string; listing_id: string; created_at: string; status: string; provider: string | null; booking_group_id?: string | null };
+export type FunnelBooking = { id: string; listing_id: string; created_at: string; status: string; provider: string | null; booking_group_id?: string | null };
 
-const BOOKABLE = new Set(["stay", "tour", "experience"]);
-const ACTION_KINDS = new Set(["directions", "website", "call", "menu"]);
+export const BOOKABLE = new Set(["stay", "tour", "experience"]);
+export const ACTION_KINDS = new Set(["directions", "website", "call", "menu"]);
+
+/** Confirmed/completed bookings created since `since` (RLS: an operator gets their own listings', an admin all). null while loading. */
+export function useFunnelBookings(since: string): FunnelBooking[] | null {
+  const [bookings, setBookings] = useState<FunnelBooking[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    setBookings(null);
+    const load = async () => {
+      const base = "id, listing_id, created_at, status, provider";
+      const query = (cols: string) =>
+        supabase.from("bookings").select(cols).gte("created_at", `${since}T00:00:00Z`).in("status", ["confirmed", "completed"]).limit(10000);
+      // booking_group_id is 0097; without it every booking counts on its own.
+      let res = await query(`${base}, booking_group_id`);
+      if (res.error) res = await query(base);
+      if (res.error) console.error("[funnel] bookings load failed", res.error.message);
+      if (live) setBookings((res.data ?? []) as unknown as FunnelBooking[]);
+    };
+    void load();
+    return () => {
+      live = false;
+    };
+  }, [since]);
+  return bookings;
+}
+
+/** Bookings that count: made on Revamp (not entered by hand), a room group once. */
+export function countedBookings(bookings: FunnelBooking[]): FunnelBooking[] {
+  const seen = new Set<string>();
+  return bookings.filter((b) => {
+    if (b.provider === "direct") return false;
+    const key = b.booking_group_id || b.id;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 const STAGES: StageKey[] = ["impressions", "ctr", "visits", "conversion", "outcome"];
 
@@ -86,6 +122,8 @@ export function PerformanceFunnel({
   listingMeta,
   ids,
   days,
+  bookings,
+  focus,
 }: {
   /** Engagement rows for the period (any listings — filtered here by `ids`). */
   rows: Row[];
@@ -94,31 +132,12 @@ export function PerformanceFunnel({
   ids: Set<string>;
   /** The period, oldest first (ISO days). */
   days: string[];
+  /** From useFunnelBookings (null while loading). */
+  bookings: FunnelBooking[] | null;
+  /** When the graph is narrowed to one listing from the table below. */
+  focus?: { title: string; onClear: () => void };
 }) {
   const [stage, setStage] = useState<StageKey>("impressions");
-  const [bookings, setBookings] = useState<BookingRow[] | null>(null);
-  const since = days[0];
-
-  // Bookings made in the period (RLS: an operator gets their own listings', an admin all).
-  useEffect(() => {
-    let live = true;
-    setBookings(null);
-    const load = async () => {
-      const base = "id, listing_id, created_at, status, provider";
-      const query = (cols: string) =>
-        supabase.from("bookings").select(cols).gte("created_at", `${since}T00:00:00Z`).in("status", ["confirmed", "completed"]).limit(10000);
-      // booking_group_id is 0097; without it every booking counts on its own.
-      let res = await query(`${base}, booking_group_id`);
-      if (res.error) res = await query(base);
-      if (res.error) console.error("[funnel] bookings load failed", res.error.message);
-      if (live) setBookings((res.data ?? []) as unknown as BookingRow[]);
-    };
-    void load();
-    return () => {
-      live = false;
-    };
-  }, [since]);
-
   // Bookable listings get the bookings funnel; only when the filter selects
   // nothing bookable (restaurants / places) does it switch to actions.
   const { scopeIds, actions, leftOut } = useMemo(() => {
@@ -152,14 +171,7 @@ export function PerformanceFunnel({
       else if (actions && ACTION_KINDS.has(r.kind)) at(r.day).outcome += r.count;
     }
     if (!actions && bookings) {
-      const seen = new Set<string>();
-      for (const b of bookings) {
-        if (!scopeIds.has(b.listing_id) || b.provider === "direct") continue;
-        const key = b.booking_group_id || b.id;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        at(b.created_at.slice(0, 10)).outcome += 1;
-      }
+      for (const b of countedBookings(bookings)) if (scopeIds.has(b.listing_id)) at(b.created_at.slice(0, 10)).outcome += 1;
     }
     return m;
   }, [rows, scopeIds, actions, bookings]);
@@ -197,6 +209,14 @@ export function PerformanceFunnel({
           <h2 className="text-base font-semibold text-basalt">Listing performance</h2>
           <p className="text-xs tabular-nums text-basalt/50">{period}</p>
         </div>
+        {focus && (
+          <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+            <span className="rounded-full bg-apricot/10 px-2.5 py-0.5 font-semibold text-basalt">{focus.title}</span>
+            <button type="button" onClick={focus.onClear} className="text-xs font-semibold text-apricot hover:underline">
+              Show all listings
+            </button>
+          </p>
+        )}
         <p className="mt-1 text-sm text-basalt/60">
           {actions
             ? "From seeing the card in search to an action — directions, website, call or menu."

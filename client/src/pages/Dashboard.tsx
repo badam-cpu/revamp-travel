@@ -1796,7 +1796,7 @@ const CALENDAR_VIEWS = [
 type CalendarView = (typeof CALENDAR_VIEWS)[number]["key"];
 
 const ANALYTICS_TABS = [
-  { key: "engagement", label: "Engagement", sub: "How travellers engage with your listings. Impressions: a card was seen; views: the listing page was opened." },
+  { key: "engagement", label: "Performance", sub: "How travellers find and book your listings: seen, clicked, visited, booked." },
   { key: "bookings", label: "Bookings & revenue", sub: "Confirmed bookings and revenue over the last 12 months." },
   { key: "events", label: "Events & pricing", sub: "Holidays, festivals, concerts and matches found automatically from public sources — and how your prices compare on those dates." },
   { key: "response", label: "Response times", sub: "How fast you reply to guest inquiries — fast replies win bookings." },
