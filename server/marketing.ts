@@ -9,7 +9,7 @@
  * without an account), or everyone (the union). Admins are never marketed to.
  */
 import { type CampaignVisual, httpsUrl, layoutBlocks, layoutHasImage } from "../shared/campaignVisual.js";
-import { buttonsToText, renderCampaignBody } from "../shared/campaignBlocks.js";
+import { buttonsToText, markdownToTelegramText, renderCampaignBody } from "../shared/campaignBlocks.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
@@ -364,19 +364,8 @@ export function telegramBroadcastConfigured(): boolean {
  * heading/emphasis markers. Capped at Telegram's 4096-char message limit.
  */
 export function markdownToTelegram(src: string): string {
-  const text = buttonsToText(src || "")
-    .replace(/\r\n?/g, "\n")
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")               // images: drop
-    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, "$1 ($2)")   // links: label (url)
-    .replace(/^#{1,6}\s*/gm, "")                          // headings
-    .replace(/^>\s?/gm, "")                               // blockquotes
-    .replace(/\*\*([^*]+)\*\*/g, "$1")                   // bold
-    .replace(/(^|[^*])\*([^*]+)\*/g, "$1$2")            // italic *
-    .replace(/(^|[^_])_([^_]+)_/g, "$1$2")               // italic _
-    .replace(/`{1,3}([^`]*)`{1,3}/g, "$1")               // code
-    .replace(/^\s*[-*]\s+/gm, "• ")                       // bullets
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  // Shared with the composer preview (shared/campaignBlocks.ts).
+  const text = markdownToTelegramText(src);
   return text.length > 4096 ? text.slice(0, 4095) + "…" : text;
 }
 
@@ -395,15 +384,26 @@ export async function resolveTelegramRecipients(admin: SupabaseClient): Promise<
 /** Send a Telegram broadcast (subject as a first line + the plain-text body). */
 export async function sendTelegramCampaign(
   admin: SupabaseClient,
-  opts: { subject: string; markdown: string; siteUrl?: string },
+  opts: {
+    subject: string;
+    markdown: string;
+    siteUrl?: string;
+    /** Test send: these chats instead of everyone who linked the bot. */
+    recipients?: { chatId: string; name: string | null }[];
+    /** e.g. "[TEST] " on the first line. */
+    prefix?: string;
+  },
 ): Promise<{ sent: number; failed: number; total: number }> {
-  const recipients = await resolveTelegramRecipients(admin);
+  const recipients = opts.recipients ?? (await resolveTelegramRecipients(admin));
   let sent = 0;
   let failed = 0;
-  const taggedMd = tagMarkdownLinks(opts.markdown, { source: "telegram", medium: "broadcast", campaign: campaignSlug(opts.subject) }, hostOf(opts.siteUrl || ""));
+  const tgUtm = { source: "telegram", medium: "broadcast", campaign: campaignSlug(opts.subject) };
+  const siteHost = hostOf(opts.siteUrl || "");
+  // Button lines → "Label: url" with the same tracking as ordinary links.
+  const taggedMd = tagMarkdownLinks(buttonsToText(opts.markdown, (u) => addUtm(u, tgUtm, siteHost)), tgUtm, siteHost);
   const bodyPlain = markdownToTelegram(taggedMd);
   for (const r of recipients) {
-    const subject = personalize(opts.subject, { email: "", name: r.name }).trim();
+    const subject = `${opts.prefix ?? ""}${personalize(opts.subject, { email: "", name: r.name }).trim()}`.trim();
     const body = personalize(bodyPlain, { email: "", name: r.name });
     const text = subject ? `${subject}\n\n${body}` : body;
     const res = await sendTelegram(r.chatId, text.slice(0, 4096));

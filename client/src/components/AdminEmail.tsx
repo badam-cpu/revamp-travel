@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { Sparkles, Loader2, Upload, Mail, Send, Eye, X, Monitor, Smartphone, CheckCircle2, AlertCircle, ChevronDown, MousePointerClick } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { supabase } from "@/lib/supabase";
-import { adminEmailPreview, adminEmailSend, adminEmailGenerate, adminEmailImportContacts, adminEmailTest, ApiError } from "@/lib/api";
+import { adminEmailPreview, adminEmailSend, adminEmailGenerate, adminEmailImportContacts, adminEmailTest, adminTelegramTest, ApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { CampaignVisualPicker } from "@/components/CampaignVisualPicker";
 import { displaySrc } from "@/lib/campaignImage";
@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { buttonLine, buttonsToText, renderCampaignBody, type ButtonStyle } from "@shared/campaignBlocks";
+import { buttonLine, markdownToTelegramText, renderCampaignBody, type ButtonStyle } from "@shared/campaignBlocks";
 import { toast } from "sonner";
 
 type Channel = "email" | "telegram";
@@ -61,21 +61,8 @@ interface CampaignRow { id: string; subject: string; audience: string; channel?:
 
 const previewText = (t: string) => t.replace(/\{\s*(?:first_name|name|guest_first_name)\s*\}/gi, "Anna");
 
-/** Client mirror of server markdownToTelegram: keep line breaks, links as "label (url)". */
-const mdToTelegram = (src: string) =>
-  buttonsToText(src || "")
-    .replace(/\r\n?/g, "\n")
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
-    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, "$1 ($2)")
-    .replace(/^#{1,6}\s*/gm, "")
-    .replace(/^>\s?/gm, "")
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/(^|[^*])\*([^*]+)\*/g, "$1$2")
-    .replace(/(^|[^_])_([^_]+)_/g, "$1$2")
-    .replace(/`{1,3}([^`]*)`{1,3}/g, "$1")
-    .replace(/^\s*[-*]\s+/gm, "• ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+/** Same conversion the server sends (shared/campaignBlocks.ts). */
+const mdToTelegram = (src: string) => markdownToTelegramText(src);
 
 export function AdminEmail() {
   const [tab, setTab] = useState<"compose" | "sent">("compose");
@@ -123,6 +110,8 @@ export function AdminEmail() {
     supabase.from("email_contacts").select("email", { count: "exact", head: true }).then(({ count }) => setContactCount(count ?? 0));
   };
   useEffect(() => { loadCampaigns(); loadContactCount(); }, []);
+
+  useEffect(() => setTestResult(null), [channel]);
 
   // Live recipient count — no button to press.
   useEffect(() => {
@@ -247,6 +236,25 @@ export function AdminEmail() {
       });
     } catch (e) {
       setTestResult({ ok: false, text: e instanceof ApiError ? e.message : "Couldn't send the test." });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const sendTelegramTest = async () => {
+    if (!subject.trim() || !body.trim()) return setTestResult({ ok: false, text: "Add a first line and a message first (step 2)." });
+    setTesting(true);
+    setTestResult(null);
+    try {
+      await adminTelegramTest({ subject, body });
+      const at = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+      setTestResult({ ok: true, text: `Sent at ${at} to your Telegram — look for "[TEST] ${subject.trim()}" from the Revamp bot.` });
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : "Couldn't send the test.";
+      setTestResult({
+        ok: false,
+        text: msg === "not_linked" ? "NOT_LINKED" : msg,
+      });
     } finally {
       setTesting(false);
     }
@@ -477,6 +485,33 @@ export function AdminEmail() {
                     <p role="status" className={cn("flex items-start gap-2 text-sm leading-6", testResult.ok ? "text-basalt/75" : "text-apricot")}>
                       {testResult.ok ? <CheckCircle2 className="mt-1 h-4 w-4 shrink-0" /> : <AlertCircle className="mt-1 h-4 w-4 shrink-0" />}
                       <span>{testResult.text}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {isTg && (
+                <div className="grid gap-3 border border-basalt/10 bg-chalk/40 p-4">
+                  <div>
+                    <p className="text-sm font-semibold text-basalt">Send a test</p>
+                    <p className="text-xs text-basalt/55">Sends exactly this message to your own Telegram, with [TEST] on the first line. Not recorded as a campaign.</p>
+                  </div>
+                  <div>
+                    <Button type="button" variant="outline" onClick={sendTelegramTest} disabled={testing} className="h-10 rounded-none border-basalt/25 bg-paper">
+                      {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Send className="mr-1.5 h-3.5 w-3.5" /> Send test to my Telegram</>}
+                    </Button>
+                  </div>
+                  {testResult && (
+                    <p role="status" className={cn("flex items-start gap-2 text-sm leading-6", testResult.ok ? "text-basalt/75" : "text-apricot")}>
+                      {testResult.ok ? <CheckCircle2 className="mt-1 h-4 w-4 shrink-0" /> : <AlertCircle className="mt-1 h-4 w-4 shrink-0" />}
+                      {testResult.text === "NOT_LINKED" ? (
+                        <span>
+                          Your Telegram isn't linked to the Revamp bot yet. Link it in{" "}
+                          <a href="/account?tab=security" target="_blank" rel="noreferrer" className="font-semibold underline">Account → Security</a>, then try again.
+                        </span>
+                      ) : (
+                        <span>{testResult.text}</span>
+                      )}
                     </p>
                   )}
                 </div>

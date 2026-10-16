@@ -3945,6 +3945,38 @@ export function registerApiRoutes(app: Express) {
     res.json({ sent, failed, from: campaignSender().from ?? null });
   });
 
+  // POST /api/admin-telegram/test — admin-only: send the composed Telegram
+  // broadcast to the admin's OWN linked chat (the same text everyone gets,
+  // "[TEST] " on the first line). Not recorded as a campaign.
+  app.post("/api/admin-telegram/test", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: me } = await admin.from("profiles").select("role, display_name").eq("id", userId).maybeSingle();
+    if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
+    if (rateLimited(giftPurchaseHits, `tgtest:${userId}`, 10)) return res.status(429).json({ error: "That's a lot of tests — wait a minute." });
+    const parsed = z
+      .object({ subject: z.string().trim().min(1, "Add a first line first.").max(200), body: z.string().trim().min(1, "Write the message first.").max(20000) })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
+    if (!telegramBroadcastConfigured()) return res.status(503).json({ error: "Telegram isn't configured (set TELEGRAM_BOT_TOKEN)." });
+    const { data: link } = await admin.from("telegram_links").select("chat_id").eq("user_id", userId).maybeSingle();
+    if (!link?.chat_id) return res.status(409).json({ error: "not_linked" });
+    const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
+    const r = await sendTelegramCampaign(admin, {
+      subject: parsed.data.subject,
+      markdown: parsed.data.body,
+      siteUrl: site,
+      recipients: [{ chatId: link.chat_id, name: (me as { display_name?: string | null }).display_name ?? null }],
+      prefix: "[TEST] ",
+    });
+    if (!r.sent) return res.status(502).json({ error: "Telegram didn't accept the test — try again in a moment." });
+    res.json({ sent: r.sent });
+  });
+
   // POST /api/admin-email/send — admin-only: send a composed email to an audience.
   app.post("/api/admin-email/send", async (req: Request, res: Response) => {
     const authHeader = req.get("authorization") || "";

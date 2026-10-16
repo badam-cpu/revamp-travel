@@ -62,13 +62,43 @@ export function renderCampaignBody(md: string, mapUrl: (u: string) => string = (
   return out.join("\n");
 }
 
-/** For plain-text channels (Telegram): a button line becomes "Label: url". */
-export function buttonsToText(md: string): string {
+/** For plain-text channels (Telegram): a button line becomes "Label: url" (`mapUrl` adds tracking). */
+export function buttonsToText(md: string, mapUrl: (u: string) => string = (u) => u): string {
   return (md || "")
     .split(/\r?\n/)
     .map((line) => {
       const m = line.match(BUTTON_LINE);
-      return m ? `${m[2]}: ${m[3]}` : line;
+      return m ? `${m[2]}: ${mapUrl(m[3])}` : line;
     })
     .join("\n");
 }
+
+/**
+ * Campaign Markdown → Telegram plain text (shared by the composer preview and
+ * the server send). Emphasis markers are only removed when they wrap words —
+ * never inside a word, a URL or a merge tag — so "{first_name}" and links like
+ * "?utm_source=telegram&utm_medium=…" survive intact (they didn't before
+ * 2026-10-16: the old rule stripped every pair of underscores).
+ */
+export function markdownToTelegramText(src: string, mapUrl: (u: string) => string = (u) => u): string {
+  // Set aside URLs and merge tags so the emphasis rules can't touch them.
+  const kept: string[] = [];
+  const keep = (s: string) => `\u0000${kept.push(s) - 1}\u0000`;
+  let t = buttonsToText(src || "", mapUrl).replace(/\r\n?/g, "\n");
+  t = t.replace(/!\[[^\]]*\]\([^)]*\)/g, ""); // images: drop
+  t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, label, url) => `${label} (${keep(url)})`); // links: label (url)
+  t = t.replace(/https?:\/\/[^\s)]+/g, (u) => keep(u)); // bare URLs (incl. button "Label: url")
+  t = t.replace(/\{\s*[a-z_]+\s*\}/gi, (tag) => keep(tag)); // {first_name}
+  t = t
+    .replace(/^#{1,6}\s*/gm, "") // headings
+    .replace(/^>\s?/gm, "") // blockquotes
+    .replace(/\*\*([^*\n]+)\*\*/g, "$1") // bold
+    .replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s.,!?;:)]|$)/gm, "$1$2") // *italic* around words
+    .replace(/(^|[\s(])_([^_\n]+)_(?=[\s.,!?;:)]|$)/gm, "$1$2") // _italic_ around words
+    .replace(/`{1,3}([^`]*)`{1,3}/g, "$1") // code
+    .replace(/^\s*[-*]\s+/gm, "• ") // bullets
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return t.replace(/\u0000(\d+)\u0000/g, (_m, i) => kept[Number(i)]);
+}
+
