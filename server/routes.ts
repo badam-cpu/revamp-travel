@@ -53,6 +53,8 @@ import { isAllowedGiftAmount } from "../shared/giftcards.js";
 import { bookingCredit, returnCreditForBooking, creditBalanceFor, reviewCredit } from "./credit.js";
 import { redeemForCheckout, releaseRedeemed, redeemedColumns, redeemedTotal, coveredProvider, noteRedeemed } from "./redemption.js";
 import { payoutState } from "../shared/payouts.js";
+import { loadInvoiceSource, savedInvoice, invoiceContext, canManageInvoice, saveInvoice, invoiceForToken, invoiceLinkFor } from "./invoices.js";
+import { isInvoiceable, INVOICE_LIMITS } from "../shared/invoice.js";
 import { sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, sendJourneyEmail, type BookingEmailInfo } from "./email.js";
 import { notifyBooking } from "./notify.js";
 import { telegramConfigured, telegramConnectLink, telegramBotUsername, setTelegramWebhook, sendTelegram } from "./telegram.js";
@@ -454,6 +456,8 @@ const voucherPurchaseHits = new Map<string, number[]>();
 const journeySendHits = new Map<string, number[]>();
 const tripHits = new Map<string, number[]>();
 const tripSurveyHits = new Map<string, number[]>();
+const invoiceHits = new Map<string, number[]>();
+const invoiceSendHits = new Map<string, number[]>();
 function rateLimited(map: Map<string, number[]>, key: string, max: number, windowMs = 60_000): boolean {
   const now = Date.now();
   const hits = (map.get(key) ?? []).filter((t) => t > now - windowMs);
@@ -4593,6 +4597,119 @@ export function registerApiRoutes(app: Express) {
     } catch (err) {
       console.error("[trip]", err);
       res.status(503).json({ error: "This page isn't available right now. Please try again shortly." });
+    }
+  });
+
+  // ── Guest invoices (0108, server/invoices.ts) ─────────────────────────────
+  // The operator (or an admin) opens a booking → Invoice: /draft returns the
+  // booking facts + seller defaults + any saved invoice so the editor can draw
+  // a live preview with shared/invoice.ts; /save stores the edits (amounts are
+  // never accepted — they come from the booking) and optionally emails it.
+  const invoiceEditsSchema = z.object({
+    sendTo: z.string().trim().max(INVOICE_LIMITS.short).optional(),
+    billTo: z
+      .object({
+        name: z.string().max(INVOICE_LIMITS.short).optional(),
+        company: z.string().max(INVOICE_LIMITS.short).optional(),
+        taxId: z.string().max(INVOICE_LIMITS.short).optional(),
+        address: z.string().max(INVOICE_LIMITS.address).optional(),
+      })
+      .optional(),
+    issuedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    dueOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    notes: z.string().max(INVOICE_LIMITS.notes).optional(),
+    lines: z.record(z.string().max(80), z.string().max(INVOICE_LIMITS.line)).optional(),
+    seller: z
+      .object({
+        name: z.string().max(INVOICE_LIMITS.short).optional(),
+        taxId: z.string().max(INVOICE_LIMITS.short).optional(),
+        address: z.string().max(INVOICE_LIMITS.address).optional(),
+        email: z.string().max(INVOICE_LIMITS.short).optional(),
+        phone: z.string().max(INVOICE_LIMITS.short).optional(),
+        bankDetails: z.string().max(INVOICE_LIMITS.bank).optional(),
+      })
+      .optional(),
+  });
+
+  const invoiceAuth = async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId) {
+      res.status(401).json({ error: "Sign in as an operator." });
+      return null;
+    }
+    const admin = supabaseAdmin();
+    if (!admin) {
+      res.status(503).json({ error: "Invoices aren't available right now." });
+      return null;
+    }
+    const bookingId = typeof req.body?.bookingId === "string" ? req.body.bookingId : "";
+    if (!/^[0-9a-f-]{36}$/i.test(bookingId)) {
+      res.status(400).json({ error: "Booking not found." });
+      return null;
+    }
+    const src = await loadInvoiceSource(admin, bookingId);
+    if (!src) {
+      res.status(404).json({ error: "Booking not found." });
+      return null;
+    }
+    if (!(await canManageInvoice(admin, src, userId))) {
+      res.status(403).json({ error: "That booking isn't on your listing." });
+      return null;
+    }
+    return { admin, src, userId };
+  };
+
+  app.post("/api/invoice/draft", async (req: Request, res: Response) => {
+    try {
+      const ctx = await invoiceAuth(req, res);
+      if (!ctx) return;
+      const { admin, src } = ctx;
+      const saved = await savedInvoice(admin, src.facts.id);
+      res.json({
+        facts: src.facts,
+        context: invoiceContext(src, saved?.number ?? null),
+        edits: saved?.edits ?? {},
+        saved: saved ? { number: saved.number, url: invoiceLinkFor(saved.token), sentTo: saved.sent_to, sentAt: saved.sent_at } : null,
+        invoiceable: isInvoiceable(src.facts.status),
+      });
+    } catch (err) {
+      console.error("[invoice/draft]", err);
+      res.status(503).json({ error: "Invoices aren't available right now. Please try again shortly." });
+    }
+  });
+
+  app.post("/api/invoice/save", async (req: Request, res: Response) => {
+    const parsed = z.object({ bookingId: z.string(), edits: invoiceEditsSchema, send: z.boolean().default(false), saveSellerDefaults: z.boolean().default(false) }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Some invoice fields are too long — shorten them and try again." });
+    try {
+      const ctx = await invoiceAuth(req, res);
+      if (!ctx) return;
+      if (parsed.data.send && rateLimited(invoiceSendHits, ctx.userId, 10)) return res.status(429).json({ error: "Too many invoices sent in a minute — try again shortly." });
+      const r = await saveInvoice(ctx.admin, ctx.src, ctx.userId, parsed.data.edits, { send: parsed.data.send, saveSellerDefaults: parsed.data.saveSellerDefaults });
+      if (!r.ok) return res.status(r.status).json({ error: r.error });
+      res.json({ number: r.number, url: r.url, sent: r.sent, sentTo: r.sentTo });
+    } catch (err) {
+      console.error("[invoice/save]", err);
+      res.status(503).json({ error: "Couldn't save the invoice right now. Please try again." });
+    }
+  });
+
+  // The guest's private invoice page (/invoice/:token) — the token is the credential.
+  app.get("/api/invoice", async (req: Request, res: Response) => {
+    if (rateLimited(invoiceHits, req.ip || "anon", 60)) return res.status(429).json({ error: "Too many requests — try again in a minute." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "This invoice isn't available right now." });
+    try {
+      const model = await invoiceForToken(admin, String(req.query.token ?? ""));
+      if (!model) return res.status(404).json({ error: "We couldn't find this invoice. Check the link in your email." });
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("X-Robots-Tag", "noindex, nofollow");
+      res.json({ invoice: model });
+    } catch (err) {
+      console.error("[invoice]", err);
+      res.status(503).json({ error: "This invoice isn't available right now. Please try again shortly." });
     }
   });
 

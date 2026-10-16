@@ -6,6 +6,7 @@
  * (see client/src/contexts/ListingsContext.tsx).
  */
 import type { CampaignVisual } from "@shared/campaignVisual";
+import type { InvoiceBookingFacts, InvoiceContext, InvoiceEdits, InvoiceModel } from "@shared/invoice";
 import { supabase } from "@/lib/supabase";
 
 export class ApiError extends Error {}
@@ -1084,6 +1085,21 @@ export interface TripPageData {
 export function getTripPage(token: string): Promise<TripPageData> {
   return request<TripPageData>(`/api/trip?token=${encodeURIComponent(token)}`);
 }
+// ── Guest invoices (0108) ──
+export interface InvoiceDraft {
+  facts: InvoiceBookingFacts;
+  context: InvoiceContext;
+  edits: InvoiceEdits;
+  saved: { number: string; url: string; sentTo: string | null; sentAt: string | null } | null;
+  invoiceable: boolean;
+}
+export const getInvoiceDraft = (bookingId: string) => authed<InvoiceDraft>("/api/invoice/draft", { method: "POST", body: { bookingId } });
+export const saveInvoice = (bookingId: string, edits: InvoiceEdits, opts: { send: boolean; saveSellerDefaults: boolean }) =>
+  authed<{ number: string; url: string; sent: boolean; sentTo: string | null }>("/api/invoice/save", { method: "POST", body: { bookingId, edits, ...opts } });
+export function getInvoice(token: string): Promise<{ invoice: InvoiceModel }> {
+  return request<{ invoice: InvoiceModel }>(`/api/invoice?token=${encodeURIComponent(token)}`);
+}
+
 export function submitTripSurvey(token: string, step: string, rating: number, comment: string): Promise<{ ok: boolean; rating: number; low: boolean }> {
   return request("/api/trip/survey", { method: "POST", body: JSON.stringify({ token, step, rating, comment }) });
 }

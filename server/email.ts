@@ -250,6 +250,29 @@ export function sendPaymentLink(to: string, b: BookingEmailInfo, payUrl: string)
   return send(to, `Complete your booking: ${b.listingTitle}`, html);
 }
 
+/**
+ * To the guest: their invoice (server/invoices.ts). The email carries the whole
+ * invoice (shared/invoice.ts, drawn without its own wordmark — this frame has
+ * it) plus a link to the private page where they can save it as a PDF.
+ */
+export function sendInvoiceEmail(
+  to: string,
+  inv: { number: string; sellerName: string; listingTitle: string; totalLabel: string; due: boolean; invoiceHtml: string; url: string; replyTo?: string },
+) {
+  const lead = inv.due
+    ? `Here's your invoice for <strong>${esc(inv.listingTitle)}</strong>. Balance due: <strong>${esc(inv.totalLabel)}</strong>.`
+    : `Here's your invoice for <strong>${esc(inv.listingTitle)}</strong> — paid in full, thank you.`;
+  const html = shell(
+    `Your invoice from ${inv.sellerName}`,
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 16px;">${lead}</p>
+     <p style="margin:0 0 22px;"><a href="${esc(inv.url)}" style="background:#212121;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;">View and download PDF</a></p>
+     <div style="border:1px solid #e4ded3;border-radius:12px;padding:16px 14px;">${inv.invoiceHtml}</div>
+     <p style="font-size:13px;line-height:1.6;color:#6B6357;margin:16px 0 0;">Questions about this invoice? Just reply to this email.</p>`,
+    SITE(),
+  );
+  return send(to, `Invoice ${inv.number} · ${inv.listingTitle}`, html, { replyTo: inv.replyTo });
+}
+
 /** To the buyer: their restaurant voucher is active — the code to show in-venue. */
 export function sendVoucherPurchased(
   to: string,

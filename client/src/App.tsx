@@ -50,6 +50,7 @@ import Events from "./pages/Events";
 import Host from "./pages/Host";
 import RedeemStation from "./pages/RedeemStation";
 import TripPage from "./pages/TripPage";
+import InvoicePage from "./pages/InvoicePage";
 import Plan from "./pages/Plan";
 import Developers from "./pages/Developers";
 import StayHome from "./pages/StayHome";
@@ -164,6 +165,7 @@ function Router() {
       <Route path="/listing/:slug">{(params) => <ListingPage params={params} />}</Route>
       <Route path="/redeem/:token">{(params) => <RedeemStation token={params.token} />}</Route>
       <Route path="/trip/:token">{(params) => <TripPage token={params.token} />}</Route>
+      <Route path="/invoice/:token">{(params) => <InvoicePage token={params.token} />}</Route>
       <Route path="/q/:code">{(params) => <QrLanding code={params.code} />}</Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

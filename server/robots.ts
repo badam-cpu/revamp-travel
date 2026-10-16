@@ -18,6 +18,7 @@ export function robotsTxtHandler(req: Request, res: Response): void {
   lines.push("Disallow: /dashboard");
   lines.push("Disallow: /admin");
   lines.push("Disallow: /trip/");
+  lines.push("Disallow: /invoice/");
   lines.push("");
 
   for (const bot of KNOWN_BOTS) {
@@ -26,6 +27,7 @@ export function robotsTxtHandler(req: Request, res: Response): void {
     lines.push("Disallow: /dashboard");
     lines.push("Disallow: /admin");
     lines.push("Disallow: /trip/");
+    lines.push("Disallow: /invoice/");
     lines.push("");
   }
 

@@ -1,12 +1,13 @@
 /**
  * Booking detail window for operators (opened from the bookings timeline/list).
  * Shows guest contact, dates, guests, the full payment breakdown, add-ons, and
- * a communication History (sent emails etc.) from the booking_events log
+ * an Invoice block (0108, InvoiceDialog), and a communication History (sent
+ * emails etc.) from the booking_events log
  * (supabase/migrations/0032_booking_events.sql). RLS scopes reads to bookings on
  * the operator's own listings.
  */
 import { useEffect, useState } from "react";
-import { ArrowRightLeft, Mail, Phone, User, Pencil } from "lucide-react";
+import { ArrowRightLeft, FileText, Mail, Phone, User, Pencil } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 import { setBookingPayment, cancelBooking, ensureBookingThread, updateBookingContact, sendBookingPaymentLink, getRoomMoveOptions, moveBookingRoom, type RoomMoveOption, userMessage } from "@/lib/api";
@@ -18,6 +19,8 @@ import { toast } from "sonner";
 import type { BookingStatus } from "@shared/bookings";
 import { fetchBookingRoomNames, withRoomName } from "@/lib/roomTypes";
 import { BookingJourney } from "@/components/BookingJourney";
+import { InvoiceDialog } from "@/components/InvoiceDialog";
+import { isInvoiceable } from "@shared/invoice";
 import { roomUnitLabel } from "@shared/rooms";
 
 interface AddonSnap { id: string; name: string; unit?: string; qty: number; amountCents: number; onRequest?: boolean }
@@ -84,6 +87,7 @@ const EVENT_LABEL: Record<string, string> = {
   telegram_sent: "Telegram sent",
   telegram_failed: "⚠️ Telegram failed",
   payment_link_sent: "Payment link sent",
+  invoice_sent: "Invoice sent",
   contact_updated: "Guest contact updated",
   email_failed: "⚠️ Email failed to send",
 };
@@ -120,6 +124,9 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
   const [moveOpen, setMoveOpen] = useState(false);
   const [movePick, setMovePick] = useState<string | null>(null);
   const [moving, setMoving] = useState(false);
+  // Invoice (0108): the saved one, if any, and the editor.
+  const [invoice, setInvoice] = useState<{ number: string; sent_to: string | null; sent_at: string | null } | null>(null);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [, navigate] = useLocation();
 
   useEffect(() => {
@@ -149,6 +156,14 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
             setRoomLabel(names.get(loaded.id) ?? null);
           });
       });
+    // Saved invoice — degrades to "none yet" before migration 0108.
+    setInvoice(null);
+    supabase
+      .from("invoices")
+      .select("number, sent_to, sent_at")
+      .eq("booking_id", bookingId)
+      .maybeSingle()
+      .then(({ data, error }) => setInvoice(error ? null : ((data as { number: string; sent_to: string | null; sent_at: string | null } | null) ?? null)));
     // History log — degrades to empty if the table isn't there yet.
     supabase
       .from("booking_events")
@@ -456,6 +471,27 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
                 )}
               </section>
 
+              {/* Invoice (0108) — every listing type */}
+              <section>
+                <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-basalt/45">Invoice</h3>
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+                  <p className="min-w-0 text-sm text-basalt/60">
+                    {invoice
+                      ? invoice.sent_at
+                        ? `${invoice.number} · sent to ${invoice.sent_to} on ${fmtDate(invoice.sent_at)}`
+                        : `${invoice.number} · saved, not sent yet`
+                      : isInvoiceable(b.status)
+                        ? "Send the guest a branded invoice for this booking."
+                        : "Available once the booking is confirmed or awaiting payment."}
+                  </p>
+                  {(invoice || isInvoiceable(b.status)) && (
+                    <Button variant="outline" onClick={() => setInvoiceOpen(true)} className="h-9 rounded-none border-basalt/20">
+                      <FileText className="mr-1.5 h-4 w-4" aria-hidden /> {invoice ? "View or resend" : "Send invoice"}
+                    </Button>
+                  )}
+                </div>
+              </section>
+
               {/* Customer journey (0098): what was sent / is scheduled, and Send message */}
               <BookingJourney bookingId={b.id} status={b.status} onSent={() => setReloadKey((k) => k + 1)} />
 
@@ -502,6 +538,8 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
             </div>
           </div>
         )}
+        {/* Rendered inside the booking window so Radix treats it as a nested dialog. */}
+        {b && <InvoiceDialog bookingId={b.id} open={invoiceOpen} onClose={() => setInvoiceOpen(false)} onSaved={() => setReloadKey((k) => k + 1)} />}
       </DialogContent>
     </Dialog>
   );

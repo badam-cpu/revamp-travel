@@ -153,6 +153,12 @@
   [headers.values]
     X-Robots-Tag = "noindex, nofollow"
 
+# Guests' private invoice pages (0108) — never indexed.
+[[headers]]
+  for = "/invoice/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
 # PWA: the service worker must not be cached (so updates ship on the next visit),
 # and the manifest needs the right content type.
 [[headers]]
