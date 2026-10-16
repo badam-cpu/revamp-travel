@@ -9,7 +9,7 @@
  * without an account), or everyone (the union). Admins are never marketed to.
  */
 import { type CampaignVisual, httpsUrl, layoutBlocks, layoutHasImage } from "../shared/campaignVisual.js";
-import { buttonsToText, markdownToTelegramHtml, markdownToTelegramText, renderCampaignBody, telegramMessageHtml } from "../shared/campaignBlocks.js";
+import { buttonsToText, campaignFooterHtml, markdownToTelegramHtml, markdownToTelegramText, renderCampaignBody, telegramMessageHtml } from "../shared/campaignBlocks.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
@@ -297,16 +297,13 @@ function composeVisual(visual: CampaignVisual | undefined, subject: string, body
   return parts.join("\n");
 }
 
-function shell(bodyHtml: string, siteUrl: string, unsubUrl: string, nonce: string, sentLabel: string): string {
+function shell(bodyHtml: string, siteUrl: string, unsubUrl: string, nonce: string, sentLabel: string, mapUrl?: (u: string) => string): string {
   return `<!doctype html><html><body style="margin:0;background:#F5F2EC;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#212121;">
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${esc(nonce)}</div>
     <div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid rgba(33,33,33,.1);border-radius:14px;overflow:hidden;">
       <div style="padding:20px 28px;border-bottom:1px solid rgba(33,33,33,.08);"><span style="font-size:22px;font-weight:700;color:#212121;">revamp.</span></div>
       <div style="padding:24px 28px;font-size:15px;line-height:1.65;">${bodyHtml}</div>
-      <div style="padding:16px 28px;border-top:1px solid rgba(33,33,33,.08);font-size:12px;color:#8a857c;">
-        <p style="margin:0 0 6px;">Revamp Vacations · <a href="${esc(siteUrl)}" style="color:#8a857c;">revampvacations.com</a> · ${esc(sentLabel)}</p>
-        <p style="margin:0;">Don't want these emails? <a href="${esc(unsubUrl)}" style="color:#8a857c;text-decoration:underline;">Unsubscribe</a>.</p>
-      </div>
+      ${campaignFooterHtml({ siteUrl, unsubUrl, sentLabel, mapUrl })}
     </div>
   </body></html>`;
 }
@@ -456,7 +453,7 @@ export async function sendCampaign(
       const unsubUrl = `${opts.siteUrl}/api/email/unsubscribe?e=${encodeURIComponent(r.email)}&t=${unsubToken(r.email)}`;
       // Markdown + [[button: …]] lines (shared/campaignBlocks.ts); button links get the same UTM tags.
       const bodyHtml = styleEmailLinks(renderCampaignBody(personalize(taggedMarkdown, r), (u) => addUtm(u, utm, hostOf(opts.siteUrl))));
-      const html = shell(composeVisual(opts.visual, personalize(opts.subject, r), bodyHtml, imageLink), opts.siteUrl, unsubUrl, nonce, sentLabel);
+      const html = shell(composeVisual(opts.visual, personalize(opts.subject, r), bodyHtml, imageLink), opts.siteUrl, unsubUrl, nonce, sentLabel, (u) => addUtm(u, utm, hostOf(opts.siteUrl)));
       return {
         from,
         to: r.email,

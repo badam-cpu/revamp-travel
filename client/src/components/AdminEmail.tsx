@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { buttonLine, markdownToTelegramHtml, renderCampaignBody, type ButtonStyle } from "@shared/campaignBlocks";
+import { buttonLine, campaignFooterHtml, markdownToTelegramHtml, renderCampaignBody, type ButtonStyle } from "@shared/campaignBlocks";
 import { toast } from "sonner";
 
 type Channel = "email" | "telegram";
@@ -681,9 +681,16 @@ function EmailPreview({ subject, body, visual }: { subject: string; body: string
           ),
         )}
       </div>
-      <div className="border-t border-basalt/8 px-6 py-3 text-[11px] text-basalt/45">
-        Revamp Vacations · revampvacations.com · Sent {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}<br />Don't want these emails? <span className="underline">Unsubscribe</span>.
-      </div>
+      {/* Same footer the server sends (shared/campaignBlocks.ts). */}
+      <div
+        dangerouslySetInnerHTML={{
+          __html: campaignFooterHtml({
+            siteUrl: "https://revampvacations.com",
+            unsubUrl: "#",
+            sentLabel: `Sent ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`,
+          }),
+        }}
+      />
     </div>
   );
 }
