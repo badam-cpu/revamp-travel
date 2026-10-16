@@ -9,7 +9,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { Sparkles, Loader2, Upload, Mail, Send, Eye, X, Monitor, Smartphone, CheckCircle2, AlertCircle, ChevronDown } from "lucide-react";
+import { Sparkles, Loader2, Upload, Mail, Send, Eye, X, Monitor, Smartphone, CheckCircle2, AlertCircle, ChevronDown, MousePointerClick } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { supabase } from "@/lib/supabase";
 import { adminEmailPreview, adminEmailSend, adminEmailGenerate, adminEmailImportContacts, adminEmailTest, ApiError } from "@/lib/api";
@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { renderMarkdown } from "@shared/markdown";
+import { buttonLine, buttonsToText, renderCampaignBody, type ButtonStyle } from "@shared/campaignBlocks";
 import { toast } from "sonner";
 
 type Channel = "email" | "telegram";
@@ -41,19 +41,19 @@ const TEMPLATES: { value: string; label: string; subject: string; body: string }
     value: "new-listings",
     label: "New listings announcement",
     subject: "New places to stay in Armenia ✨",
-    body: "Hi {first_name},\n\nWe've just added a fresh set of stays and experiences across Armenia — from Yerevan design apartments to mountain guesthouses in Dilijan.\n\n[Explore what's new](https://revampvacations.com/explore)\n\nSee you out there,\nThe Revamp team",
+    body: "Hi {first_name},\n\nWe've just added a fresh set of stays and experiences across Armenia — from Yerevan design apartments to mountain guesthouses in Dilijan.\n\n[[button: Explore what's new | https://revampvacations.com/explore]]\n\nSee you out there,\nThe Revamp team",
   },
   {
     value: "seasonal",
     label: "Seasonal promo",
     subject: "A little something for your next trip",
-    body: "Hi {first_name},\n\nAutumn in Armenia is one of our favourite seasons — golden vineyards, crisp mountain air, and fewer crowds.\n\nPlanning a getaway? Browse stays, tours and experiences on Revamp.\n\n[Start planning](https://revampvacations.com)\n\nWarmly,\nThe Revamp team",
+    body: "Hi {first_name},\n\nAutumn in Armenia is one of our favourite seasons — golden vineyards, crisp mountain air, and fewer crowds.\n\nPlanning a getaway? Browse stays, tours and experiences on Revamp.\n\n[[button: Start planning | https://revampvacations.com]]\n\nWarmly,\nThe Revamp team",
   },
   {
     value: "welcome",
     label: "Welcome / re-engage",
     subject: "Your next Armenian adventure awaits",
-    body: "Hi {first_name},\n\nThanks for being part of Revamp. Whether it's a city stay, a day tour, or a hands-on experience, we're here to help you discover Armenia like a local.\n\n[Have a look around](https://revampvacations.com/explore)\n\nThe Revamp team",
+    body: "Hi {first_name},\n\nThanks for being part of Revamp. Whether it's a city stay, a day tour, or a hands-on experience, we're here to help you discover Armenia like a local.\n\n[[button: Have a look around | https://revampvacations.com/explore]]\n\nThe Revamp team",
   },
 ];
 
@@ -63,7 +63,7 @@ const previewText = (t: string) => t.replace(/\{\s*(?:first_name|name|guest_firs
 
 /** Client mirror of server markdownToTelegram: keep line breaks, links as "label (url)". */
 const mdToTelegram = (src: string) =>
-  (src || "")
+  buttonsToText(src || "")
     .replace(/\r\n?/g, "\n")
     .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, "$1 ($2)")
@@ -87,6 +87,11 @@ export function AdminEmail() {
   const [body, setBody] = useState("");
   const [prompt, setPrompt] = useState("");
   const [aiOpen, setAiOpen] = useState(false);
+  // "Add button" panel (shared/campaignBlocks.ts — a [[button: …]] line in the message).
+  const [btnOpen, setBtnOpen] = useState(false);
+  const [btnLabel, setBtnLabel] = useState("");
+  const [btnUrl, setBtnUrl] = useState("https://revampvacations.com/explore");
+  const [btnStyle, setBtnStyle] = useState<ButtonStyle>("solid");
   const [generating, setGenerating] = useState(false);
   const [preview, setPreview] = useState<{ count: number; sample: string[] } | null>(null);
   const [counting, setCounting] = useState(false);
@@ -173,6 +178,29 @@ export function AdminEmail() {
     const end = el.selectionEnd ?? body.length;
     setBody(body.slice(0, start) + tag + body.slice(end));
     requestAnimationFrame(() => { el.focus(); el.selectionStart = el.selectionEnd = start + tag.length; });
+  };
+
+  /** Put a button line at the cursor, on its own line. */
+  const insertButton = () => {
+    if (!btnLabel.trim()) return toast("Give the button a label, e.g. “Explore stays”.");
+    if (!httpsUrl(btnUrl.trim())) return toast("The button link must start with https://");
+    const line = buttonLine(btnLabel, btnUrl, btnStyle);
+    const el = bodyRef.current;
+    const start = el?.selectionStart ?? body.length;
+    const end = el?.selectionEnd ?? body.length;
+    const before = body.slice(0, start).replace(/[ \t]*$/, "");
+    const after = body.slice(end).replace(/^[ \t]*/, "");
+    const pre = before && !before.endsWith("\n\n") ? (before.endsWith("\n") ? "\n" : "\n\n") : "";
+    const post = after && !after.startsWith("\n") ? "\n\n" : "";
+    const next = `${before}${pre}${line}${post}${after}`;
+    setBody(next);
+    setBtnOpen(false);
+    setBtnLabel("");
+    requestAnimationFrame(() => {
+      if (!el) return;
+      el.focus();
+      el.selectionStart = el.selectionEnd = (before + pre + line).length;
+    });
   };
 
   const generate = async () => {
@@ -363,7 +391,12 @@ export function AdminEmail() {
               <div className="grid gap-1.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <Label htmlFor="cm-body" className="text-xs font-semibold">Message <span className="font-normal text-basalt/45">(Markdown{isTg ? " — plain text on Telegram" : ""})</span></Label>
-                  <div className="flex items-center gap-4">
+                  <div className="flex flex-wrap items-center gap-4">
+                    {!isTg && (
+                      <button type="button" onClick={() => setBtnOpen((o) => !o)} aria-expanded={btnOpen} className="inline-flex items-center gap-1 text-xs font-semibold text-basalt/65 hover:text-apricot">
+                        <MousePointerClick className="h-3.5 w-3.5 text-apricot" /> Add button
+                      </button>
+                    )}
                     <button type="button" onClick={() => setAiOpen((o) => !o)} aria-expanded={aiOpen} className="inline-flex items-center gap-1 text-xs font-semibold text-basalt/65 hover:text-apricot">
                       <Sparkles className="h-3.5 w-3.5 text-apricot" /> Draft with AI <ChevronDown className={cn("h-3 w-3 transition-transform", aiOpen && "rotate-180")} />
                     </button>
@@ -374,6 +407,29 @@ export function AdminEmail() {
                   <div className="grid gap-2 border border-basalt/10 bg-chalk/50 p-3 sm:grid-cols-[minmax(0,1fr)_auto]">
                     <Input value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="e.g. Announce new Dilijan stays, warm and short, with a link to explore" className="h-10 rounded-none" aria-label="What should the message say?" />
                     <Button type="button" onClick={generate} disabled={generating} className="h-10 rounded-none bg-basalt text-paper hover:bg-basalt/90">{generating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Write it"}</Button>
+                  </div>
+                )}
+                {btnOpen && !isTg && (
+                  <div className="grid gap-3 border border-basalt/10 bg-chalk/50 p-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="grid gap-1.5">
+                        <Label htmlFor="btn-label" className="text-xs font-semibold">Button text</Label>
+                        <Input id="btn-label" value={btnLabel} onChange={(e) => setBtnLabel(e.target.value)} maxLength={40} placeholder="Explore stays" className="h-10 rounded-none bg-paper" />
+                      </div>
+                      <div className="grid gap-1.5">
+                        <Label htmlFor="btn-url" className="text-xs font-semibold">Link</Label>
+                        <Input id="btn-url" type="url" value={btnUrl} onChange={(e) => setBtnUrl(e.target.value)} placeholder="https://revampvacations.com/explore" className="h-10 rounded-none bg-paper" />
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="inline-flex gap-1 border border-basalt/12 bg-paper p-1" role="group" aria-label="Button style">
+                        {([["solid", "Solid"], ["outline", "Outline"]] as const).map(([k, l]) => (
+                          <button key={k} type="button" aria-pressed={btnStyle === k} onClick={() => setBtnStyle(k)} className={cn("px-3 py-1 text-xs font-semibold", btnStyle === k ? "bg-basalt text-paper" : "text-basalt/55 hover:text-basalt")}>{l}</button>
+                        ))}
+                      </div>
+                      <Button type="button" onClick={insertButton} className="h-9 rounded-none bg-basalt text-paper hover:bg-basalt/90">Insert at cursor</Button>
+                    </div>
+                    <p className="text-xs text-basalt/50">It shows in the message as a <code>[[button: …]]</code> line — edit or delete that line to change it. Buttons are centred; one or two per email work best.</p>
                   </div>
                 )}
                 <Textarea id="cm-body" ref={bodyRef} rows={12} value={body} onChange={(e) => setBody(e.target.value)} placeholder={"Hi {first_name},\n\nWe just added new stays in Dilijan…\n\n[Explore now](https://revampvacations.com/explore)"} className="rounded-none text-base" />
@@ -547,7 +603,7 @@ function EmailPreview({ subject, body, visual }: { subject: string; body: string
             <div
               key="b"
               className="prose-blog text-[15px] leading-7 text-basalt/80 [&_a]:text-apricot [&_a]:underline"
-              dangerouslySetInnerHTML={{ __html: body.trim() ? renderMarkdown(previewText(body)) : "<p style='color:#9a958c'>The body text will be displayed here.</p>" }}
+              dangerouslySetInnerHTML={{ __html: body.trim() ? renderCampaignBody(previewText(body)) : "<p style='color:#9a958c'>The body text will be displayed here.</p>" }}
             />
           ),
         )}

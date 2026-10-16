@@ -9,6 +9,7 @@
  * without an account), or everyone (the union). Admins are never marketed to.
  */
 import { type CampaignVisual, httpsUrl, layoutBlocks, layoutHasImage } from "../shared/campaignVisual.js";
+import { buttonsToText, renderCampaignBody } from "../shared/campaignBlocks.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
@@ -20,8 +21,22 @@ const RESEND_BATCH_URL = "https://api.resend.com/emails/batch";
 export type Audience = "everyone" | "operators" | "travelers" | "guests" | "contacts";
 export interface Recipient { email: string; name?: string | null }
 
+/**
+ * Campaigns send from their own subdomain when CAMPAIGN_EMAIL_FROM is set
+ * (e.g. "Revamp Vacations <hello@news.revampvacations.com>", verified in
+ * Resend), so spam complaints about marketing never hurt the main domain that
+ * booking confirmations come from. Replies go to CAMPAIGN_REPLY_TO (a real
+ * inbox). Without them, campaigns use EMAIL_FROM as before.
+ */
+export function campaignSender(): { from: string | undefined; replyTo: string | undefined } {
+  return {
+    from: process.env.CAMPAIGN_EMAIL_FROM || process.env.EMAIL_FROM,
+    replyTo: process.env.CAMPAIGN_REPLY_TO || undefined,
+  };
+}
+
 export function marketingConfigured(): boolean {
-  return !!(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
+  return !!(process.env.RESEND_API_KEY && campaignSender().from);
 }
 
 export function emailGenConfigured(): boolean {
@@ -349,7 +364,7 @@ export function telegramBroadcastConfigured(): boolean {
  * heading/emphasis markers. Capped at Telegram's 4096-char message limit.
  */
 export function markdownToTelegram(src: string): string {
-  const text = (src || "")
+  const text = buttonsToText(src || "")
     .replace(/\r\n?/g, "\n")
     .replace(/!\[[^\]]*\]\([^)]*\)/g, "")               // images: drop
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, "$1 ($2)")   // links: label (url)
@@ -403,7 +418,7 @@ export async function sendCampaign(
   opts: { subject: string; markdown: string; recipients: Recipient[]; siteUrl: string; subjectPrefix?: string; visual?: CampaignVisual },
 ): Promise<{ sent: number; failed: number; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM;
+  const { from, replyTo } = campaignSender();
   if (!apiKey || !from) return { sent: 0, failed: opts.recipients.length, error: "Email isn't configured (RESEND_API_KEY / EMAIL_FROM)." };
   let sent = 0;
   let failed = 0;
@@ -414,16 +429,25 @@ export async function sendCampaign(
   const nonce = `rv-${Date.now().toString(36)}-${crypto.randomBytes(4).toString("hex")}`;
   const sentLabel = `Sent ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`;
   // Tag in-site links once for GA attribution (utm_source=email …).
-  const taggedMarkdown = tagMarkdownLinks(opts.markdown, { source: "email", medium: "campaign", campaign: campaignSlug(opts.subject) }, hostOf(opts.siteUrl));
+  const utm = { source: "email", medium: "campaign", campaign: campaignSlug(opts.subject) };
+  const taggedMarkdown = tagMarkdownLinks(opts.markdown, utm, hostOf(opts.siteUrl));
   const rawLink = httpsUrl(opts.visual?.imageLink);
   const imageLink = rawLink ? addUtm(rawLink, { source: "email", medium: "campaign", campaign: campaignSlug(opts.subject) }, hostOf(opts.siteUrl)) : null;
   for (let i = 0; i < opts.recipients.length; i += 100) {
     const chunk = opts.recipients.slice(i, i + 100);
     const batch = chunk.map((r) => {
       const unsubUrl = `${opts.siteUrl}/api/email/unsubscribe?e=${encodeURIComponent(r.email)}&t=${unsubToken(r.email)}`;
-      const bodyHtml = styleEmailLinks(renderMarkdown(personalize(taggedMarkdown, r)));
+      // Markdown + [[button: …]] lines (shared/campaignBlocks.ts); button links get the same UTM tags.
+      const bodyHtml = styleEmailLinks(renderCampaignBody(personalize(taggedMarkdown, r), (u) => addUtm(u, utm, hostOf(opts.siteUrl))));
       const html = shell(composeVisual(opts.visual, personalize(opts.subject, r), bodyHtml, imageLink), opts.siteUrl, unsubUrl, nonce, sentLabel);
-      return { from, to: r.email, subject: `${opts.subjectPrefix ?? ""}${personalize(opts.subject, r)}`, html, headers: { "List-Unsubscribe": `<${unsubUrl}>` } };
+      return {
+        from,
+        to: r.email,
+        ...(replyTo ? { reply_to: replyTo } : {}),
+        subject: `${opts.subjectPrefix ?? ""}${personalize(opts.subject, r)}`,
+        html,
+        headers: { "List-Unsubscribe": `<${unsubUrl}>` },
+      };
     });
     try {
       const res = await fetch(RESEND_BATCH_URL, {

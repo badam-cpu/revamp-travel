@@ -85,3 +85,10 @@ Encrypts operators' PayLink API keys before they're stored (migration 0094, `ser
 | Variable | Purpose |
 | --- | --- |
 | `INFOBIP_WHATSAPP_JOURNEY_TEMPLATE` | Name of a Meta-approved WhatsApp template (placeholders: guest first name, listing, trip link) used for journey texts. Without it, WhatsApp journey texts only reach guests inside WhatsApp's 24-hour window; email, inbox, SMS, Viber and Telegram are unaffected. |
+
+## Campaign sender (optional)
+
+| Variable | Example | Purpose |
+| --- | --- | --- |
+| `CAMPAIGN_EMAIL_FROM` | `Revamp Vacations <hello@news.revampvacations.com>` | Sender for admin email campaigns only — a separate subdomain verified in Resend, so marketing complaints never affect the main domain booking emails use. Falls back to `EMAIL_FROM`. |
+| `CAMPAIGN_REPLY_TO` | `hello@revampvacations.com` | Where replies to campaigns go. |

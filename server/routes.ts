@@ -45,7 +45,7 @@ import { reconcilePurchaserVouchers, redeemVoucher, redeemVoucherByCode } from "
 import { voucherPriceCents, isAllowedVoucherAmount } from "../shared/vouchers.js";
 import { resolvePromo } from "./promo.js";
 import { promoDiscountCents } from "../shared/promo.js";
-import { resolveAudience, sendCampaign, marketingConfigured, verifyUnsub, generateEmailBody, emailGenConfigured, parseContactsCsv, importContacts, sendTelegramCampaign, resolveTelegramRecipients, telegramBroadcastConfigured } from "./marketing.js";
+import { resolveAudience, sendCampaign, marketingConfigured, verifyUnsub, generateEmailBody, emailGenConfigured, parseContactsCsv, importContacts, sendTelegramCampaign, resolveTelegramRecipients, telegramBroadcastConfigured, campaignSender } from "./marketing.js";
 import { listAdminUsers } from "./adminUsers.js";
 import { endImpersonation, startImpersonation } from "./impersonation.js";
 import { listManagedVenues, venueSummary } from "./restaurant.js";
@@ -3942,7 +3942,7 @@ export function registerApiRoutes(app: Express) {
     const { sent, failed, error } = await sendCampaign({ subject: parsed.data.subject, markdown: parsed.data.body, recipients, siteUrl: site, subjectPrefix: "[TEST] ", visual: parsed.data.visual });
     // Admin-only route: the email service's own reason helps fix sender/domain issues.
     if (sent === 0) return res.status(502).json({ error: `The email service didn't accept the test (${error ?? "unknown reason"}).` });
-    res.json({ sent, failed, from: process.env.EMAIL_FROM ?? null });
+    res.json({ sent, failed, from: campaignSender().from ?? null });
   });
 
   // POST /api/admin-email/send — admin-only: send a composed email to an audience.
