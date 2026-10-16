@@ -157,10 +157,13 @@ export function telegramMessageHtml(subject: string, bodyHtml: string): string {
 }
 
 // ── Campaign email footer ───────────────────────────────────────────────────
-// The website's closing band, for campaign emails: charcoal, the white
-// `revamp.` wordmark, the slogan (never reworded — "Experience." in orange),
-// links into the site incl. the Blog, social channels, the legal line and
-// Unsubscribe. Shared by the server's email builder and the composer preview.
+// The website's closing band, for campaign emails — kept quiet so the message
+// and its button lead: charcoal, the slogan small (never reworded —
+// "Experience." in orange; the header already carries the `revamp.`
+// wordmark, so it isn't repeated), four links into the site incl. the Blog,
+// social channels, the legal line and Unsubscribe. Links are separated by
+// spacing (with a real space) so the row wraps on phones. Shared by the
+// server's email builder and the composer preview.
 
 /** Social channels shown in the footer (same as the website footer). */
 export const BRAND_SOCIALS: { label: string; url: string }[] = [{ label: "Instagram", url: "https://www.instagram.com/revamphomes_yerevan/" }];
@@ -175,28 +178,33 @@ const FOOTER_LINKS: [string, string][] = [
   ["Stays", "/explore/stay"],
   ["Tours", "/explore/tour"],
   ["Experiences", "/explore/experience"],
-  ["Events", "/events"],
-  ["Travel guide", "/guide"],
   ["Blog", "/blog"],
 ];
 
 export function campaignFooterHtml(o: { siteUrl: string; unsubUrl: string; sentLabel: string; mapUrl?: (u: string) => string; year?: number }): string {
   const map = o.mapUrl ?? ((u: string) => u);
   const site = o.siteUrl.replace(/\/+$/, "");
-  const a = (href: string, label: string, extra = "") =>
-    `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer" style="color:#ffffff;text-decoration:none;${extra}">${esc(label)}</a>`;
-  const dot = `<span style="color:rgba(255,255,255,.35);padding:0 8px;">·</span>`;
-  const links = FOOTER_LINKS.map(([l, p]) => a(map(`${site}${p}`), l, "font-weight:600;")).join(dot);
-  const socials = [...BRAND_SOCIALS.map((s) => a(s.url, `${s.label} ↗`)), a(`mailto:${BRAND_CONTACT_EMAIL}`, BRAND_CONTACT_EMAIL)].join(dot);
-  const muted = "font-size:12px;line-height:1.7;color:rgba(255,255,255,.55);margin:0;";
-  return `<div style="background:#212121;padding:30px 28px 26px;color:#ffffff;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;">
-  ${a(map(`${site}/`), "revamp.", "font-size:24px;font-weight:800;letter-spacing:-.03em;")}
-  <p style="margin:18px 0 0;font-weight:800;font-size:26px;line-height:.95;letter-spacing:-.04em;color:#ffffff;">Stay.<br /><span style="color:#F15822;">Experience.</span><br />Repeat.</p>
-  <p style="margin:22px 0 0;font-size:14px;line-height:1.9;">${links}</p>
-  <p style="margin:10px 0 0;font-size:13px;line-height:1.9;color:rgba(255,255,255,.75);">${socials}</p>
-  <div style="border-top:1px solid rgba(255,255,255,.12);margin-top:20px;padding-top:16px;">
+  // `inner` is trusted HTML built here; every outside value goes through esc().
+  const a = (href: string, inner: string, color = "#ffffff", extra = "") =>
+    `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer" style="color:${color};text-decoration:none;${extra}">${inner}</a>`;
+  // Space, not dots, between links: no separator left dangling at the end of
+  // a wrapped line, and nothing for a screen reader to announce. The final
+  // normal space is where the row can wrap.
+  const gap = "&nbsp;&nbsp;&nbsp; ";
+  const links = FOOTER_LINKS.map(([l, p]) => a(map(`${site}${p}`), esc(l), "#ffffff", "font-weight:600;")).join(gap);
+  const soft = "rgba(255,255,255,.7)";
+  const socials = [
+    ...BRAND_SOCIALS.map((s) => a(s.url, `${esc(s.label)}<span aria-hidden="true">&nbsp;↗</span>`, soft)),
+    a(`mailto:${BRAND_CONTACT_EMAIL}`, esc(BRAND_CONTACT_EMAIL), soft),
+  ].join(gap);
+  const muted = "font-size:12px;line-height:1.6;color:rgba(255,255,255,.55);margin:0;";
+  return `<div style="background:#212121;padding:24px 28px 22px;color:#ffffff;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <p style="margin:0;font-weight:800;font-size:18px;line-height:1.1;letter-spacing:-.02em;color:#ffffff;">Stay.<br /><span style="color:#F15822;">Experience.</span><br />Repeat.</p>
+  <p style="margin:18px 0 0;font-size:14px;line-height:1.8;color:#ffffff;">${links}</p>
+  <p style="margin:4px 0 0;font-size:13px;line-height:1.8;color:${soft};">${socials}</p>
+  <div style="border-top:1px solid rgba(255,255,255,.1);margin-top:18px;padding-top:14px;">
     <p style="${muted}">© ${o.year ?? new Date().getFullYear()} Revamp Hospitality LLC${BRAND_POSTAL_ADDRESS ? ` · ${esc(BRAND_POSTAL_ADDRESS)}` : ""} · ${esc(o.sentLabel)}</p>
-    <p style="${muted}">Don't want these emails? <a href="${esc(o.unsubUrl)}" style="color:rgba(255,255,255,.75);text-decoration:underline;">Unsubscribe</a>.</p>
+    <p style="${muted}">Don't want these emails? <a href="${esc(o.unsubUrl)}" style="color:${soft};text-decoration:underline;">Unsubscribe</a>.</p>
   </div>
 </div>`;
 }
