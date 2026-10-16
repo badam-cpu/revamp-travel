@@ -243,7 +243,7 @@ export function AdminEmail() {
     setTesting(true);
     setTestResult(null);
     try {
-      await adminTelegramTest({ subject, body, name: testName.trim() || undefined });
+      await adminTelegramTest({ subject, body, name: testName.trim() || undefined, imageUrl: visual.imageUrl ?? null });
       const at = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
       setTestResult({ ok: true, text: `Sent at ${at} to your Telegram — look for "[TEST] ${subject.trim()}" from the Revamp bot.` });
     } catch (e) {
@@ -271,7 +271,19 @@ export function AdminEmail() {
     if (!window.confirm(msg)) return;
     setSending(true);
     try {
-      const r = await adminEmailSend({ audience, subject: subject.trim(), body: body.trim(), channel, ...(!isTg && typeof v !== "string" ? { visual: v } : {}) });
+      const r = await adminEmailSend({
+        audience,
+        subject: subject.trim(),
+        body: body.trim(),
+        channel,
+        ...(isTg
+          ? visual.imageUrl
+            ? { visual: { layout: "image_title_body" as const, imageUrl: visual.imageUrl } }
+            : {}
+          : typeof v !== "string"
+            ? { visual: v }
+            : {}),
+      });
       toast.success(`Sent to ${r.sent} of ${r.total}${r.failed ? ` (${r.failed} failed)` : ""}.`);
       setSubject(""); setBody(""); setPrompt(""); setVisual({ layout: "title_body" }); setTestResult(null);
       loadCampaigns();
@@ -442,15 +454,17 @@ export function AdminEmail() {
             </div>
           </Step>
 
-          {/* 3 — Visual (email only) */}
-          {!isTg && (
-            <Step n={3} title="Visual" sub="Optional. Pick a layout, then an image from your library or the starters.">
-              <CampaignVisualPicker value={visual} onChange={setVisual} />
-            </Step>
-          )}
+          {/* 3 — Visual (email: layout + image; Telegram: an image on top of the message) */}
+          <Step
+            n={3}
+            title="Visual"
+            sub={isTg ? "Optional. A picture shown above the message — short messages go out as a photo with the text as its caption." : "Optional. Pick a layout, then an image from your library or the starters."}
+          >
+            <CampaignVisualPicker value={visual} onChange={setVisual} imageOnly={isTg} />
+          </Step>
 
           {/* 4 — Check & send */}
-          <Step n={isTg ? 3 : 4} title="Check & send">
+          <Step n={4} title="Check & send">
             <div className="grid gap-5">
               <div>
                 <Button type="button" variant="outline" onClick={() => setShowPreview(true)} className="h-10 rounded-none border-basalt/25">
@@ -600,7 +614,7 @@ function PreviewOverlay({ onClose, isTg, subject, body, visual }: { onClose: () 
               <p className="font-semibold text-basalt">{previewText(subject) || "Your subject"}</p>
             </div>
           )}
-          {isTg ? <TelegramPreview subject={subject} body={body} /> : <EmailPreview subject={subject} body={body} visual={visual} />}
+          {isTg ? <TelegramPreview subject={subject} body={body} imageUrl={visual.imageUrl ?? null} /> : <EmailPreview subject={subject} body={body} visual={visual} />}
         </div>
       </div>
     </div>
@@ -608,12 +622,14 @@ function PreviewOverlay({ onClose, isTg, subject, body, visual }: { onClose: () 
 }
 
 /** Same formatting + buttons the bot sends (shared/campaignBlocks.ts markdownToTelegramHtml). */
-function TelegramPreview({ subject, body }: { subject: string; body: string }) {
+function TelegramPreview({ subject, body, imageUrl }: { subject: string; body: string; imageUrl: string | null }) {
   const { html, buttons } = markdownToTelegramHtml(previewText(body));
   return (
     <div className="overflow-hidden rounded-[14px] border border-basalt/12 bg-[#cfe0ed] p-4">
       <div className="max-w-[85%]">
-        <div className="rounded-[14px] rounded-tl-sm bg-white px-4 py-3 shadow-sm">
+        <div className="overflow-hidden rounded-[14px] rounded-tl-sm bg-white shadow-sm">
+          {imageUrl && <img src={displaySrc(imageUrl)} alt="" className="block w-full" />}
+          <div className="px-4 py-3">
           {subject.trim() && <p className="whitespace-pre-wrap text-sm font-semibold text-basalt">{previewText(subject)}</p>}
           {body.trim() ? (
             <p
@@ -624,6 +640,7 @@ function TelegramPreview({ subject, body }: { subject: string; body: string }) {
             <p className="mt-1 text-sm text-basalt/45">Your message will appear here.</p>
           )}
           <p className="mt-1 text-right text-[10px] text-basalt/35">Revamp bot</p>
+          </div>
         </div>
         {buttons.length > 0 && (
           <div className="mt-1 grid gap-1">

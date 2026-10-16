@@ -44,7 +44,12 @@ async function call(method: string, body: unknown): Promise<{ ok: boolean; statu
 export async function sendTelegram(
   chatId: string,
   text: string,
-  opts: { html?: boolean; buttons?: { text: string; url: string }[] } = {},
+  opts: {
+    html?: boolean;
+    buttons?: { text: string; url: string }[];
+    /** Show this URL (e.g. an image) as a large preview ABOVE the text — one message, full 4096-char text. */
+    previewUrl?: string;
+  } = {},
 ): Promise<SendResult> {
   if (!process.env.TELEGRAM_BOT_TOKEN) return { sent: false, reason: "not_configured" };
   if (!chatId) return { sent: false, reason: "no_recipient" };
@@ -52,7 +57,9 @@ export async function sendTelegram(
     const r = await call("sendMessage", {
       chat_id: chatId,
       text,
-      disable_web_page_preview: true,
+      ...(opts.previewUrl
+        ? { link_preview_options: { url: opts.previewUrl, prefer_large_media: true, show_above_text: true } }
+        : { disable_web_page_preview: true }),
       ...(opts.html ? { parse_mode: "HTML" } : {}),
       ...(opts.buttons?.length ? { reply_markup: { inline_keyboard: opts.buttons.map((b) => [{ text: b.text, url: b.url }]) } } : {}),
     });
@@ -63,6 +70,37 @@ export async function sendTelegram(
     return { sent: true };
   } catch (err) {
     console.warn("[telegram] send failed", err);
+    return { sent: false, reason: "exception" };
+  }
+}
+
+/**
+ * Send a photo (public https URL) with a caption (≤ 1024 characters — Telegram's
+ * caption limit) and optional link buttons. Best-effort.
+ */
+export async function sendTelegramPhoto(
+  chatId: string,
+  photoUrl: string,
+  caption: string,
+  opts: { html?: boolean; buttons?: { text: string; url: string }[] } = {},
+): Promise<SendResult> {
+  if (!process.env.TELEGRAM_BOT_TOKEN) return { sent: false, reason: "not_configured" };
+  if (!chatId) return { sent: false, reason: "no_recipient" };
+  try {
+    const r = await call("sendPhoto", {
+      chat_id: chatId,
+      photo: photoUrl,
+      caption,
+      ...(opts.html ? { parse_mode: "HTML" } : {}),
+      ...(opts.buttons?.length ? { reply_markup: { inline_keyboard: opts.buttons.map((b) => [{ text: b.text, url: b.url }]) } } : {}),
+    });
+    if (!r.ok) {
+      console.warn(`[telegram] sendPhoto ${r.status}`, JSON.stringify(r.json)?.slice(0, 300));
+      return { sent: false, reason: `http_${r.status}` };
+    }
+    return { sent: true };
+  } catch (err) {
+    console.warn("[telegram] photo send failed", err);
     return { sent: false, reason: "exception" };
   }
 }

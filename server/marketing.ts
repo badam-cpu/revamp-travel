@@ -14,7 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { renderMarkdown } from "../shared/markdown.js";
-import { sendTelegram, telegramConfigured } from "./telegram.js";
+import { sendTelegram, telegramConfigured, sendTelegramPhoto } from "./telegram.js";
 
 const RESEND_BATCH_URL = "https://api.resend.com/emails/batch";
 
@@ -392,6 +392,8 @@ export async function sendTelegramCampaign(
     recipients?: { chatId: string; name: string | null }[];
     /** e.g. "[TEST] " on the first line. */
     prefix?: string;
+    /** Campaign image (public https URL, from the image library / starters). */
+    imageUrl?: string | null;
   },
 ): Promise<{ sent: number; failed: number; total: number }> {
   const recipients = opts.recipients ?? (await resolveTelegramRecipients(admin));
@@ -408,7 +410,16 @@ export async function sendTelegramCampaign(
   for (const r of recipients) {
     const subject = `${opts.prefix ?? ""}${personalize(opts.subject, { email: "", name: r.name }).trim()}`.trim();
     const html = telegramMessageHtml(subject, personalize(bodyHtml, { email: "", name: escName(r.name) }));
-    let res = html.length <= 4096 ? await sendTelegram(r.chatId, html, { html: true, buttons }) : { sent: false, reason: "too_long" };
+    const image = httpsUrl(opts.imageUrl);
+    let res: { sent: boolean; reason?: string } = { sent: false, reason: "too_long" };
+    if (image && html.length <= 1024) {
+      // Short message: a real photo with the message as its caption.
+      res = await sendTelegramPhoto(r.chatId, image, html, { html: true, buttons });
+    }
+    if (!res.sent && html.length <= 4096) {
+      // Longer message (or the photo failed): the image as a large preview above the text.
+      res = await sendTelegram(r.chatId, html, { html: true, buttons, ...(image ? { previewUrl: image } : {}) });
+    }
     if (!res.sent) {
       const plain = personalize(bodyPlain, { email: "", name: r.name });
       res = await sendTelegram(r.chatId, (subject ? `${subject}\n\n${plain}` : plain).slice(0, 4096));

@@ -22,13 +22,14 @@ const LEVEL = {
   low: { label: "Low quality", cls: "bg-apricot text-white" },
 } as const;
 
-export function CampaignVisualPicker({ value, onChange }: { value: CampaignVisual; onChange: (v: CampaignVisual) => void }) {
+/** `imageOnly` (Telegram): just pick an image — no layout, alt text or image link (the photo always sits on top). */
+export function CampaignVisualPicker({ value, onChange, imageOnly = false }: { value: CampaignVisual; onChange: (v: CampaignVisual) => void; imageOnly?: boolean }) {
   const { user } = useAuth();
   const [images, setImages] = useState<CampaignImage[] | null>(null);
   const [missing, setMissing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const withImage = layoutHasImage(value.layout);
+  const withImage = imageOnly || layoutHasImage(value.layout);
 
   useEffect(() => {
     if (!withImage || images) return;
@@ -39,7 +40,7 @@ export function CampaignVisualPicker({ value, onChange }: { value: CampaignVisua
   }, [withImage, images]);
 
   const selected = [...(images ?? []), ...STARTER_IMAGES].find((i) => i.url === value.imageUrl) ?? null;
-  const quality = selected ? imageQuality(selected, value.imageAlt ?? "") : null;
+  const quality = selected ? imageQuality(selected, imageOnly ? undefined : value.imageAlt ?? "") : null;
 
   const upload = async (file: File) => {
     if (!user) return;
@@ -109,7 +110,7 @@ export function CampaignVisualPicker({ value, onChange }: { value: CampaignVisua
 
   return (
     <div className="grid gap-4">
-      <div className="grid gap-1.5 sm:max-w-[260px]">
+      {!imageOnly && <div className="grid gap-1.5 sm:max-w-[260px]">
         <Label htmlFor="cv-layout" className="text-xs font-semibold">Layout</Label>
         <Select value={value.layout} onValueChange={(v) => onChange({ ...value, layout: v as CampaignLayout })}>
           <SelectTrigger id="cv-layout" className="h-10 rounded-none"><SelectValue /></SelectTrigger>
@@ -119,7 +120,7 @@ export function CampaignVisualPicker({ value, onChange }: { value: CampaignVisua
             ))}
           </SelectContent>
         </Select>
-      </div>
+      </div>}
 
       {withImage && (
         <>
@@ -183,7 +184,7 @@ export function CampaignVisualPicker({ value, onChange }: { value: CampaignVisua
             </div>
           )}
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          {!imageOnly && <div className="grid gap-3 sm:grid-cols-2">
             <div className="grid gap-1.5">
               <Label htmlFor="cv-alt" className="text-xs font-semibold">Alt text <span className="font-normal text-basalt/45">(shown if images are hidden)</span></Label>
               <Input id="cv-alt" value={value.imageAlt ?? ""} onChange={(e) => onChange({ ...value, imageAlt: e.target.value })} maxLength={200} placeholder="e.g. Lake Sevan at sunset" className="h-10 rounded-none" />
@@ -192,7 +193,7 @@ export function CampaignVisualPicker({ value, onChange }: { value: CampaignVisua
               <Label htmlFor="cv-link" className="text-xs font-semibold">Image link <span className="font-normal text-basalt/45">(optional)</span></Label>
               <Input id="cv-link" type="url" value={value.imageLink ?? ""} onChange={(e) => onChange({ ...value, imageLink: e.target.value })} placeholder="https://revampvacations.com/explore/stay" className="h-10 rounded-none" />
             </div>
-          </div>
+          </div>}
         </>
       )}
     </div>
