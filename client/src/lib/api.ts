@@ -579,7 +579,7 @@ export async function adminEmailTest(input: { subject: string; body: string; to:
 }
 
 /** Admin: send the Telegram broadcast to your own linked chat. Throws ApiError("not_linked") if you haven't linked Telegram. */
-export async function adminTelegramTest(input: { subject: string; body: string }): Promise<{ sent: number }> {
+export async function adminTelegramTest(input: { subject: string; body: string; name?: string }): Promise<{ sent: number }> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new ApiError("Sign in.");

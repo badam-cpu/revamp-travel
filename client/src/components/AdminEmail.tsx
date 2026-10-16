@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { buttonLine, markdownToTelegramText, renderCampaignBody, type ButtonStyle } from "@shared/campaignBlocks";
+import { buttonLine, markdownToTelegramHtml, renderCampaignBody, type ButtonStyle } from "@shared/campaignBlocks";
 import { toast } from "sonner";
 
 type Channel = "email" | "telegram";
@@ -60,9 +60,6 @@ const TEMPLATES: { value: string; label: string; subject: string; body: string }
 interface CampaignRow { id: string; subject: string; audience: string; channel?: string | null; recipient_count: number; sent_count: number; created_at: string }
 
 const previewText = (t: string) => t.replace(/\{\s*(?:first_name|name|guest_first_name)\s*\}/gi, "Anna");
-
-/** Same conversion the server sends (shared/campaignBlocks.ts). */
-const mdToTelegram = (src: string) => markdownToTelegramText(src);
 
 export function AdminEmail() {
   const [tab, setTab] = useState<"compose" | "sent">("compose");
@@ -246,7 +243,7 @@ export function AdminEmail() {
     setTesting(true);
     setTestResult(null);
     try {
-      await adminTelegramTest({ subject, body });
+      await adminTelegramTest({ subject, body, name: testName.trim() || undefined });
       const at = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
       setTestResult({ ok: true, text: `Sent at ${at} to your Telegram — look for "[TEST] ${subject.trim()}" from the Revamp bot.` });
     } catch (e) {
@@ -398,9 +395,9 @@ export function AdminEmail() {
 
               <div className="grid gap-1.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <Label htmlFor="cm-body" className="text-xs font-semibold">Message <span className="font-normal text-basalt/45">(Markdown{isTg ? " — plain text on Telegram" : ""})</span></Label>
+                  <Label htmlFor="cm-body" className="text-xs font-semibold">Message <span className="font-normal text-basalt/45">(Markdown{isTg ? " — links and buttons become tappable on Telegram" : ""})</span></Label>
                   <div className="flex flex-wrap items-center gap-4">
-                    {!isTg && (
+                    {(
                       <button type="button" onClick={() => setBtnOpen((o) => !o)} aria-expanded={btnOpen} className="inline-flex items-center gap-1 text-xs font-semibold text-basalt/65 hover:text-apricot">
                         <MousePointerClick className="h-3.5 w-3.5 text-apricot" /> Add button
                       </button>
@@ -417,7 +414,7 @@ export function AdminEmail() {
                     <Button type="button" onClick={generate} disabled={generating} className="h-10 rounded-none bg-basalt text-paper hover:bg-basalt/90">{generating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Write it"}</Button>
                   </div>
                 )}
-                {btnOpen && !isTg && (
+                {btnOpen && (
                   <div className="grid gap-3 border border-basalt/10 bg-chalk/50 p-3">
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="grid gap-1.5">
@@ -496,7 +493,11 @@ export function AdminEmail() {
                     <p className="text-sm font-semibold text-basalt">Send a test</p>
                     <p className="text-xs text-basalt/55">Sends exactly this message to your own Telegram, with [TEST] on the first line. Not recorded as a campaign.</p>
                   </div>
-                  <div>
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div className="grid w-full gap-1.5 sm:w-56">
+                      <Label htmlFor="tg-test-name" className="text-xs font-semibold">Name used for {"{first_name}"}</Label>
+                      <Input id="tg-test-name" value={testName} onChange={(e) => setTestName(e.target.value)} placeholder="Anna" className="h-10 rounded-none bg-paper" />
+                    </div>
                     <Button type="button" variant="outline" onClick={sendTelegramTest} disabled={testing} className="h-10 rounded-none border-basalt/25 bg-paper">
                       {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Send className="mr-1.5 h-3.5 w-3.5" /> Send test to my Telegram</>}
                     </Button>
@@ -606,15 +607,35 @@ function PreviewOverlay({ onClose, isTg, subject, body, visual }: { onClose: () 
   );
 }
 
+/** Same formatting + buttons the bot sends (shared/campaignBlocks.ts markdownToTelegramHtml). */
 function TelegramPreview({ subject, body }: { subject: string; body: string }) {
+  const { html, buttons } = markdownToTelegramHtml(previewText(body));
   return (
     <div className="overflow-hidden rounded-[14px] border border-basalt/12 bg-[#cfe0ed] p-4">
-      <div className="max-w-[85%] rounded-[14px] rounded-tl-sm bg-white px-4 py-3 shadow-sm">
-        {subject.trim() && <p className="whitespace-pre-wrap text-sm font-semibold text-basalt">{previewText(subject)}</p>}
-        <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-basalt/85">{body.trim() ? previewText(mdToTelegram(body)) : "Your message will appear here."}</p>
-        <p className="mt-1 text-right text-[10px] text-basalt/35">Revamp bot</p>
+      <div className="max-w-[85%]">
+        <div className="rounded-[14px] rounded-tl-sm bg-white px-4 py-3 shadow-sm">
+          {subject.trim() && <p className="whitespace-pre-wrap text-sm font-semibold text-basalt">{previewText(subject)}</p>}
+          {body.trim() ? (
+            <p
+              className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-basalt/85 [&_a]:text-[#2481cc] [&_a]:underline-offset-2 hover:[&_a]:underline [&_b]:font-semibold"
+              dangerouslySetInnerHTML={{ __html: html }}
+            />
+          ) : (
+            <p className="mt-1 text-sm text-basalt/45">Your message will appear here.</p>
+          )}
+          <p className="mt-1 text-right text-[10px] text-basalt/35">Revamp bot</p>
+        </div>
+        {buttons.length > 0 && (
+          <div className="mt-1 grid gap-1">
+            {buttons.map((b) => (
+              <span key={b.text + b.url} className="block rounded-[10px] bg-white/60 px-3 py-2 text-center text-sm font-medium text-[#2481cc] backdrop-blur">
+                {b.text} ↗
+              </span>
+            ))}
+          </div>
+        )}
       </div>
-      <p className="mt-2 text-center text-[11px] text-basalt/45">Sent as plain text. Links show as “label (url)” and Telegram makes them tappable.</p>
+      <p className="mt-3 text-center text-[11px] text-basalt/45">Links show as tappable text; buttons appear under the message.</p>
     </div>
   );
 }

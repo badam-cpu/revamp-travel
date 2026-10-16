@@ -102,3 +102,57 @@ export function markdownToTelegramText(src: string, mapUrl: (u: string) => strin
   return t.replace(/\u0000(\d+)\u0000/g, (_m, i) => kept[Number(i)]);
 }
 
+export interface TelegramButton {
+  text: string;
+  url: string;
+}
+
+const escTg = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/**
+ * Campaign Markdown → Telegram HTML (parse_mode "HTML": only <b> <i> <a> <code>)
+ * + inline buttons. `[[button: …]]` lines (https only) become real tappable
+ * buttons under the message; `[label](url)` becomes a tappable "label" with the
+ * (tracked) URL hidden inside — no long utm addresses on show. All text is
+ * escaped first, so a message can't inject markup. `{first_name}` stays as-is
+ * (the sender personalizes with an ESCAPED name).
+ */
+export function markdownToTelegramHtml(src: string, mapUrl: (u: string) => string = (u) => u): { html: string; buttons: TelegramButton[] } {
+  const buttons: TelegramButton[] = [];
+  const lines: string[] = [];
+  for (const line of (src || "").replace(/\r\n?/g, "\n").split("\n")) {
+    const m = line.match(BUTTON_LINE);
+    const url = m ? httpsOnly(m[3]) : null;
+    if (m && url) buttons.push({ text: m[2].slice(0, 60), url: mapUrl(url) });
+    else lines.push(line);
+  }
+  const kept: string[] = [];
+  const keep = (s: string) => `\u0000${kept.push(s) - 1}\u0000`;
+  let t = lines.join("\n");
+  t = t.replace(/!\[[^\]]*\]\([^)]*\)/g, ""); // images: drop
+  t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, label: string, url: string) => {
+    const safe = httpsOnly(url) ?? (/^http:\/\//i.test(url) ? url : null);
+    return safe ? keep(`<a href="${escTg(mapUrl(safe)).replace(/"/g, "&quot;")}">${escTg(label)}</a>`) : `${label} (${url})`;
+  });
+  t = t.replace(/https?:\/\/[^\s)<]+/g, (u) => keep(escTg(u))); // bare URLs: Telegram links them
+  t = t.replace(/\{\s*[a-z_]+\s*\}/gi, (tag) => keep(tag)); // {first_name}
+  t = escTg(t);
+  t = t
+    .replace(/^#{1,6}\s*(.+)$/gm, "<b>$1</b>") // headings → bold line
+    .replace(/^&gt;\s?/gm, "") // blockquotes
+    .replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")
+    .replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s.,!?;:)]|$)/gm, "$1<i>$2</i>")
+    .replace(/(^|[\s(])_([^_\n]+)_(?=[\s.,!?;:)]|$)/gm, "$1<i>$2</i>")
+    .replace(/`([^`\n]+)`/g, "<code>$1</code>")
+    .replace(/^\s*[-*]\s+/gm, "• ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return { html: t.replace(/\u0000(\d+)\u0000/g, (_m, i) => kept[Number(i)]), buttons };
+}
+
+/** The bold first line + body, as the bot sends it. */
+export function telegramMessageHtml(subject: string, bodyHtml: string): string {
+  const first = escTg(subject.trim());
+  return first ? `<b>${first}</b>\n\n${bodyHtml}` : bodyHtml;
+}
+

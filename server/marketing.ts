@@ -9,7 +9,7 @@
  * without an account), or everyone (the union). Admins are never marketed to.
  */
 import { type CampaignVisual, httpsUrl, layoutBlocks, layoutHasImage } from "../shared/campaignVisual.js";
-import { buttonsToText, markdownToTelegramText, renderCampaignBody } from "../shared/campaignBlocks.js";
+import { buttonsToText, markdownToTelegramHtml, markdownToTelegramText, renderCampaignBody, telegramMessageHtml } from "../shared/campaignBlocks.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
@@ -395,18 +395,24 @@ export async function sendTelegramCampaign(
   },
 ): Promise<{ sent: number; failed: number; total: number }> {
   const recipients = opts.recipients ?? (await resolveTelegramRecipients(admin));
-  let sent = 0;
-  let failed = 0;
   const tgUtm = { source: "telegram", medium: "broadcast", campaign: campaignSlug(opts.subject) };
   const siteHost = hostOf(opts.siteUrl || "");
-  // Button lines → "Label: url" with the same tracking as ordinary links.
-  const taggedMd = tagMarkdownLinks(buttonsToText(opts.markdown, (u) => addUtm(u, tgUtm, siteHost)), tgUtm, siteHost);
-  const bodyPlain = markdownToTelegram(taggedMd);
+  const track = (u: string) => addUtm(u, tgUtm, siteHost);
+  // Formatted message (labelled links, bold) + real buttons; plain text is the fallback
+  // if Telegram ever rejects the formatting.
+  const { html: bodyHtml, buttons } = markdownToTelegramHtml(opts.markdown, track);
+  const bodyPlain = markdownToTelegram(tagMarkdownLinks(buttonsToText(opts.markdown, track), tgUtm, siteHost));
+  const escName = (n: string | null) => (n ? n.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : n);
+  let sent = 0;
+  let failed = 0;
   for (const r of recipients) {
     const subject = `${opts.prefix ?? ""}${personalize(opts.subject, { email: "", name: r.name }).trim()}`.trim();
-    const body = personalize(bodyPlain, { email: "", name: r.name });
-    const text = subject ? `${subject}\n\n${body}` : body;
-    const res = await sendTelegram(r.chatId, text.slice(0, 4096));
+    const html = telegramMessageHtml(subject, personalize(bodyHtml, { email: "", name: escName(r.name) }));
+    let res = html.length <= 4096 ? await sendTelegram(r.chatId, html, { html: true, buttons }) : { sent: false, reason: "too_long" };
+    if (!res.sent) {
+      const plain = personalize(bodyPlain, { email: "", name: r.name });
+      res = await sendTelegram(r.chatId, (subject ? `${subject}\n\n${plain}` : plain).slice(0, 4096));
+    }
     if (res.sent) sent++;
     else failed++;
   }

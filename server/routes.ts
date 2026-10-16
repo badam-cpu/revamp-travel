@@ -3959,7 +3959,7 @@ export function registerApiRoutes(app: Express) {
     if (me?.role !== "admin") return res.status(403).json({ error: "Admins only." });
     if (rateLimited(giftPurchaseHits, `tgtest:${userId}`, 10)) return res.status(429).json({ error: "That's a lot of tests — wait a minute." });
     const parsed = z
-      .object({ subject: z.string().trim().min(1, "Add a first line first.").max(200), body: z.string().trim().min(1, "Write the message first.").max(20000) })
+      .object({ subject: z.string().trim().min(1, "Add a first line first.").max(200), body: z.string().trim().min(1, "Write the message first.").max(20000), name: z.string().trim().max(80).optional() })
       .safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
     if (!telegramBroadcastConfigured()) return res.status(503).json({ error: "Telegram isn't configured (set TELEGRAM_BOT_TOKEN)." });
@@ -3970,7 +3970,7 @@ export function registerApiRoutes(app: Express) {
       subject: parsed.data.subject,
       markdown: parsed.data.body,
       siteUrl: site,
-      recipients: [{ chatId: link.chat_id, name: (me as { display_name?: string | null }).display_name ?? null }],
+      recipients: [{ chatId: link.chat_id, name: parsed.data.name || ((me as { display_name?: string | null }).display_name ?? null) }],
       prefix: "[TEST] ",
     });
     if (!r.sent) return res.status(502).json({ error: "Telegram didn't accept the test — try again in a moment." });

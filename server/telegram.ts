@@ -36,12 +36,26 @@ async function call(method: string, body: unknown): Promise<{ ok: boolean; statu
   return { ok: res.ok, status: res.status, json };
 }
 
-/** Send a plain-text message to a connected chat. Best-effort. */
-export async function sendTelegram(chatId: string, text: string): Promise<SendResult> {
+/**
+ * Send a message to a connected chat. Best-effort. Plain text by default;
+ * `html` sends Telegram's HTML subset (<b> <i> <a> <code>) and `buttons` adds
+ * tappable link buttons under the message (one per row).
+ */
+export async function sendTelegram(
+  chatId: string,
+  text: string,
+  opts: { html?: boolean; buttons?: { text: string; url: string }[] } = {},
+): Promise<SendResult> {
   if (!process.env.TELEGRAM_BOT_TOKEN) return { sent: false, reason: "not_configured" };
   if (!chatId) return { sent: false, reason: "no_recipient" };
   try {
-    const r = await call("sendMessage", { chat_id: chatId, text, disable_web_page_preview: true });
+    const r = await call("sendMessage", {
+      chat_id: chatId,
+      text,
+      disable_web_page_preview: true,
+      ...(opts.html ? { parse_mode: "HTML" } : {}),
+      ...(opts.buttons?.length ? { reply_markup: { inline_keyboard: opts.buttons.map((b) => [{ text: b.text, url: b.url }]) } } : {}),
+    });
     if (!r.ok) {
       console.warn(`[telegram] sendMessage ${r.status}`, JSON.stringify(r.json)?.slice(0, 300));
       return { sent: false, reason: `http_${r.status}` };
