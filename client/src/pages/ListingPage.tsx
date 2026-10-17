@@ -41,7 +41,7 @@ import { buildBreadcrumbJsonLd, buildListingJsonLd } from "@shared/seo";
 import { shareCurrentPage } from "@/lib/share";
 import { VirtualTour } from "@/components/VirtualTour";
 import { fetchTour } from "@/lib/tours";
-import { listingTourPhotos, tourWorthShowing, visibleRooms, type ListingTour } from "@shared/tours";
+import { listingTourPhotos, tourWorthShowing, visibleRooms, type ListingTour, type TourFacts } from "@shared/tours";
 import { RichText } from "@/components/RichText";
 import { ExpandableDescription } from "@/components/ExpandableDescription";
 
@@ -248,6 +248,17 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   }, [listing?.id, listing?.type]);
   const tourRooms = useMemo(() => (tour && listing ? visibleRooms(tour.rooms, listingTourPhotos(listing, roomTypes)) : []), [tour, listing, roomTypes]);
   const showTour = tourWorthShowing(tourRooms);
+  const tourFacts = useMemo<TourFacts | undefined>(
+    () =>
+      listing
+        ? {
+            amenities: listing.amenities ?? [],
+            sleeping: listing.rooms ?? [],
+            roomTypes: roomTypes.map((t) => ({ name: t.name, beds: t.beds, maxGuests: t.maxGuests, sizeM2: t.sizeM2, amenities: t.amenities })),
+          }
+        : undefined,
+    [listing, roomTypes],
+  );
 
   if (!listing) {
     // While the catalog is still loading (e.g. a hard refresh on this page,
@@ -381,14 +392,14 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
                     setTourOpen(true);
                     trackEvent("virtual_tour_open", { item_id: listing.id, rooms: tourRooms.length });
                   }}
-                  className="absolute right-3 top-3 z-10 inline-flex h-10 items-center gap-2 rounded-full bg-basalt/85 px-4 text-xs font-semibold text-paper shadow-md backdrop-blur-sm transition-colors hover:bg-basalt focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-apricot"
+                  className="absolute right-3 top-3 z-10 inline-flex h-10 items-center gap-2 rounded-full bg-apricot px-4 text-sm font-bold text-white shadow-lg ring-1 ring-black/10 transition-colors hover:bg-[#d94c1c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-paper"
                 >
-                  <Footprints className="h-4 w-4" aria-hidden /> Virtual tour · {tourRooms.length} {tourRooms.length === 1 ? "room" : "rooms"}
+                  <Footprints className="h-4 w-4" aria-hidden /> Virtual tour
                 </button>
               ) : undefined
             }
           />
-          {showTour && <VirtualTour title={listing.title} rooms={tourRooms} open={tourOpen} onClose={() => setTourOpen(false)} />}
+          {showTour && <VirtualTour title={listing.title} rooms={tourRooms} facts={tourFacts} open={tourOpen} onClose={() => setTourOpen(false)} />}
         </section>
 
         {/* Title below the gallery. */}

@@ -13,7 +13,7 @@ import { ChevronLeft, ChevronRight, Loader2, Rotate3d, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { imgAttrs } from "@/lib/responsiveImg";
 import { cn } from "@/lib/utils";
-import type { TourRoom } from "@shared/tours";
+import { tourRoomDetails, type TourFacts, type TourRoom } from "@shared/tours";
 
 const PanoramaView = lazy(() => import("@/components/PanoramaView"));
 
@@ -21,8 +21,9 @@ type Item = { type: "pano"; url: string } | { type: "photo"; url: string; captio
 const itemsOf = (r: TourRoom): Item[] => [...(r.pano ? [{ type: "pano" as const, url: r.pano.url }] : []), ...r.photos.map((p) => ({ type: "photo" as const, url: p.url, caption: p.caption }))];
 const thumbOf = (r: TourRoom) => r.photos[0]?.url ?? null;
 
-export function VirtualTour({ title, rooms, open, onClose, startRoom = 0 }: { title: string; rooms: TourRoom[]; open: boolean; onClose: () => void; startRoom?: number }) {
+export function VirtualTour({ title, rooms, open, onClose, startRoom = 0, facts }: { title: string; rooms: TourRoom[]; open: boolean; onClose: () => void; startRoom?: number; facts?: TourFacts }) {
   const [roomIdx, setRoomIdx] = useState(startRoom);
+  const [allDetails, setAllDetails] = useState(false);
   const [itemIdx, setItemIdx] = useState(0);
   const touch = useRef<{ x: number; y: number } | null>(null);
   const chipsRef = useRef<HTMLDivElement>(null);
@@ -36,6 +37,10 @@ export function VirtualTour({ title, rooms, open, onClose, startRoom = 0 }: { ti
 
   const room = rooms[roomIdx];
   const items = useMemo(() => (room ? itemsOf(room) : []), [room]);
+  // What's in this room — the operator's own amenities / beds (shared/tours.ts).
+  const details = useMemo(() => (room && facts ? tourRoomDetails(room, rooms, facts) : []), [room, rooms, facts]);
+  useEffect(() => setAllDetails(false), [roomIdx]);
+  const DETAILS_SHOWN = 5;
   const item = items[itemIdx];
   const nextRoom = rooms[roomIdx + 1];
   const atEnd = !nextRoom && itemIdx >= items.length - 1;
@@ -98,7 +103,7 @@ export function VirtualTour({ title, rooms, open, onClose, startRoom = 0 }: { ti
         </div>
 
         {/* Rooms — chips on phones */}
-        <div ref={chipsRef} className="flex shrink-0 gap-2 overflow-x-auto px-4 pb-3 [scrollbar-width:none] lg:hidden [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Rooms">
+        <div ref={chipsRef} className="flex shrink-0 gap-2 overflow-x-auto px-4 pb-3 [scrollbar-width:none] lg:hidden [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Parts of the tour">
           {rooms.map((r, i) => (
             <button
               key={r.id}
@@ -117,7 +122,7 @@ export function VirtualTour({ title, rooms, open, onClose, startRoom = 0 }: { ti
 
         <div className="grid min-h-0 flex-1 lg:grid-cols-[264px_minmax(0,1fr)]">
           {/* Rooms — side rail on desktop */}
-          <nav aria-label="Rooms" className="hidden overflow-y-auto px-4 pb-6 lg:block">
+          <nav aria-label="Parts of the tour" className="hidden overflow-y-auto px-4 pb-6 lg:block">
             <ol className="grid gap-1">
               {rooms.map((r, i) => {
                 const thumb = thumbOf(r);
@@ -204,12 +209,27 @@ export function VirtualTour({ title, rooms, open, onClose, startRoom = 0 }: { ti
 
             {/* Caption + where you are */}
             <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
                 <p className="truncate text-sm font-semibold text-white">{item?.type === "photo" && item.caption ? item.caption : room.name}</p>
                 <p className="text-xs tabular-nums text-white/50">
                   {room.name} · {itemIdx + 1} of {items.length}
-                  {rooms.length > 1 ? ` · room ${roomIdx + 1} of ${rooms.length}` : ""}
                 </p>
+                {details.length > 0 && (
+                  <ul className="-mx-4 mt-2 flex gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden" aria-label={`In the ${room.name.toLowerCase()}`}>
+                    {(allDetails ? details : details.slice(0, DETAILS_SHOWN)).map((d) => (
+                      <li key={d} className="shrink-0 whitespace-nowrap rounded-full bg-white/10 px-2.5 py-1 text-xs text-white/85">
+                        {d}
+                      </li>
+                    ))}
+                    {!allDetails && details.length > DETAILS_SHOWN && (
+                      <li className="shrink-0">
+                        <button type="button" onClick={() => setAllDetails(true)} className="rounded-full px-2.5 py-1 text-xs font-semibold text-white/70 underline-offset-2 hover:text-white hover:underline">
+                          +{details.length - DETAILS_SHOWN} more
+                        </button>
+                      </li>
+                    )}
+                  </ul>
+                )}
               </div>
               {itemIdx >= items.length - 1 && nextRoom && (
                 <button type="button" onClick={() => goRoom(roomIdx + 1)} className="inline-flex h-10 items-center gap-1.5 rounded-full bg-white px-4 text-sm font-semibold text-basalt transition-colors hover:bg-white/90">

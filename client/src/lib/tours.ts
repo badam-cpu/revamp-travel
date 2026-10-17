@@ -16,6 +16,7 @@ import {
   newPhotosFor,
   type ClassifiedPhoto,
   type ListingTour,
+  type TourFacts,
   type TourRoom,
 } from "@shared/tours";
 
@@ -62,22 +63,29 @@ export interface TourSource {
   /** Photos Aha sorts — the listing's own (hotel room-type photos become rooms as they are). */
   listingPhotos: string[];
   roomTypes: { name: string; photos: string[] }[];
+  /** Amenities / beds shown on each stop (tourRoomDetails). */
+  facts: TourFacts;
 }
 
 /** The stay's current photos, read fresh from the database. */
 export async function fetchTourSource(listingId: string): Promise<TourSource | null> {
-  const { data, error } = await supabase.from("listings").select("image, gallery, multi_room").eq("id", listingId).maybeSingle();
+  const { data, error } = await supabase.from("listings").select("image, gallery, multi_room, amenities, rooms").eq("id", listingId).maybeSingle();
   if (error || !data) return null;
-  const l = data as { image: string | null; gallery: string[] | null; multi_room?: boolean | null };
-  let roomTypes: { name: string; image: string | null; gallery: string[] | null }[] = [];
+  const l = data as { image: string | null; gallery: string[] | null; multi_room?: boolean | null; amenities: string[] | null; rooms: TourFacts["sleeping"] | null };
+  let roomTypes: { name: string; image: string | null; gallery: string[] | null; beds: { type: string; count: number }[] | null; max_guests: number | null; size_m2: number | null; amenities: string[] | null }[] = [];
   if (l.multi_room) {
-    const { data: rts } = await supabase.from("room_types").select("name, image, gallery, sort_order").eq("listing_id", listingId).order("sort_order", { ascending: true });
+    const { data: rts } = await supabase.from("room_types").select("name, image, gallery, beds, max_guests, size_m2, amenities, sort_order").eq("listing_id", listingId).order("sort_order", { ascending: true });
     roomTypes = (rts ?? []) as typeof roomTypes;
   }
   return {
     photos: listingTourPhotos(l, roomTypes),
     listingPhotos: listingTourPhotos(l),
     roomTypes: roomTypes.map((t) => ({ name: t.name, photos: listingTourPhotos({ image: t.image, gallery: t.gallery }) })),
+    facts: {
+      amenities: l.amenities ?? [],
+      sleeping: Array.isArray(l.rooms) ? l.rooms : [],
+      roomTypes: roomTypes.map((t) => ({ name: t.name, beds: t.beds ?? [], maxGuests: t.max_guests ?? undefined, sizeM2: t.size_m2 ?? undefined, amenities: t.amenities ?? [] })),
+    },
   };
 }
 

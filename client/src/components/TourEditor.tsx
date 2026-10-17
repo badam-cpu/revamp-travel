@@ -20,7 +20,7 @@ import { saveListingTour, userMessage } from "@/lib/api";
 import { addNewPhotos, buildTour, fetchTour, fetchTourSource, PanoramaError, uploadPanorama, type TourSource } from "@/lib/tours";
 import { imgAttrs } from "@/lib/responsiveImg";
 import { cn } from "@/lib/utils";
-import { kindLabel, newPhotosFor, newRoomId, TOUR_LIMITS, TOUR_ROOM_KINDS, visibleRooms, type ListingTour, type TourRoom, type TourRoomKind } from "@shared/tours";
+import { kindLabel, newPhotosFor, newRoomId, tourRoomDetails, TOUR_LIMITS, TOUR_ROOM_KINDS, visibleRooms, type ListingTour, type TourRoom, type TourRoomKind } from "@shared/tours";
 
 const LEFT_OUT = "__left_out__";
 
@@ -351,6 +351,25 @@ export function TourEditor({ listing, open, onClose, onChanged }: { listing: { i
                       </Button>
                     </div>
 
+                    {/* What guests see listed for this room (from the listing) */}
+                    {src && (
+                      <section className="grid gap-1.5">
+                        <p className="text-xs font-semibold text-basalt/50">Shown to guests in this room</p>
+                        {tourRoomDetails(room, rooms, src.facts).length ? (
+                          <ul className="flex flex-wrap gap-1.5">
+                            {tourRoomDetails(room, rooms, src.facts).map((d) => (
+                              <li key={d} className="rounded-full bg-chalk px-2.5 py-1 text-xs text-basalt/75">
+                                {d}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-xs text-basalt/45">Nothing matched yet.</p>
+                        )}
+                        <p className="text-[11px] leading-4 text-basalt/45">Comes from your listing's amenities and sleeping arrangements — edit them in the listing form.</p>
+                      </section>
+                    )}
+
                     {/* 360° */}
                     <section className="grid gap-2 rounded-[12px] border border-basalt/10 p-3">
                       <div className="flex flex-wrap items-center gap-3">
@@ -442,7 +461,7 @@ export function TourEditor({ listing, open, onClose, onChanged }: { listing: { i
             </div>
           </>
         )}
-        <VirtualTour title={listing.title} rooms={preview} open={previewOpen} onClose={() => setPreviewOpen(false)} />
+        <VirtualTour title={listing.title} rooms={preview} facts={src?.facts} open={previewOpen} onClose={() => setPreviewOpen(false)} />
       </DialogContent>
     </Dialog>
   );
