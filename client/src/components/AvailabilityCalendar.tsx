@@ -45,6 +45,7 @@ export function AvailabilityCalendar({
   initialEnd = null,
   className,
   showLegend = true,
+  minNights = 1,
 }: {
   blockedRanges: BlockedRange[];
   /** Confirmed-booking ranges (from listing_booked_ranges), greyed out alongside the iCal ranges. */
@@ -59,6 +60,8 @@ export function AvailabilityCalendar({
   className?: string;
   /** The Available/Unavailable key — meaningless where nothing is blocked (search). */
   showLegend?: boolean;
+  /** Stays: the operator's minimum stay — check-outs before check-in + this can't be picked. */
+  minNights?: number;
 }) {
   const blocked = useMemo(() => expandBlocked([...blockedRanges, ...bookedRanges]), [blockedRanges, bookedRanges]);
   const today = useMemo(() => {
@@ -88,6 +91,15 @@ export function AvailabilityCalendar({
     }
     return false;
   };
+
+  const minN = mode === "range" ? Math.max(1, Math.floor(minNights)) : 1;
+  const addDays = (s: string, n: number) => {
+    const d = parseIso(s);
+    d.setDate(d.getDate() + n);
+    return iso(d);
+  };
+  /** First allowed check-out for the picked check-in. */
+  const earliestEnd = start && !end ? addDays(start, minN) : null;
 
   const onPick = (key: string) => {
     // Single-date mode (tours/experiences): one tap picks the date, no range.
@@ -160,7 +172,9 @@ export function AvailabilityCalendar({
           const key = iso(d);
           const isPast = d < today;
           const isBlocked = blocked.has(key);
-          const isDisabled = isPast || isBlocked;
+          // Check-in picked, check-out pending: nights shorter than the minimum stay can't be chosen.
+          const tooShort = !!earliestEnd && key > start! && key < earliestEnd;
+          const isDisabled = isPast || isBlocked || tooShort;
           const isStart = key === start;
           const isEnd = key === end;
           const inRange = Boolean(start && end && key > start && key < end);
@@ -171,6 +185,7 @@ export function AvailabilityCalendar({
                 type="button"
                 disabled={isDisabled}
                 aria-pressed={isEndpoint}
+                title={tooShort ? `${minN}-night minimum` : undefined}
                 onClick={() => onPick(key)}
                 className={cn(
                   "flex h-9 w-9 items-center justify-center rounded-full text-sm transition-colors",
@@ -178,7 +193,9 @@ export function AvailabilityCalendar({
                     ? "bg-apricot font-semibold text-white"
                     : isBlocked
                       ? "text-basalt/30 line-through"
-                      : isPast
+                      : tooShort
+                        ? "bg-apricot/5 text-basalt/30"
+                        : isPast
                         ? "text-basalt/25"
                         : "cursor-pointer text-basalt hover:bg-apricot/20",
                 )}
@@ -203,9 +220,13 @@ export function AvailabilityCalendar({
               <strong className="font-semibold text-basalt">{nights} {nights === 1 ? "night" : "nights"}</strong> · {prettyDate(start)} → {prettyDate(end)}
             </>
           ) : start ? (
-            <>Check-in {prettyDate(start)} — now pick a check-out date.</>
+            minN > 1 && earliestEnd ? (
+              <>Check-in {prettyDate(start)} — pick a check-out on or after <strong className="font-semibold text-basalt">{prettyDate(earliestEnd)}</strong> ({minN}-night minimum).</>
+            ) : (
+              <>Check-in {prettyDate(start)} — now pick a check-out date.</>
+            )
           ) : (
-            <span className="text-basalt/45">Select your check-in and check-out dates.</span>
+            <span className="text-basalt/45">Select your check-in and check-out dates{minN > 1 ? ` · ${minN}-night minimum` : ""}.</span>
           )}
         </span>
         {(start || end) && (

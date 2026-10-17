@@ -410,7 +410,7 @@ export function computeRefundCents(
 /** One-line policy description for the UI. */
 export function describeCancellationPolicy(
   policy: CancellationPolicy | undefined | null,
-  opts: { freeCancelDays?: number; startDate?: string; discountPercent?: number } = {},
+  opts: { freeCancelDays?: number; startDate?: string; discountPercent?: number; today?: string } = {},
 ): string {
   const p = policy ?? DEFAULT_CANCELLATION_POLICY;
   if (p === "non_refundable") {
@@ -420,6 +420,11 @@ export function describeCancellationPolicy(
   const days = opts.freeCancelDays ?? DEFAULT_FREE_CANCEL_DAYS;
   if (opts.startDate) {
     const cutoff = addDaysIso(opts.startDate, -days);
+    // Booking inside the window (the cutoff has already passed): there is no
+    // free cancellation — same rule computeRefundCents applies (today > cutoff → 0).
+    const now = new Date();
+    const today = opts.today ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    if (cutoff < today) return `Non-refundable for these dates — free cancellation ends ${days} day${days === 1 ? "" : "s"} before check-in`;
     const [y, m, d] = cutoff.split("-").map(Number);
     const pretty = new Date(y, (m ?? 1) - 1, d ?? 1).toLocaleDateString("en-US", { month: "short", day: "numeric" });
     return `Free cancellation until ${pretty}`;

@@ -236,8 +236,9 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
       {/* Dates. Slot mode → the same month calendar (only session days enabled),
           then a tidy row of time chips for the chosen day. */}
       <div className="mt-5">
-        <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">
+        <span className="mb-2 flex items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">
           {slotMode ? "Choose a date" : isStay ? "Choose your dates" : "Choose a date"}
+          {isStay && minStay > 1 && <span className="font-semibold normal-case tracking-normal text-basalt/55">{minStay}-night minimum</span>}
         </span>
         {slotMode && sessions.length === 0 ? (
           <p className="border border-dashed border-basalt/20 bg-paper px-4 py-6 text-center text-xs text-basalt/50">No upcoming sessions right now — check back soon.</p>
@@ -282,6 +283,7 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
                 mode={isStay ? "range" : "single"}
                 blockedRanges={[...(slotMode ? slotBlockedRanges : [...(listing.blockedRanges ?? []), ...(listing.manualBlockedRanges ?? [])]), ...suspensionBlocked(listing)]}
                 bookedRanges={slotMode ? [] : booked}
+                minNights={isStay ? minStay : 1}
                 onChange={slotMode ? (r) => { setSlotDate(r.start); setSessionId(null); } : setRange}
               />
             )}
@@ -343,7 +345,15 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
       </div>
 
       {/* Price breakdown — base + turnover tax added on top (add-ons at checkout) */}
-      {selected && charge.baseCents > 0 && (
+      {/* Too short for the minimum stay: say what's needed instead of pricing dates that can't be booked. */}
+      {belowMin && selected && (
+        <div className="mt-4 border-t border-basalt/10 pt-4 text-sm">
+          <p className="font-semibold">This stay has a {minStay}-night minimum.</p>
+          <p className="mt-1 text-basalt/60">You picked {selectedNights} {selectedNights === 1 ? "night" : "nights"} — choose a check-out on or after {new Date(`${addDays(selected.startDate, minStay)}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" })} to see the price.</p>
+        </div>
+      )}
+
+      {selected && !belowMin && charge.baseCents > 0 && (
         <div className="mt-4 grid gap-1.5 border-t border-basalt/10 pt-4 text-sm">
           {(() => {
             // Compact basis: when seasonal/daily rates apply, show the average
@@ -390,11 +400,13 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
         </div>
       )}
 
-      {/* Cancellation policy */}
-      <p className="mt-3 text-xs leading-5 text-basalt/55">
-        {listing.cancellationPolicy === "non_refundable" ? "🔒 " : "✓ "}
-        {policyText}.
-      </p>
+      {/* Cancellation policy (not for dates that can't be booked) */}
+      {!belowMin && (
+        <p className="mt-3 text-xs leading-5 text-basalt/55">
+          {listing.cancellationPolicy === "non_refundable" || policyText.startsWith("Non-refundable") ? "🔒 " : "✓ "}
+          {policyText}.
+        </p>
+      )}
 
       {/* Action — hands off to the checkout page */}
       {listing.price <= 0 ? (
@@ -403,23 +415,19 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
         </Button>
       ) : (
         <Button
-          onClick={() => { if (!selected) { setDatesOpen(true); return; } goToCheckout(); }}
-          disabled={belowMin}
-          className={cn("mt-5 h-12 w-full rounded-none bg-apricot text-white hover:bg-apricot/90", (!selected || belowMin) && "opacity-60")}
+          onClick={() => { if (!selected || belowMin) { setDatesOpen(true); return; } goToCheckout(); }}
+          className={cn("mt-5 h-12 w-full rounded-none bg-apricot text-white hover:bg-apricot/90", !selected && "opacity-60")}
         >
           {!selected
             ? slotMode
               ? "Select a time"
               : "Select dates to book"
             : belowMin
-              ? `${minStay}-night minimum`
+              ? `Choose at least ${minStay} nights`
               : slotMode && listing.bookingMode === "request"
                 ? `Request to book · ${format(amountCents)}`
                 : `Book · ${format(amountCents)}`}
         </Button>
-      )}
-      {belowMin && (
-        <p className="mt-2 text-center text-xs font-medium text-apricot">This stay requires a minimum of {minStay} nights.</p>
       )}
       <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">
         You'll add your details{isStay ? " and any extras" : ""} on the next step, then pay securely via{" "}
