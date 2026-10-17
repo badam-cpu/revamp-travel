@@ -16,7 +16,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { Minus, Plus, Users, Calendar, ChevronRight, ChevronDown } from "lucide-react";
+import { Calendar, CalendarRange, ChevronDown, ChevronRight, Minus, Plus, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { LiveListing, BlockedRange } from "@/contexts/ListingsContext";
 import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
@@ -238,7 +238,11 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
       <div className="mt-5">
         <span className="mb-2 flex items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-[0.15em] text-basalt/45">
           {slotMode ? "Choose a date" : isStay ? "Choose your dates" : "Choose a date"}
-          {isStay && minStay > 1 && <span className="font-semibold normal-case tracking-normal text-basalt/55">{minStay}-night minimum</span>}
+          {isStay && minStay > 1 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-apricot/12 px-2.5 py-1 text-[11px] font-bold normal-case tracking-normal text-[#B83F0E]">
+              <CalendarRange className="h-3.5 w-3.5" aria-hidden /> {minStay}-night minimum
+            </span>
+          )}
         </span>
         {slotMode && sessions.length === 0 ? (
           <p className="border border-dashed border-basalt/20 bg-paper px-4 py-6 text-center text-xs text-basalt/50">No upcoming sessions right now — check back soon.</p>
