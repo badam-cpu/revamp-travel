@@ -1,5 +1,5 @@
 /** Revamp brandbook: detail pages combine rounded imagery, bold sans hierarchy, concise facts, white space, and orange actions. */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowLeft, BedDouble, Bookmark, CalendarRange, Check, ChevronLeft, ChevronRight, Clock, Coffee, Footprints, Home, KeyRound, LayoutGrid, LogOut, MapPin, Navigation, Share2, ShieldCheck, Sparkles, SprayCan, Star, Users, Utensils, Wallet, Wifi, X } from "lucide-react";
 import { Link } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -62,56 +62,8 @@ const REVAMP_STANDARD = [
 const AMENITIES_INLINE_LIMIT = 10;
 
 /**
- * One hero photo, fitted to its shape. The frame is wide and short (≈4:1 on
- * desktop), so filling it with every photo cut portrait and square shots down
- * to a thin middle strip. A photo whose shape is close to the frame still
- * fills it (little is lost; the operator's cover focus applies); any other
- * photo is shown whole, with a soft blurred copy of itself filling the sides
- * (a small 640 px copy — cheap) instead of empty bars.
- */
-function FitPhoto({ src, alt, eager, focus }: { src: string; alt: string; eager: boolean; focus?: string }) {
-  const ref = useRef<HTMLImageElement>(null);
-  const [fit, setFit] = useState<"cover" | "contain">("cover");
-  const decide = () => {
-    const img = ref.current;
-    const frame = img?.parentElement?.getBoundingClientRect();
-    if (!img?.naturalWidth || !frame?.width || !frame.height) return;
-    const r = img.naturalWidth / img.naturalHeight / (frame.width / frame.height);
-    // Within ~25–40% of the frame's shape a small crop looks better than bars
-    // (a normal 3:2 photo on a phone); further out, show the whole photo.
-    setFit(r >= 0.75 && r <= 1.4 ? "cover" : "contain");
-  };
-  useEffect(() => {
-    decide();
-    const frame = ref.current?.parentElement;
-    if (!frame || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(decide);
-    ro.observe(frame);
-    return () => ro.disconnect();
-  }, [src]);
-  return (
-    <>
-      {fit === "contain" && (
-        <div aria-hidden className="absolute inset-0 bg-basalt">
-          <img {...imgAttrs(src, "640px")} alt="" className="h-full w-full scale-110 object-cover opacity-60 blur-2xl" />
-        </div>
-      )}
-      <img
-        ref={ref}
-        onLoad={decide}
-        {...imgAttrs(src, "(min-width:1024px) 1100px, 100vw")}
-        alt={alt}
-        loading={eager ? undefined : "lazy"}
-        style={fit === "cover" && focus ? { objectPosition: focus } : undefined}
-        className={cn("relative h-full w-full", fit === "cover" ? "object-cover" : "object-contain")}
-      />
-    </>
-  );
-}
-
-/**
- * Rolling hero carousel: one photo at a time (shown large and whole — see
- * FitPhoto), cross-fading. Auto-advances (pauses on hover,
+ * Rolling hero carousel: one photo at a time (shown large, so rooms aren't
+ * cropped to a "minimal" slice), cross-fading. Auto-advances (pauses on hover,
  * respects reduced motion), with arrows, windowed dots, and a "Show all photos"
  * button. Clicking a photo opens the full-screen lightbox at that index.
  */
@@ -146,10 +98,12 @@ function HeroCarousel({ photos, title, onOpen, badge, coverFocus, topRight }: { 
             tabIndex={idx === i ? 0 : -1}
             aria-hidden={idx !== i}
             onClick={() => onOpen(i)}
-            className="relative h-full w-full shrink-0 overflow-hidden"
+            className="h-full w-full shrink-0"
           >
             {/* Only the current photo and its neighbours are fetched (not the whole gallery). */}
-            {Math.min(Math.abs(idx - i), total - Math.abs(idx - i)) <= 1 && <FitPhoto src={src} alt={idx === 0 ? title : ""} eager={idx === 0} focus={idx === 0 ? coverFocus : undefined} />}
+            {Math.min(Math.abs(idx - i), total - Math.abs(idx - i)) <= 1 && (
+              <img {...imgAttrs(src, "(min-width:1024px) 1100px, 100vw")} alt={idx === 0 ? title : ""} loading={idx === 0 ? undefined : "lazy"} style={idx === 0 ? { objectPosition: coverFocus || undefined } : undefined} className="h-full w-full object-cover" />
+            )}
           </button>
         ))}
       </div>
