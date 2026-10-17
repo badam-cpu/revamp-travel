@@ -315,14 +315,41 @@
   }
 }
 
-/* Virtual tour (VirtualTour.tsx): each photo drifts in slowly, like walking
-   into the room. Off for reduced motion. */
-@keyframes tour-drift {
-  from { transform: scale(1.045); opacity: 0.4; }
-  12% { opacity: 1; }
-  to { transform: scale(1); opacity: 1; }
-}
-.tour-drift { animation: tour-drift 7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+/* Virtual tour (VirtualTour.tsx) — walk-through motion.
+   Camera moves (on the photo): a slow push-in, pull-out or pan, cycled photo
+   to photo; the duration is set inline to match how long the photo shows.
+   Entering/leaving (on wrappers): moving to the next room the old photo
+   zooms through and fades while the new one comes up from the doorway;
+   going back reverses it; photos in the same room cross-fade.
+   All of it is off under reduced motion (VirtualTour also skips the classes). */
+@keyframes tour-kb-in { from { transform: scale(1); } to { transform: scale(1.1); } }
+@keyframes tour-kb-out { from { transform: scale(1.1); } to { transform: scale(1); } }
+@keyframes tour-kb-right { from { transform: scale(1.1) translateX(-3%); } to { transform: scale(1.1) translateX(3%); } }
+@keyframes tour-kb-left { from { transform: scale(1.1) translateX(3%); } to { transform: scale(1.1) translateX(-3%); } }
+.tour-kb-in { animation: tour-kb-in 7s cubic-bezier(0.37, 0, 0.63, 1) both; }
+.tour-kb-out { animation: tour-kb-out 7s cubic-bezier(0.37, 0, 0.63, 1) both; }
+.tour-kb-right { animation: tour-kb-right 7s cubic-bezier(0.37, 0, 0.63, 1) both; }
+.tour-kb-left { animation: tour-kb-left 7s cubic-bezier(0.37, 0, 0.63, 1) both; }
+
+@keyframes tour-enter-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes tour-enter-forward { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+@keyframes tour-enter-back { from { opacity: 0; transform: scale(1.08); } to { opacity: 1; transform: scale(1); } }
+.tour-enter-fade { animation: tour-enter-fade 700ms ease-out both; }
+.tour-enter-forward { animation: tour-enter-forward 1000ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.tour-enter-back { animation: tour-enter-back 900ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@keyframes tour-leave-fade { from { opacity: 1; } to { opacity: 0; } }
+@keyframes tour-leave-forward { from { opacity: 1; transform: scale(1.06); filter: blur(0); } to { opacity: 0; transform: scale(1.4); filter: blur(6px); } }
+@keyframes tour-leave-back { from { opacity: 1; transform: scale(1.06); } to { opacity: 0; transform: scale(0.85); } }
+.tour-leave-fade { animation: tour-leave-fade 700ms ease-out both; }
+.tour-leave-forward { animation: tour-leave-forward 900ms cubic-bezier(0.55, 0, 0.8, 0.35) both; }
+.tour-leave-back { animation: tour-leave-back 800ms cubic-bezier(0.55, 0, 0.8, 0.35) both; }
+
+@keyframes tour-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.tour-progress { transform-origin: left center; animation: tour-progress linear both; }
+
 @media (prefers-reduced-motion: reduce) {
-  .tour-drift { animation: none; }
+  .tour-kb-in, .tour-kb-out, .tour-kb-right, .tour-kb-left,
+  .tour-enter-fade, .tour-enter-forward, .tour-enter-back,
+  .tour-leave-fade, .tour-leave-forward, .tour-leave-back { animation: none; }
 }

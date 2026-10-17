@@ -210,17 +210,29 @@ export function amenityRoomKind(amenity: string): TourRoomKind | null {
   return AMENITY_ROOM[norm(amenity)] ?? AMENITY_WORDS.find(([re]) => re.test(amenity))?.[1] ?? null;
 }
 
-/** Where a kind's amenities go when the tour has no stop of that kind. */
+/**
+ * Where a kind's amenities go when the tour has no stop of that kind — only
+ * where they'd really be found (an open-plan dining table, a desk in the
+ * living room). Anything else is left out rather than shown in the wrong room:
+ * a balcony never appears on a living-room stop, a gym never on "Outside".
+ */
 const FALLBACK: Partial<Record<TourRoomKind, TourRoomKind[]>> = {
   dining: ["kitchen", "living"],
   workspace: ["living", "bedroom"],
-  balcony: ["view", "living"],
+  balcony: ["view"],
   garden: ["exterior"],
   pool: ["garden", "exterior"],
   entrance: ["exterior"],
-  amenities: ["exterior"],
-  bathroom: ["bedroom", "hotel_room"],
+  bathroom: ["hotel_room"],
 };
+
+/** Amenities that only name the room itself — redundant on that room's own stop. */
+const SELF_NAMES: Partial<Record<TourRoomKind, string[]>> = {
+  living: ["Living Room", "Sitting Area"],
+  kitchen: ["Kitchen"],
+  dining: ["Dining Room", "Dining area"],
+};
+const SPECIFIC_TV = /smart ?tv|cable tv|satellite tv/i;
 
 const bedsText = (beds: { type: string; count: number }[]) =>
   beds
@@ -272,9 +284,14 @@ export function tourRoomDetails(room: TourRoom, allRooms: TourRoom[], facts: Tou
       const target = targets.find((t) => present.has(t));
       if (target === room.kind) kinds.add(k);
     }
+    const selfNames = new Set((SELF_NAMES[room.kind] ?? []).map(norm));
+    const hasSpecificTv = facts.amenities.some((a) => SPECIFIC_TV.test(a));
     for (const a of facts.amenities) {
       const k = amenityRoomKind(a);
-      if (k && kinds.has(k)) add(a);
+      if (!k || !kinds.has(k)) continue;
+      if (k === room.kind && selfNames.has(norm(a))) continue;
+      if (hasSpecificTv && norm(a) === "television") continue;
+      add(a);
     }
   }
   return out.slice(0, MAX_DETAILS);
