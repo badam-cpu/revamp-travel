@@ -314,3 +314,15 @@
     scrollbar-color: color-mix(in oklch, var(--color-basalt) 35%, transparent) var(--color-chalk);
   }
 }
+
+/* Virtual tour (VirtualTour.tsx): each photo drifts in slowly, like walking
+   into the room. Off for reduced motion. */
+@keyframes tour-drift {
+  from { transform: scale(1.045); opacity: 0.4; }
+  12% { opacity: 1; }
+  to { transform: scale(1); opacity: 1; }
+}
+.tour-drift { animation: tour-drift 7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .tour-drift { animation: none; }
+}

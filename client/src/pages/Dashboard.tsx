@@ -24,7 +24,7 @@
 import { PriceLog } from "@/components/PriceLog";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, CalendarDays, Check, ChevronDown, ChevronLeft, ExternalLink, MoreHorizontal, PauseCircle, PlayCircle, Copy, CreditCard, FileText, Gift, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, PanelLeftClose, PanelLeftOpen, Pencil, Plug, Plus, QrCode, RefreshCw, Route, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, CalendarDays, Check, ChevronDown, ChevronLeft, ExternalLink, MoreHorizontal, PauseCircle, PlayCircle, Copy, CreditCard, FileText, Footprints, Gift, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, PanelLeftClose, PanelLeftOpen, Pencil, Plug, Plus, QrCode, RefreshCw, Route, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
 import { Inbox } from "@/components/Inbox";
 import { PartnerHub } from "@/components/PartnerHub";
 import { OperatorIntegrations } from "@/components/OperatorIntegrations";
@@ -73,6 +73,9 @@ import { HotelPricingCalendar, PricingCalendar } from "@/components/PricingCalen
 import { OperatorBookingsTimeline } from "@/components/OperatorBookingsTimeline";
 import { OperatorMultiCalendar } from "@/components/OperatorMultiCalendar";
 import { ListingAvailabilityDialog, quickAvailability, type AvailabilityMode } from "@/components/ListingAvailabilityDialog";
+import { TourEditor } from "@/components/TourEditor";
+import { autoTourAfterSave, fetchToursFor, OPEN_TOUR_EVENT, TOUR_CHANGED_EVENT } from "@/lib/tours";
+import type { ListingTour } from "@shared/tours";
 import { suspensionBlocked } from "@/components/SuspensionNotice";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { PromoCodes } from "@/components/PromoCodes";
@@ -603,6 +606,8 @@ function ListingFormDialog({
         }
       }
       toast(submitForReview ? `${payload.title} submitted for review.` : `${payload.title} saved as a draft.`);
+      // Virtual tour (0109): build it from the photos, or add new ones — in the background.
+      if (draft.type === "stay") void autoTourAfterSave(saved.id);
       onSaved();
     } catch (err) {
       setError(err instanceof ApiError || err instanceof Error ? err.message : "Couldn't save this listing. Please try again.");
@@ -1540,6 +1545,21 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
+  // Virtual tours (0109) — stays only: each row's status chip + editor.
+  const [tours, setTours] = useState<Map<string, ListingTour>>(new Map());
+  const tourIds = type === "stay" ? items.map((l) => l.id).join(",") : "";
+  const reloadTours = () => {
+    if (tourIds) void fetchToursFor(tourIds.split(",")).then(setTours);
+  };
+  useEffect(() => {
+    reloadTours();
+    if (!tourIds) return;
+    const on = () => reloadTours();
+    window.addEventListener(TOUR_CHANGED_EVENT, on);
+    return () => window.removeEventListener(TOUR_CHANGED_EVENT, on);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tourIds]);
+
   // `wizardMode` (Experiences only) routes Add/Edit/prefill to the full-page
   // wizard (App.tsx's /dashboard/experiences/*) instead of the shared dialog.
   const openAdd = () => {
@@ -1640,7 +1660,7 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
       ) : (
         <ul className="mt-5 divide-y divide-basalt/10 border border-basalt/10 bg-paper">
           {items.map((listing) => (
-            <OperatorListingRow key={listing.id} listing={listing} onEdit={() => openEdit(listing)} />
+            <OperatorListingRow key={listing.id} listing={listing} onEdit={() => openEdit(listing)} tour={tours.get(listing.id) ?? null} onTourChanged={reloadTours} />
           ))}
         </ul>
       )}
@@ -1671,10 +1691,21 @@ function calendarStatus(listing: LiveListing): { text: string; warn: boolean } {
  * Suspend bookings / Resume and the Active switch (0101) — listings are switched
  * off, never deleted, so existing bookings and history stay intact.
  */
-function OperatorListingRow({ listing, onEdit }: { listing: LiveListing; onEdit: () => void }) {
+function OperatorListingRow({ listing, onEdit, tour = null, onTourChanged }: { listing: LiveListing; onEdit: () => void; tour?: ListingTour | null; onTourChanged?: () => void }) {
   const { refresh } = useListings();
   const [open, setOpen] = useState(false);
   const [dialog, setDialog] = useState<AvailabilityMode | null>(null);
+  const [tourOpen, setTourOpen] = useState(false);
+  const isStay = listing.type === "stay";
+  // "Check tour" in the post-save toast opens this row's tour editor.
+  useEffect(() => {
+    if (!isStay) return;
+    const on = (e: Event) => {
+      if ((e as CustomEvent<{ listingId: string }>).detail?.listingId === listing.id) setTourOpen(true);
+    };
+    window.addEventListener(OPEN_TOUR_EVENT, on);
+    return () => window.removeEventListener(OPEN_TOUR_EVENT, on);
+  }, [isStay, listing.id]);
   const cal = calendarStatus(listing);
   const active = listing.isActive !== false;
   const paused = suspensionBlocked(listing).length > 0;
@@ -1692,6 +1723,15 @@ function OperatorListingRow({ listing, onEdit }: { listing: LiveListing; onEdit:
             </a>
             <span className="shrink-0"><StatusBadge status={listing.status} reviewNote={listing.reviewNote} /></span>
             {!active && <span className="shrink-0 border border-basalt/30 bg-basalt px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-paper">Inactive</span>}
+            {isStay && tour && (
+              <button
+                type="button"
+                onClick={() => setTourOpen(true)}
+                className={cn("hidden shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold sm:inline-flex", tour.status === "live" ? "border-basalt/15 text-basalt/60 hover:text-basalt" : "border-apricot/50 text-apricot hover:bg-apricot/5")}
+              >
+                <Footprints className="h-3 w-3" aria-hidden /> {tour.status === "live" ? "Tour live" : "Tour to check"}
+              </button>
+            )}
           </div>
           <p className="mt-0.5 truncate text-xs text-basalt/60">
             {listing.city} · {listing.priceLabel}{listing.price > 0 ? ` / ${listing.priceUnit}` : ""}
@@ -1719,6 +1759,11 @@ function OperatorListingRow({ listing, onEdit }: { listing: LiveListing; onEdit:
             <DropdownMenuItem asChild>
               <a href={`/listing/${listing.slug}`} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-2 h-3.5 w-3.5" /> Open guest page</a>
             </DropdownMenuItem>
+            {isStay && (
+              <DropdownMenuItem onSelect={() => setTourOpen(true)}>
+                <Footprints className="mr-2 h-3.5 w-3.5" /> Virtual tour{tour ? (tour.status === "live" ? " · live" : " · to check") : ""}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => setDialog("suspend")} disabled={!active}>
               <PauseCircle className="mr-2 h-3.5 w-3.5" /> {paused ? "Change suspension" : "Suspend bookings"}
@@ -1742,6 +1787,7 @@ function OperatorListingRow({ listing, onEdit }: { listing: LiveListing; onEdit:
           </DropdownMenuContent>
         </DropdownMenu>
         <ListingAvailabilityDialog key={dialog ?? "closed"} listing={listing} mode={dialog} onClose={() => setDialog(null)} />
+        {isStay && <TourEditor listing={{ id: listing.id, title: listing.title }} open={tourOpen} onClose={() => setTourOpen(false)} onChanged={onTourChanged} />}
       </div>
       {listing.status === "draft" && listing.reviewNote && (
         <p className="mx-4 mb-3 max-w-xl border-l-2 border-destructive/40 pl-2 text-xs leading-5 text-basalt/70">

@@ -55,6 +55,7 @@ import { redeemForCheckout, releaseRedeemed, redeemedColumns, redeemedTotal, cov
 import { payoutState } from "../shared/payouts.js";
 import { loadInvoiceSource, savedInvoice, invoiceContext, canManageInvoice, saveInvoice, invoiceForToken, invoiceLinkFor } from "./invoices.js";
 import { isInvoiceable, INVOICE_LIMITS } from "../shared/invoice.js";
+import { loadTourContext, canEditTour, classifyTourPhotos, saveTour, tourAiConfigured } from "./tours.js";
 import { sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, sendJourneyEmail, type BookingEmailInfo } from "./email.js";
 import { notifyBooking } from "./notify.js";
 import { telegramConfigured, telegramConnectLink, telegramBotUsername, setTelegramWebhook, sendTelegram } from "./telegram.js";
@@ -457,6 +458,7 @@ const journeySendHits = new Map<string, number[]>();
 const tripHits = new Map<string, number[]>();
 const tripSurveyHits = new Map<string, number[]>();
 const invoiceHits = new Map<string, number[]>();
+const tourClassifyHits = new Map<string, number[]>();
 const invoiceSendHits = new Map<string, number[]>();
 function rateLimited(map: Map<string, number[]>, key: string, max: number, windowMs = 60_000): boolean {
   const now = Date.now();
@@ -4597,6 +4599,78 @@ export function registerApiRoutes(app: Express) {
     } catch (err) {
       console.error("[trip]", err);
       res.status(503).json({ error: "This page isn't available right now. Please try again shortly." });
+    }
+  });
+
+  // ── Virtual tours for stays (0109, server/tours.ts) ──────────────────────
+  // The operator's browser builds the tour a few photos at a time (/classify,
+  // ≤8 photos per request so each stays inside the function time limit), then
+  // stores the result with /save. Owner or admin only; stays only.
+  const tourAuth = async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId) {
+      res.status(401).json({ error: "Sign in as an operator." });
+      return null;
+    }
+    const admin = supabaseAdmin();
+    if (!admin) {
+      res.status(503).json({ error: "Virtual tours aren't available right now." });
+      return null;
+    }
+    const listingId = typeof req.body?.listingId === "string" ? req.body.listingId : "";
+    if (!/^[0-9a-f-]{36}$/i.test(listingId)) {
+      res.status(400).json({ error: "Listing not found." });
+      return null;
+    }
+    const ctx = await loadTourContext(admin, listingId);
+    if (!ctx) {
+      res.status(404).json({ error: "Listing not found." });
+      return null;
+    }
+    if (!(await canEditTour(admin, ctx, userId))) {
+      res.status(403).json({ error: "That isn't your listing." });
+      return null;
+    }
+    if (ctx.type !== "stay") {
+      res.status(400).json({ error: "Virtual tours are for stays." });
+      return null;
+    }
+    return { admin, ctx, userId };
+  };
+
+  app.post("/api/listing-tour/classify", async (req: Request, res: Response) => {
+    const parsed = z.object({ listingId: z.string(), photos: z.array(z.string().max(1000)).min(1).max(8) }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Send up to 8 photos at a time." });
+    try {
+      const a = await tourAuth(req, res);
+      if (!a) return;
+      if (!tourAiConfigured()) return res.status(503).json({ error: "Automatic photo sorting isn't available right now — you can still build the tour by hand." });
+      if (rateLimited(tourClassifyHits, a.userId, 40)) return res.status(429).json({ error: "Sorting a lot of photos at once — wait a minute and try again." });
+      const allowed = new Set(a.ctx.photos);
+      const photos = parsed.data.photos.filter((u) => allowed.has(u));
+      res.json({ photos: await classifyTourPhotos(photos) });
+    } catch (err) {
+      console.error("[tour/classify]", err);
+      res.status(503).json({ error: "Couldn't sort the photos right now. Please try again." });
+    }
+  });
+
+  app.post("/api/listing-tour/save", async (req: Request, res: Response) => {
+    const parsed = z
+      .object({ listingId: z.string(), rooms: z.array(z.unknown()).max(60), status: z.enum(["draft", "live"]), seenPhotos: z.array(z.string().max(1000)).max(400).default([]), rebuilt: z.boolean().default(false) })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "The tour couldn't be read. Please try again." });
+    try {
+      const a = await tourAuth(req, res);
+      if (!a) return;
+      const r = await saveTour(a.admin, a.ctx, parsed.data);
+      if (!r.ok) return res.status(r.status).json({ error: r.error });
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[tour/save]", err);
+      res.status(503).json({ error: "Couldn't save the tour right now. Please try again." });
     }
   });
 

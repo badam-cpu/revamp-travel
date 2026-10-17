@@ -7,6 +7,7 @@
  */
 import type { CampaignVisual } from "@shared/campaignVisual";
 import type { InvoiceBookingFacts, InvoiceContext, InvoiceEdits, InvoiceModel } from "@shared/invoice";
+import type { ClassifiedPhoto, TourRoom } from "@shared/tours";
 import { supabase } from "@/lib/supabase";
 
 export class ApiError extends Error {}
@@ -1085,6 +1086,12 @@ export interface TripPageData {
 export function getTripPage(token: string): Promise<TripPageData> {
   return request<TripPageData>(`/api/trip?token=${encodeURIComponent(token)}`);
 }
+// ── Virtual tours (0109) ──
+export const classifyListingTourPhotos = (listingId: string, photos: string[]) =>
+  authed<{ photos: ClassifiedPhoto[] }>("/api/listing-tour/classify", { method: "POST", body: { listingId, photos } });
+export const saveListingTour = (listingId: string, t: { rooms: TourRoom[]; status: "draft" | "live"; seenPhotos: string[]; rebuilt: boolean }) =>
+  authed<{ ok: true }>("/api/listing-tour/save", { method: "POST", body: { listingId, ...t } });
+
 // ── Guest invoices (0108) ──
 export interface InvoiceDraft {
   facts: InvoiceBookingFacts;

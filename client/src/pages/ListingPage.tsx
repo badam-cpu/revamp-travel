@@ -1,6 +1,6 @@
 /** Revamp brandbook: detail pages combine rounded imagery, bold sans hierarchy, concise facts, white space, and orange actions. */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ArrowLeft, BedDouble, Bookmark, CalendarRange, Check, ChevronLeft, ChevronRight, Clock, Coffee, Home, KeyRound, LayoutGrid, LogOut, MapPin, Navigation, Share2, ShieldCheck, Sparkles, SprayCan, Star, Users, Utensils, Wallet, Wifi, X } from "lucide-react";
+import { ArrowLeft, BedDouble, Bookmark, CalendarRange, Check, ChevronLeft, ChevronRight, Clock, Coffee, Footprints, Home, KeyRound, LayoutGrid, LogOut, MapPin, Navigation, Share2, ShieldCheck, Sparkles, SprayCan, Star, Users, Utensils, Wallet, Wifi, X } from "lucide-react";
 import { Link } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -39,6 +39,9 @@ import { ExternalReviews } from "@/components/ExternalReviews";
 import { describeCancellationPolicy, nightlyPriceRange } from "@shared/bookings";
 import { buildBreadcrumbJsonLd, buildListingJsonLd } from "@shared/seo";
 import { shareCurrentPage } from "@/lib/share";
+import { VirtualTour } from "@/components/VirtualTour";
+import { fetchTour } from "@/lib/tours";
+import { listingTourPhotos, tourWorthShowing, visibleRooms, type ListingTour } from "@shared/tours";
 import { RichText } from "@/components/RichText";
 import { ExpandableDescription } from "@/components/ExpandableDescription";
 
@@ -64,7 +67,7 @@ const AMENITIES_INLINE_LIMIT = 10;
  * respects reduced motion), with arrows, windowed dots, and a "Show all photos"
  * button. Clicking a photo opens the full-screen lightbox at that index.
  */
-function HeroCarousel({ photos, title, onOpen, badge, coverFocus }: { photos: string[]; title: string; onOpen: (i: number) => void; badge?: ReactNode; coverFocus?: string }) {
+function HeroCarousel({ photos, title, onOpen, badge, coverFocus, topRight }: { photos: string[]; title: string; onOpen: (i: number) => void; badge?: ReactNode; coverFocus?: string; topRight?: ReactNode }) {
   const [i, setI] = useState(0);
   const [paused, setPaused] = useState(false);
   const total = photos.length;
@@ -105,6 +108,7 @@ function HeroCarousel({ photos, title, onOpen, badge, coverFocus }: { photos: st
         ))}
       </div>
       {badge}
+      {topRight}
 
       {total > 1 && (
         <>
@@ -228,6 +232,22 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   // room cards and the room dialog), and which room's dialog is open.
   const [hotelStay, setHotelStay] = useState<HotelStay>({ start: null, end: null, guests: 1 });
   const [openRoomId, setOpenRoomId] = useState<string | null>(null);
+
+  // Virtual tour (0109) — stays only, once the operator has published it.
+  // Photos the listing no longer has are dropped (visibleRooms).
+  const [tour, setTour] = useState<ListingTour | null>(null);
+  const [tourOpen, setTourOpen] = useState(false);
+  useEffect(() => {
+    setTour(null);
+    if (!listing?.id || listing.type !== "stay") return;
+    let live = true;
+    fetchTour(listing.id).then((t) => live && setTour(t?.status === "live" ? t : null));
+    return () => {
+      live = false;
+    };
+  }, [listing?.id, listing?.type]);
+  const tourRooms = useMemo(() => (tour && listing ? visibleRooms(tour.rooms, listingTourPhotos(listing, roomTypes)) : []), [tour, listing, roomTypes]);
+  const showTour = tourWorthShowing(tourRooms);
 
   if (!listing) {
     // While the catalog is still loading (e.g. a hard refresh on this page,
@@ -353,7 +373,22 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
             onOpen={setLightbox}
             coverFocus={listing.coverFocus}
             badge={<DiscountBadge listing={listing} className="absolute left-4 top-4 z-10" />}
+            topRight={
+              showTour ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTourOpen(true);
+                    trackEvent("virtual_tour_open", { item_id: listing.id, rooms: tourRooms.length });
+                  }}
+                  className="absolute right-3 top-3 z-10 inline-flex h-10 items-center gap-2 rounded-full bg-basalt/85 px-4 text-xs font-semibold text-paper shadow-md backdrop-blur-sm transition-colors hover:bg-basalt focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-apricot"
+                >
+                  <Footprints className="h-4 w-4" aria-hidden /> Virtual tour · {tourRooms.length} {tourRooms.length === 1 ? "room" : "rooms"}
+                </button>
+              ) : undefined
+            }
           />
+          {showTour && <VirtualTour title={listing.title} rooms={tourRooms} open={tourOpen} onClose={() => setTourOpen(false)} />}
         </section>
 
         {/* Title below the gallery. */}
