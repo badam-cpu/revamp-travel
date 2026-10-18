@@ -55,6 +55,7 @@ import { redeemForCheckout, releaseRedeemed, redeemedColumns, redeemedTotal, cov
 import { payoutState } from "../shared/payouts.js";
 import { loadInvoiceSource, savedInvoice, invoiceContext, canManageInvoice, saveInvoice, invoiceForToken, invoiceLinkFor } from "./invoices.js";
 import { isInvoiceable, INVOICE_LIMITS } from "../shared/invoice.js";
+import { handleTelegramUpdate, alertOperatorTelegram } from "./telegramBot.js";
 import { loadTourContext, canEditTour, classifyTourPhotos, saveTour, tourAiConfigured } from "./tours.js";
 import { sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, sendJourneyEmail, type BookingEmailInfo } from "./email.js";
 import { notifyBooking } from "./notify.js";
@@ -426,6 +427,8 @@ async function notifyOperatorOfRequest(admin: SupabaseClient, listing: any, book
   ]);
   const travName = (travProfile.data?.display_name && travProfile.data.display_name !== "Guest" ? travProfile.data.display_name : bk.guest_name) || "A traveler";
   if (op.data?.user?.email) await sendOperatorBookingRequest(op.data.user.email, info, travName);
+  // Telegram (0110): the host can Approve / Decline right from the alert.
+  await alertOperatorTelegram(admin, bookingId, "request");
   const guestEmail = trav.data?.user?.email || bk.guest_email;
   if (guestEmail) await sendGuestRequestReceived(guestEmail, info);
   const whenLine = `${info.startDate}${info.time ? ` at ${info.time}` : ""}`;
@@ -530,6 +533,113 @@ function buildOperatorSummary(
     "Upcoming confirmed bookings:",
     upcomingList.length ? upcomingList.join("\n") : "- (none)",
   ].join("\n");
+}
+
+type DecisionResult = { ok: true } | { ok: false; status: number; error: string };
+
+/**
+ * Approve a request-to-book slot: registers a PayLink charge, moves it to
+ * awaiting_payment, and emails the guest a secure pay link (seats were held at
+ * request time). Owner or admin only. Used by /api/booking-approve and the
+ * Telegram bot's Approve button.
+ */
+async function approveBookingRequest(admin: SupabaseClient, bookingId: string, actorId: string, site: string): Promise<DecisionResult> {
+  if (!paylinkConfigured()) return { ok: false, status: 503, error: "Payments aren't available yet." };
+  const { data: booking } = await admin
+    .from("bookings")
+    .select("id, listing_id, traveler_id, status, guests, amount_cents, currency, starts_at, guest_email, guest_phone, session_id")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (!booking) return { ok: false, status: 404, error: "Request not found." };
+  if (booking.status !== "requested") return { ok: false, status: 400, error: `This request is already ${String(booking.status).replace(/_/g, " ")}.` };
+
+  const { data: listing } = await admin.from("listings").select("title, city, region, slug, operator_id, type, facts, lat, lng").eq("id", booking.listing_id).maybeSingle();
+  const { data: me } = await admin.from("profiles").select("role").eq("id", actorId).maybeSingle();
+  if (!listing) return { ok: false, status: 404, error: "Listing not found." };
+  if (listing.operator_id !== actorId && me?.role !== "admin") return { ok: false, status: 403, error: "That's not your listing." };
+
+  const currency = booking.currency || process.env.PAYLINK_CURRENCY || DEFAULT_CURRENCY;
+  try {
+    const account = await resolvePaymentAccount(admin, listing.operator_id);
+    const pay = await account.client.registerPayment({
+      amount: currency === "AMD" ? Math.round(booking.amount_cents / 100) : booking.amount_cents / 100,
+      currency,
+      returnUrl: `${site}/account?checkout=return`,
+      info: `Revamp booking · ${listing.title}`,
+    });
+    if (!pay.redirectUrl) return { ok: false, status: 502, error: "Couldn't create the payment link." };
+    const { data: upd } = await admin
+      .from("bookings")
+      .update({ status: "awaiting_payment", paylink_request_id: pay.requestId, paylink_order_id: pay.orderId, ...(await accountOwnerPatch(admin, account)) })
+      .eq("id", booking.id)
+      .eq("status", "requested")
+      .select("id");
+    if (!upd || upd.length === 0) return { ok: false, status: 409, error: "This request just changed — refresh and try again." };
+
+    await logBookingEvent(admin, booking.id, "status_approved", "Request approved — awaiting guest payment");
+    // Email the guest the pay link (best-effort).
+    try {
+      const info = slotBookingEmailInfo(listing, booking);
+      const { data: trav } = await admin.auth.admin.getUserById(booking.traveler_id);
+      const to = trav?.user?.email || booking.guest_email;
+      if (to) await sendGuestBookingApproved(to, info, pay.redirectUrl);
+    } catch (e) {
+      console.error("[booking-approve] email failed", e);
+    }
+    const approveWhen = `${slotBookingEmailInfo(listing, booking).startDate}${booking.starts_at ? ` at ${formatSlotTime(booking.starts_at)}` : ""}`;
+    await notifyBooking(admin, {
+      bookingId: booking.id,
+      listingId: booking.listing_id,
+      operatorId: listing.operator_id,
+      travelerId: booking.traveler_id,
+      travelerPhone: booking.guest_phone,
+      inboxBody: `✅ Request approved — ${listing.title}, ${approveWhen}. Complete payment to lock in your seat: ${pay.redirectUrl}`,
+      smsBody: `Revamp: your booking for ${listing.title} (${approveWhen}) is approved. Pay to confirm: ${pay.redirectUrl}`,
+    });
+    return { ok: true };
+  } catch (err) {
+    console.error("[booking-approve]", err);
+    return { ok: false, status: 502, error: "Couldn't approve the request." };
+  }
+}
+
+/** Decline a request-to-book: frees the held seats and emails the guest (nothing was charged). */
+async function declineBookingRequest(admin: SupabaseClient, bookingId: string, actorId: string): Promise<DecisionResult> {
+  const { data: booking } = await admin
+    .from("bookings")
+    .select("id, listing_id, traveler_id, status, guests, amount_cents, currency, starts_at, guest_email, guest_phone, session_id")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (!booking) return { ok: false, status: 404, error: "Request not found." };
+  if (booking.status !== "requested") return { ok: false, status: 400, error: `This request is already ${String(booking.status).replace(/_/g, " ")}.` };
+
+  const { data: listing } = await admin.from("listings").select("title, city, region, slug, operator_id, type, facts, lat, lng").eq("id", booking.listing_id).maybeSingle();
+  const { data: me } = await admin.from("profiles").select("role").eq("id", actorId).maybeSingle();
+  if (!listing) return { ok: false, status: 404, error: "Listing not found." };
+  if (listing.operator_id !== actorId && me?.role !== "admin") return { ok: false, status: 403, error: "That's not your listing." };
+
+  const { data: upd } = await admin.from("bookings").update({ status: "cancelled" }).eq("id", booking.id).eq("status", "requested").select("id");
+  if (!upd || upd.length === 0) return { ok: false, status: 409, error: "This request just changed — refresh and try again." };
+  if (booking.session_id) await releaseSeats(admin, booking.session_id, booking.guests);
+  await logBookingEvent(admin, booking.id, "status_cancelled", "Request declined by host");
+  try {
+    const info = slotBookingEmailInfo(listing, booking);
+    const { data: trav } = await admin.auth.admin.getUserById(booking.traveler_id);
+    const to = trav?.user?.email || booking.guest_email;
+    if (to) await sendGuestBookingDeclined(to, info);
+  } catch (e) {
+    console.error("[booking-decline] email failed", e);
+  }
+  await notifyBooking(admin, {
+    bookingId: booking.id,
+    listingId: booking.listing_id,
+    operatorId: listing.operator_id,
+    travelerId: booking.traveler_id,
+    travelerPhone: booking.guest_phone,
+    inboxBody: `❌ Booking request declined — ${listing.title}. No charge was made; the seats have been released.`,
+    smsBody: `Revamp: unfortunately your booking request for ${listing.title} was declined. No charge was made.`,
+  });
+  return { ok: true };
 }
 
 export function registerApiRoutes(app: Express) {
@@ -2958,26 +3068,13 @@ export function registerApiRoutes(app: Express) {
     const admin = supabaseAdmin();
     if (!admin) return res.status(200).json({ ok: true });
     try {
-      const msg = (req.body as { message?: { text?: string; chat?: { id?: number | string } } })?.message;
-      const text = msg?.text;
-      const chatId = msg?.chat?.id;
-      if (text && chatId != null && text.startsWith("/start")) {
-        const startToken = text.split(/\s+/)[1];
-        if (startToken) {
-          const { data: link } = await admin.from("telegram_links").select("user_id").eq("connect_token", startToken).maybeSingle();
-          if (link) {
-            await admin.from("telegram_links").update({ chat_id: String(chatId), connect_token: null, updated_at: new Date().toISOString() }).eq("user_id", link.user_id);
-            await sendTelegram(String(chatId), "✅ Connected to Revamp. You'll get your booking updates right here.");
-          } else {
-            await sendTelegram(String(chatId), "That link has expired. Open your Revamp account and tap ‘Connect Telegram’ again.");
-          }
-        } else {
-          await sendTelegram(String(chatId), "Welcome to Revamp! Open your account on revampvacations.com and tap ‘Connect Telegram’ to link this chat.");
-        }
-      }
+      // server/telegramBot.ts: linking, host buttons (same approve/decline as the
+      // dashboard), /today /bookings /summary /trip, and the AI concierge.
+      await handleTelegramUpdate(admin, req.body ?? {}, { approve: approveBookingRequest, decline: declineBookingRequest });
     } catch (e) {
       console.error("[telegram-webhook]", e);
     }
+    // Always 200 — otherwise Telegram keeps re-sending the same update.
     res.status(200).json({ ok: true });
   });
 
@@ -4809,81 +4906,25 @@ export function registerApiRoutes(app: Express) {
     }
   });
 
-  // POST /api/booking-approve — the operator (or admin) approves a request-to-book
-  // slot: registers a PayLink charge, moves it to awaiting_payment, and emails the
-  // guest a secure pay link. Seats were already held at request time.
+  // POST /api/booking-approve / -decline — the operator (or admin) decides a
+  // request-to-book slot. The work lives in approveBookingRequest /
+  // declineBookingRequest (module scope) so the Telegram bot's buttons run
+  // exactly the same code.
   app.post("/api/booking-approve", async (req: Request, res: Response) => {
     const authHeader = req.get("authorization") || "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
     const userId = token ? await verifyUser(token) : null;
     if (!userId || !token) return res.status(401).json({ error: "Sign in." });
-    if (!paylinkConfigured()) return res.status(503).json({ error: "Payments aren't available yet." });
     const parsed = bookingDecisionSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
     const admin = supabaseAdmin();
     if (!admin) return res.status(503).json({ error: "Not available right now." });
-
-    const { data: booking } = await admin
-      .from("bookings")
-      .select("id, listing_id, traveler_id, status, guests, amount_cents, currency, starts_at, guest_email, guest_phone, session_id")
-      .eq("id", parsed.data.bookingId)
-      .maybeSingle();
-    if (!booking) return res.status(404).json({ error: "Request not found." });
-    if (booking.status !== "requested") return res.status(400).json({ error: `This request is already ${String(booking.status).replace(/_/g, " ")}.` });
-
-    const { data: listing } = await admin.from("listings").select("title, city, region, slug, operator_id, type, facts, lat, lng").eq("id", booking.listing_id).maybeSingle();
-    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
-    if (!listing) return res.status(404).json({ error: "Listing not found." });
-    if (listing.operator_id !== userId && me?.role !== "admin") return res.status(403).json({ error: "That's not your listing." });
-
     const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
-    const currency = booking.currency || process.env.PAYLINK_CURRENCY || DEFAULT_CURRENCY;
-    try {
-      const account = await resolvePaymentAccount(admin, listing.operator_id);
-      const pay = await account.client.registerPayment({
-        amount: currency === "AMD" ? Math.round(booking.amount_cents / 100) : booking.amount_cents / 100,
-        currency,
-        returnUrl: `${site}/account?checkout=return`,
-        info: `Revamp booking · ${listing.title}`,
-      });
-      if (!pay.redirectUrl) return res.status(502).json({ error: "Couldn't create the payment link." });
-      const { data: upd } = await admin
-        .from("bookings")
-        .update({ status: "awaiting_payment", paylink_request_id: pay.requestId, paylink_order_id: pay.orderId, ...(await accountOwnerPatch(admin, account)) })
-        .eq("id", booking.id)
-        .eq("status", "requested")
-        .select("id");
-      if (!upd || upd.length === 0) return res.status(409).json({ error: "This request just changed — refresh and try again." });
-
-      await logBookingEvent(admin, booking.id, "status_approved", "Request approved — awaiting guest payment");
-      // Email the guest the pay link (best-effort).
-      try {
-        const info = slotBookingEmailInfo(listing, booking);
-        const { data: trav } = await admin.auth.admin.getUserById(booking.traveler_id);
-        const to = trav?.user?.email || booking.guest_email;
-        if (to) await sendGuestBookingApproved(to, info, pay.redirectUrl);
-      } catch (e) {
-        console.error("[booking-approve] email failed", e);
-      }
-      const approveWhen = `${slotBookingEmailInfo(listing, booking).startDate}${booking.starts_at ? ` at ${formatSlotTime(booking.starts_at)}` : ""}`;
-      await notifyBooking(admin, {
-        bookingId: booking.id,
-        listingId: booking.listing_id,
-        operatorId: listing.operator_id,
-        travelerId: booking.traveler_id,
-        travelerPhone: booking.guest_phone,
-        inboxBody: `✅ Request approved — ${listing.title}, ${approveWhen}. Complete payment to lock in your seat: ${pay.redirectUrl}`,
-        smsBody: `Revamp: your booking for ${listing.title} (${approveWhen}) is approved. Pay to confirm: ${pay.redirectUrl}`,
-      });
-      res.json({ ok: true });
-    } catch (err) {
-      console.error("[booking-approve]", err);
-      res.status(502).json({ error: "Couldn't approve the request." });
-    }
+    const r = await approveBookingRequest(admin, parsed.data.bookingId, userId, site);
+    if (!r.ok) return res.status(r.status).json({ error: r.error });
+    res.json({ ok: true });
   });
 
-  // POST /api/booking-decline — the operator (or admin) declines a request: frees
-  // the held seats and emails the guest. No charge was ever made.
   app.post("/api/booking-decline", async (req: Request, res: Response) => {
     const authHeader = req.get("authorization") || "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
@@ -4893,41 +4934,8 @@ export function registerApiRoutes(app: Express) {
     if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
     const admin = supabaseAdmin();
     if (!admin) return res.status(503).json({ error: "Not available right now." });
-
-    const { data: booking } = await admin
-      .from("bookings")
-      .select("id, listing_id, traveler_id, status, guests, amount_cents, currency, starts_at, guest_email, guest_phone, session_id")
-      .eq("id", parsed.data.bookingId)
-      .maybeSingle();
-    if (!booking) return res.status(404).json({ error: "Request not found." });
-    if (booking.status !== "requested") return res.status(400).json({ error: `This request is already ${String(booking.status).replace(/_/g, " ")}.` });
-
-    const { data: listing } = await admin.from("listings").select("title, city, region, slug, operator_id, type, facts, lat, lng").eq("id", booking.listing_id).maybeSingle();
-    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
-    if (!listing) return res.status(404).json({ error: "Listing not found." });
-    if (listing.operator_id !== userId && me?.role !== "admin") return res.status(403).json({ error: "That's not your listing." });
-
-    const { data: upd } = await admin.from("bookings").update({ status: "cancelled" }).eq("id", booking.id).eq("status", "requested").select("id");
-    if (!upd || upd.length === 0) return res.status(409).json({ error: "This request just changed — refresh and try again." });
-    if (booking.session_id) await releaseSeats(admin, booking.session_id, booking.guests);
-    await logBookingEvent(admin, booking.id, "status_cancelled", "Request declined by host");
-    try {
-      const info = slotBookingEmailInfo(listing, booking);
-      const { data: trav } = await admin.auth.admin.getUserById(booking.traveler_id);
-      const to = trav?.user?.email || booking.guest_email;
-      if (to) await sendGuestBookingDeclined(to, info);
-    } catch (e) {
-      console.error("[booking-decline] email failed", e);
-    }
-    await notifyBooking(admin, {
-      bookingId: booking.id,
-      listingId: booking.listing_id,
-      operatorId: listing.operator_id,
-      travelerId: booking.traveler_id,
-      travelerPhone: booking.guest_phone,
-      inboxBody: `❌ Booking request declined — ${listing.title}. No charge was made; the seats have been released.`,
-      smsBody: `Revamp: unfortunately your booking request for ${listing.title} was declined. No charge was made.`,
-    });
+    const r = await declineBookingRequest(admin, parsed.data.bookingId, userId);
+    if (!r.ok) return res.status(r.status).json({ error: r.error });
     res.json({ ok: true });
   });
 

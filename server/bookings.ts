@@ -206,6 +206,13 @@ async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promi
   if (operatorEmail) {
     await logBookingEvent(admin, row.id, operatorRes.sent ? "email_operator_new_booking" : "email_failed", operatorRes.sent ? operatorEmail : `Operator email to ${operatorEmail} failed (${operatorRes.reason ?? "unknown"}).`);
   }
+  // Telegram alert to the host (0110) — loaded on demand (telegramBot → journey → bookings would be a cycle).
+  try {
+    const { alertOperatorTelegram } = await import("./telegramBot.js");
+    await alertOperatorTelegram(admin, row.id, "new");
+  } catch (err) {
+    console.error("[bookings] telegram host alert", err);
+  }
 
   // New channels on top of email: mirror into the unified inbox + text/WhatsApp
   // the traveler (best-effort, self-gating).

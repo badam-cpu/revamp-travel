@@ -24,6 +24,8 @@ import { runCommissionStatements } from "../../server/commissionStatements.js";
 import { runJourneyAutomations } from "../../server/journey.js";
 import { awardTravelCredits } from "../../server/credit.js";
 import { recordCronRun, checkAndAlertStaleCrons } from "../../server/alerts.js";
+import { runTelegramDailySummaries } from "../../server/telegramBot.js";
+import { ensureTelegramWebhook } from "../../server/telegram.js";
 
 const JOB = "reconcile-bookings";
 
@@ -69,7 +71,16 @@ export default async (): Promise<Response> => {
     } catch (err) {
       console.error("[reconcile-bookings] credit failed", err);
     }
-    console.log("[reconcile-bookings]", { ...result, reviewEmails: reviews.sent, gifts, giftExpiry, subs, subAmounts, vouchers, qrPays, statements, journey, credit });
+    // Telegram (0110): hosts' morning summary, once a day after 08:00 Armenia time.
+    let tgSummary = { sent: 0, checked: 0 };
+    try {
+      // Make sure Telegram delivers button taps (Approve/Decline) to the webhook.
+      await ensureTelegramWebhook(process.env.URL || "https://revampvacations.com");
+      tgSummary = await runTelegramDailySummaries(admin);
+    } catch (err) {
+      console.error("[reconcile-bookings] telegram summary failed", err);
+    }
+    console.log("[reconcile-bookings]", { ...result, reviewEmails: reviews.sent, gifts, giftExpiry, subs, subAmounts, vouchers, qrPays, statements, journey, credit, tgSummary });
     // Heartbeat + cron watchdog. This job runs every 10 min, so it's the primary
     // watcher that notices the daily refresh-ical going silent.
     await recordCronRun(admin, JOB, true, `bookings ${result.confirmed ?? 0}c/${result.expired ?? 0}x`);

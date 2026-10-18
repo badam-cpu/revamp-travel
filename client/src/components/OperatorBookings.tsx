@@ -161,7 +161,15 @@ export function OperatorBookings() {
   const [roomNames, setRoomNames] = useState<Map<string, string>>(new Map());
   const [guestCounts, setGuestCounts] = useState<Map<string, number>>(new Map());
   const [occupancy, setOccupancy] = useState<{ pct: number; nights: number; capacity: number } | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
+  // ?booking=<id> (e.g. "Open booking" in a Telegram alert) opens that booking's window.
+  const [openId, setOpenId] = useState<string | null>(() => {
+    try {
+      const id = new URLSearchParams(window.location.search).get("booking");
+      return id && /^[0-9a-f-]{36}$/i.test(id) ? id : null;
+    } catch {
+      return null;
+    }
+  });
   const [busy, setBusy] = useState<string | null>(null);
 
   // Bookings for the chosen date field + range (everything else filters client-side).
