@@ -29,6 +29,7 @@ import {
 } from "../shared/invoice.js";
 import { roomUnitLabel } from "../shared/rooms.js";
 import { sendInvoiceEmail } from "./email.js";
+import { contactFor } from "./guestContacts.js";
 
 const SITE = () => (process.env.URL || "https://revampvacations.com").replace(/\/+$/, "");
 export const invoiceLinkFor = (token: string) => `${SITE()}/invoice/${token}`;
@@ -228,11 +229,16 @@ export async function saveInvoice(
   opts: { send: boolean; saveSellerDefaults: boolean },
 ): Promise<SaveInvoiceResult> {
   if (!isInvoiceable(src.facts.status)) return { ok: false, status: 400, error: "Invoices can be made for confirmed bookings and bookings awaiting payment." };
-  const sendTo = (edits.sendTo ?? "").trim() || src.facts.guestEmail || "";
+  // Empty "Send to" → the guest's email on file; for an unpaid booking that's
+  // held privately (0113) and used without ever showing it to the host.
+  const sendTo = (edits.sendTo ?? "").trim() || src.facts.guestEmail || (await contactFor(admin, { id: src.facts.id })).email || "";
   if (opts.send && !isEmail(sendTo)) return { ok: false, status: 400, error: "Add the guest's email address to send the invoice." };
 
-  // Only an operator seller keeps seller edits.
-  const clean: InvoiceEdits = { ...edits, sendTo, seller: src.issuerKind === "operator" ? edits.seller : undefined };
+  // Only an operator seller keeps seller edits. A held address is never stored on the invoice the host can read.
+  const typed = (edits.sendTo ?? "").trim() || src.facts.guestEmail || "";
+  // What the host may see as the recipient (history, "sent to", the toast).
+  const shownTo = typed || "the guest's email on file";
+  const clean: InvoiceEdits = { ...edits, sendTo: typed, seller: src.issuerKind === "operator" ? edits.seller : undefined };
 
   if (opts.saveSellerDefaults && src.issuerKind === "operator" && clean.seller) {
     const s = clean.seller;
@@ -309,18 +315,18 @@ export async function saveInvoice(
       replyTo: src.issuerKind === "operator" ? model.seller.email || src.operatorEmail || undefined : undefined,
     });
     sent = r.sent;
-    await logEvent(admin, src.facts.id, sent ? "invoice_sent" : "email_failed", sent ? `${inv.number} to ${sendTo}` : `Invoice ${inv.number} to ${sendTo}`);
+    await logEvent(admin, src.facts.id, sent ? "invoice_sent" : "email_failed", sent ? `${inv.number} to ${shownTo}` : `Invoice ${inv.number} to ${shownTo}`);
     if (sent) {
       await admin
         .from("invoices")
-        .update({ sent_to: sendTo, sent_at: new Date().toISOString(), send_count: (inv.send_count ?? 0) + 1 })
+        .update({ sent_to: shownTo, sent_at: new Date().toISOString(), send_count: (inv.send_count ?? 0) + 1 })
         .eq("id", inv.id);
     } else {
       return { ok: false, status: 502, error: "The invoice is saved, but the email couldn't be sent. Copy the link to share it, or try again." };
     }
   }
 
-  return { ok: true, number: inv.number, url: invoiceLinkFor(inv.token), sent, sentTo: sent ? sendTo : inv.sent_to, model };
+  return { ok: true, number: inv.number, url: invoiceLinkFor(inv.token), sent, sentTo: sent ? shownTo : inv.sent_to, model };
 }
 
 async function logEvent(admin: SupabaseClient, bookingId: string, type: string, detail: string) {

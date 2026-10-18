@@ -11,6 +11,7 @@
  * this transition cannot be authorized by RLS. Idempotent: the flip is guarded
  * `where status = 'pending_payment'`, so a double poll never double-confirms.
  */
+import { contactFor } from "./guestContacts.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { clientForOwner } from "./paymentAccounts.js";
 import { recordDirectBookingCharge } from "./directLedger.js";
@@ -189,7 +190,10 @@ async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promi
   ]);
   // Guests book anonymously (no auth email) — fall back to the email/name they
   // gave at checkout so they still get a confirmation.
-  const travelerEmail = traveler?.user?.email || row.guest_email || "";
+  // Guest contact: on the row once paid (the 0113 trigger copies it there on
+  // confirm) — read the private copy too in case this row was loaded earlier.
+  const held = await contactFor(admin, row);
+  const travelerEmail = traveler?.user?.email || held.email || "";
   const travelerName = travelerProfile?.display_name && travelerProfile.display_name !== "Guest" ? travelerProfile.display_name : row.guest_name || "A traveler";
   const operatorEmail = operator?.user?.email || "";
   const [travelerRes, operatorRes] = await Promise.all([
@@ -224,7 +228,7 @@ async function onBookingConfirmed(admin: SupabaseClient, row: BookingRow): Promi
     listingId: row.listing_id,
     operatorId: listing.operator_id,
     travelerId: row.traveler_id,
-    travelerPhone: row.guest_phone,
+    travelerPhone: held.phone,
     inboxBody: `✅ Booking confirmed — ${info.listingTitle}, ${whenLine}, ${info.guests} guest${info.guests === 1 ? "" : "s"}.`,
     smsBody: `Revamp: your booking is confirmed — ${info.listingTitle}, ${whenLine}. Details are in your account.`,
   });

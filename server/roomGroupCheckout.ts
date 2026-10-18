@@ -15,6 +15,7 @@
  * Single-room checkouts never come here — they keep the original path in
  * server/routes.ts untouched.
  */
+import { splitContact, storeHeldContacts } from "./guestContacts.js";
 import crypto from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RoomType, RoomUnit } from "../shared/listings.js";
@@ -215,12 +216,15 @@ export async function startRoomGroupCheckout(i: RoomGroupInput): Promise<RoomGro
   // Fully covered by gift card / credit → hold every room, then confirm each through
   // the capacity-safe confirm; if any room can't be confirmed, undo the lot.
   if (remaining <= 0 && (red.giftId || red.creditHold)) {
-    const { error: holdErr } = await admin.from("bookings").insert(rows.map((r) => ({ ...r, status: "pending_payment", provider: coveredProvider(red) })));
+    const coveredSplit = rows.map((r) => splitContact({ ...r, status: "pending_payment", provider: coveredProvider(red) }));
+    const { error: holdErr } = await admin.from("bookings").insert(coveredSplit.map(([row]) => row));
     if (holdErr) {
       await releaseRedeemed(admin, red);
       console.error("[room-group] gift-covered hold failed", holdErr.message);
       return fail(500, "Couldn't record your booking.");
     }
+    // Contacts held privately; the DB trigger restores them as each room confirms (0113).
+    await storeHeldContacts(admin, coveredSplit.flatMap(([row, c]) => (c ? [{ bookingId: String((row as Record<string, unknown>).id), contact: c }] : [])));
     for (const id of ids) {
       const { data: outcome, error: rpcErr } = await admin.rpc("confirm_room_booking", { p_booking_id: id });
       if (rpcErr || outcome !== "confirmed") {
@@ -258,21 +262,23 @@ export async function startRoomGroupCheckout(i: RoomGroupInput): Promise<RoomGro
     }
     // Every booking is written by the server (0106 removed the guest insert policy).
     const writer = admin;
-    const { error: insErr } = await writer.from("bookings").insert(
-      rows.map((r) => ({
+    const paySplit = rows.map((r) =>
+      splitContact({
         ...r,
         status: "pending_payment",
         provider: "paylink",
         paylink_request_id: pay.requestId,
         paylink_order_id: pay.orderId,
         ...(account.owner ? { paylink_account_owner: account.owner } : {}),
-      })),
+      }),
     );
+    const { error: insErr } = await writer.from("bookings").insert(paySplit.map(([row]) => row));
     if (insErr) {
       await releaseRedeemed(admin, red);
       console.error("[room-group] insert failed", insErr.message);
       return fail(500, "Couldn't record your booking.");
     }
+    await storeHeldContacts(writer, paySplit.flatMap(([row, c]) => (c ? [{ bookingId: String((row as Record<string, unknown>).id), contact: c }] : [])));
     await noteRedeemed(admin, red, groupId, `Applied to ${n} rooms · ${listing.title}`);
     return { status: 200, body: { redirectUrl: pay.redirectUrl } };
   } catch (err) {

@@ -56,6 +56,7 @@ import { payoutState } from "../shared/payouts.js";
 import { loadInvoiceSource, savedInvoice, invoiceContext, canManageInvoice, saveInvoice, invoiceForToken, invoiceLinkFor } from "./invoices.js";
 import { isInvoiceable, INVOICE_LIMITS } from "../shared/invoice.js";
 import { handleTelegramUpdate, alertOperatorTelegram } from "./telegramBot.js";
+import { splitContact, storeHeldContacts, contactFor, setConversationGuestEmail, conversationGuestEmail } from "./guestContacts.js";
 import { loadTourContext, canEditTour, classifyTourPhotos, saveTour, tourAiConfigured } from "./tours.js";
 import { sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, sendJourneyEmail, type BookingEmailInfo } from "./email.js";
 import { notifyBooking } from "./notify.js";
@@ -429,7 +430,9 @@ async function notifyOperatorOfRequest(admin: SupabaseClient, listing: any, book
   if (op.data?.user?.email) await sendOperatorBookingRequest(op.data.user.email, info, travName);
   // Telegram (0110): the host can Approve / Decline right from the alert.
   await alertOperatorTelegram(admin, bookingId, "request");
-  const guestEmail = trav.data?.user?.email || bk.guest_email;
+  // The guest's contact is held privately while the request is unpaid (0113).
+  const held = await contactFor(admin, { id: bookingId, guest_email: bk.guest_email, guest_phone: bk.guest_phone });
+  const guestEmail = trav.data?.user?.email || held.email;
   if (guestEmail) await sendGuestRequestReceived(guestEmail, info);
   const whenLine = `${info.startDate}${info.time ? ` at ${info.time}` : ""}`;
   await notifyBooking(admin, {
@@ -437,7 +440,7 @@ async function notifyOperatorOfRequest(admin: SupabaseClient, listing: any, book
     listingId: listing.id,
     operatorId: listing.operator_id,
     travelerId: bk.traveler_id,
-    travelerPhone: bk.guest_phone,
+    travelerPhone: held.phone,
     inboxBody: `📩 Booking request received — ${info.listingTitle}, ${whenLine}, ${info.guests} guest${info.guests === 1 ? "" : "s"}. Awaiting the host's approval; no charge yet.`,
     smsBody: `Revamp: we received your booking request for ${info.listingTitle}, ${whenLine}. The host will approve it — no charge yet.`,
   });
@@ -581,7 +584,7 @@ async function approveBookingRequest(admin: SupabaseClient, bookingId: string, a
     try {
       const info = slotBookingEmailInfo(listing, booking);
       const { data: trav } = await admin.auth.admin.getUserById(booking.traveler_id);
-      const to = trav?.user?.email || booking.guest_email;
+      const to = trav?.user?.email || (await contactFor(admin, booking)).email;
       if (to) await sendGuestBookingApproved(to, info, pay.redirectUrl);
     } catch (e) {
       console.error("[booking-approve] email failed", e);
@@ -592,7 +595,7 @@ async function approveBookingRequest(admin: SupabaseClient, bookingId: string, a
       listingId: booking.listing_id,
       operatorId: listing.operator_id,
       travelerId: booking.traveler_id,
-      travelerPhone: booking.guest_phone,
+      travelerPhone: (await contactFor(admin, booking)).phone,
       inboxBody: `✅ Request approved — ${listing.title}, ${approveWhen}. Complete payment to lock in your seat: ${pay.redirectUrl}`,
       smsBody: `Revamp: your booking for ${listing.title} (${approveWhen}) is approved. Pay to confirm: ${pay.redirectUrl}`,
     });
@@ -625,7 +628,7 @@ async function declineBookingRequest(admin: SupabaseClient, bookingId: string, a
   try {
     const info = slotBookingEmailInfo(listing, booking);
     const { data: trav } = await admin.auth.admin.getUserById(booking.traveler_id);
-    const to = trav?.user?.email || booking.guest_email;
+    const to = trav?.user?.email || (await contactFor(admin, booking)).email;
     if (to) await sendGuestBookingDeclined(to, info);
   } catch (e) {
     console.error("[booking-decline] email failed", e);
@@ -635,7 +638,7 @@ async function declineBookingRequest(admin: SupabaseClient, bookingId: string, a
     listingId: booking.listing_id,
     operatorId: listing.operator_id,
     travelerId: booking.traveler_id,
-    travelerPhone: booking.guest_phone,
+    travelerPhone: (await contactFor(admin, booking)).phone,
     inboxBody: `❌ Booking request declined — ${listing.title}. No charge was made; the seats have been released.`,
     smsBody: `Revamp: unfortunately your booking request for ${listing.title} was declined. No charge was made.`,
   });
@@ -1539,12 +1542,15 @@ export function registerApiRoutes(app: Express) {
 
       // Request-to-book: no charge now — create a pending request for the operator.
       if (listing.booking_mode === "request") {
-        const { data: created, error: insErr } = await admin.from("bookings").insert({ ...slotRow, status: "requested", provider: "paylink" }).select("id").single();
+        // Unpaid: the guest's email/phone are held privately until it's paid (0113).
+        const [reqRow, reqContact] = splitContact({ ...slotRow, status: "requested", provider: "paylink" });
+        const { data: created, error: insErr } = await admin.from("bookings").insert(reqRow).select("id").single();
         if (insErr) {
           await releaseSeats(admin, sessionId, guests);
           console.error("[start-checkout] request insert failed", insErr.message);
           return res.status(500).json({ error: "Couldn't record your request." });
         }
+        if (reqContact) await storeHeldContacts(admin, [{ bookingId: created.id, contact: reqContact }]);
         try {
           await notifyOperatorOfRequest(admin, listing, created.id);
         } catch (e) {
@@ -1609,16 +1615,14 @@ export function registerApiRoutes(app: Express) {
           await failSlot();
           return res.status(502).json({ error: "Couldn't start checkout." });
         }
-        const { data: held, error: insErr } = await admin
-          .from("bookings")
-          .insert({ ...slotRow, status: "pending_payment", provider: "paylink", paylink_request_id: pay.requestId, paylink_order_id: pay.orderId, ...(account.owner ? { paylink_account_owner: account.owner } : {}) })
-          .select("id")
-          .maybeSingle();
+        const [slotIns, slotContact] = splitContact({ ...slotRow, status: "pending_payment", provider: "paylink", paylink_request_id: pay.requestId, paylink_order_id: pay.orderId, ...(account.owner ? { paylink_account_owner: account.owner } : {}) });
+        const { data: held, error: insErr } = await admin.from("bookings").insert(slotIns).select("id").maybeSingle();
         if (insErr) {
           await failSlot();
           console.error("[start-checkout] slot insert failed", insErr.message);
           return res.status(500).json({ error: "Couldn't record your booking." });
         }
+        if (slotContact && held?.id) await storeHeldContacts(admin, [{ bookingId: held.id, contact: slotContact }]);
         await noteRedeemed(admin, red, held?.id ?? null, `Applied to booking · ${listing.title}`);
         return res.json({ redirectUrl: pay.redirectUrl });
       } catch (err) {
@@ -1919,7 +1923,10 @@ export function registerApiRoutes(app: Express) {
       if (room) {
         // A room can't be inserted straight as confirmed — that would skip the
         // capacity check. Hold it, then confirm through confirm_room_booking.
-        const { data: held, error: holdErr } = await adminClient.from("bookings").insert({ ...baseRow, status: "pending_payment", provider: coveredProvider(red) }).select("id").single();
+        const [roomHoldRow, roomHoldContact] = splitContact({ ...baseRow, status: "pending_payment", provider: coveredProvider(red) });
+        const { data: held, error: holdErr } = await adminClient.from("bookings").insert(roomHoldRow).select("id").single();
+        // Held privately; the DB trigger puts it on the booking when confirm_room_booking confirms it.
+        if (held && roomHoldContact) await storeHeldContacts(adminClient, [{ bookingId: held.id, contact: roomHoldContact }]);
         if (holdErr || !held) {
           await releaseRedeemed(adminClient, red);
           console.error("[start-checkout] gift-covered room hold failed", holdErr?.message);
@@ -1984,23 +1991,21 @@ export function registerApiRoutes(app: Express) {
         return res.status(503).json({ error: "Booking isn't available right now." });
       }
       const writer = adminClient;
-      const { data: pendingRow, error: insErr } = await writer
-        .from("bookings")
-        .insert({
-          ...baseRow,
-          status: "pending_payment",
-          provider: "paylink",
-          paylink_request_id: pay.requestId,
-          paylink_order_id: pay.orderId,
-          ...(account.owner ? { paylink_account_owner: account.owner } : {}),
-        })
-        .select("id")
-        .maybeSingle();
+      const [stayIns, stayContact] = splitContact({
+        ...baseRow,
+        status: "pending_payment",
+        provider: "paylink",
+        paylink_request_id: pay.requestId,
+        paylink_order_id: pay.orderId,
+        ...(account.owner ? { paylink_account_owner: account.owner } : {}),
+      });
+      const { data: pendingRow, error: insErr } = await writer.from("bookings").insert(stayIns).select("id").maybeSingle();
       if (insErr) {
         await releaseRedeemed(adminClient, red);
         console.error("[start-checkout] insert failed", insErr.message);
         return res.status(500).json({ error: "Couldn't record your booking." });
       }
+      if (stayContact && pendingRow?.id) await storeHeldContacts(writer, [{ bookingId: pendingRow.id, contact: stayContact }]);
       await noteRedeemed(adminClient, red, pendingRow?.id ?? null, `Applied to booking · ${listing.title}`);
       res.json({ redirectUrl: pay.redirectUrl });
     } catch (err) {
@@ -2355,7 +2360,7 @@ export function registerApiRoutes(app: Express) {
     const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
     if (L.operator_id !== userId && me?.role !== "admin") return res.status(403).json({ error: "That booking isn't on your listing." });
     if ((bk as { status: string }).status === "cancelled") return res.status(400).json({ error: "This booking is cancelled." });
-    const email = (bk as { guest_email: string | null }).guest_email;
+    const email = (await contactFor(admin, bk as { id: string; guest_email: string | null })).email;
     if (!email) return res.status(400).json({ error: "Add the customer's email first, then send the link." });
 
     const currency = (bk as { currency: string }).currency || DEFAULT_CURRENCY;
@@ -2525,10 +2530,11 @@ export function registerApiRoutes(app: Express) {
           }
         } else {
           const { data: tr } = await admin.auth.admin.getUserById(booking.traveler_id);
-          const to = tr?.user?.email || booking.guest_email || "";
+          const to = tr?.user?.email || (await contactFor(admin, booking)).email || "";
           if (to) {
             await sendCancellation(to, info, { toRole: "traveler", refundCents });
-            await logBookingEvent(admin, booking.id, "email_cancellation", to);
+            // A held (unpaid-booking) address is never written where the host can read it (0113).
+            await logBookingEvent(admin, booking.id, "email_cancellation", booking.guest_email ? to : "guest");
           }
         }
       } catch (err) {
@@ -2541,7 +2547,7 @@ export function registerApiRoutes(app: Express) {
         listingId: booking.listing_id,
         operatorId: listing.operator_id,
         travelerId: booking.traveler_id,
-        travelerPhone: booking.guest_phone,
+        travelerPhone: (await contactFor(admin, booking)).phone,
         inboxBody: `🚫 Booking cancelled — ${listing.title}.${refundLine}`,
         smsBody: `Revamp: your booking for ${listing.title} has been cancelled.${refundLine}`,
       });
@@ -2854,15 +2860,17 @@ export function registerApiRoutes(app: Express) {
           .in("conversation_id", ids)
           .maybeSingle();
         if (mine) {
-          // Keep the latest contact details on the thread for host follow-up.
-          if (guestEmail || guestName) await admin.from("conversations").update({ guest_email: guestEmail || null, guest_name: guestName || null }).eq("id", mine.conversation_id);
+          // Keep the latest name on the thread; the email is kept privately so the
+          // host's reply can reach them without the host seeing it (0113).
+          if (guestName) await admin.from("conversations").update({ guest_name: guestName }).eq("id", mine.conversation_id);
+          if (guestEmail) await setConversationGuestEmail(admin, mine.conversation_id, guestEmail);
           return res.json({ conversationId: mine.conversation_id });
         }
       }
 
       const { data: convo, error: cErr } = await admin
         .from("conversations")
-        .insert({ kind: "listing_inquiry", listing_id: listing.id, guest_email: guestEmail || null, guest_name: guestName || null })
+        .insert({ kind: "listing_inquiry", listing_id: listing.id, guest_name: guestName || null })
         .select("id")
         .single();
       if (cErr || !convo) throw new Error(cErr?.message || "conversation create failed");
@@ -2872,6 +2880,7 @@ export function registerApiRoutes(app: Express) {
         { conversation_id: convo.id, user_id: listing.operator_id, role: "operator" },
       ]);
       if (pErr) throw new Error(pErr.message);
+      if (guestEmail) await setConversationGuestEmail(admin, convo.id, guestEmail);
 
       res.json({ conversationId: convo.id });
     } catch (err) {
@@ -3238,7 +3247,7 @@ export function registerApiRoutes(app: Express) {
           const { data: u } = await admin.auth.admin.getUserById(rr.user_id);
           // Anonymous guests have no auth email — fall back to the contact email
           // they left on a listing_inquiry so they still get the host's reply.
-          const to = u?.user?.email || (rr.role === "traveler" ? (convo as { guest_email?: string | null }).guest_email || null : null);
+          const to = u?.user?.email || (rr.role === "traveler" ? await conversationGuestEmail(admin, parsed.data.conversationId, (convo as { guest_email?: string | null }).guest_email) : null);
           if (to) await sendNewMessage(to, { fromName: String(senderName), listingTitle, snippet, recipientRole: rr.role === "operator" ? "operator" : "traveler" });
         }
       } catch (emailErr) {

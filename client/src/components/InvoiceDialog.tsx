@@ -143,7 +143,7 @@ export function InvoiceDialog({ bookingId, open, onClose, onSaved }: { bookingId
 
                 <Group title="Send to">
                   <Field id="inv-to" label="Guest email">
-                    <Input id="inv-to" type="email" value={edits.sendTo ?? ""} onChange={(e) => setEdits((x) => ({ ...x, sendTo: e.target.value }))} maxLength={INVOICE_LIMITS.short} placeholder="guest@example.com" className={inputCls} />
+                    <Input id="inv-to" type="email" value={edits.sendTo ?? ""} onChange={(e) => setEdits((x) => ({ ...x, sendTo: e.target.value }))} maxLength={INVOICE_LIMITS.short} placeholder="Leave empty to use the guest's email on file" className={inputCls} />
                   </Field>
                 </Group>
 

@@ -175,6 +175,9 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
 
   const b = booking;
   const guestName = b?.guest_name || b?.profiles?.display_name || "Guest";
+  // Unpaid Revamp bookings: the guest's email/phone are held privately until
+  // payment (0113) — say so instead of "not shared".
+  const contactPending = !!b && b.provider !== "direct" && b.status !== "confirmed" && b.status !== "completed";
 
   const startEditContact = () => {
     setCName(b?.guest_name || "");
@@ -331,8 +334,8 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
                 ) : (
                   <div className="mt-2 grid gap-1.5 text-sm">
                     <p className="flex items-center gap-2"><User className="h-4 w-4 text-basalt/40" /> {guestName}</p>
-                    <p className="flex items-center gap-2"><Mail className="h-4 w-4 text-basalt/40" /> {b.guest_email ? <a href={`mailto:${b.guest_email}`} className="text-apricot hover:underline">{b.guest_email}</a> : <span className="text-basalt/40">Not shared (account guest)</span>}</p>
-                    <p className="flex items-center gap-2"><Phone className="h-4 w-4 text-basalt/40" /> {b.guest_phone ? <a href={`tel:${b.guest_phone}`} className="text-apricot hover:underline">{b.guest_phone}</a> : <span className="text-basalt/40">—</span>}</p>
+                    <p className="flex items-center gap-2"><Mail className="h-4 w-4 text-basalt/40" /> {b.guest_email ? <a href={`mailto:${b.guest_email}`} className="text-apricot hover:underline">{b.guest_email}</a> : <span className="text-basalt/40">{contactPending ? "Shared once the booking is paid" : "Not shared (account guest)"}</span>}</p>
+                    <p className="flex items-center gap-2"><Phone className="h-4 w-4 text-basalt/40" /> {b.guest_phone ? <a href={`tel:${b.guest_phone}`} className="text-apricot hover:underline">{b.guest_phone}</a> : <span className="text-basalt/40">{contactPending ? "Shared once the booking is paid" : "—"}</span>}</p>
                   </div>
                 )}
               </section>

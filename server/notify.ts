@@ -74,9 +74,12 @@ export async function notifyBooking(
       sendWhatsApp(phone, smsBody, opts.whatsapp),
       sendViber(phone, smsBody),
     ]);
-    if (sms.reason !== "not_configured") await logEvent(admin, opts.bookingId, sms.sent ? "sms_sent" : "sms_failed", sms.sent ? phone : `SMS to ${phone} failed (${sms.reason ?? "unknown"}).`);
-    if (wa.reason !== "not_configured") await logEvent(admin, opts.bookingId, wa.sent ? "whatsapp_sent" : "whatsapp_failed", wa.sent ? phone : `WhatsApp to ${phone} failed (${wa.reason ?? "unknown"}).`);
-    if (vb.reason !== "not_configured") await logEvent(admin, opts.bookingId, vb.sent ? "viber_sent" : "viber_failed", vb.sent ? phone : `Viber to ${phone} failed (${vb.reason ?? "unknown"}).`);
+    // The booking history is visible to the host, also before payment — log the
+    // number's last digits only (0113: contact stays private until it's paid).
+    const shown = `••• ${phone.replace(/\D/g, "").slice(-3)}`;
+    if (sms.reason !== "not_configured") await logEvent(admin, opts.bookingId, sms.sent ? "sms_sent" : "sms_failed", sms.sent ? shown : `SMS to ${shown} failed (${sms.reason ?? "unknown"}).`);
+    if (wa.reason !== "not_configured") await logEvent(admin, opts.bookingId, wa.sent ? "whatsapp_sent" : "whatsapp_failed", wa.sent ? shown : `WhatsApp to ${shown} failed (${wa.reason ?? "unknown"}).`);
+    if (vb.reason !== "not_configured") await logEvent(admin, opts.bookingId, vb.sent ? "viber_sent" : "viber_failed", vb.sent ? shown : `Viber to ${shown} failed (${vb.reason ?? "unknown"}).`);
     if (sms.sent) sent.push("sms");
     if (wa.sent) sent.push("whatsapp");
     if (vb.sent) sent.push("viber");
