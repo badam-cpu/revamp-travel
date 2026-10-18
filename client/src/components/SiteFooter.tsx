@@ -1,6 +1,6 @@
 /** Revamp brandbook: use a charcoal closing surface, intact wordmark, cropped logo pattern, and practical marketplace context. */
 import { useEffect, useState } from "react";
-import { ArrowUpRight, ChevronDown, Instagram, Mail } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Instagram, Mail, Send } from "lucide-react";
 import { Link } from "wouter";
 import { Slogan } from "./Slogan";
 import { BrandMark, Wordmark } from "./BrandMark";
@@ -91,12 +91,30 @@ function FooterGroup({ title, children }: { title: React.ReactNode; children: Re
   );
 }
 
+// The Telegram bot's t.me link comes from the server (its @username is server
+// env only); fetched once per page load. No link while unknown or not set up.
+let telegramBotPromise: Promise<string | null> | null = null;
+function useTelegramBotUrl(): string | null {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    telegramBotPromise ??= fetch("/api/telegram/bot")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { url?: string | null } | null) => d?.url ?? null)
+      .catch(() => null);
+    let live = true;
+    void telegramBotPromise.then((u) => live && setUrl(u));
+    return () => { live = false; };
+  }, []);
+  return url;
+}
+
 export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolean; wide?: boolean } = {}) {
   const { profile } = useAuth();
   const { settings } = useSiteSettings();
   const { publicListings: listings } = useListings();
   const site = useSite();
   const isStay = site === "stay";
+  const telegramUrl = useTelegramBotUrl();
 
   // Regions that actually have listings of each type → footer crawl paths into
   // the per-region landing pages (SEO internal links). Deduped, capped. Only
@@ -200,6 +218,9 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
           <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
             <a href="mailto:hello@revampvacations.com" className="inline-flex items-center gap-2 hover:text-white"><Mail className="h-4 w-4" /> hello@revampvacations.com</a>
             <a href="https://www.instagram.com/revamphomes_yerevan/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 hover:text-white"><Instagram className="h-4 w-4" /> Field notes <ArrowUpRight className="h-3 w-3" /></a>
+            {telegramUrl && (
+              <a href={telegramUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 hover:text-white"><Send className="h-4 w-4" /> Plan on Telegram <ArrowUpRight className="h-3 w-3" /></a>
+            )}
           </div>
         </div>
       </div>

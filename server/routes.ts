@@ -3046,6 +3046,14 @@ export function registerApiRoutes(app: Express) {
   });
 
   // GET /api/telegram/status — is this account's Telegram linked?
+  // Public: the bot's t.me link for the site footer (the @username is public;
+  // it lives only in server env). null when Telegram isn't set up.
+  app.get("/api/telegram/bot", (_req: Request, res: Response) => {
+    const username = telegramConfigured() ? telegramBotUsername().replace(/^@/, "") : "";
+    res.set("Cache-Control", "public, max-age=3600");
+    res.json({ url: /^[A-Za-z0-9_]{5,32}$/.test(username) ? `https://t.me/${username}` : null });
+  });
+
   app.get("/api/telegram/status", async (req: Request, res: Response) => {
     const authHeader = req.get("authorization") || "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
