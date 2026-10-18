@@ -453,8 +453,8 @@ export function moveBookingRoom(bookingId: string, roomUnitId: string): Promise<
 }
 
 /** Admin: run the events discovery now (holidays + AI web search) instead of waiting for the weekly run. */
-export function refreshEventsNow(): Promise<{ started: boolean }> {
-  return operatorPost("/api/admin-events/refresh", {});
+export function refreshEventsNow(mode: "full" | "pictures" = "full"): Promise<{ started: boolean }> {
+  return operatorPost("/api/admin-events/refresh", mode === "pictures" ? { mode } : {});
 }
 
 /** Switch a listing off/on, or suspend/resume its bookings (0101). Admins are emailed on every change. */

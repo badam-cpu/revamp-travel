@@ -6,7 +6,7 @@
  * the derived token; anything else is ignored. Records a cron heartbeat.
  */
 import { supabaseAdmin, adminConfigured } from "../../server/supabaseAdmin.js";
-import { eventsSyncToken, syncEvents } from "../../server/events.js";
+import { eventsSyncToken, recheckEvents, syncEvents } from "../../server/events.js";
 import { recordCronRun, checkAndAlertStaleCrons } from "../../server/alerts.js";
 
 const JOB = "events-sync";
@@ -20,6 +20,17 @@ export default async (req: Request): Promise<void> => {
   if (!adminConfigured()) return;
   const admin = supabaseAdmin();
   if (!admin) return;
+  // "pictures" (Admin → Events → Refresh pictures): only re-open the upcoming
+  // events' source pages (cancellations + pictures) — no paid web searches, and
+  // no heartbeat, so it never starts the full refresh's one-hour cooldown.
+  if (req.headers.get("x-events-mode") === "pictures") {
+    try {
+      console.log("[events-sync] pictures", JSON.stringify(await recheckEvents(admin)));
+    } catch (e) {
+      console.error("[events-sync] pictures failed", e);
+    }
+    return;
+  }
   try {
     const r = await syncEvents(admin);
     console.log("[events-sync]", JSON.stringify(r));

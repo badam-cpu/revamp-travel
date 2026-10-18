@@ -1311,9 +1311,11 @@ export function registerApiRoutes(app: Express) {
     // Cost guard: each run uses up to EVENTS_MAX_SEARCHES paid web searches, so a
     // manual refresh is allowed at most once an hour (the weekly cron is separate).
     // Only a SUCCESSFUL run starts the cooldown — after a failed one, retrying right away is fine.
+    // mode "pictures" only re-opens source pages (no paid searches) — no cooldown.
+    const picturesOnly = req.body?.mode === "pictures";
     const { data: last } = await admin.from("cron_runs").select("last_success_at").eq("job", "events-sync").maybeSingle();
     const lastAt = last?.last_success_at ? Date.parse(last.last_success_at as string) : 0;
-    if (lastAt && Date.now() - lastAt < 60 * 60_000) {
+    if (!picturesOnly && lastAt && Date.now() - lastAt < 60 * 60_000) {
       const mins = Math.ceil((60 * 60_000 - (Date.now() - lastAt)) / 60_000);
       return res.status(429).json({ error: `Events were refreshed recently — you can run it again in about ${mins} minute${mins === 1 ? "" : "s"}.` });
     }
@@ -1321,7 +1323,7 @@ export function registerApiRoutes(app: Express) {
     const base = process.env.URL || process.env.DEPLOY_PRIME_URL;
     if (!syncToken || !base) return res.status(503).json({ error: "Event discovery isn't configured on this server." });
     try {
-      const r = await fetch(`${base}/.netlify/functions/events-sync-background`, { method: "POST", headers: { "x-events-token": syncToken } });
+      const r = await fetch(`${base}/.netlify/functions/events-sync-background`, { method: "POST", headers: { "x-events-token": syncToken, ...(picturesOnly ? { "x-events-mode": "pictures" } : {}) } });
       if (r.status >= 400) throw new Error(`background ${r.status}`);
       res.json({ started: true });
     } catch (e) {

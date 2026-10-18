@@ -8,7 +8,7 @@
  * operators.
  */
 import { useCallback, useEffect, useState } from "react";
-import { ExternalLink, RefreshCw } from "lucide-react";
+import { ExternalLink, Image as ImageIcon, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { PageHeader } from "@/components/PageHeader";
@@ -41,11 +41,11 @@ export function AdminEvents() {
   }, []);
   useEffect(load, [load]);
 
-  const refresh = async () => {
+  const refresh = async (mode: "full" | "pictures" = "full") => {
     setBusy(true);
     try {
-      await refreshEventsNow();
-      toast.success("Started — the search takes a few minutes. Reload this page afterwards.");
+      await refreshEventsNow(mode);
+      toast.success(mode === "pictures" ? "Started — checking each event's page for its picture. Reload in a minute or two." : "Started — the search takes a few minutes. Reload this page afterwards.");
     } catch (e) {
       toast(userMessage(e, "Couldn't start the refresh."));
     } finally {
@@ -72,9 +72,15 @@ export function AdminEvents() {
         title="Events"
         sub="Holidays and public events across Armenia for the next 12 months, found and re-checked automatically every week. Operators see verified ones next to their pricing."
         actions={
-          <button type="button" onClick={() => void refresh()} disabled={busy} className="inline-flex h-10 items-center gap-2 rounded-none border border-basalt/20 px-4 text-sm font-semibold hover:border-basalt/40 disabled:opacity-50">
-            <RefreshCw className={cn("h-4 w-4", busy && "animate-spin")} /> Refresh now
-          </button>
+          <div className="flex flex-wrap gap-2">
+            {/* Only re-opens each upcoming event's source page — no paid searches, no cooldown. */}
+            <button type="button" onClick={() => void refresh("pictures")} disabled={busy} title="Look for each event's own picture on its source page" className="inline-flex h-10 items-center gap-2 rounded-none border border-basalt/20 px-4 text-sm font-semibold hover:border-basalt/40 disabled:opacity-50">
+              <ImageIcon className="h-4 w-4" /> Refresh pictures
+            </button>
+            <button type="button" onClick={() => void refresh()} disabled={busy} className="inline-flex h-10 items-center gap-2 rounded-none border border-basalt/20 px-4 text-sm font-semibold hover:border-basalt/40 disabled:opacity-50">
+              <RefreshCw className={cn("h-4 w-4", busy && "animate-spin")} /> Refresh now
+            </button>
+          </div>
         }
       />
       <p className="mb-4 text-sm text-basalt/60">

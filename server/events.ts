@@ -337,8 +337,7 @@ export async function sourceMentions(url: string, title: string, start: string, 
       html += dec.decode(value, { stream: true });
     }
     reader.cancel().catch(() => {});
-    const img = pageImage(html, res.url || url);
-    if (img) sourceImages.set(url, img);
+    await rememberEventImage(html, res.url || url, url, title, start, nameOnSource);
     const text = html.replace(/<[^>]+>/g, " ").toLowerCase().normalize("NFKD");
     const named = Math.max(nameHit(text, title), nameOnSource ? nameHit(text, nameOnSource) : 0) >= 0.6;
     return named && mentionsDate(text, start);
@@ -370,8 +369,139 @@ export function pageImage(html: string, pageUrl: string): string | null {
   }
 }
 
-/** Pictures found on source pages during this run, by source URL. */
+/**
+ * Pictures found on source pages during this run, per EVENT (source URL + title):
+ * one ticket-site listing page carries dozens of events, and its own link-preview
+ * picture is the site's banner — never the event's.
+ */
 const sourceImages = new Map<string, string>();
+const imgKey = (url: string, title: string) => `${url}\n${title}`;
+
+/** Site-wide placeholders some pages use as og:image — never an event picture. */
+const GENERIC_IMG = /(default|logo|placeholder|og[_-]?image|ogp|favicon|share[_-]?image|social)/i;
+
+const decodeEntities = (s: string) =>
+  s.replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ");
+
+function absHttps(raw: string | undefined | null, pageUrl: string): string | null {
+  if (!raw || typeof raw !== "string") return null;
+  try {
+    const u = new URL(decodeEntities(raw).trim(), pageUrl);
+    if (u.protocol === "http:") u.protocol = "https:";
+    return u.protocol === "https:" && u.href.length <= 1000 ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Every schema.org *Event object in the page's JSON-LD (ticket sites list their events this way). */
+function ldEvents(html: string): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
+  const walk = (v: unknown, depth: number) => {
+    if (!v || typeof v !== "object" || depth > 8) return;
+    if (Array.isArray(v)) return v.forEach((x) => walk(x, depth + 1));
+    const o = v as Record<string, unknown>;
+    const t = o["@type"];
+    if ((Array.isArray(t) ? t : [t]).some((x) => typeof x === "string" && /Event$/.test(x))) out.push(o);
+    Object.values(o).forEach((x) => walk(x, depth + 1));
+  };
+  for (const m of Array.from(html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi))) {
+    try {
+      walk(JSON.parse(m[1].trim()), 0);
+    } catch {
+      /* malformed block — skip */
+    }
+  }
+  return out;
+}
+
+const ldImage = (img: unknown): string | null => {
+  if (typeof img === "string") return img;
+  if (Array.isArray(img)) return ldImage(img[0]);
+  if (img && typeof img === "object") return ldImage((img as Record<string, unknown>).url);
+  return null;
+};
+
+/**
+ * This event's own picture on a source page, in order of trust:
+ *  1. a JSON-LD Event with the same name and start date → its `image` (or its own
+ *     page, which we open next for that page's link-preview picture);
+ *  2. an <img> whose alt text names the event (best match only, and not a tie);
+ *  3. the page's link-preview picture — only when the page is about one event
+ *     (not a listing) and it isn't a site placeholder.
+ */
+export function eventImageOnPage(html: string, pageUrl: string, title: string, start: string, nameOnSource?: string | null): { image: string | null; eventPage: string | null } {
+  const names = [title, nameOnSource].filter((n): n is string => !!n && n.trim().length > 0);
+  const score = (text: string) => {
+    const t = decodeEntities(text).toLowerCase().normalize("NFKD");
+    return Math.max(0, ...names.map((n) => nameHit(t, n)));
+  };
+  const events = ldEvents(html);
+  for (const ev of events) {
+    const name = typeof ev.name === "string" ? ev.name : "";
+    const day = typeof ev.startDate === "string" ? ev.startDate.slice(0, 10) : "";
+    if (day !== start || score(name) < 0.6) continue;
+    const image = absHttps(ldImage(ev.image), pageUrl);
+    if (image && !GENERIC_IMG.test(image)) return { image, eventPage: null };
+    const own = absHttps(typeof ev.url === "string" ? ev.url : null, pageUrl);
+    if (own && own !== pageUrl) return { image: null, eventPage: own };
+  }
+  let best: { src: string; s: number } | null = null;
+  let tie = false;
+  for (const m of Array.from(html.matchAll(/<img\b[^>]*>/gi))) {
+    const tag = m[0];
+    const alt = tag.match(/\balt=["']([^"']{4,300})["']/i)?.[1];
+    const src = absHttps(tag.match(/\b(?:data-src|src)=["']([^"']+)["']/i)?.[1], pageUrl);
+    if (!alt || !src || /\.svg(\?|$)/i.test(src) || GENERIC_IMG.test(src)) continue;
+    const s = score(alt);
+    if (s < 0.8) continue;
+    if (!best || s > best.s) {
+      best = { src, s };
+      tie = false;
+    } else if (s === best.s && src !== best.src) tie = true;
+  }
+  if (best && !tie) return { image: best.src, eventPage: null };
+  if (events.length <= 1) {
+    const og = pageImage(html, pageUrl);
+    if (og && !GENERIC_IMG.test(og)) return { image: og, eventPage: null };
+  }
+  return { image: null, eventPage: null };
+}
+
+/** Pictures matched to two clearly different events — a page's generic banner, not either event's. */
+export function sharedImages(pairs: { title: string; image: string | undefined | null }[]): Set<string> {
+  const byImage = new Map<string, string[]>();
+  for (const p of pairs) if (p.image) byImage.set(p.image, [...(byImage.get(p.image) ?? []), p.title]);
+  const out = new Set<string>();
+  byImage.forEach((titles, image) => {
+    if (titles.some((a, i) => titles.slice(i + 1).some((b) => titleOverlap(a, b) < 0.6))) out.add(image);
+  });
+  return out;
+}
+
+/** Find and keep this event's picture (opening its own page once if the listing points there). */
+async function rememberEventImage(html: string, finalUrl: string, sourceUrl: string, title: string, start: string, nameOnSource?: string | null): Promise<void> {
+  try {
+    const found = eventImageOnPage(html, finalUrl, title, start, nameOnSource);
+    let image = found.image;
+    if (!image && found.eventPage) {
+      const safe = await assertSafeUrl(found.eventPage);
+      const res = await fetch(safe.toString(), {
+        redirect: "follow",
+        signal: AbortSignal.timeout(8_000),
+        headers: { "user-agent": "Mozilla/5.0 (compatible; RevampVacationsBot/1.0; +https://revampvacations.com) event source check", accept: "text/html,*/*" },
+      });
+      if (res.ok) {
+        const page = (await res.text()).slice(0, 400_000);
+        const og = pageImage(page, res.url || found.eventPage);
+        if (og && !GENERIC_IMG.test(og)) image = og;
+      }
+    }
+    if (image) sourceImages.set(imgKey(sourceUrl, title), image);
+  } catch {
+    /* a picture is optional — the event still counts */
+  }
+}
 
 /**
  * Fallback evidence when a site blocks or JS-renders its page: the cited URL is
@@ -424,6 +554,7 @@ export async function discoverEvents(admin: SupabaseClient, today = isoDay(new D
 
   // 2. Check each against real evidence — six at a time, so a long list still fits the time limit.
   const oks = await mapPool(cands, 6, async (c) => (await sourceMentions(c.url, c.title, c.start, c.nameOnSource)) || searchConfirms(hits, c.url, c.title, c.nameOnSource));
+  const sharedInRun = sharedImages(cands.map((c) => ({ title: c.title, image: sourceImages.get(imgKey(c.url, c.title)) })));
 
   // 3. Store (or refresh) each one.
   let verified = 0;
@@ -467,8 +598,8 @@ export async function discoverEvents(admin: SupabaseClient, today = isoDay(new D
     else {
       stored++;
       // The source page's picture (0112) — separate, so a DB without the column still stores the event.
-      const img = sourceImages.get(url);
-      if (img) await admin.from("events").update({ image_url: img }).eq(twin ? "id" : "dedupe_key", twin ? twin.id : key);
+      const img = sourceImages.get(imgKey(url, title));
+      if (img && !sharedInRun.has(img)) await admin.from("events").update({ image_url: img }).eq(twin ? "id" : "dedupe_key", twin ? twin.id : key);
     }
   }
   return { found: cands.length, verified, stored, searches, areaErrors };
@@ -510,8 +641,7 @@ export async function sourceStatus(url: string, title: string, start: string, na
     if (res.status === 404 || res.status === 410) return "gone";
     if (!res.ok || !res.body) return "unknown";
     const html = (await res.text()).slice(0, 1_500_000);
-    const img = pageImage(html, res.url || url);
-    if (img) sourceImages.set(url, img);
+    await rememberEventImage(html, res.url || url, url, title, start, nameOnSource);
     const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").toLowerCase().normalize("NFKD");
     // Cancel words near the event's name (not elsewhere on a long listing page).
     const words = [...titleTokens(title), ...(nameOnSource ? titleTokens(nameOnSource) : [])];
@@ -531,22 +661,24 @@ export async function sourceStatus(url: string, title: string, start: string, na
 }
 
 /** Mark upcoming events cancelled (source gone / says cancelled) or hide stale ones. */
-export async function recheckEvents(admin: SupabaseClient, today = isoDay(new Date())): Promise<{ checked: number; cancelled: number; hidden: number }> {
+export async function recheckEvents(admin: SupabaseClient, today = isoDay(new Date())): Promise<{ checked: number; cancelled: number; hidden: number; pictured: number }> {
   const { data } = await admin
     .from("events")
-    .select("id, title, start_date, source_url, last_seen_at, status_reason")
+    .select("id, title, start_date, source_url, last_seen_at, status_reason, image_url")
     .eq("kind", "event")
     .eq("status", "active")
     .eq("hidden", false)
     .gte("end_date", today)
     .limit(300);
   // An admin's "Restore" sticks — the re-check never overrides it.
-  const rows = ((data ?? []) as { id: string; title: string; start_date: string; source_url: string | null; last_seen_at: string; status_reason: string | null }[]).filter(
+  const rows = ((data ?? []) as { id: string; title: string; start_date: string; source_url: string | null; last_seen_at: string; status_reason: string | null; image_url: string | null }[]).filter(
     (r) => r.status_reason !== RESTORED_BY_ADMIN,
   );
   const verdicts = await mapPool(rows, 6, (r) => (r.source_url ? sourceStatus(r.source_url, r.title, r.start_date) : Promise.resolve("unknown" as const)));
+  const shared = sharedImages(rows.map((r) => ({ title: r.title, image: r.source_url ? sourceImages.get(imgKey(r.source_url, r.title)) : null })));
   let cancelled = 0;
   let hidden = 0;
+  let pictured = 0;
   const now = new Date().toISOString();
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
@@ -555,15 +687,22 @@ export async function recheckEvents(admin: SupabaseClient, today = isoDay(new Da
       const reason = v === "gone" ? "The source page was removed" : "The source now says it's cancelled or postponed";
       const { error } = await admin.from("events").update({ status: "cancelled", status_reason: reason, status_changed_at: now }).eq("id", r.id);
       if (!error) cancelled++;
-    } else if (v === "ok" && r.source_url && sourceImages.has(r.source_url)) {
+    } else {
       // Still on: keep its picture current (fills events stored before 0112).
-      await admin.from("events").update({ image_url: sourceImages.get(r.source_url) }).eq("id", r.id);
-    } else if (v !== "ok" && Date.parse(r.last_seen_at) < Date.now() - STALE_DAYS * DAY) {
-      const { error } = await admin.from("events").update({ hidden: true, status_reason: "Not confirmed by any search for 3 weeks", status_changed_at: now }).eq("id", r.id);
-      if (!error) hidden++;
+      // The picture was matched to THIS event by name (+ date), so it counts even
+      // when the page's text check was inconclusive.
+      const img = r.source_url ? sourceImages.get(imgKey(r.source_url, r.title)) : undefined;
+      if (img && !shared.has(img) && img !== r.image_url) {
+        const { error } = await admin.from("events").update({ image_url: img }).eq("id", r.id);
+        if (!error) pictured++;
+      }
+      if (v !== "ok" && Date.parse(r.last_seen_at) < Date.now() - STALE_DAYS * DAY) {
+        const { error } = await admin.from("events").update({ hidden: true, status_reason: "Not confirmed by any search for 3 weeks", status_changed_at: now }).eq("id", r.id);
+        if (!error) hidden++;
+      }
     }
   }
-  return { checked: rows.length, cancelled, hidden };
+  return { checked: rows.length, cancelled, hidden, pictured };
 }
 
 /** Holidays + AI discovery. Each half runs even if the other fails. */
@@ -583,7 +722,7 @@ export async function syncEvents(admin: SupabaseClient): Promise<{ holidays: num
   }
   errors.push(...disc.areaErrors.map((a) => `discovery ${a}`));
   // After discovery (so re-found events have a fresh last_seen_at): cancellations & stale ones.
-  let re = { checked: 0, cancelled: 0, hidden: 0 };
+  let re = { checked: 0, cancelled: 0, hidden: 0, pictured: 0 };
   try {
     re = await recheckEvents(admin);
   } catch (e) {
