@@ -21,6 +21,7 @@ import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { buildCollectionPageJsonLd } from "@shared/seo";
 import { cn } from "@/lib/utils";
 import { ReMark } from "@/components/BrandMark";
+import { compareEatListings } from "@shared/eat";
 
 const validTypes = new Set(["all", "stay", "eat", "tour", "experience", "place"]);
 const validOffers = new Set(["all", "nightly", "monthly", "sale"]);
@@ -158,7 +159,7 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return listings.filter((listing) => {
+    const matched = listings.filter((listing) => {
       // Eat listings live in their own free guide (/explore/eat), not the
       // bookable marketplace grid — keep them out of "All places".
       // "All" = bookable inventory; the free curated guides (eat + place) have their own tabs.
@@ -174,6 +175,9 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
       const haystack = [listing.title, listing.city, listing.region, listing.type, listing.shortDescription, ...listing.tags].join(" ").toLowerCase();
       return matchesType && matchesRegion && matchesCategory && matchesOffer && matchesStayKind && (!needle || haystack.includes(needle)) && isAvailableForRange(listing);
     });
+    // The Visit guide is admin-curated like the Eat guide: "Pin to the top" and
+    // the curation rank (Admin → Visit guide) decide the order, then rating.
+    return type === "place" ? matched.sort(compareEatListings) : matched;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, type, region, placeCat, offer, stayKind, listings, hasRange, checkin, checkout, bookedByListing]);
   // Only offer the Hotels chip when there's at least one hotel to show.

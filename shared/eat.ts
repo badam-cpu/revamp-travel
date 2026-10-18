@@ -1,6 +1,6 @@
 /**
- * Shared ordering for the Eat guide + landing pages, so the client and the bot
- * prerenderer sort restaurants identically. Curation order:
+ * Shared ordering for the curated guides — Eat (guide + landing pages, client and
+ * bot prerender) and Visit (/explore/place + /visit/:region, since 2026-10-18). Curation order:
  *   1. featured (admin pin) first
  *   2. editor_rank ascending (lower = earlier; unranked sinks to the end)
  *   3. best external rating (Google/Tripadvisor) descending

@@ -10,6 +10,7 @@
  * added HERE, not in one of the three consumers.
  */
 import { ARMENIA_REGIONS, type ListingType } from "./listings.js";
+import { compareEatListings, type EatSortable } from "./eat.js";
 import { slugify } from "./slug.js";
 
 export type LandingType = "stay" | "tour" | "experience" | "place";
@@ -48,7 +49,9 @@ export function inRegion(l: { region?: string | null }, label: string): boolean 
 }
 
 export function landingItems<T extends { type: string; region?: string | null }>(listings: T[], type: LandingType, label: string): T[] {
-  return listings.filter((l) => l.type === type && inRegion(l, label));
+  const items = listings.filter((l) => l.type === type && inRegion(l, label));
+  // Places are admin-curated (pin + curation rank), same order as the Visit guide.
+  return type === "place" ? items.sort((a, b) => compareEatListings(a as unknown as EatSortable, b as unknown as EatSortable)) : items;
 }
 
 export function proseList(items: string[]): string {
