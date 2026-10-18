@@ -24,11 +24,14 @@ export default function ResetPassword() {
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The link expired / was already used → offer a fresh one.
+  const [expired, setExpired] = useState(false);
   const [done, setDone] = useState(false);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
+    setExpired(false);
     if (password.length < 6) {
       setError("Use at least 6 characters.");
       return;
@@ -42,9 +45,20 @@ export default function ResetPassword() {
       await updatePassword(password);
       setDone(true);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Couldn't update your password.";
-      // The most common cause is an expired/already-used link (no recovery session).
-      setError(/session/i.test(message) ? "This reset link has expired or was already used. Request a new one from the sign-in page." : message);
+      // Plain messages only — the raw error goes to the console.
+      console.error("[reset-password]", err);
+      const message = err instanceof Error ? err.message : "";
+      if (/session|expired|invalid|jwt|token/i.test(message)) {
+        // The most common cause: an expired or already-used link (no recovery session).
+        setExpired(true);
+        setError("This reset link has expired or was already used.");
+      } else if (/different from the old|same as/i.test(message)) {
+        setError("Choose a password you haven't used for this account before.");
+      } else if (/weak|characters|password should/i.test(message)) {
+        setError("Choose a stronger password — longer, with a mix of letters and numbers.");
+      } else {
+        setError("We couldn't update your password right now. Please try again in a moment.");
+      }
     } finally {
       setLoading(false);
     }
@@ -81,7 +95,16 @@ export default function ResetPassword() {
 
                 {error && (
                   <div className="flex items-start gap-2 border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {error}
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>
+                      {error}
+                      {expired && (
+                        <>
+                          {" "}
+                          <Link href="/forgot-password" className="font-semibold underline underline-offset-2">Get a new link</Link>
+                        </>
+                      )}
+                    </span>
                   </div>
                 )}
 

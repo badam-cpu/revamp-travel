@@ -1,7 +1,7 @@
 /** Revamp brandbook: same white/orange/charcoal form surfaces as Dashboard.tsx and Plan.tsx. */
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { AlertTriangle, MailCheck } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { Button } from "@/components/ui/button";
@@ -11,9 +11,10 @@ import { PasswordInput } from "@/components/PasswordInput";
 import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
+import { RESET_EMAIL_KEY } from "./ForgotPassword";
 
 export default function Login() {
-  const { signIn, resetPassword, user, loading: authLoading } = useAuth();
+  const { signIn, user, loading: authLoading } = useAuth();
   const [, navigate] = useLocation();
   // A support-chat visitor is signed in ANONYMOUSLY (no email) — that's not a real
   // account, so the sign-in form must still show for them. Mirrors SiteHeader.
@@ -36,14 +37,11 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [resetSent, setResetSent] = useState<string | null>(null);
-  const [resetLoading, setResetLoading] = useState(false);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setLoading(true);
     setError(null);
-    setResetSent(null);
     try {
       await signIn(email, password);
       const redirect = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("redirect") : null;
@@ -55,23 +53,15 @@ export default function Login() {
     }
   };
 
-  const sendReset = async () => {
-    setError(null);
-    setResetSent(null);
-    if (!email.trim()) {
-      setError("Enter your email above first, then tap “Forgot password?”.");
-      return;
-    }
-    setResetLoading(true);
+  // "Forgot password?" opens its own page, carrying the typed email over
+  // without putting it in the URL.
+  const goForgot = () => {
     try {
-      await resetPassword(email.trim());
-      // Don't reveal whether the address exists — always show the same message.
-      setResetSent(email.trim());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't send a reset link. Please try again.");
-    } finally {
-      setResetLoading(false);
+      if (email.trim()) sessionStorage.setItem(RESET_EMAIL_KEY, email.trim());
+    } catch {
+      /* private mode — they'll type it there */
     }
+    navigate("/forgot-password");
   };
 
   // Signed in already — render a brief placeholder instead of the form while
@@ -112,23 +102,12 @@ export default function Login() {
             <div className="grid gap-1.5">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
-                <button
-                  type="button"
-                  onClick={sendReset}
-                  disabled={resetLoading}
-                  className="text-xs font-semibold text-apricot hover:underline disabled:opacity-50"
-                >
-                  {resetLoading ? "Sending…" : "Forgot password?"}
+                <button type="button" onClick={goForgot} className="text-xs font-semibold text-apricot hover:underline">
+                  Forgot password?
                 </button>
               </div>
               <PasswordInput id="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
-
-            {resetSent && (
-              <div className="flex items-start gap-2 border border-apricot/30 bg-apricot/5 p-3 text-sm text-basalt/80">
-                <MailCheck className="mt-0.5 h-4 w-4 shrink-0 text-apricot" /> If an account exists for {resetSent}, a reset link is on its way. Follow it to set a new password.
-              </div>
-            )}
 
             {error && (
               <div className="flex items-start gap-2 border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">

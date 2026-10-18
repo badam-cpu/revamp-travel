@@ -170,6 +170,7 @@ For crawler discoverability, `pnpm build && pnpm start`, then against `localhost
 | `/admin` | `AdminReview` | Admin-only: approve or send back every `pending` listing. `RequireRole role="admin"` redirects anyone else. |
 | `/login` | `Login` | Email/password sign-in. Honors `?redirect=` to return to a listing after `BookingPanel` sends someone here. |
 | `/signup` | `Signup` | Email/password sign-up with a traveler/operator role toggle. |
+| `/forgot-password` · `/reset-password` | `ForgotPassword` · `ResetPassword` | "Forgot password?" on the sign-in form opens `/forgot-password` (2026-10-18; it used to send the email in place and error when the field was empty): email pre-filled from the sign-in form via sessionStorage (never the URL), "Send reset link" → `resetPassword` (Supabase emails the branded template → `/reset-password`), "Check your inbox" state with resend after 60 s, same message whether or not the account exists, calm errors only (raw error to console). `/reset-password` maps errors to plain messages and offers "Get a new link" when the link expired. Both noindex and private in GA. |
 | `/404` and fallback | `NotFound` | Branded error state. |
 
 ## Data Model

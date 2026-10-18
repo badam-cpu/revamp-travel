@@ -34,6 +34,7 @@ import AdminReview from "./pages/AdminReview";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ResetPassword from "./pages/ResetPassword";
+import ForgotPassword from "./pages/ForgotPassword";
 import Account from "./pages/Account";
 import VenueDashboard from "./pages/VenueDashboard";
 import Checkout from "./pages/Checkout";
@@ -144,6 +145,7 @@ function Router() {
       <Route path="/admin" component={AdminReview} />
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
+      <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/account" component={Account} />
       <Route path="/venue" component={VenueDashboard} />

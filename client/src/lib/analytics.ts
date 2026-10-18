@@ -24,7 +24,7 @@ const GA_ID = import.meta.env.VITE_GA_MEASUREMENT_ID as string | undefined;
 export const analyticsEnabled = Boolean(GA_ID);
 
 /** Pages that are never reported (private app screens, and URLs with a private token). */
-const PRIVATE_PATHS = [/^\/dashboard(\/|$)/, /^\/admin(\/|$)/, /^\/account(\/|$)/, /^\/venue(\/|$)/, /^\/(login|signup|reset-password)(\/|$)/, /^\/redeem\//, /^\/trip\//, /^\/invoice\//];
+const PRIVATE_PATHS = [/^\/dashboard(\/|$)/, /^\/admin(\/|$)/, /^\/account(\/|$)/, /^\/venue(\/|$)/, /^\/(login|signup|forgot-password|reset-password)(\/|$)/, /^\/redeem\//, /^\/trip\//, /^\/invoice\//];
 export function isPrivatePath(path: string): boolean {
   const p = path.split(/[?#]/)[0];
   return PRIVATE_PATHS.some((re) => re.test(p));
