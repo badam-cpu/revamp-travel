@@ -33,7 +33,14 @@ const addDays = (iso: string, n: number) => {
   return d.toISOString().slice(0, 10);
 };
 const esc = (s: unknown) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-const day = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "Sun 27 Sep" (fixed short names — some ICU builds print "Sept"). */
+const day = (iso: string) => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+};
+const guestsText = (n: number) => `${n} guest${n === 1 ? "" : "s"}`;
 const money = (cents: number, currency = "AMD") =>
   currency === "AMD" ? `֏${Math.round(cents / 100).toLocaleString("en-US")}` : `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
 const bookingLink = (id: string) => `${SITE()}/dashboard?section=bookings&booking=${id}`;
@@ -202,13 +209,15 @@ export async function todaySummary(admin: SupabaseClient, operatorId: string, op
   const views = rows.map((r) => viewOf(r, rooms.get(r.id) ?? null));
   const stay = (v: BookingView) => v.listing.type === "stay";
   const name = (v: BookingView) => `${esc(v.listing.title)}${v.room ? ` · ${esc(v.room)}` : ""}`;
-  const who = (v: BookingView) => `${esc(v.guestName)} (${v.guests})`;
+  const who = (v: BookingView) => `${esc(v.guestName)} · ${guestsText(v.guests)}`;
   const checkIns = views.filter((v) => stay(v) && v.status !== "requested" && v.startDate === today);
   const checkOuts = views.filter((v) => stay(v) && v.status !== "requested" && v.endDate === today);
   const sessions = views
     .filter((v) => !stay(v) && v.status !== "requested" && (v.startsAt ? slotLocalDate(v.startsAt) : v.startDate) === today)
     .sort((a, b) => (a.startsAt ?? "").localeCompare(b.startsAt ?? ""));
-  const requests = views.filter((v) => v.status === "requested");
+  // Only requests whose date is still ahead — a request for a day that has passed
+  // can't be answered any more.
+  const requests = views.filter((v) => v.status === "requested" && (v.startsAt ? slotLocalDate(v.startsAt) : v.startDate) >= today);
 
   const parts: string[] = [];
   if (checkIns.length) parts.push(`<b>Check-ins (${checkIns.length})</b>\n${checkIns.map((v) => `• ${name(v)} — ${who(v)}`).join("\n")}`);
@@ -237,14 +246,19 @@ async function upcomingList(admin: SupabaseClient, operatorId: string): Promise<
   const rooms = await roomNames(admin, rows.map((r) => r.id));
   const lines = rows.map((r) => {
     const v = viewOf(r, rooms.get(r.id) ?? null);
-    return `• ${esc(whenLine(v))} — ${esc(v.listing.title)}${v.room ? ` · ${esc(v.room)}` : ""} · ${esc(v.guestName)} (${v.guests})`;
+    return `• ${esc(whenLine(v))} — ${esc(v.listing.title)}${v.room ? ` · ${esc(v.room)}` : ""} · ${esc(v.guestName)} · ${guestsText(v.guests)}`;
   });
   return `<b>Next 7 days (${rows.length})</b>\n${lines.join("\n")}`;
 }
 
-/** Morning summary for hosts, once a day after 08:00 Armenia time (10-minute cron). */
+/**
+ * Morning summary for hosts, once a day between 08:00 and 12:00 Armenia time
+ * (10-minute cron). Outside that window nothing is sent — a summary that
+ * missed the morning waits for tomorrow rather than arriving mid-afternoon.
+ */
 export async function runTelegramDailySummaries(admin: SupabaseClient): Promise<{ sent: number; checked: number }> {
-  if (!process.env.TELEGRAM_BOT_TOKEN || yerevanNow().getUTCHours() < 8) return { sent: 0, checked: 0 };
+  const hour = yerevanNow().getUTCHours();
+  if (!process.env.TELEGRAM_BOT_TOKEN || hour < 8 || hour >= 12) return { sent: 0, checked: 0 };
   const today = yerevanToday();
   const { data, error } = await admin
     .from("telegram_links")
