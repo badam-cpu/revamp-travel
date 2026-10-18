@@ -14,6 +14,7 @@ import { Loader2, ArrowRight, Check } from "lucide-react";
 import { resolveQr, startQrPayment, confirmQrPayment, type QrType, type QrConfig } from "@/lib/qr";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { toast } from "sonner";
+import { Wordmark } from "@/components/BrandMark";
 
 const fmt = (cents: number) => "֏" + Math.round(cents / 100).toLocaleString("en-US");
 
@@ -21,9 +22,9 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-chalk text-basalt">
       <div className="mx-auto flex min-h-screen max-w-md flex-col px-5 py-8">
-        <header className="mb-6"><span className="font-display text-xl font-bold tracking-[-0.02em]">revamp.</span></header>
+        <header className="mb-6"><Wordmark className="h-[22px] text-[#F15822]" /></header>
         <main className="flex-1">{children}</main>
-        <footer className="mt-8 text-center text-[11px] text-basalt/40">powered by <span className="font-bold text-basalt/60">revamp.</span></footer>
+        <footer className="mt-8 text-center text-[11px] text-basalt/40">powered by <Wordmark className="ml-1 inline-block h-[0.95em] align-[-0.2em] text-basalt/60" /></footer>
       </div>
     </div>
   );
@@ -180,7 +181,7 @@ export default function QrLanding({ code }: { code: string }) {
           {paying ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
           {paying ? "Taking you to payment…" : amountCents > 0 ? `Pay ${fmt(amountCents)} securely` : "Choose an amount"}
         </button>
-        <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">Paid securely via PayLink · powered by <span className="font-semibold text-basalt/60">revamp.</span></p>
+        <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">Paid securely via PayLink · powered by <Wordmark className="ml-1 inline-block h-[0.95em] align-[-0.2em] text-basalt/60" /></p>
       </div>
     </Shell>
   );

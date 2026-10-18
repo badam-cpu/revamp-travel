@@ -14,6 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { renderMarkdown } from "../shared/markdown.js";
+import { wordmarkImg } from "../shared/brandLogo.js";
 import { sendTelegram, telegramConfigured, sendTelegramPhoto } from "./telegram.js";
 
 const RESEND_BATCH_URL = "https://api.resend.com/emails/batch";
@@ -301,7 +302,7 @@ function shell(bodyHtml: string, siteUrl: string, unsubUrl: string, nonce: strin
   return `<!doctype html><html><body style="margin:0;background:#F5F2EC;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#212121;">
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${esc(nonce)}</div>
     <div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid rgba(33,33,33,.1);border-radius:14px;overflow:hidden;">
-      <div style="padding:20px 28px;border-bottom:1px solid rgba(33,33,33,.08);"><span style="font-size:22px;font-weight:700;color:#212121;">revamp.</span></div>
+      <div style="padding:20px 28px;border-bottom:1px solid rgba(33,33,33,.08);">${wordmarkImg(24)}</div>
       <div style="padding:24px 28px;font-size:15px;line-height:1.65;">${bodyHtml}</div>
       ${campaignFooterHtml({ siteUrl, unsubUrl, sentLabel, mapUrl })}
     </div>

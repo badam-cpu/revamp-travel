@@ -3,11 +3,12 @@ import { ArrowLeft, Compass } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { SiteHeader } from "@/components/SiteHeader";
+import { ReMark } from "@/components/BrandMark";
 
 export default function NotFound() {
   return (
     <div className="relative min-h-screen overflow-hidden bg-paper text-basalt">
-      <div className="pointer-events-none absolute -bottom-24 -right-20 text-[18rem] font-bold leading-none tracking-[-0.12em] text-apricot/[0.07]">re.</div>
+      <div className="pointer-events-none absolute -bottom-24 -right-20 text-[18rem] font-bold leading-none tracking-[-0.12em] text-apricot/[0.07]"><ReMark /></div>
       <SiteHeader />
       <main className="container grid min-h-[calc(100vh-76px)] place-items-center py-20">
         <div className="max-w-xl text-center">

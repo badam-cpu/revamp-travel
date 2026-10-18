@@ -44,6 +44,7 @@ import { fetchTour } from "@/lib/tours";
 import { listingTourPhotos, tourWorthShowing, visibleRooms, type ListingTour, type TourFacts } from "@shared/tours";
 import { RichText } from "@/components/RichText";
 import { ExpandableDescription } from "@/components/ExpandableDescription";
+import { ReMark } from "@/components/BrandMark";
 
 /** What every Revamp stay includes — a marketplace-wide baseline shown on stay
  * pages (a stated standard Revamp holds stay operators to, not a per-listing
@@ -593,7 +594,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
         </section>
 
         <section className="relative overflow-hidden border-y border-basalt/10 bg-chalk">
-          <div className="pointer-events-none absolute -right-12 -top-20 text-[14rem] font-bold leading-none tracking-[-0.12em] text-apricot/[0.07]">re.</div>
+          <div className="pointer-events-none absolute -right-12 -top-20 text-[14rem] font-bold leading-none tracking-[-0.12em] text-apricot/[0.07]"><ReMark /></div>
           <div className="container relative grid gap-8 py-12 lg:grid-cols-[0.65fr_1.35fr] lg:items-center lg:py-16">
             <div>
               <p className="eyebrow">On the map</p>

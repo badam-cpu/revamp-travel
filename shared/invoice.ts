@@ -14,6 +14,7 @@
  */
 import { TAX_PERCENT } from "./bookings.js";
 import { formatSlotTime } from "./sessions.js";
+import { wordmarkImg } from "./brandLogo.js";
 
 export type InvoiceIssuerKind = "revamp" | "operator";
 export type InvoiceStatus = "paid" | "due" | "cancelled";
@@ -370,7 +371,7 @@ export function invoiceHtml(m: InvoiceModel, opts: { brandHeader?: boolean } = {
     ? `<img src="${esc(m.logoUrl)}" alt="${esc(m.seller.name)}" height="40" style="display:block;height:40px;width:auto;max-width:180px;border:0;" />`
     : m.issuerKind === "operator"
       ? `<div style="font-weight:800;font-size:20px;letter-spacing:-.02em;color:${C.ink};">${esc(m.seller.name)}</div>`
-      : `<div style="font-weight:800;font-size:26px;letter-spacing:-.03em;color:${C.ink};">revamp.</div>`;
+      : wordmarkImg(28);
 
   const numberLine = m.number ? `No. ${esc(m.number)}` : "Number given when sent";
   const pillHtml = `<span style="display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;color:${pill.color};background:${pill.bg};border-radius:999px;padding:4px 10px;">${pill.label}</span>`;

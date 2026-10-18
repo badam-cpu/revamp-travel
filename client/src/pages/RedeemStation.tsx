@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { staffRedeemVoucher, voucherRedeemInfo, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { Wordmark } from "@/components/BrandMark";
 
 export default function RedeemStation({ token }: { token: string }) {
   const { format } = useCurrency();
@@ -56,7 +57,7 @@ export default function RedeemStation({ token }: { token: string }) {
             </div>
           </div>
         ) : (
-          <p className="font-display text-2xl leading-none">revamp.</p>
+          <Wordmark className="h-[26px] text-[#F15822]" />
         )}
         <h1 className="mt-4 font-display text-xl">Redeem a voucher</h1>
         <p className="mt-1 text-sm text-basalt/55">Enter the code the guest shows you.</p>

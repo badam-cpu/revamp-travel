@@ -20,6 +20,7 @@ import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { buildCollectionPageJsonLd } from "@shared/seo";
 import { cn } from "@/lib/utils";
+import { ReMark } from "@/components/BrandMark";
 
 const validTypes = new Set(["all", "stay", "eat", "tour", "experience", "place"]);
 const validOffers = new Set(["all", "nightly", "monthly", "sale"]);
@@ -209,7 +210,7 @@ export default function Explore({ initialType = "" }: { initialType?: string }) 
       <SiteHeader />
       <main>
         <section className="relative overflow-hidden border-b border-basalt/10 bg-chalk">
-          <div className="pointer-events-none absolute -right-20 -top-16 text-[13rem] font-bold leading-none tracking-[-0.12em] text-apricot/[0.08]">re.</div>
+          <div className="pointer-events-none absolute -right-20 -top-16 text-[13rem] font-bold leading-none tracking-[-0.12em] text-apricot/[0.08]"><ReMark /></div>
           <div className="absolute left-[36%] top-0 h-full w-px bg-apricot/14" />
           <span className="absolute right-8 top-5 hidden text-[8px] font-bold uppercase tracking-[0.24em] text-basalt/35 md:block">Atlas sheet 02 · 40.18° N</span>
           <div className="container relative grid gap-8 py-10 lg:grid-cols-[0.75fr_1.25fr] lg:items-end lg:py-14">

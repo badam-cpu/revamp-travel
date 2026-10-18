@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { ArrowUpRight, ChevronDown, Instagram, Mail } from "lucide-react";
 import { Link } from "wouter";
 import { Slogan } from "./Slogan";
-import { BrandMark } from "./BrandMark";
+import { BrandMark, Wordmark } from "./BrandMark";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { useListings } from "@/contexts/ListingsContext";
@@ -132,7 +132,7 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
 
   return (
     <footer className="relative overflow-hidden bg-basalt text-paper">
-      <div className="pointer-events-none absolute -bottom-24 right-0 text-[19rem] font-bold leading-none tracking-[-0.12em] text-white/[0.035]">{isStay ? "revampstay." : "revamp."}</div>
+      <div className="pointer-events-none absolute -bottom-24 right-0 text-[19rem] font-bold leading-none tracking-[-0.12em] text-white/[0.035]">{isStay ? "revampstay." : <Wordmark title={null} className="h-[0.69em]" />}</div>
       <div className="container grid gap-x-8 gap-y-4 py-14 sm:grid-cols-2 sm:gap-y-10 lg:grid-cols-6 lg:py-16">
         <div className="pb-6 sm:col-span-2 sm:pb-0">
           <BrandMark light />

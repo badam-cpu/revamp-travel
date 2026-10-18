@@ -16,6 +16,7 @@ import { getTripPage, submitTripSurvey, type TripPageData } from "@/lib/api";
 import { RichText } from "@/components/RichText";
 import { imgAttrs } from "@/lib/responsiveImg";
 import { cn } from "@/lib/utils";
+import { Wordmark } from "@/components/BrandMark";
 
 const fmtDay = (iso: string) =>
   iso ? new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }) : "";
@@ -25,7 +26,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-chalk text-basalt">
       <div className="mx-auto flex min-h-screen max-w-xl flex-col px-4 py-6 sm:px-6 sm:py-10">
         <header className="mb-6 flex items-center justify-between">
-          <a href="/" className="font-display text-xl font-bold tracking-[-0.03em]">revamp.</a>
+          <a href="/" aria-label="Revamp home"><Wordmark title={null} className="h-[22px] text-[#F15822]" /></a>
           <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-basalt/45">Your trip</span>
         </header>
         <main className="flex-1">{children}</main>

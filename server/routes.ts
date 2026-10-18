@@ -95,6 +95,7 @@ import { robotsTxtHandler } from "./robots.js";
 import { sitemapHandler } from "./sitemap.js";
 import { llmsTxtHandler } from "./llms.js";
 import { renderForBot } from "./prerender.js";
+import { wordmarkSvg } from "../shared/brandLogo.js";
 
 const planTripSchema = z.object({
   days: z.number().int().min(1).max(21),
@@ -4163,7 +4164,7 @@ export function registerApiRoutes(app: Express) {
     const email = String(req.query.e || "").trim().toLowerCase();
     const t = String(req.query.t || "");
     const page = (msg: string) =>
-      `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#F5F2EC;color:#212121;display:grid;place-items:center;min-height:100vh;margin:0;"><div style="max-width:420px;background:#fff;border:1px solid rgba(33,33,33,.1);border-radius:14px;padding:28px;text-align:center;"><p style="font-size:22px;font-weight:700;margin:0 0 10px;">revamp.</p><p style="font-size:15px;line-height:1.6;color:#4a463f;margin:0;">${msg}</p></div></body></html>`;
+      `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#F5F2EC;color:#212121;display:grid;place-items:center;min-height:100vh;margin:0;"><div style="max-width:420px;background:#fff;border:1px solid rgba(33,33,33,.1);border-radius:14px;padding:28px;text-align:center;"><div style="display:flex;justify-content:center;margin:0 0 14px;">${wordmarkSvg("#F15822", 24)}</div><p style="font-size:15px;line-height:1.6;color:#4a463f;margin:0;">${msg}</p></div></body></html>`;
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     if (!email || !verifyUnsub(email, t)) return res.status(400).send(page("This unsubscribe link is invalid or expired."));
     const admin = supabaseAdmin();

@@ -11,6 +11,7 @@ import { Download, Loader2 } from "lucide-react";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { getInvoice, userMessage } from "@/lib/api";
 import { invoiceHtml, type InvoiceModel } from "@shared/invoice";
+import { Wordmark } from "@/components/BrandMark";
 
 export default function InvoicePage({ token }: { token: string }) {
   const [invoice, setInvoice] = useState<InvoiceModel | null>(null);
@@ -37,7 +38,7 @@ export default function InvoicePage({ token }: { token: string }) {
     <div className="min-h-screen bg-chalk px-4 py-6 text-basalt sm:py-10 print:bg-paper print:p-0">
       <div className="mx-auto max-w-[760px]">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 print:hidden">
-          <a href="/" className="font-display text-xl font-bold tracking-[-0.03em]">revamp.</a>
+          <a href="/" aria-label="Revamp home"><Wordmark title={null} className="h-[22px] text-[#F15822]" /></a>
           {invoice && (
             <button
               type="button"

@@ -39,9 +39,9 @@ replace the message body with the matching file and set the subject:
 
 | File | Template tab | Subject |
 | --- | --- | --- |
-| `confirm-signup.html` | Confirm signup | `Confirm your Revamp account` |
-| `reset-password.html` | Reset Password | `Reset your Revamp password` |
-| `magic-link.html` | Magic Link | `Your Revamp sign-in link` |
+| `confirm-signup.html` | Confirm signup | `Confirm your email` |
+| `reset-password.html` | Reset Password | `Reset your password` |
+| `magic-link.html` | Magic Link | `Your sign-in link` |
 | `change-email.html` | Change Email Address | `Confirm your new email address` |
 | `invite.html` | Invite user | `You're invited to Revamp Vacations` |
 

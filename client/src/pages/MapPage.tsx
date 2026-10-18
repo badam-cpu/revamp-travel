@@ -9,6 +9,7 @@ import { useListings } from "@/contexts/ListingsContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { buildCollectionPageJsonLd } from "@shared/seo";
 import { cn } from "@/lib/utils";
+import { ReMark } from "@/components/BrandMark";
 
 export default function MapPage() {
   const { publicListings: listings } = useListings();
@@ -28,7 +29,7 @@ export default function MapPage() {
       <SiteHeader flush />
       <main className="grid min-h-[calc(100vh-76px)] lg:grid-cols-[460px_1fr] xl:grid-cols-[520px_1fr]">
         <aside className="relative order-2 max-h-none overflow-hidden overflow-y-auto bg-basalt p-5 lg:order-1 lg:max-h-[calc(100vh-76px)] lg:p-7">
-          <div className="pointer-events-none absolute -right-10 -top-14 text-[10rem] font-bold leading-none tracking-[-0.12em] text-white/[0.035]">re.</div>
+          <div className="pointer-events-none absolute -right-10 -top-14 text-[10rem] font-bold leading-none tracking-[-0.12em] text-white/[0.035]"><ReMark /></div>
           <div className="mb-7 flex items-center justify-between border-b border-white/10 pb-4 text-[8px] font-bold uppercase tracking-[0.2em] text-paper/35"><span>Atlas sheet 01</span><span>38.8°—41.3° N</span></div>
           <p className="eyebrow text-apricot">Explore by map</p>
           <h1 className="mt-3 font-display text-5xl leading-none tracking-[-0.04em]">Armenia,<br />place by place.</h1>

@@ -5,6 +5,7 @@
  * #212121 basalt) that auto-invokes the browser's print dialog.
  */
 import { payoutState, PAYOUT_STATE_LABEL, type Payout } from "@shared/payouts";
+import { wordmarkSvg } from "@shared/brandLogo";
 
 function money(cents: number, currency: string): string {
   const major = cents / 100;
@@ -50,8 +51,7 @@ export function openPayoutStatement(opts: { operatorName: string; payouts: Payou
 <style>
   * { box-sizing: border-box; }
   body { font-family: -apple-system, Arial, sans-serif; color: #212121; margin: 0; padding: 40px; }
-  .wm { font-weight: 800; font-size: 26px; letter-spacing: -.02em; }
-  .wm span { color: #212121; }
+  .wm svg { display: block; }
   .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #212121; padding-bottom: 16px; }
   .head h1 { font-size: 15px; text-transform: uppercase; letter-spacing: .14em; color: #857f76; margin: 6px 0 0; font-weight: 700; }
   .meta { text-align: right; font-size: 13px; color: #55514b; line-height: 1.6; }
@@ -77,7 +77,7 @@ export function openPayoutStatement(opts: { operatorName: string; payouts: Payou
 </style></head><body>
   <div class="head">
     <div>
-      <div class="wm">revamp<span>.</span></div>
+      <div class="wm">${wordmarkSvg("#F15822", 28)}</div>
       <h1>Payout statement</h1>
     </div>
     <div class="meta">

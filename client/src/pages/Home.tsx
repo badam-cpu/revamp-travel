@@ -17,6 +17,7 @@ import { useCurrency } from "@/contexts/CurrencyContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { buildWebsiteJsonLd, buildOrganizationJsonLd } from "@shared/seo";
 import { findRegionGuide } from "@shared/regionGuides";
+import { ReMark } from "@/components/BrandMark";
 
 /** Link a region card to its guide page when one exists, else to filtered explore. */
 function regionHref(name: string, query: string): string {
@@ -152,7 +153,7 @@ export default function Home() {
                     readers. Same font-size as the h1 so its em offsets line up
                     with the "Repeat." line. */}
                 <span aria-hidden className="pointer-events-none absolute bottom-0 left-0 select-none font-display text-[4rem] leading-[0.86] sm:text-[5.6rem] lg:text-[6.5rem]">
-                  <span className="absolute -bottom-[0.26em] -left-[0.32em] text-[2.6em] font-bold leading-none tracking-[-0.12em] text-apricot/[0.2]">re.</span>
+                  <span className="absolute -bottom-[0.26em] -left-[0.32em] text-[2.6em] font-bold leading-none tracking-[-0.12em] text-apricot/[0.2]"><ReMark className="relative -top-[0.085em]" /></span>
                 </span>
                 <h1 className="relative font-display text-[4rem] leading-[0.86] tracking-[-0.055em] text-basalt sm:text-[5.6rem] lg:text-[6.5rem]">
                   Stay.
@@ -268,7 +269,7 @@ export default function Home() {
         </section>
 
         <section className="relative overflow-hidden bg-basalt py-20 text-paper lg:py-28">
-          <div className="pointer-events-none absolute -right-16 -top-28 text-[22rem] font-bold leading-none tracking-[-0.12em] text-white/[0.045]">re.</div>
+          <div className="pointer-events-none absolute -right-16 -top-28 text-[22rem] font-bold leading-none tracking-[-0.12em] text-white/[0.045]"><ReMark /></div>
           <div className="container">
             <div className="grid gap-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-end">
               <div><p className="eyebrow text-apricot">{regionsEyebrow}</p><h2 className="mt-3 whitespace-pre-line font-display text-5xl leading-[0.94] tracking-[-0.04em] sm:text-6xl">{regionsTitle}</h2></div>
@@ -318,7 +319,7 @@ export default function Home() {
         </section>
 
         <section className="relative overflow-hidden border-t border-basalt/10 bg-apricot text-white">
-          <div className="pointer-events-none absolute -bottom-24 -left-10 text-[15rem] font-bold leading-none tracking-[-0.12em] text-white/10">re.</div>
+          <div className="pointer-events-none absolute -bottom-24 -left-10 text-[15rem] font-bold leading-none tracking-[-0.12em] text-white/10"><ReMark /></div>
           <div className="container grid gap-8 py-14 md:grid-cols-[1fr_auto] md:items-center lg:py-20">
             <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/65">A quieter kind of itinerary</p><h2 className="mt-3 max-w-3xl font-display text-5xl leading-[0.96] tracking-[-0.04em]">One room. One table. One road you’ll remember.</h2></div>
             <Button asChild size="lg" className="brand-notch rounded-none bg-paper px-7 text-basalt hover:bg-white"><Link href="/explore">Begin the route <MoveUpRight className="ml-2 h-4 w-4" /></Link></Button>

@@ -24,6 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { buttonLine, campaignFooterHtml, markdownToTelegramHtml, renderCampaignBody, type ButtonStyle } from "@shared/campaignBlocks";
 import { toast } from "sonner";
+import { Wordmark } from "@/components/BrandMark";
 
 type Channel = "email" | "telegram";
 
@@ -660,7 +661,7 @@ function TelegramPreview({ subject, body, imageUrl }: { subject: string; body: s
 function EmailPreview({ subject, body, visual }: { subject: string; body: string; visual: CampaignVisual }) {
   return (
     <div className="overflow-hidden rounded-[14px] border border-basalt/10 bg-white">
-      <div className="border-b border-basalt/8 px-6 py-4"><span className="font-display text-xl">revamp.</span></div>
+      <div className="border-b border-basalt/8 px-6 py-4"><Wordmark className="h-[22px] text-[#F15822]" /></div>
       <div className="grid gap-3 px-6 py-5">
         {/* Same order as the email the server builds (shared/campaignVisual.ts). */}
         {layoutBlocks(visual.layout).map((b) =>
