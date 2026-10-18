@@ -8,6 +8,7 @@
  * updateProfile; logo uploaded to the operator's storage folder).
  */
 import { useEffect, useState, type FormEvent } from "react";
+import { PASSWORD_HINT, passwordProblem } from "@/lib/passwords";
 import { useLocation } from "wouter";
 import { LogOut } from "lucide-react";
 import { toast } from "sonner";
@@ -158,7 +159,8 @@ function AccountSettings() {
 
   const changePassword = async (e: FormEvent) => {
     e.preventDefault();
-    if (pw.length < 6) return toast("Use at least 6 characters.");
+    const pwProblem = passwordProblem(pw);
+    if (pwProblem) return toast(pwProblem);
     if (pw !== pw2) return toast("Those two passwords don't match.");
     setSaving(true);
     try {
@@ -178,7 +180,7 @@ function AccountSettings() {
       <SettingsRow title="Email" help="You sign in with this address. Booking and payout emails go here too.">
         <p className="flex h-12 items-center text-base text-basalt">{user?.email}</p>
       </SettingsRow>
-      <SettingsRow title="Password" help="At least 6 characters.">
+      <SettingsRow title="Password" help={PASSWORD_HINT}>
         <form onSubmit={changePassword} className="grid gap-3">
           <label className="grid gap-1.5 text-sm font-semibold">
             New password

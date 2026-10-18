@@ -6,6 +6,7 @@
  * so it's presented as two explicit cards rather than a buried dropdown.
  */
 import { FormEvent, useEffect, useState } from "react";
+import { MIN_PASSWORD_LENGTH, PASSWORD_HINT, authErrorMessage, passwordProblem } from "@/lib/passwords";
 import { Link, useLocation } from "wouter";
 import { AlertTriangle, Compass, Store } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -62,8 +63,13 @@ export default function Signup() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    setLoading(true);
     setError(null);
+    const pwProblem = passwordProblem(password);
+    if (pwProblem) {
+      setError(pwProblem);
+      return;
+    }
+    setLoading(true);
     try {
       await signUp({ email, password, role, displayName, businessName: role === "operator" ? businessName : undefined });
       // Supabase projects with "confirm email" on don't return an active
@@ -76,7 +82,7 @@ export default function Signup() {
         setCheckEmail(true);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't create your account. Please try again.");
+      setError(authErrorMessage(err, "Couldn't create your account right now. Please try again in a moment."));
     } finally {
       setLoading(false);
     }
@@ -180,7 +186,8 @@ export default function Signup() {
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="password">Password</Label>
-              <PasswordInput id="password" autoComplete="new-password" minLength={6} required value={password} onChange={(e) => setPassword(e.target.value)} />
+              <PasswordInput id="password" autoComplete="new-password" minLength={MIN_PASSWORD_LENGTH} required value={password} onChange={(e) => setPassword(e.target.value)} aria-describedby="password-hint" />
+              <p id="password-hint" className="text-xs text-basalt/50">{PASSWORD_HINT}</p>
             </div>
 
             {error && (

@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
+import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 
 /** Sign-in form → this page: the email typed there, without putting it in the URL. */
 export const RESET_EMAIL_KEY = "revamp.resetEmail";
@@ -122,9 +123,14 @@ export default function ForgotPassword() {
                   {sending ? "Sending…" : "Send reset link"}
                 </Button>
               </form>
-              <p className="mt-6 text-center text-sm text-basalt/55">
-                Signed up with Google? Use <Link href="/login" className="font-semibold text-apricot hover:underline">Continue with Google</Link> — there's no password to reset.
-              </p>
+              {/* Google sign-ups have no password — let them sign in right here. */}
+              <div className="mt-8">
+                <div className="mb-5 flex items-center gap-3 text-xs uppercase tracking-[0.12em] text-basalt/40">
+                  <span className="h-px flex-1 bg-basalt/10" /> or <span className="h-px flex-1 bg-basalt/10" />
+                </div>
+                <GoogleSignInButton redirect={null} />
+                <p className="mt-2 text-center text-xs text-basalt/50">Signed up with Google? You don't need a password.</p>
+              </div>
             </>
           )}
         </div>

@@ -15,6 +15,7 @@
  * visitors are bounced to /login, matching RequireRole's own redirect.
  */
 import { PageHeader } from "@/components/PageHeader";
+import { passwordProblem } from "@/lib/passwords";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { Bookmark, Coins, LogOut, MapPin, MessageSquare, ShieldCheck, Star, Ticket, Utensils, User as UserIcon } from "lucide-react";
@@ -387,8 +388,8 @@ export function SecurityTab() {
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
-    if (password.length < 6) {
-      toast("Use at least 6 characters.");
+    if (passwordProblem(password)) {
+      toast(passwordProblem(password)!);
       return;
     }
     if (password !== confirm) {

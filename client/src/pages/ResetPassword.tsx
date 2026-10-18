@@ -8,6 +8,7 @@
  * this deployment's /reset-password (see README → Supabase Setup / Netlify).
  */
 import { FormEvent, useState } from "react";
+import { MIN_PASSWORD_LENGTH, passwordProblem } from "@/lib/passwords";
 import { Link, useLocation } from "wouter";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -32,8 +33,9 @@ export default function ResetPassword() {
     event.preventDefault();
     setError(null);
     setExpired(false);
-    if (password.length < 6) {
-      setError("Use at least 6 characters.");
+    const pwProblem = passwordProblem(password);
+    if (pwProblem) {
+      setError(pwProblem);
       return;
     }
     if (password !== confirm) {
@@ -86,11 +88,11 @@ export default function ResetPassword() {
               <form onSubmit={submit} className="mt-8 grid gap-4">
                 <div className="grid gap-1.5">
                   <Label htmlFor="password">New password</Label>
-                  <PasswordInput id="password" autoComplete="new-password" minLength={6} required value={password} onChange={(e) => setPassword(e.target.value)} />
+                  <PasswordInput id="password" autoComplete="new-password" minLength={MIN_PASSWORD_LENGTH} required value={password} onChange={(e) => setPassword(e.target.value)} />
                 </div>
                 <div className="grid gap-1.5">
                   <Label htmlFor="confirm">Confirm password</Label>
-                  <PasswordInput id="confirm" autoComplete="new-password" minLength={6} required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+                  <PasswordInput id="confirm" autoComplete="new-password" minLength={MIN_PASSWORD_LENGTH} required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
                 </div>
 
                 {error && (
