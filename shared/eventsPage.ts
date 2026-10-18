@@ -27,6 +27,19 @@ export interface PublicEvent {
   summary: string | null;
   sourceUrl: string | null;
   sourceName: string | null;
+  /** The source page's link-preview picture (0112), https only — credited to the source. */
+  image?: string | null;
+}
+
+const ART_CATEGORIES = new Set(["concert", "festival", "sports", "conference", "exhibition", "religious"]);
+/** Revamp's own art for an event's category (client/public/images/events/*.svg). */
+export function eventArt(e: Pick<PublicEvent, "category">): string {
+  return `/images/events/${ART_CATEGORIES.has(e.category) ? e.category : "other"}.svg`;
+}
+/** The organizer's picture when it's a usable https URL, else null. */
+export function eventImage(e: Pick<PublicEvent, "image">): string | null {
+  const u = (e.image ?? "").trim();
+  return /^https:\/\/[^\s"'<>]+$/i.test(u) && u.length <= 1000 ? u : null;
 }
 
 /** Filter chips, in display order. Holidays + religious feasts share one chip. */
@@ -162,6 +175,7 @@ export function buildEventsJsonLd(origin: string, events: PublicEvent[]): Record
         },
       };
       if (e.summary) ev.description = e.summary;
+      ev.image = eventImage(e) ?? `${origin}${eventArt(e)}`;
       const src = safeSourceUrl(e.sourceUrl);
       if (src) ev.url = src;
       return { "@type": "ListItem", position: i + 1, item: ev };

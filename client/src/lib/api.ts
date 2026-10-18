@@ -820,16 +820,17 @@ export async function telegramDisconnect(): Promise<{ ok: boolean }> {
 }
 
 /** Unified inbox — send a message into a conversation (guardrail-scanned server-side). */
-export async function sendInboxMessage(conversationId: string, body: string): Promise<{ id: string }> {
+export async function sendInboxMessage(conversationId: string, body: string): Promise<{ id: string; masked: boolean }> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new ApiError("Sign in to send a message.");
-  const res = await request<{ message: { id: string } }>("/api/message-send", {
+  const res = await request<{ message: { id: string }; masked?: boolean }>("/api/message-send", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({ conversationId, body }),
   });
-  return res.message;
+  // masked: contact details were hidden (no paid booking yet between guest and host — 0111).
+  return { id: res.message.id, masked: !!res.masked };
 }
 
 // --- PriceLabs price sync (operator) --- the API key is sent once and never returned.

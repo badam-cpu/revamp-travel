@@ -337,6 +337,8 @@ export async function sourceMentions(url: string, title: string, start: string, 
       html += dec.decode(value, { stream: true });
     }
     reader.cancel().catch(() => {});
+    const img = pageImage(html, res.url || url);
+    if (img) sourceImages.set(url, img);
     const text = html.replace(/<[^>]+>/g, " ").toLowerCase().normalize("NFKD");
     const named = Math.max(nameHit(text, title), nameOnSource ? nameHit(text, nameOnSource) : 0) >= 0.6;
     return named && mentionsDate(text, start);
@@ -344,6 +346,32 @@ export async function sourceMentions(url: string, title: string, start: string, 
     return false;
   }
 }
+
+/**
+ * The picture a page shares for link previews (og:image, then twitter:image),
+ * as an absolute https URL — or null. Relative paths resolve against the page.
+ */
+export function pageImage(html: string, pageUrl: string): string | null {
+  const head = html.slice(0, 200_000);
+  const meta = (key: string) => {
+    const re1 = new RegExp(`<meta[^>]+(?:property|name)=["']${key}["'][^>]*content=["']([^"']+)["']`, "i");
+    const re2 = new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["']${key}["']`, "i");
+    return head.match(re1)?.[1] ?? head.match(re2)?.[1] ?? null;
+  };
+  const raw = meta("og:image:secure_url") ?? meta("og:image") ?? meta("og:image:url") ?? meta("twitter:image") ?? meta("twitter:image:src");
+  if (!raw) return null;
+  try {
+    const u = new URL(raw.replace(/&amp;/g, "&").trim(), pageUrl);
+    if (u.protocol === "http:") u.protocol = "https:";
+    if (u.protocol !== "https:" || u.href.length > 1000) return null;
+    return u.href;
+  } catch {
+    return null;
+  }
+}
+
+/** Pictures found on source pages during this run, by source URL. */
+const sourceImages = new Map<string, string>();
 
 /**
  * Fallback evidence when a site blocks or JS-renders its page: the cited URL is
@@ -436,7 +464,12 @@ export async function discoverEvents(admin: SupabaseClient, today = isoDay(new D
       ? await admin.from("events").update({ ...row, dedupe_key: twin.dedupe_key, last_seen_at: new Date().toISOString() }).eq("id", twin.id)
       : await admin.from("events").upsert({ ...row, last_seen_at: new Date().toISOString() }, { onConflict: "dedupe_key" });
     if (error) console.error("[events] store failed", title, error.message);
-    else stored++;
+    else {
+      stored++;
+      // The source page's picture (0112) — separate, so a DB without the column still stores the event.
+      const img = sourceImages.get(url);
+      if (img) await admin.from("events").update({ image_url: img }).eq(twin ? "id" : "dedupe_key", twin ? twin.id : key);
+    }
   }
   return { found: cands.length, verified, stored, searches, areaErrors };
 }
@@ -477,6 +510,8 @@ export async function sourceStatus(url: string, title: string, start: string, na
     if (res.status === 404 || res.status === 410) return "gone";
     if (!res.ok || !res.body) return "unknown";
     const html = (await res.text()).slice(0, 1_500_000);
+    const img = pageImage(html, res.url || url);
+    if (img) sourceImages.set(url, img);
     const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").toLowerCase().normalize("NFKD");
     // Cancel words near the event's name (not elsewhere on a long listing page).
     const words = [...titleTokens(title), ...(nameOnSource ? titleTokens(nameOnSource) : [])];
@@ -520,6 +555,9 @@ export async function recheckEvents(admin: SupabaseClient, today = isoDay(new Da
       const reason = v === "gone" ? "The source page was removed" : "The source now says it's cancelled or postponed";
       const { error } = await admin.from("events").update({ status: "cancelled", status_reason: reason, status_changed_at: now }).eq("id", r.id);
       if (!error) cancelled++;
+    } else if (v === "ok" && r.source_url && sourceImages.has(r.source_url)) {
+      // Still on: keep its picture current (fills events stored before 0112).
+      await admin.from("events").update({ image_url: sourceImages.get(r.source_url) }).eq("id", r.id);
     } else if (v !== "ok" && Date.parse(r.last_seen_at) < Date.now() - STALE_DAYS * DAY) {
       const { error } = await admin.from("events").update({ hidden: true, status_reason: "Not confirmed by any search for 3 weeks", status_changed_at: now }).eq("id", r.id);
       if (!error) hidden++;

@@ -28,19 +28,22 @@ export interface MarketEvent {
   /** 0104: "cancelled" when the source page is gone or says cancelled/postponed. */
   status: "active" | "cancelled";
   statusReason: string | null;
+  /** 0112: the source page's link-preview picture. */
+  image: string | null;
 }
 
 type Row = {
   id: string; kind: "holiday" | "event"; title: string; category: string; city: string | null; region: string | null; venue: string | null;
   start_date: string; end_date: string; impact: EventImpact; expected_attendance: number | null; summary: string | null;
   source_url: string | null; source_name: string | null; verified: boolean; hidden: boolean;
-  status?: "active" | "cancelled" | null; status_reason?: string | null;
+  status?: "active" | "cancelled" | null; status_reason?: string | null; image_url?: string | null;
 };
 const map = (r: Row): MarketEvent => ({
   id: r.id, kind: r.kind, title: r.title, category: r.category, city: r.city, region: r.region, venue: r.venue,
   start: r.start_date, end: r.end_date, impact: r.impact, expectedAttendance: r.expected_attendance, summary: r.summary,
   sourceUrl: r.source_url, sourceName: r.source_name, verified: r.verified, hidden: r.hidden,
   status: r.status === "cancelled" ? "cancelled" : "active", statusReason: r.status_reason ?? null,
+  image: r.image_url ?? null,
 });
 
 /** Events overlapping [from, to] (inclusive ISO days), soonest first. */

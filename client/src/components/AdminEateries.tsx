@@ -6,6 +6,7 @@
  * Operators can't create these — only admins, via the RLS policy in 0051.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ClosedVenuesNote, VenueStatusBadge, useVenueStatuses } from "@/components/VenueStatusBadge";
 import { PageHeader } from "@/components/PageHeader";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -76,6 +77,8 @@ export function AdminEateries() {
     setRows((data ?? []) as EatRow[]);
   }, []);
   useEffect(() => { load(); }, [load]);
+  // Google business status (0112) — closed venues get a badge.
+  const venueStatuses = useVenueStatuses((rows ?? []).map((r) => r.id));
 
   const set = (patch: Partial<typeof BLANK>) => setF((prev) => ({ ...prev, ...patch }));
 
@@ -399,11 +402,14 @@ export function AdminEateries() {
         ) : rows.length === 0 ? (
           <p className="mt-3 text-sm text-basalt/50">No restaurants yet — add your first above.</p>
         ) : (
+          <>
+          <ClosedVenuesNote statuses={venueStatuses} />
           <ul className="mt-3 grid gap-2">
             {rows.map((r) => (
               <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border border-basalt/12 bg-paper px-4 py-3">
                 <Utensils className="h-4 w-4 shrink-0 text-basalt/40" />
                 <span className="min-w-0 flex-1 truncate font-semibold text-basalt">{r.title}</span>
+                <VenueStatusBadge status={venueStatuses.get(r.id)} />
                 {r.venue_type && <span className="text-xs font-semibold text-basalt/60">{r.venue_type}</span>}
                 {r.cuisine && <span className="text-xs text-basalt/50">{r.cuisine}</span>}
                 {r.price_band && <span className="text-xs font-bold text-basalt/60">{r.price_band}</span>}
@@ -414,6 +420,7 @@ export function AdminEateries() {
               </li>
             ))}
           </ul>
+          </>
         )}
       </div>
     </div>

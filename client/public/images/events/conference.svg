@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 750" preserveAspectRatio="xMidYMid slice">
+  <rect width="1200" height="750" fill="#EDE7D8"/>
+  <rect x="300" y="90" width="600" height="300" rx="12" fill="#212121"/>
+  <rect x="330" y="120" width="540" height="240" rx="6" fill="#EDE7D8" opacity="0.12"/>
+  <rect x="370" y="160" width="230" height="22" rx="11" fill="#F15822"/>
+  <rect x="370" y="205" width="380" height="14" rx="7" fill="#EDE7D8" opacity="0.6"/>
+  <rect x="370" y="235" width="320" height="14" rx="7" fill="#EDE7D8" opacity="0.6"/>
+  <rect x="370" y="290" width="80" height="50" rx="4" fill="#F15822" opacity="0.8"/>
+  <rect x="470" y="270" width="80" height="70" rx="4" fill="#EDE7D8" opacity="0.5"/>
+  <rect x="570" y="250" width="80" height="90" rx="4" fill="#F15822"/>
+  <path d="M540 430 L660 430 L640 560 L560 560 Z" fill="#F15822"/>
+  <rect x="525" y="420" width="150" height="20" rx="6" fill="#212121"/>
+  <g fill="#212121" opacity="0.3">
+    <rect x="110" y="610" width="140" height="60" rx="10"/><rect x="280" y="610" width="140" height="60" rx="10"/>
+    <rect x="450" y="610" width="140" height="60" rx="10"/><rect x="620" y="610" width="140" height="60" rx="10"/>
+    <rect x="790" y="610" width="140" height="60" rx="10"/><rect x="960" y="610" width="140" height="60" rx="10"/>
+  </g>
+  <rect y="690" width="1200" height="60" fill="#212121" opacity="0.18"/>
+</svg>

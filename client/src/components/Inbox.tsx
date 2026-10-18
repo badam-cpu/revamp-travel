@@ -15,6 +15,7 @@ import { listTemplates, type MessageTemplate } from "@/lib/templates";
 import { sendInboxMessage, moderateInbox } from "@/lib/api";
 import { FileText } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 
 function timeAgo(iso: string): string {
   const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
@@ -28,6 +29,24 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
   const [convos, setConvos] = useState<InboxConversation[] | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<InboxMessage[]>([]);
+  // Admins: what was actually typed, for messages whose contact details were hidden (0111).
+  const [originals, setOriginals] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    if (!admin || !messages.length) return setOriginals(new Map());
+    const ids = messages.filter((m) => m.flagged).map((m) => m.id);
+    if (!ids.length) return setOriginals(new Map());
+    let live = true;
+    supabase
+      .from("message_originals")
+      .select("message_id, body")
+      .in("message_id", ids)
+      .then(({ data, error }) => {
+        if (live && !error) setOriginals(new Map(((data ?? []) as { message_id: string; body: string }[]).map((o) => [o.message_id, o.body])));
+      });
+    return () => {
+      live = false;
+    };
+  }, [admin, messages]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
@@ -103,8 +122,9 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
     if (!body || !activeId || sending) return;
     setSending(true);
     try {
-      await sendInboxMessage(activeId, body);
+      const sent = await sendInboxMessage(activeId, body);
       setDraft("");
+      if (sent.masked) toast("Contact details were hidden. Phone numbers, emails and links are shared once the stay is booked and paid on Revamp.");
       const msgs = await getMessages(activeId);
       setMessages(msgs);
       loadConvos();
@@ -225,9 +245,14 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
                     >
                       {admin && <p className="mb-0.5 text-[10px] font-bold uppercase tracking-wide opacity-60">{m.senderRole}</p>}
                       <p className={cn("whitespace-pre-wrap break-words", m.redacted && "italic opacity-70")}>{m.body}</p>
+                      {admin && originals.get(m.id) && (
+                        <p className="mt-1.5 border-t border-amber-500/30 pt-1.5 text-xs leading-snug text-amber-700">
+                          <span className="font-semibold">As typed (only admins see this):</span> <span className="whitespace-pre-wrap break-words">{originals.get(m.id)}</span>
+                        </p>
+                      )}
                       <p className={cn("mt-1 text-[10px]", mine || isSupport ? "text-white/60" : "text-basalt/40")}>
                         {new Date(m.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-                        {m.flagged && <span className="ml-1 font-semibold text-amber-300">· flagged</span>}
+                        {admin && m.flagged && <span className="ml-1 font-semibold text-amber-600">· flagged</span>}
                         {admin && !m.redacted && (
                           <button type="button" onClick={() => redact(m.id)} className="ml-2 font-semibold text-amber-600 underline-offset-2 hover:underline">
                             redact
@@ -247,7 +272,7 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
             <div className="border-t border-basalt/10 p-3">
               {!admin && (
                 <p className="mb-1.5 text-[10px] leading-tight text-basalt/40">
-                  Keep bookings & payments on Revamp — sharing contact details or paying off-platform isn't covered by our protection.
+                  Phone numbers, emails and links are shared once a booking is confirmed — until then they're hidden. Keep bookings & payments on Revamp.
                 </p>
               )}
               {templates.length > 0 && (

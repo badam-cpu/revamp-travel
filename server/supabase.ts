@@ -325,7 +325,7 @@ export async function getUpcomingEvents(): Promise<PublicEvent[]> {
     .limit(500);
   type EventDbRow = {
     id: string; kind: "holiday" | "event"; title: string; category: string; city: string | null; region: string | null; venue: string | null;
-    start_date: string; end_date: string; summary: string | null; source_url: string | null; source_name: string | null; status?: string | null;
+    start_date: string; end_date: string; summary: string | null; source_url: string | null; source_name: string | null; status?: string | null; image_url?: string | null;
   };
   const rows: PublicEvent[] =
     error || !data
@@ -334,7 +334,7 @@ export async function getUpcomingEvents(): Promise<PublicEvent[]> {
           .filter((r) => r.status !== "cancelled")
           .map((r) => ({
             id: r.id, kind: r.kind, title: r.title, category: r.category, city: r.city, region: r.region, venue: r.venue,
-            start: r.start_date, end: r.end_date, summary: r.summary, sourceUrl: r.source_url, sourceName: r.source_name,
+            start: r.start_date, end: r.end_date, summary: r.summary, sourceUrl: r.source_url, sourceName: r.source_name, image: r.image_url ?? null,
           }));
   eventsCache = { data: rows, expiresAt: Date.now() + 30 * 60 * 1000 };
   return rows;

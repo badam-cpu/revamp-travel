@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 750" preserveAspectRatio="xMidYMid slice">
+  <rect width="1200" height="750" fill="#EDE7D8"/>
+  <path d="M-100 750 Q300 300 1300 330 L1300 750 Z" fill="#F15822" opacity="0.9"/>
+  <g fill="none" stroke="#EDE7D8" stroke-width="7" opacity="0.85">
+    <path d="M-60 750 Q330 360 1300 390"/>
+    <path d="M60 750 Q380 430 1300 460"/>
+    <path d="M190 750 Q440 510 1300 535"/>
+    <path d="M330 750 Q520 590 1300 615"/>
+  </g>
+  <rect x="820" y="120" width="12" height="260" fill="#212121"/>
+  <rect x="1088" y="120" width="12" height="260" fill="#212121"/>
+  <rect x="820" y="120" width="280" height="70" fill="#212121"/>
+  <g fill="#EDE7D8">
+    <rect x="840" y="138" width="34" height="34"/><rect x="908" y="138" width="34" height="34"/>
+    <rect x="976" y="138" width="34" height="34"/><rect x="1044" y="138" width="34" height="34"/>
+  </g>
+  <g fill="#212121" opacity="0.85">
+    <circle cx="420" cy="300" r="26"/>
+    <path d="M402 332 L448 332 L470 420 L440 420 L425 370 L400 440 L370 430 Z"/>
+    <path d="M440 345 L500 380 L490 395 L430 368 Z"/>
+    <path d="M405 345 L350 375 L360 390 L415 365 Z"/>
+  </g>
+</svg>

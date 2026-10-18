@@ -174,3 +174,27 @@ export async function fetchPlaceReviews(placeId: string): Promise<GooglePlaceRev
     return null;
   }
 }
+
+export type BusinessStatus = "OPERATIONAL" | "CLOSED_TEMPORARILY" | "CLOSED_PERMANENTLY";
+
+/**
+ * Google's business status for a place (0112 venue closure checks) — one
+ * cheap Place Details call (id + businessStatus + googleMapsUri only).
+ * null when Google doesn't report one, or the call fails.
+ */
+export async function fetchBusinessStatus(placeId: string): Promise<{ status: BusinessStatus | null; mapsUri: string | null } | null> {
+  const key = process.env.GOOGLE_PLACES_API_KEY;
+  if (!key || !placeId) return null;
+  try {
+    const res = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`, {
+      headers: { "X-Goog-Api-Key": key, "X-Goog-FieldMask": "id,businessStatus,googleMapsUri" },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+    const j = (await res.json().catch(() => ({}))) as { businessStatus?: string; googleMapsUri?: string };
+    const s = j.businessStatus;
+    return { status: s === "OPERATIONAL" || s === "CLOSED_TEMPORARILY" || s === "CLOSED_PERMANENTLY" ? s : null, mapsUri: j.googleMapsUri ?? null };
+  } catch {
+    return null;
+  }
+}

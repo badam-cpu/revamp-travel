@@ -502,6 +502,39 @@ export function sendPrepaidTopupAlert(to: string, opts: { restaurantTitle: strin
 }
 
 /**
+ * Admin alert (0112, server/venueStatus.ts): Google now reports a restaurant /
+ * place to visit as temporarily or permanently closed — or open again.
+ * Nothing changed on the site automatically; the admin decides.
+ */
+export function sendVenueStatusAlert(
+  to: string,
+  opts: { title: string; type: "eat" | "place"; slug: string; status: "OPERATIONAL" | "CLOSED_TEMPORARILY" | "CLOSED_PERMANENTLY"; previous: string | null; mapsUri: string | null },
+) {
+  const site = SITE();
+  const label = { OPERATIONAL: "open again", CLOSED_TEMPORARILY: "temporarily closed", CLOSED_PERMANENTLY: "permanently closed" }[opts.status];
+  const kind = opts.type === "eat" ? "restaurant" : "place to visit";
+  const advice =
+    opts.status === "CLOSED_PERMANENTLY"
+      ? "Consider unpublishing it so guests aren't sent to a closed venue — and check any active vouchers or prepaid balance."
+      : opts.status === "CLOSED_TEMPORARILY"
+        ? "Check whether to pause it or add a note until it reopens."
+        : "If you paused it, you can put it back.";
+  const adminSection = opts.type === "eat" ? "eateries" : "places";
+  const html = shell(
+    `${opts.title} is ${label}`,
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 12px;">Google now lists the ${kind} <strong>${esc(opts.title)}</strong> as <strong>${label}</strong>${opts.previous ? ` (was ${esc(opts.previous.toLowerCase().replace(/_/g, " "))})` : ""}.</p>
+     <p style="font-size:14px;line-height:1.6;margin:0 0 16px;color:#55514b;">Nothing was changed on the site. ${advice}</p>
+     <p style="margin:0 0 8px;">
+       <a href="${esc(`${site}/admin?section=${adminSection}`)}" style="background:#F15822;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;margin:0 8px 8px 0;">Open in Admin</a>
+       <a href="${esc(`${site}/listing/${opts.slug}`)}" style="color:#212121;font-weight:600;margin-right:14px;">View listing</a>
+       ${opts.mapsUri ? `<a href="${esc(opts.mapsUri)}" style="color:#212121;font-weight:600;">Google Maps</a>` : ""}
+     </p>`,
+    site,
+  );
+  return send(to, `${opts.title}: ${label} (Google)`, html);
+}
+
+/**
  * Admin alert: an operator switched a listing off/on, or suspended / resumed its
  * bookings (0101, server/listingStatus.ts). Says how many upcoming bookings the
  * operator still has to honour.

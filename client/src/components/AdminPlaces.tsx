@@ -8,6 +8,7 @@
  * RLS policy (0051). Requires migration 0084 (type='place' + category column).
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ClosedVenuesNote, VenueStatusBadge, useVenueStatuses } from "@/components/VenueStatusBadge";
 import { PageHeader } from "@/components/PageHeader";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -70,6 +71,8 @@ export function AdminPlaces() {
     setRows((data ?? []) as PlaceRow[]);
   }, []);
   useEffect(() => { load(); }, [load]);
+  // Google business status (0112) — closed venues get a badge.
+  const venueStatuses = useVenueStatuses((rows ?? []).map((r) => r.id));
 
   const set = (patch: Partial<typeof BLANK>) => setF((prev) => ({ ...prev, ...patch }));
 
@@ -371,11 +374,14 @@ export function AdminPlaces() {
         ) : rows.length === 0 ? (
           <p className="mt-3 text-sm text-basalt/50">No places yet — add your first above.</p>
         ) : (
+          <>
+          <ClosedVenuesNote statuses={venueStatuses} />
           <ul className="mt-3 grid gap-2">
             {rows.map((r) => (
               <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border border-basalt/12 bg-paper px-4 py-3">
                 <Landmark className="h-4 w-4 shrink-0 text-basalt/40" />
                 <span className="min-w-0 flex-1 truncate font-semibold text-basalt">{r.title}</span>
+                <VenueStatusBadge status={venueStatuses.get(r.id)} />
                 {r.category && <span className="text-xs font-semibold text-basalt/60">{placeCategoryLabel(r.category)}</span>}
                 {typeof r.google_rating === "number" && <span className="inline-flex items-center gap-0.5 text-xs text-basalt/50"><Star className="h-3 w-3 fill-apricot text-apricot" />{r.google_rating.toFixed(1)}</span>}
                 <span className="text-[10px] font-bold uppercase tracking-wide text-basalt/35">{r.neighborhood || r.city}</span>
@@ -384,6 +390,7 @@ export function AdminPlaces() {
               </li>
             ))}
           </ul>
+          </>
         )}
       </div>
     </div>

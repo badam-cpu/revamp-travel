@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 750" preserveAspectRatio="xMidYMid slice">
+  <rect width="1200" height="750" fill="#EDE7D8"/>
+  <path d="M330 0 L520 520 L140 520 Z" fill="#F15822" opacity="0.18"/>
+  <path d="M870 0 L1060 520 L680 520 Z" fill="#F15822" opacity="0.18"/>
+  <path d="M600 0 L760 520 L440 520 Z" fill="#212121" opacity="0.08"/>
+  <rect x="120" y="500" width="960" height="40" rx="6" fill="#212121"/>
+  <rect x="120" y="540" width="960" height="40" fill="#212121" opacity="0.2"/>
+  <line x1="600" y1="300" x2="600" y2="500" stroke="#212121" stroke-width="10"/>
+  <line x1="560" y1="500" x2="640" y2="500" stroke="#212121" stroke-width="10"/>
+  <rect x="580" y="250" width="40" height="70" rx="20" fill="#F15822"/>
+  <g fill="#212121" opacity="0.32">
+    <circle cx="170" cy="660" r="44"/><circle cx="290" cy="650" r="48"/><circle cx="410" cy="665" r="42"/>
+    <circle cx="530" cy="650" r="50"/><circle cx="660" cy="662" r="44"/><circle cx="780" cy="648" r="50"/>
+    <circle cx="905" cy="664" r="43"/><circle cx="1030" cy="652" r="48"/>
+  </g>
+  <rect y="690" width="1200" height="60" fill="#212121" opacity="0.32"/>
+</svg>

@@ -18,6 +18,7 @@ import { syncAllPricelabs } from "../../server/pricelabs.js";
 import { syncAllRoomCalendars } from "../../server/roomCalendars.js";
 import { syncListingSessions, applyIcalToSessions } from "../../server/sessions.js";
 import { recordCronRun, checkAndAlertStaleCrons } from "../../server/alerts.js";
+import { checkVenueClosures } from "../../server/venueStatus.js";
 
 const JOB = "refresh-ical";
 
@@ -107,7 +108,15 @@ export default async (): Promise<Response> => {
     console.error("[refresh-ical] pricelabs sync failed", err);
   }
 
-  const result = { total: data.length, refreshed, failed, sessionsClosed, rooms, pricelabs };
+  // Restaurants / places to visit: Google business status, ~weekly each (0112).
+  let venues = { checked: 0, alerted: 0 };
+  try {
+    venues = await checkVenueClosures(admin, { limit: 15 });
+  } catch (err) {
+    console.error("[refresh-ical] venue closure check failed", err);
+  }
+
+  const result = { total: data.length, refreshed, failed, sessionsClosed, rooms, pricelabs, venues };
   console.log("[refresh-ical]", result);
 
   // Heartbeat: the sweep completed (per-feed failures are tracked per listing in

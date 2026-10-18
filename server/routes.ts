@@ -39,7 +39,7 @@ import { generateListingCopy, generateJourneyTemplate, ahaCopyConfigured } from 
 import { scanTextFixes, suggestTextFix, applyTextFixes } from "./textFixes.js";
 import { generateSupportReply, type SupportTurn } from "./support.js";
 import { generateOperatorReply, type OperatorTurn } from "./operatorAssistant.js";
-import { scanMessage } from "./messaging.js";
+import { scanMessage, maskContacts, contactsAllowed } from "./messaging.js";
 import { reserveGift, releaseGift, refundGiftForBooking, lookupRedeemableGift, reconcilePurchaserGiftCards, logGiftEvent, voidGiftCard } from "./giftcards.js";
 import { reconcilePurchaserVouchers, redeemVoucher, redeemVoucherByCode } from "./vouchers.js";
 import { voucherPriceCents, isAllowedVoucherAmount } from "../shared/vouchers.js";
@@ -3121,7 +3121,7 @@ export function registerApiRoutes(app: Express) {
       // The conversation must exist and be open.
       const { data: convo } = await admin
         .from("conversations")
-        .select("id, status, listing_id, guest_email, first_guest_at, first_operator_at, listings(title)")
+        .select("id, status, kind, booking_id, listing_id, guest_email, first_guest_at, first_operator_at, listings(title)")
         .eq("id", parsed.data.conversationId)
         .maybeSingle();
       if (!convo) return res.status(404).json({ error: "Conversation not found." });
@@ -3144,13 +3144,22 @@ export function registerApiRoutes(app: Express) {
       }
 
       const { flagged } = scanMessage(parsed.data.body);
+      // Before a paid booking, contact details between guest and host are hidden
+      // in what's delivered (0111); the original is kept for admins only.
+      const hostGuest = senderRole === "traveler" || senderRole === "operator";
+      const hide = hostGuest && !(await contactsAllowed(admin, convo as { id: string; kind?: string | null; booking_id?: string | null; listing_id?: string | null }));
+      const mask = hide ? maskContacts(parsed.data.body) : { body: parsed.data.body, masked: false, reasons: [] as string[] };
 
       const { data: msg, error: mErr } = await admin
         .from("messages")
-        .insert({ conversation_id: parsed.data.conversationId, sender_id: userId, sender_role: senderRole, body: parsed.data.body, flagged })
+        .insert({ conversation_id: parsed.data.conversationId, sender_id: userId, sender_role: senderRole, body: mask.body, flagged: flagged || mask.masked })
         .select("id, conversation_id, sender_id, sender_role, body, flagged, created_at")
         .single();
       if (mErr || !msg) throw new Error(mErr?.message || "message insert failed");
+      if (mask.masked) {
+        const { error: oErr } = await admin.from("message_originals").insert({ message_id: (msg as { id: string }).id, body: parsed.data.body, reasons: mask.reasons });
+        if (oErr) console.error("[message-send] keep original", oErr.message);
+      }
 
       // First-response tracking: stamp the first guest message and the operator's
       // first reply, so we can report response times (operator + admin). Only the
@@ -3183,11 +3192,12 @@ export function registerApiRoutes(app: Express) {
               const { data: op } = await admin.from("profiles").select("auto_reply_enabled, auto_reply_message").eq("id", operatorId).maybeSingle();
               const autoBody = (op as { auto_reply_enabled?: boolean; auto_reply_message?: string | null } | null);
               if (autoBody?.auto_reply_enabled && autoBody.auto_reply_message?.trim()) {
+                // The host's saved auto-reply follows the same rule (no phone numbers before booking).
                 await admin.from("messages").insert({
                   conversation_id: parsed.data.conversationId,
                   sender_id: operatorId,
                   sender_role: "operator",
-                  body: autoBody.auto_reply_message.trim(),
+                  body: hide ? maskContacts(autoBody.auto_reply_message.trim()).body : autoBody.auto_reply_message.trim(),
                   auto: true,
                 });
                 await admin.from("conversations").update({ last_message_at: new Date().toISOString() }).eq("id", parsed.data.conversationId);
@@ -3201,7 +3211,7 @@ export function registerApiRoutes(app: Express) {
 
       hits.push(now);
       messageSendHits.set(userId, hits);
-      res.json({ message: msg });
+      res.json({ message: msg, masked: mask.masked });
 
       // Best-effort email notification to the OTHER participants — after responding
       // so it never delays the send. Skips muted participants and anyone active in
@@ -3219,7 +3229,7 @@ export function registerApiRoutes(app: Express) {
           .eq("conversation_id", parsed.data.conversationId)
           .neq("user_id", userId);
         const listingTitle = (convo as { listings?: { title?: string } | null }).listings?.title;
-        const snippet = parsed.data.body.length > 140 ? `${parsed.data.body.slice(0, 140)}…` : parsed.data.body;
+        const snippet = mask.body.length > 140 ? `${mask.body.slice(0, 140)}…` : mask.body;
         const activeCutoff = Date.now() - 5 * 60_000;
         for (const r of recips ?? []) {
           const rr = r as { user_id: string; role: string; muted: boolean; last_read_at: string | null };

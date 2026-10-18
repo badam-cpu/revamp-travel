@@ -23,6 +23,8 @@ import {
   addDays,
   buildEventsJsonLd,
   categoryLabel,
+  eventArt,
+  eventImage,
   eventsPageTitle,
   filterKey,
   formatEventDates,
@@ -60,6 +62,7 @@ export default function Events() {
             summary: e.summary,
             sourceUrl: e.sourceUrl,
             sourceName: e.sourceName,
+            image: e.image,
           })),
       );
     });
@@ -197,14 +200,47 @@ export default function Events() {
   );
 }
 
+/**
+ * The event's picture: the organizer's own (from its source page, credited),
+ * or Revamp's art for the category when there's none or it fails to load.
+ * no-referrer — some sites refuse images requested from other sites.
+ */
+function EventPicture({ e }: { e: PublicEvent }) {
+  const organizer = eventImage(e);
+  const [failed, setFailed] = useState(false);
+  const useOrganizer = !!organizer && !failed;
+  const credit = useOrganizer ? sourceLabel(e) : null;
+  return (
+    <figure className="relative overflow-hidden rounded-[12px] bg-chalk">
+      <img
+        src={useOrganizer ? organizer! : eventArt(e)}
+        alt={useOrganizer ? e.title : ""}
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
+        className="aspect-[16/10] w-full object-cover"
+      />
+      {credit && (
+        <figcaption className="absolute bottom-1.5 right-1.5 max-w-[90%] truncate rounded-full bg-basalt/70 px-2 py-0.5 text-[10px] font-medium text-paper backdrop-blur-sm">
+          Image: {credit}
+        </figcaption>
+      )}
+    </figure>
+  );
+}
+
 function EventRow({ e }: { e: PublicEvent }) {
   const src = safeSourceUrl(e.sourceUrl);
   const srcName = sourceLabel(e);
   const place = [e.venue, e.city].filter(Boolean).join(", ");
   return (
-    <li className="grid gap-x-6 gap-y-2 py-5 sm:grid-cols-[132px_minmax(0,1fr)]">
+    <li className="grid gap-x-6 gap-y-3 py-5 sm:grid-cols-[132px_minmax(0,1fr)] lg:grid-cols-[132px_minmax(0,1fr)_240px]">
       <p className="text-sm font-semibold tabular-nums text-apricot sm:pt-1">{formatEventDates(e)}</p>
-      <div>
+      <div className="order-first sm:order-none sm:col-start-2 sm:max-w-[320px] lg:order-last lg:col-start-3 lg:row-start-1 lg:max-w-none">
+        <EventPicture e={e} />
+      </div>
+      <div className="sm:col-start-2 lg:row-start-1">
         <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-basalt/45">{categoryLabel(e)}</p>
         <h3 className="mt-1 font-display text-xl leading-snug tracking-[-0.01em]">{e.title}</h3>
         {place && (
