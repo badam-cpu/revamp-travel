@@ -1174,11 +1174,13 @@ export function registerApiRoutes(app: Express) {
     try {
       const { status, body } = await renderForBot(path, origin);
       // AI assistants analytics (0114): the edge function forwards the bot's real
-      // address + a derived token; without the token the forwarded address is
-      // ignored (anyone can call this URL), so the visit can't be verified.
+      // address + a derived token. Without a valid token the request didn't come
+      // through the edge (anyone can call this URL directly), so the caller's OWN
+      // address is checked instead — a forger posing as ChatGPT is then rejected
+      // like any impostor rather than counted as unverifiable.
       const forwardedIp = req.get("x-revamp-client-ip");
       const edgeOk = !!forwardedIp && req.get("x-revamp-edge") === (await aiEdgeToken());
-      await recordAiPageFetch(supabaseAdmin(), { userAgent: req.get("user-agent"), ip: edgeOk ? forwardedIp : null, path, status });
+      await recordAiPageFetch(supabaseAdmin(), { userAgent: req.get("user-agent"), ip: edgeOk ? forwardedIp : req.ip, path, status });
       res.status(status).set("Content-Type", "text/html; charset=utf-8").send(body);
     } catch (err) {
       console.error("prerender failed", err);
