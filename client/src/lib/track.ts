@@ -7,6 +7,7 @@
  * powers the admin per-restaurant analytics (and later an owner dashboard).
  */
 import { useCallback } from "react";
+import { aiAssistantFromSource } from "@shared/aiAgents";
 
 export type ListingEventKind =
   | "impression"
@@ -66,6 +67,7 @@ export function setTrackingSuppressed(team: boolean): void {
   }
   suppressed = team || isTeamDevice();
   resolved = true;
+  if (!suppressed) sendAiReferral();
   if (suppressed) queue.length = 0;
   else if (queue.length && !timer) timer = setTimeout(flush, 1500);
 }
@@ -137,4 +139,37 @@ export function useImpressionRef<T extends Element>(listingId: string, surface =
     },
     [listingId, surface],
   );
+}
+
+// ── Arrivals from AI assistants (admin → Analytics → AI assistants, 0114) ──
+// Read once, when the app first loads: the referrer (chatgpt.com, perplexity.ai,
+// claude.ai, …) or ChatGPT's utm_source tag. Sent at most once per browser
+// session, only after auth has resolved and never from a team device.
+const AI_REFERRAL_SENT_KEY = "revamp.aiReferralSent";
+const aiArrival: { assistant: string; path: string } | null = (() => {
+  if (typeof window === "undefined") return null;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const assistant = aiAssistantFromSource(params.get("utm_source")) ?? aiAssistantFromSource(document.referrer);
+    return assistant ? { assistant, path: window.location.pathname } : null;
+  } catch {
+    return null;
+  }
+})();
+
+function sendAiReferral(): void {
+  if (!aiArrival || typeof navigator === "undefined") return;
+  try {
+    if (sessionStorage.getItem(AI_REFERRAL_SENT_KEY)) return;
+    sessionStorage.setItem(AI_REFERRAL_SENT_KEY, "1");
+  } catch {
+    /* private mode — send once per page load instead */
+  }
+  const body = JSON.stringify(aiArrival);
+  try {
+    if (navigator.sendBeacon) navigator.sendBeacon("/api/ai-referral", new Blob([body], { type: "application/json" }));
+    else void fetch("/api/ai-referral", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
+  } catch {
+    /* best-effort */
+  }
 }

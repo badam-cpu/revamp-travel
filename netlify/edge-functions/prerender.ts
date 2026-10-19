@@ -67,7 +67,28 @@ export const config = {
   onError: "bypass",
 };
 
-export default async (request: Request): Promise<Response | undefined> => {
+// AI assistants analytics (0114): the API function only sees this edge function's
+// subrequest, so the bot's real address is forwarded — with a token derived from
+// the service-role key (same derivation as aiEdgeToken in server/aiVisibility.ts)
+// so the API can trust it. No key in the edge env → no token → the visit is just
+// counted as unverifiable; the page itself is never affected.
+declare const Netlify: { env: { get(name: string): string | undefined } } | undefined;
+let edgeToken: Promise<string | null> | null = null;
+function aiEdgeToken(): Promise<string | null> {
+  edgeToken ??= (async () => {
+    try {
+      const key = typeof Netlify !== "undefined" ? Netlify.env.get("SUPABASE_SERVICE_ROLE_KEY") : undefined;
+      if (!key) return null;
+      const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`ai-visibility:${key}`));
+      return Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, "0")).join("");
+    } catch {
+      return null;
+    }
+  })();
+  return edgeToken;
+}
+
+export default async (request: Request, context?: { ip?: string }): Promise<Response | undefined> => {
   const url = new URL(request.url);
   const path = url.pathname;
 
@@ -87,7 +108,13 @@ export default async (request: Request): Promise<Response | undefined> => {
   target.searchParams.set("origin", url.origin);
 
   try {
-    const res = await fetch(target.toString(), { headers: { "user-agent": ua } });
+    const headers: Record<string, string> = { "user-agent": ua };
+    const token = await aiEdgeToken();
+    if (token && context?.ip) {
+      headers["x-revamp-client-ip"] = context.ip;
+      headers["x-revamp-edge"] = token;
+    }
+    const res = await fetch(target.toString(), { headers });
     // 404 is a legitimate prerender result (unknown/unpublished listing) and
     // should be served as-is; any other non-OK status means the renderer
     // failed, so fall back to the SPA shell rather than surfacing an error.

@@ -96,6 +96,8 @@ import { sitemapHandler } from "./sitemap.js";
 import { llmsTxtHandler } from "./llms.js";
 import { renderForBot } from "./prerender.js";
 import { wordmarkSvg } from "../shared/brandLogo.js";
+import { aiEdgeToken, recordAiPageFetch, recordMcpUse, bumpAiVisibility } from "./aiVisibility.js";
+import { aiVisitPath, isAiAssistant } from "../shared/aiAgents.js";
 
 const planTripSchema = z.object({
   days: z.number().int().min(1).max(21),
@@ -458,6 +460,7 @@ const giftLookupHits = new Map<string, number[]>();
 const giftPurchaseHits = new Map<string, number[]>();
 // Per-IP cap for the public (unauthenticated) AI trip planner — protects the Anthropic bill.
 const planTripHits = new Map<string, number[]>();
+const aiReferralHits = new Map<string, number[]>();
 const ahaCopyHits = new Map<string, number[]>();
 const trackHits = new Map<string, number[]>();
 const voucherPurchaseHits = new Map<string, number[]>();
@@ -1072,6 +1075,8 @@ export function registerApiRoutes(app: Express) {
     app.post(mcpPath, async (req: Request, res: Response) => {
       mcpCors(res);
       res.setHeader("Mcp-Protocol-Version", MCP_PROTOCOL_VERSION);
+      // AI assistants analytics (0114): count connections + tool calls (never blocks the reply).
+      void recordMcpUse(supabaseAdmin(), req.body, req.get("user-agent"), req.ip);
       try {
         if (mcpStreamingEnabled()) await handlePublicMcpStreaming(req, res);
         else await handlePublicMcp(req, res);
@@ -1168,12 +1173,30 @@ export function registerApiRoutes(app: Express) {
         : `${req.protocol}://${req.get("host")}`;
     try {
       const { status, body } = await renderForBot(path, origin);
+      // AI assistants analytics (0114): the edge function forwards the bot's real
+      // address + a derived token; without the token the forwarded address is
+      // ignored (anyone can call this URL), so the visit can't be verified.
+      const forwardedIp = req.get("x-revamp-client-ip");
+      const edgeOk = !!forwardedIp && req.get("x-revamp-edge") === (await aiEdgeToken());
+      await recordAiPageFetch(supabaseAdmin(), { userAgent: req.get("user-agent"), ip: edgeOk ? forwardedIp : null, path, status });
       res.status(status).set("Content-Type", "text/html; charset=utf-8").send(body);
     } catch (err) {
       console.error("prerender failed", err);
       // 500 (not 200) so the edge function knows to fall back to the SPA shell.
       res.status(500).set("Content-Type", "text/plain").send("prerender error");
     }
+  });
+
+  // POST /api/ai-referral — a visitor arrived from an AI assistant (the browser
+  // read document.referrer / utm_source, client/src/lib/aiReferral.ts). Anonymous
+  // and spoofable like any analytics beacon, so: assistant must be a known id,
+  // path normalised, 10 per minute per address. Nothing personal is stored.
+  app.post("/api/ai-referral", async (req: Request, res: Response) => {
+    if (rateLimited(aiReferralHits, req.ip || "unknown", 10)) return res.status(204).end();
+    const assistant = req.body?.assistant;
+    if (!isAiAssistant(assistant)) return res.status(204).end();
+    await bumpAiVisibility(supabaseAdmin(), { kind: "referral", assistant, path: aiVisitPath(typeof req.body?.path === "string" ? req.body.path : "/"), verification: "n/a" });
+    res.status(204).end();
   });
 
   app.post("/api/plan-trip", async (req: Request, res: Response) => {

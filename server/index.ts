@@ -5,6 +5,8 @@ import { fileURLToPath } from "url";
 import { app } from "./app.js";
 import { isCrawlerUserAgent } from "./botDetect.js";
 import { renderForBot } from "./prerender.js";
+import { recordAiPageFetch } from "./aiVisibility.js";
+import { supabaseAdmin } from "./supabaseAdmin.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -50,6 +52,8 @@ async function startServer() {
     try {
       const origin = `${req.protocol}://${req.get("host")}`;
       const { status, body } = await renderForBot(req.path, origin);
+      // Self-hosted: this process sees the bot directly, so req.ip is its real address.
+      await recordAiPageFetch(supabaseAdmin(), { userAgent: req.get("user-agent"), ip: req.ip, path: req.path, status });
       res.status(status).set("Content-Type", "text/html; charset=utf-8").send(body);
     } catch (err) {
       console.error("Bot prerender failed, falling back to the SPA shell:", err);

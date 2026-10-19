@@ -35,7 +35,7 @@ import { AdminPlaces } from "@/components/AdminPlaces";
 import { AdminTextFixes } from "@/components/AdminTextFixes";
 import { AdminDocuments } from "@/components/AdminDocuments";
 import { QrManager } from "@/components/QrManager";
-import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
+import { AdminAnalytics } from "@/components/AdminAnalytics";
 import { AdminVoucherOffers } from "@/components/AdminVoucherOffers";
 import { AdminVenueManagers } from "@/components/AdminVenueManagers";
 import { AdminPrepaid } from "@/components/AdminPrepaid";
@@ -374,7 +374,7 @@ function AdminConsole() {
             {section === "textfixes" && <AdminTextFixes />}
             {section === "eateries" && <AdminEateries />}
             {section === "places" && <AdminPlaces />}
-            {section === "analytics" && <AnalyticsDashboard scope="admin" />}
+            {section === "analytics" && <AdminAnalytics />}
             {section === "vouchers" && (
               <div className="grid gap-6">
                 <AdminVoucherOffers />
