@@ -9,7 +9,7 @@
  * without an account), or everyone (the union). Admins are never marketed to.
  */
 import { type CampaignVisual, httpsUrl, layoutBlocks, layoutHasImage } from "../shared/campaignVisual.js";
-import { buttonsToText, campaignFooterHtml, markdownToTelegramHtml, markdownToTelegramText, renderCampaignBody, telegramMessageHtml } from "../shared/campaignBlocks.js";
+import { buttonsToText, campaignFooterHtml, defaultPreheader, markdownToTelegramHtml, markdownToTelegramText, preheaderHtml, renderCampaignBody, telegramMessageHtml } from "../shared/campaignBlocks.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
@@ -298,13 +298,17 @@ function composeVisual(visual: CampaignVisual | undefined, subject: string, body
   return parts.join("\n");
 }
 
-function shell(bodyHtml: string, siteUrl: string, unsubUrl: string, nonce: string, sentLabel: string, mapUrl?: (u: string) => string): string {
-  return `<!doctype html><html><body style="margin:0;background:#F5F2EC;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#212121;">
+function shell(bodyHtml: string, siteUrl: string, unsubUrl: string, nonce: string, sentLabel: string, mapUrl: ((u: string) => string) | undefined, preheader: string, recipient: string): string {
+  // The preview line comes FIRST, padded with invisible spacers, so the inbox
+  // shows it — never the hidden per-send marker (before 2026-10-22 the marker
+  // "rv-…" was the first text and could appear as the inbox preview).
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"></head><body style="margin:0;background:#F5F2EC;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#212121;">
+    ${preheaderHtml(preheader)}
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${esc(nonce)}</div>
     <div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid rgba(33,33,33,.1);border-radius:14px;overflow:hidden;">
       <div style="padding:20px 28px;border-bottom:1px solid rgba(33,33,33,.08);">${wordmarkImg(24)}</div>
       <div style="padding:24px 28px;font-size:15px;line-height:1.65;">${bodyHtml}</div>
-      ${campaignFooterHtml({ siteUrl, unsubUrl, sentLabel, mapUrl })}
+      ${campaignFooterHtml({ siteUrl, unsubUrl, sentLabel, mapUrl, recipient })}
     </div>
   </body></html>`;
 }
@@ -430,7 +434,18 @@ export async function sendTelegramCampaign(
 
 /** Send a campaign to the resolved recipients via Resend batch (chunks of 100). */
 export async function sendCampaign(
-  opts: { subject: string; markdown: string; recipients: Recipient[]; siteUrl: string; subjectPrefix?: string; visual?: CampaignVisual },
+  opts: {
+    subject: string;
+    markdown: string;
+    recipients: Recipient[];
+    siteUrl: string;
+    subjectPrefix?: string;
+    visual?: CampaignVisual;
+    /** Inbox preview line; empty = the message's first sentence. */
+    preheader?: string | null;
+    /** Recorded campaign (0116): emails are tagged with it and Resend's ids saved, so opens/clicks can be counted. */
+    tracking?: { admin: SupabaseClient; campaignId: string } | null;
+  },
 ): Promise<{ sent: number; failed: number; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   const { from, replyTo } = campaignSender();
@@ -454,7 +469,8 @@ export async function sendCampaign(
       const unsubUrl = `${opts.siteUrl}/api/email/unsubscribe?e=${encodeURIComponent(r.email)}&t=${unsubToken(r.email)}`;
       // Markdown + [[button: …]] lines (shared/campaignBlocks.ts); button links get the same UTM tags.
       const bodyHtml = styleEmailLinks(renderCampaignBody(personalize(taggedMarkdown, r), (u) => addUtm(u, utm, hostOf(opts.siteUrl))));
-      const html = shell(composeVisual(opts.visual, personalize(opts.subject, r), bodyHtml, imageLink), opts.siteUrl, unsubUrl, nonce, sentLabel, (u) => addUtm(u, utm, hostOf(opts.siteUrl)));
+      const preheader = personalize((opts.preheader ?? "").trim() || defaultPreheader(opts.markdown), r);
+      const html = shell(composeVisual(opts.visual, personalize(opts.subject, r), bodyHtml, imageLink), opts.siteUrl, unsubUrl, nonce, sentLabel, (u) => addUtm(u, utm, hostOf(opts.siteUrl)), preheader, r.email);
       return {
         from,
         to: r.email,
@@ -462,6 +478,7 @@ export async function sendCampaign(
         subject: `${opts.subjectPrefix ?? ""}${personalize(opts.subject, r)}`,
         html,
         headers: { "List-Unsubscribe": `<${unsubUrl}>` },
+        ...(opts.tracking ? { tags: [{ name: "campaign_id", value: opts.tracking.campaignId }] } : {}),
       };
     });
     try {
@@ -470,8 +487,22 @@ export async function sendCampaign(
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify(batch),
       });
-      if (res.ok) sent += chunk.length;
-      else {
+      if (res.ok) {
+        sent += chunk.length;
+        // Resend returns one id per email, in order — keep them so its open/click
+        // events (webhook, 0116) can be counted against this campaign.
+        if (opts.tracking) {
+          try {
+            const ids = (((await res.json()) as { data?: { id?: string }[] }).data ?? []).map((d) => d.id).filter((id): id is string => !!id);
+            if (ids.length) {
+              const { error: idErr } = await opts.tracking.admin.from("email_campaign_messages").insert(ids.map((email_id) => ({ email_id, campaign_id: opts.tracking!.campaignId })));
+              if (idErr) console.warn("[marketing] tracking ids not saved (run migration 0116?)", idErr.message);
+            }
+          } catch (e) {
+            console.warn("[marketing] tracking ids", e);
+          }
+        }
+      } else {
         failed += chunk.length;
         const text = (await res.text().catch(() => "")).slice(0, 400);
         console.warn("[marketing] batch", res.status, text);

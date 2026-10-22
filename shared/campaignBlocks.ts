@@ -9,10 +9,23 @@
  * background colour + a padded link) — a real button in Gmail, Apple Mail and
  * Outlook alike, not an underlined link. Only https links; anything else stays
  * as plain text so a typo never produces a broken button.
+ *
+ * Images (2026-10-22): a line on its own
+ *     [[image: https://…/photo.jpg | Alt text | https://optional-link]]
+ * places a full-width picture anywhere in the message (not only the layout's
+ * one image at the top) — the same responsive <img> the layout uses.
+ *
+ * Stats (2026-10-22): a line on its own
+ *     [[stat: 22% | of travelers who saw similar listings clicked "Book later"]]
+ * renders as a number card (big orange number, short label). Consecutive stat
+ * lines sit side by side, up to 3 in a row — real text, so they read with
+ * images off and on every screen. On Telegram both become plain lines.
  */
 import { renderMarkdown } from "./markdown.js";
 
 const BUTTON_LINE = /^\s*\[\[button(-outline)?:\s*(.+?)\s*\|\s*(\S+?)\s*\]\]\s*$/i;
+const IMAGE_LINE = /^\s*\[\[image:\s*(\S+?)\s*(?:\|\s*([^|\]]*?)\s*)?(?:\|\s*(\S+?)\s*)?\]\]\s*$/i;
+const STAT_LINE = /^\s*\[\[stat:\s*([^|\]]{1,16}?)\s*\|\s*([^\]]{1,160}?)\s*\]\]\s*$/i;
 
 export type ButtonStyle = "solid" | "outline";
 
@@ -33,6 +46,81 @@ function httpsOnly(u: string): string | null {
   }
 }
 
+/** The line the composer inserts for an image. */
+export function imageLine(src: string, alt: string, link?: string | null): string {
+  const clean = (t: string) => t.replace(/[|\]\n]/g, " ").replace(/\s+/g, " ").trim();
+  return `[[image: ${src.trim()} | ${clean(alt)}${link?.trim() ? ` | ${link.trim()}` : ""}]]`;
+}
+
+/** The line the composer inserts for a stat card. */
+export function statLine(value: string, label: string): string {
+  const clean = (t: string) => t.replace(/[|\]\n]/g, " ").replace(/\s+/g, " ").trim();
+  return `[[stat: ${clean(value).slice(0, 16)} | ${clean(label).slice(0, 160)}]]`;
+}
+
+export function imageHtml(src: string, alt: string, link: string | null): string {
+  const tag = `<img src="${esc(src)}" alt="${esc(alt)}" width="544" style="display:block;width:100%;max-width:544px;height:auto;border:0;border-radius:10px;margin:0;" />`;
+  const inner = link ? `<a href="${esc(link)}" target="_blank" rel="noopener noreferrer" style="display:block;">${tag}</a>` : tag;
+  return `<div style="margin:22px 0;">${inner}</div>`;
+}
+
+/** 1–3 number cards in one row (an email-safe table; equal widths). */
+export function statsHtml(stats: { value: string; label: string }[]): string {
+  const w = Math.floor(100 / stats.length);
+  const cells = stats
+    .map(
+      (st) =>
+        `<td width="${w}%" valign="top" style="background:#FDF1EB;border-radius:12px;padding:16px 16px 18px;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;"><div style="font-size:32px;line-height:1.05;font-weight:800;letter-spacing:-.02em;color:#F15822;">${esc(st.value)}</div><div style="margin-top:6px;font-size:13px;line-height:1.45;color:#4a463f;">${esc(st.label)}</div></td>`,
+    )
+    .join("");
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;border-spacing:8px 0;margin:18px 0;"><tr>${cells}</tr></table>`;
+}
+
+/** Image/stat lines → plain text lines (Telegram): images dropped, a stat as "**22%** — label". */
+function blocksToText(md: string): string {
+  return (md || "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .flatMap((line) => {
+      if (IMAGE_LINE.test(line)) return [];
+      const st = line.match(STAT_LINE);
+      return [st ? `**${st[1]}** — ${st[2]}` : line];
+    })
+    .join("\n");
+}
+
+/**
+ * The inbox preview line (the grey text after the subject): what the admin
+ * typed, else the message's first real sentence — never a greeting line, a
+ * button, an image or a stat.
+ */
+export function defaultPreheader(md: string): string {
+  const lines = blocksToText(md)
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !BUTTON_LINE.test(l) && !/^#{1,6}\s/.test(l));
+  const body = lines.filter((l, i) => !(i === 0 && /,$/.test(l) && l.length < 40)); // skip "Hi {first_name},"
+  const text = body
+    .join(" ")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/[*_`>]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (text.length <= 140) return text;
+  const cut = text.slice(0, 140);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), 100)).trim()}…`;
+}
+
+/**
+ * Hidden inbox preview text + a run of invisible spacers, so mail apps show
+ * only this and never pull in the header/body text (or any hidden marker) after it.
+ */
+export function preheaderHtml(text: string): string {
+  const filler = "&#8199;&#65279;&#847;".repeat(80);
+  return `<div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;color:transparent;font-size:1px;line-height:1px;mso-hide:all;">${esc(text)}${filler}</div>`;
+}
+
 export function buttonHtml(label: string, url: string, style: ButtonStyle): string {
   const solid = style === "solid";
   const font = "font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;line-height:1.2;";
@@ -50,21 +138,40 @@ export function renderCampaignBody(md: string, mapUrl: (u: string) => string = (
     if (chunk.length) out.push(renderMarkdown(chunk.join("\n")));
     chunk = [];
   };
+  let stats: { value: string; label: string }[] = [];
+  const flushStats = () => {
+    for (let i = 0; i < stats.length; i += 3) out.push(statsHtml(stats.slice(i, i + 3)));
+    stats = [];
+  };
   for (const line of (md || "").replace(/\r\n?/g, "\n").split("\n")) {
+    const st = line.match(STAT_LINE);
+    if (st) {
+      flush();
+      stats.push({ value: st[1], label: st[2] });
+      continue;
+    }
+    flushStats();
     const m = line.match(BUTTON_LINE);
     const url = m ? httpsOnly(m[3]) : null;
+    const im = line.match(IMAGE_LINE);
+    const src = im ? httpsOnly(im[1]) : null;
     if (m && url) {
       flush();
       out.push(buttonHtml(m[2], mapUrl(url), m[1] ? "outline" : "solid"));
+    } else if (im && src) {
+      flush();
+      const link = im[3] ? httpsOnly(im[3]) : null;
+      out.push(imageHtml(src, im[2] ?? "", link ? mapUrl(link) : null));
     } else chunk.push(line);
   }
   flush();
+  flushStats();
   return out.join("\n");
 }
 
 /** For plain-text channels (Telegram): a button line becomes "Label: url" (`mapUrl` adds tracking). */
 export function buttonsToText(md: string, mapUrl: (u: string) => string = (u) => u): string {
-  return (md || "")
+  return blocksToText(md)
     .split(/\r?\n/)
     .map((line) => {
       const m = line.match(BUTTON_LINE);
@@ -120,7 +227,7 @@ const escTg = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").repl
 export function markdownToTelegramHtml(src: string, mapUrl: (u: string) => string = (u) => u): { html: string; buttons: TelegramButton[] } {
   const buttons: TelegramButton[] = [];
   const lines: string[] = [];
-  for (const line of (src || "").replace(/\r\n?/g, "\n").split("\n")) {
+  for (const line of blocksToText(src).split("\n")) {
     const m = line.match(BUTTON_LINE);
     const url = m ? httpsOnly(m[3]) : null;
     if (m && url) buttons.push({ text: m[2].slice(0, 60), url: mapUrl(url) });
@@ -172,7 +279,7 @@ export const BRAND_CONTACT_EMAIL = "hello@revampvacations.com";
  * Business postal address — marketing email should carry one (e.g. US
  * CAN-SPAM). Null until it's provided; the footer simply leaves it out.
  */
-export const BRAND_POSTAL_ADDRESS: string | null = null;
+export const BRAND_POSTAL_ADDRESS: string | null = "Northern Ave 1, Yerevan, Armenia";
 
 const FOOTER_LINKS: [string, string][] = [
   ["Stays", "/explore/stay"],
@@ -181,7 +288,7 @@ const FOOTER_LINKS: [string, string][] = [
   ["Blog", "/blog"],
 ];
 
-export function campaignFooterHtml(o: { siteUrl: string; unsubUrl: string; sentLabel: string; mapUrl?: (u: string) => string; year?: number }): string {
+export function campaignFooterHtml(o: { siteUrl: string; unsubUrl: string; sentLabel: string; mapUrl?: (u: string) => string; year?: number; recipient?: string | null }): string {
   const map = o.mapUrl ?? ((u: string) => u);
   const site = o.siteUrl.replace(/\/+$/, "");
   // `inner` is trusted HTML built here; every outside value goes through esc().
@@ -204,6 +311,7 @@ export function campaignFooterHtml(o: { siteUrl: string; unsubUrl: string; sentL
   <p style="margin:4px 0 0;font-size:13px;line-height:1.8;color:${soft};">${socials}</p>
   <div style="border-top:1px solid rgba(255,255,255,.1);margin-top:18px;padding-top:14px;">
     <p style="${muted}">© ${o.year ?? new Date().getFullYear()} Revamp Hospitality LLC${BRAND_POSTAL_ADDRESS ? ` · ${esc(BRAND_POSTAL_ADDRESS)}` : ""} · ${esc(o.sentLabel)}</p>
+    ${o.recipient ? `<p style="${muted}">This email was sent to ${esc(o.recipient)}.</p>` : ""}
     <p style="${muted}">Don't want these emails? <a href="${esc(o.unsubUrl)}" style="color:${soft};text-decoration:underline;">Unsubscribe</a>.</p>
   </div>
 </div>`;

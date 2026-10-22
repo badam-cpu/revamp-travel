@@ -91,4 +91,5 @@ Encrypts operators' PayLink API keys before they're stored (migration 0094, `ser
 | Variable | Example | Purpose |
 | --- | --- | --- |
 | `CAMPAIGN_EMAIL_FROM` | `Revamp Vacations <hello@news.revampvacations.com>` | Sender for admin email campaigns only — a separate subdomain verified in Resend, so marketing complaints never affect the main domain booking emails use. Falls back to `EMAIL_FROM`. |
+| `RESEND_WEBHOOK_SECRET` | `whsec_…` | Signing secret of the Resend webhook pointing at `https://revampvacations.com/api/resend-webhook` (events: email.delivered, email.opened, email.clicked, email.bounced, email.complained). Enables per-campaign opens/clicks in Admin → Campaigns → Sent (migration 0116). Without it the webhook accepts nothing. Open/click tracking must also be switched on for the sending domain in Resend. |
 | `CAMPAIGN_REPLY_TO` | `hello@revampvacations.com` | Where replies to campaigns go. |

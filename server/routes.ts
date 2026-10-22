@@ -97,6 +97,7 @@ import { llmsTxtHandler } from "./llms.js";
 import { renderForBot } from "./prerender.js";
 import { wordmarkSvg } from "../shared/brandLogo.js";
 import { aiEdgeToken, recordAiPageFetch, recordMcpUse, bumpAiVisibility } from "./aiVisibility.js";
+import { handleResendEvent, verifySvix } from "./resendWebhook.js";
 import { aiVisitPath, isAiAssistant } from "../shared/aiAgents.js";
 
 const planTripSchema = z.object({
@@ -234,6 +235,7 @@ const emailSendSchema = z.object({
   body: z.string().trim().min(1).max(20000),
   channel: z.enum(["email", "telegram"]).optional().default("email"),
   visual: campaignVisualSchema,
+  preheader: z.string().trim().max(160).optional(),
 });
 
 const trackSchema = z.object({
@@ -4091,13 +4093,14 @@ export function registerApiRoutes(app: Express) {
         to: z.array(z.string().trim().toLowerCase().email("One of the test addresses isn't a valid email.")).min(1, "Add a test address.").max(5, "Up to 5 test addresses."),
         name: z.string().trim().max(80).optional(),
         visual: campaignVisualSchema,
+        preheader: z.string().trim().max(160).optional(),
       })
       .safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
     if (!marketingConfigured()) return res.status(503).json({ error: "Email isn't configured (set RESEND_API_KEY + EMAIL_FROM)." });
     const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
     const recipients = Array.from(new Set(parsed.data.to)).map((email) => ({ email, name: parsed.data.name || null }));
-    const { sent, failed, error } = await sendCampaign({ subject: parsed.data.subject, markdown: parsed.data.body, recipients, siteUrl: site, subjectPrefix: "[TEST] ", visual: parsed.data.visual });
+    const { sent, failed, error } = await sendCampaign({ subject: parsed.data.subject, markdown: parsed.data.body, recipients, siteUrl: site, subjectPrefix: "[TEST] ", visual: parsed.data.visual, preheader: parsed.data.preheader });
     // Admin-only route: the email service's own reason helps fix sender/domain issues.
     if (sent === 0) return res.status(502).json({ error: `The email service didn't accept the test (${error ?? "unknown reason"}).` });
     res.json({ sent, failed, from: campaignSender().from ?? null });
@@ -4177,20 +4180,64 @@ export function registerApiRoutes(app: Express) {
     const recipients = await resolveAudience(admin, parsed.data.audience);
     if (recipients.length === 0) return res.status(400).json({ error: "No recipients in that audience." });
     const site = (process.env.URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
-    const { sent, failed } = await sendCampaign({ subject: parsed.data.subject, markdown: parsed.data.body, recipients, siteUrl: site, visual: parsed.data.visual });
-    const record = {
+    // Record the campaign BEFORE sending (0116): its id tags every email so
+    // Resend's opens/clicks can be counted against it. Columns added by later
+    // migrations are dropped one by one if the database doesn't have them yet.
+    const campaignId = randomUUID();
+    const base = {
+      id: campaignId,
       subject: parsed.data.subject,
       body: parsed.data.body,
       audience: parsed.data.audience,
       channel: "email",
       recipient_count: recipients.length,
-      sent_count: sent,
+      sent_count: 0,
       created_by: userId,
     };
-    // layout/image_url are 0107 columns — record without them if they aren't there yet.
-    const { error: recErr } = await admin.from("email_campaigns").insert({ ...record, layout: parsed.data.visual?.layout ?? null, image_url: parsed.data.visual?.imageUrl ?? null });
-    if (recErr) await admin.from("email_campaigns").insert(record);
+    let recorded = false;
+    for (const row of [
+      { ...base, layout: parsed.data.visual?.layout ?? null, image_url: parsed.data.visual?.imageUrl ?? null, preheader: parsed.data.preheader || null },
+      { ...base, layout: parsed.data.visual?.layout ?? null, image_url: parsed.data.visual?.imageUrl ?? null },
+      base,
+    ]) {
+      const { error: recErr } = await admin.from("email_campaigns").insert(row);
+      if (!recErr) {
+        recorded = true;
+        break;
+      }
+    }
+    const { sent, failed } = await sendCampaign({
+      subject: parsed.data.subject,
+      markdown: parsed.data.body,
+      recipients,
+      siteUrl: site,
+      visual: parsed.data.visual,
+      preheader: parsed.data.preheader,
+      tracking: recorded ? { admin, campaignId } : null,
+    });
+    if (recorded) await admin.from("email_campaigns").update({ sent_count: sent }).eq("id", campaignId);
     res.json({ total: recipients.length, sent, failed });
+  });
+
+  // POST /api/resend-webhook — Resend's delivery/open/click/bounce/complaint
+  // events for campaign emails (0116). Verified (Svix signature) before
+  // anything is read; see server/resendWebhook.ts. Always 200 once verified,
+  // so Resend doesn't retry events we simply don't count.
+  app.post("/api/resend-webhook", async (req: Request, res: Response) => {
+    const secret = process.env.RESEND_WEBHOOK_SECRET;
+    if (!secret) return res.status(503).json({ error: "not_configured" });
+    const raw = (req as unknown as { rawBody?: string }).rawBody ?? "";
+    const ok = verifySvix(secret, { id: req.get("svix-id"), timestamp: req.get("svix-timestamp"), signature: req.get("svix-signature") }, raw);
+    if (!ok) return res.status(401).json({ error: "invalid_signature" });
+    const admin = supabaseAdmin();
+    if (admin) {
+      try {
+        await handleResendEvent(admin, req.body);
+      } catch (e) {
+        console.error("[resend webhook]", e);
+      }
+    }
+    res.json({ received: true });
   });
 
   // GET /api/email/unsubscribe?e=&t= — public one-click unsubscribe. Adds the

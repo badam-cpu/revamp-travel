@@ -557,7 +557,7 @@ export async function adminEmailGenerate(prompt: string): Promise<{ body: string
 }
 
 /** Admin: send a composed email or Telegram broadcast to an audience segment. */
-export async function adminEmailSend(input: { audience: string; subject: string; body: string; channel?: "email" | "telegram"; visual?: CampaignVisual }): Promise<{ total: number; sent: number; failed: number }> {
+export async function adminEmailSend(input: { audience: string; subject: string; body: string; channel?: "email" | "telegram"; visual?: CampaignVisual; preheader?: string }): Promise<{ total: number; sent: number; failed: number }> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new ApiError("Sign in.");
@@ -569,7 +569,7 @@ export async function adminEmailSend(input: { audience: string; subject: string;
 }
 
 /** Admin: send the composed campaign email to test addresses ("[TEST]" subject, not recorded). */
-export async function adminEmailTest(input: { subject: string; body: string; to: string[]; name?: string; visual?: CampaignVisual }): Promise<{ sent: number; failed: number; from: string | null }> {
+export async function adminEmailTest(input: { subject: string; body: string; to: string[]; name?: string; visual?: CampaignVisual; preheader?: string }): Promise<{ sent: number; failed: number; from: string | null }> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new ApiError("Sign in.");
