@@ -48,8 +48,11 @@ export const CRON_REGISTRY: CronJobSpec[] = [
   { job: "refresh-ical", label: "iCal availability refresh", maxAgeMinutes: 180 },
   // Schedule: */10 * * * * → should run constantly; 60 min means several misses.
   { job: "reconcile-bookings", label: "Booking & payment reconcile", maxAgeMinutes: 60 },
-  // Schedule: @weekly (events-sync → events-sync-background) → alert after ~8 days.
-  { job: "events-sync", label: "Upcoming events discovery", maxAgeMinutes: 8 * 24 * 60 },
+  // Schedule: 1st + 15th of the month (events-sync → events-sync-background) —
+  // the longest gap is the 15th → next 1st (≤ 17 days) → alert after 18 days.
+  { job: "events-sync", label: "Upcoming events discovery (AI, twice a month)", maxAgeMinutes: 18 * 24 * 60 },
+  // Schedule: @weekly (events-upkeep → events-sync-background "upkeep") → alert after ~8 days.
+  { job: "events-upkeep", label: "Upcoming events re-check (weekly)", maxAgeMinutes: 8 * 24 * 60 },
 ];
 
 /** Re-send a down-alert for the same job at most once per this window. */

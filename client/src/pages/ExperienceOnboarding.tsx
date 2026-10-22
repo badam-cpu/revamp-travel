@@ -45,7 +45,8 @@
  * original inline ListingFormDialog in Dashboard.tsx entirely untouched.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
+import { deleteListingDraft, getListingDraft, saveListingDraft } from "@/lib/listingDrafts";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -324,6 +325,14 @@ function stepTextProblem(step: number, d: WizardData): string | null {
   return null;
 }
 
+/** For the Dashboard's "Unfinished" list ("Stopped at step N of …"). */
+export const EXPERIENCE_STEP_COUNT = STEP_META.length;
+
+/** Anything worth keeping in an unfinished experience (0115)? */
+function hasContent(d: WizardData): boolean {
+  return !!(d.title.trim() || d.eyebrow.trim() || d.shortDescription.trim() || d.longDescription.trim() || d.city.trim() || d.photos.length || d.highlights.length || d.price > 0);
+}
+
 const STEP_VALIDATORS: ((data: WizardData) => boolean)[] = [
   (d) => d.eyebrow.trim().length > 0 && d.title.trim().length > 0 && !stepTextProblem(0, d),
   (d) => d.city.trim().length > 0 && d.region.trim().length > 0,
@@ -355,6 +364,10 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
   const { listings, loading: listingsLoading, createListing, updateListing } = useListings();
   const existing = isEdit ? listings.find((l) => l.id === id) : undefined;
   const [, navigate] = useLocation();
+  // Continuing an unfinished experience (0115): /dashboard/experiences/new?draft=<id>.
+  const search = useSearch();
+  const resumeId = !isEdit ? new URLSearchParams(search).get("draft") : null;
+  const [resuming, setResuming] = useState(!!resumeId);
 
   const [data, setData] = useState<WizardData>(() => {
     if (isEdit) return emptyWizardData();
@@ -403,6 +416,86 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
     const video = videoRef.current?.getValue();
     if (video !== undefined) setData((d) => ({ ...d, videoUrl: video }));
   }, [currentStep]);
+
+  // ── Save and continue later (0115) — new experiences only ──
+  const draftRowRef = useRef<string | null>(resumeId);
+  const lastSavedRef = useRef<string>("");
+  const doneRef = useRef(false);
+  const [progressSavedAt, setProgressSavedAt] = useState<number | null>(null);
+  const [savingProgress, setSavingProgress] = useState(false);
+  useEffect(() => {
+    if (!resumeId) return;
+    let alive = true;
+    getListingDraft(resumeId)
+      .then((row) => {
+        if (!alive) return;
+        const saved = row?.type === "experience" ? (row.data as { data?: Partial<WizardData>; maxUnlocked?: number }) : null;
+        if (row && saved?.data) {
+          const restored = { ...emptyWizardData(), ...saved.data };
+          setData(restored);
+          const last = STEP_META.length - 1;
+          setCurrentStep(Math.min(row.step, last));
+          setMaxUnlocked(Math.min(Math.max(saved.maxUnlocked ?? 0, row.step), last));
+        } else {
+          draftRowRef.current = null;
+          toast("That unfinished experience is no longer available — starting fresh.");
+        }
+      })
+      .catch((e) => {
+        console.error("[listing drafts] open", e);
+        draftRowRef.current = null;
+        toast.error("Couldn't open your saved progress. Please try again from the dashboard.");
+      })
+      .finally(() => alive && setResuming(false));
+    return () => {
+      alive = false;
+    };
+  }, [resumeId]);
+
+  /** The wizard's data incl. the self-managed pickers (amenities, photos, video). */
+  const currentData = (): WizardData => ({
+    ...data,
+    amenities: amenitiesRef.current?.getValue() ?? data.amenities,
+    photos: photosRef.current?.getValue() ?? data.photos,
+    coverFocus: photosRef.current?.getCoverFocus() ?? data.coverFocus,
+    videoUrl: videoRef.current?.getValue() ?? data.videoUrl,
+  });
+  const saveProgress = async (mode: "auto" | "explicit"): Promise<boolean> => {
+    if (isEdit || resuming || doneRef.current) return true;
+    const d = currentData();
+    if (!hasContent(d)) return true;
+    const json = JSON.stringify({ d, currentStep, maxUnlocked });
+    if (json === lastSavedRef.current) return true;
+    setSavingProgress(true);
+    try {
+      draftRowRef.current = await saveListingDraft({ id: draftRowRef.current, type: "experience", title: d.title, step: currentStep, data: { v: 1, data: d, maxUnlocked } });
+      lastSavedRef.current = json;
+      setProgressSavedAt(Date.now());
+      return true;
+    } catch (e) {
+      console.error("[listing drafts] save", e);
+      if (mode === "explicit") toast.error("Couldn't save your progress. Check your connection and try again.");
+      return false;
+    } finally {
+      setSavingProgress(false);
+    }
+  };
+  const saveProgressRef = useRef(saveProgress);
+  saveProgressRef.current = saveProgress;
+  // A few seconds after any change (and on every step change).
+  useEffect(() => {
+    if (isEdit || resuming) return;
+    const t = setTimeout(() => void saveProgressRef.current("auto"), 3000);
+    return () => clearTimeout(t);
+  }, [data, currentStep, maxUnlocked, isEdit, resuming]);
+  // Leaving the page another way (header link, back button) saves too.
+  useEffect(() => () => void saveProgressRef.current("auto"), []);
+  const saveAndExit = async () => {
+    const ok = await saveProgress("explicit");
+    if (!ok) return;
+    if (draftRowRef.current) toast("Saved — continue anytime from Experiences → Unfinished.");
+    navigate("/dashboard");
+  };
 
   useDocumentMeta({
     title: isEdit ? "Edit experience | Dashboard" : "Add an experience | Dashboard",
@@ -465,6 +558,10 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
       } else {
         await createListing(payload, submitForReview);
         toast(submitForReview ? `${payload.title} submitted for review.` : `${payload.title} saved as a draft.`);
+        // The listing exists now — its unfinished copy (0115) is no longer needed.
+        doneRef.current = true;
+        if (draftRowRef.current) void deleteListingDraft(draftRowRef.current).catch((e) => console.error("[listing drafts] delete", e));
+        draftRowRef.current = null;
       }
       navigate("/dashboard");
     } catch (err) {
@@ -489,16 +586,28 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
     <div className="min-h-screen bg-paper text-basalt">
       <SiteHeader />
       <main className="listing-form container py-10 lg:py-14">
-        <Link href="/dashboard" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-basalt/55 hover:text-apricot">
-          <ArrowLeft className="h-4 w-4" /> Back to dashboard
-        </Link>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Link href="/dashboard" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-basalt/55 hover:text-apricot">
+            <ArrowLeft className="h-4 w-4" /> Back to dashboard
+          </Link>
+          {!isEdit && !resuming && (
+            <div className="flex items-center gap-3">
+              {(savingProgress || progressSavedAt) && <span className="text-xs text-basalt/45" aria-live="polite">{savingProgress ? "Saving…" : "Progress saved"}</span>}
+              <Button type="button" variant="outline" size="sm" onClick={() => void saveAndExit()} disabled={savingProgress} className="rounded-none border-basalt/20">
+                Save &amp; exit
+              </Button>
+            </div>
+          )}
+        </div>
 
         <p className="eyebrow mt-6">{isEdit ? "Edit experience" : "Add an experience"}</p>
         <h1 className="mt-2 font-display text-4xl leading-[0.98] tracking-[-0.035em] sm:text-5xl">
           {isEdit ? existing?.title || "Loading…" : "Host something hands-on."}
         </h1>
 
-        {(listingsLoading && isEdit && !hydrated) ? (
+        {resuming ? (
+          <p className="mt-10 text-sm text-basalt/50">Opening your saved progress…</p>
+        ) : (listingsLoading && isEdit && !hydrated) ? (
           <p className="mt-10 text-sm text-basalt/50">Loading your listing…</p>
         ) : notFound ? (
           <div className="mt-10 flex items-start gap-2 border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">

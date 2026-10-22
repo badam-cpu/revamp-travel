@@ -621,7 +621,7 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise
 
 // ── 3. Weekly re-check: cancelled, postponed, stale ─────────────────────────
 const CANCEL_WORDS = ["cancelled", "canceled", "cancellation", "postponed", "called off", "отмен", "перенес", "перенос", "չեղարկ", "հետաձգ"];
-const STALE_DAYS = 21; // not re-found by any weekly search for 3 weeks
+const STALE_DAYS = 35; // not re-found for 5 weeks = two missed twice-monthly searches (was 21 when searches were weekly)
 /** Set by Admin → Events → Restore (client/src/components/AdminEvents.tsx); the re-check skips these. */
 export const RESTORED_BY_ADMIN = "Restored by an admin";
 
@@ -697,12 +697,33 @@ export async function recheckEvents(admin: SupabaseClient, today = isoDay(new Da
         if (!error) pictured++;
       }
       if (v !== "ok" && Date.parse(r.last_seen_at) < Date.now() - STALE_DAYS * DAY) {
-        const { error } = await admin.from("events").update({ hidden: true, status_reason: "Not confirmed by any search for 3 weeks", status_changed_at: now }).eq("id", r.id);
+        const { error } = await admin.from("events").update({ hidden: true, status_reason: "Not confirmed by any search for 5 weeks", status_changed_at: now }).eq("id", r.id);
         if (!error) hidden++;
       }
     }
   }
   return { checked: rows.length, cancelled, hidden, pictured };
+}
+
+/**
+ * Weekly free upkeep (no AI): holidays + re-check of upcoming events
+ * (cancellations, stale ones, pictures). The paid discovery is syncEvents.
+ */
+export async function upkeepEvents(admin: SupabaseClient): Promise<{ holidays: number; checked: number; cancelled: number; hidden: number; pictured: number; errors: string[] }> {
+  const errors: string[] = [];
+  let holidays = 0;
+  try {
+    holidays = await syncHolidays(admin);
+  } catch (e) {
+    errors.push(`holidays: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  let re = { checked: 0, cancelled: 0, hidden: 0, pictured: 0 };
+  try {
+    re = await recheckEvents(admin);
+  } catch (e) {
+    errors.push(`recheck: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  return { holidays, ...re, errors };
 }
 
 /** Holidays + AI discovery. Each half runs even if the other fails. */

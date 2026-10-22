@@ -231,7 +231,7 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
         </ul>
       )}
       {list.length === 0 ? (
-        <p className="border border-dashed border-basalt/20 bg-chalk px-5 py-6 text-sm text-basalt/70">No notable events near your listings in the next 12 months yet. The list refreshes every week.</p>
+        <p className="border border-dashed border-basalt/20 bg-chalk px-5 py-6 text-sm text-basalt/70">No notable events near your listings in the next 12 months yet. New events are added twice a month.</p>
       ) : (
         <>
           {anyMarkup && (

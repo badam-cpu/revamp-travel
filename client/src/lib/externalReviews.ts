@@ -64,6 +64,22 @@ export async function addHostReview(operatorId: string, input: HostReviewInput):
   if (error) throw new Error(error.message);
 }
 
+/** Edit one of the operator's own imported reviews (RLS: owner or admin only). */
+export async function updateHostReview(id: string, input: HostReviewInput): Promise<void> {
+  const { error } = await supabase
+    .from("external_reviews")
+    .update({
+      source: input.source,
+      reviewer_name: input.reviewerName,
+      rating: input.rating,
+      body: input.body,
+      review_date: input.reviewDate,
+      listing_id: input.listingId,
+    })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
 export async function deleteHostReview(id: string): Promise<void> {
   const { error } = await supabase.from("external_reviews").delete().eq("id", id);
   if (error) throw new Error(error.message);
@@ -104,3 +120,4 @@ export async function fetchGoogleReviews(operatorId: string): Promise<GoogleRevi
     return { configured: false };
   }
 }
+

@@ -6,7 +6,7 @@
  * the derived token; anything else is ignored. Records a cron heartbeat.
  */
 import { supabaseAdmin, adminConfigured } from "../../server/supabaseAdmin.js";
-import { eventsSyncToken, recheckEvents, syncEvents } from "../../server/events.js";
+import { eventsSyncToken, recheckEvents, syncEvents, upkeepEvents } from "../../server/events.js";
 import { recordCronRun, checkAndAlertStaleCrons } from "../../server/alerts.js";
 
 const JOB = "events-sync";
@@ -23,6 +23,19 @@ export default async (req: Request): Promise<void> => {
   // "pictures" (Admin → Events → Refresh pictures): only re-open the upcoming
   // events' source pages (cancellations + pictures) — no paid web searches, and
   // no heartbeat, so it never starts the full refresh's one-hour cooldown.
+  // "upkeep" (weekly, events-upkeep.ts): holidays + re-check — free, own heartbeat.
+  if (req.headers.get("x-events-mode") === "upkeep") {
+    try {
+      const r = await upkeepEvents(admin);
+      console.log("[events-upkeep]", JSON.stringify(r));
+      await recordCronRun(admin, "events-upkeep", r.errors.length === 0, r.errors.length ? r.errors.join(" | ").slice(0, 500) : `holidays ${r.holidays}, checked ${r.checked}, cancelled ${r.cancelled}, hidden ${r.hidden}, pictures ${r.pictured}`);
+    } catch (e) {
+      console.error("[events-upkeep] failed", e);
+      await recordCronRun(admin, "events-upkeep", false, e instanceof Error ? e.message : String(e));
+    }
+    await checkAndAlertStaleCrons(admin);
+    return;
+  }
   if (req.headers.get("x-events-mode") === "pictures") {
     try {
       console.log("[events-sync] pictures", JSON.stringify(await recheckEvents(admin)));

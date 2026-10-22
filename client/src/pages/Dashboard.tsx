@@ -22,7 +22,7 @@
  * step gating is handled by validateStep(), and the server still Zod-validates.
  */
 import { PriceLog } from "@/components/PriceLog";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, CalendarDays, Check, ChevronDown, ChevronLeft, ExternalLink, MoreHorizontal, PauseCircle, PlayCircle, Copy, CreditCard, FileText, Footprints, Gift, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, PanelLeftClose, PanelLeftOpen, Pencil, Plug, Plus, QrCode, RefreshCw, Route, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
 import { Inbox } from "@/components/Inbox";
@@ -42,7 +42,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useListings, LiveListing } from "@/contexts/ListingsContext";
 import { useAuth } from "@/contexts/AuthContext";
-import type { ListingInput, ListingType, RoomType } from "@shared/listings";
+import type { ListingInput, ListingType, RoomType, RoomTypeInput } from "@shared/listings";
 import { LISTING_LIMITS, LISTING_TEXT_LIMITS, STAY_SPACE_TYPES, firstListingTextProblem, listingOffers, suspensionLabel } from "@shared/listings";
 import { EXTRA_FEE_TYPES } from "@shared/bookings";
 import { CharCount } from "@/components/CharCount";
@@ -95,6 +95,8 @@ import { EventInsights } from "@/components/EventInsights";
 import { EXPERIENCE_PREFILL_STORAGE_KEY } from "@/pages/ExperienceOnboarding";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { toast } from "sonner";
+import { deleteListingDraft, listListingDrafts, saveListingDraft, savedAgo, type DraftListingType, type ListingDraftRow } from "@/lib/listingDrafts";
+import { EXPERIENCE_STEP_COUNT } from "@/pages/ExperienceOnboarding";
 
 // `prefillImageUrl` is display-only — it's carried on the draft purely so
 // ListingFormDialog can show a reference thumbnail; toInputPayload() never
@@ -118,6 +120,37 @@ function emptyDraft(type: ListingType): DraftListing {
     accent: type === "tour" ? "apricot" : "sevan",
     image: "",
   };
+}
+
+/** What a saved "Unfinished" stay/tour (0115, lib/listingDrafts.ts) holds. */
+interface ListingDraftData {
+  v: 1;
+  listing: DraftListing;
+  multiRoom?: boolean;
+  roomTypes?: RoomTypeInput[];
+}
+/** Resuming an unfinished listing: its draft row, the step reached and (hotels) its room types. */
+interface ListingResume {
+  rowId: string;
+  step: number;
+  roomTypes?: RoomType[];
+}
+const inArmenia = (c?: { lat: number; lng: number }) => !!c && c.lat >= 38 && c.lat <= 42 && c.lng >= 43 && c.lng <= 47;
+function restoreListingDraft(type: ListingType, d: ListingDraftData | null | undefined): DraftListing {
+  const base = emptyDraft(type);
+  const l = (d?.listing ?? {}) as DraftListing;
+  return { ...base, ...l, type, coordinates: inArmenia(l.coordinates) ? l.coordinates : base.coordinates, multiRoom: !!d?.multiRoom, id: undefined, status: undefined };
+}
+/** Room types typed into an unfinished hotel → the editor's seed shape (never saved yet, so no ids). */
+function restoreRoomTypes(inputs: RoomTypeInput[] | undefined): RoomType[] | undefined {
+  if (!inputs?.length) return undefined;
+  return inputs.map((t, i) => ({
+    ...t,
+    id: t.id as string,
+    listingId: "",
+    sortOrder: i,
+    units: t.units.map((u, j) => ({ id: u.id as string, roomTypeId: "", name: u.name, priceCents: u.priceCents, seasonalRates: [], manualBlockedRanges: [], active: true, sortOrder: j })),
+  }));
 }
 
 interface RefLists {
@@ -346,11 +379,16 @@ function ListingFormDialog({
   open,
   onOpenChange,
   onSaved,
+  resume = null,
+  onDraftsChanged,
 }: {
   draft: DraftListing | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
+  /** Continuing an unfinished listing (0115). */
+  resume?: ListingResume | null;
+  onDraftsChanged?: () => void;
 }) {
   const { createListing, updateListing, saveRoomTypes } = useListings();
   const [saving, setSaving] = useState(false);
@@ -386,30 +424,130 @@ function ListingFormDialog({
   // Existing room types load async; the editor (uncontrolled) mounts once they're in.
   const [roomTypes, setRoomTypes] = useState<RoomType[] | null>(null);
   const draftId = draft?.id;
-  // Reset to the first step whenever the dialog (re)opens or a different draft loads.
+  const resumeId = resume?.rowId;
+  // "Save and continue later" (0115) — NEW listings only: the form is kept in
+  // listing_drafts while the operator works (a few seconds after a change, on
+  // every step change, and on Save & exit) and deleted once the listing is created.
+  const draftRowRef = useRef<string | null>(null);
+  const dirtyRef = useRef(false);
+  const doneRef = useRef(false);
+  const stepRef = useRef(0);
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveProgressRef = useRef<((mode: "auto" | "explicit") => Promise<boolean>) | null>(null);
+  const [progressSavedAt, setProgressSavedAt] = useState<number | null>(null);
+  const [savingProgress, setSavingProgress] = useState(false);
+  stepRef.current = step;
+  // Reset whenever the dialog (re)opens or a different listing/draft loads.
   useEffect(() => {
-    setStep(0);
+    setStep(Math.max(0, Math.min(LAST_STEP, resume?.step ?? 0)));
     setStepError(null);
     setError(null);
     setItinerary(draft?.highlights ?? []);
     setMultiRoom(!!draft?.multiRoom);
     setPolicy(draft?.cancellationPolicy ?? "flexible");
-  }, [open, draftId]);
+    draftRowRef.current = resume?.rowId ?? null;
+    dirtyRef.current = false;
+    doneRef.current = false;
+    setProgressSavedAt(null);
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, draftId, resumeId]);
   useEffect(() => {
     let alive = true;
     setRoomTypes(null);
     if (draftId && draft?.multiRoom) fetchRoomTypes(draftId).then((r) => alive && setRoomTypes(r));
-    else setRoomTypes([]);
+    else setRoomTypes(resume?.roomTypes ?? []);
     return () => {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, draftId]);
+  }, [open, draftId, resumeId]);
+  // Moving to another step saves what's there so far.
+  useEffect(() => {
+    if (open && dirtyRef.current) void saveProgressRef.current?.("auto");
+  }, [step, open]);
+  useEffect(() => () => {
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+  }, []);
   if (!draft) return null;
   const isEdit = Boolean(draft.id);
   const isLast = step === LAST_STEP;
   // A published listing stays published on edit (no draft/submit toggle).
   const isPublished = draft.status === "published";
+  const canSaveProgress = !isEdit;
+
+  const collectLists = (): RefLists => ({
+    amenities: amenitiesRef.current?.getValue() ?? [],
+    photos: photosRef.current?.getValue() ?? [],
+    itinerary,
+    notIncluded: notIncludedRef.current?.getValue() ?? [],
+    whatToBring: whatToBringRef.current?.getValue() ?? [],
+    notSuitableFor: notSuitableForRef.current?.getValue() ?? [],
+    houseRules: houseRulesRef.current?.getValue() ?? [],
+    rooms: roomsRef.current?.getValue() ?? [],
+    seasonalRates: ratesRef.current?.getValue() ?? [],
+    coverFocus: photosRef.current?.getCoverFocus() ?? "50% 50%",
+    videoUrl: videoRef.current?.getValue() ?? "",
+  });
+
+  // Save the unfinished form to listing_drafts (0115). "auto" stays quiet on
+  // failure (retried on the next change); "explicit" (Save & exit) tells the operator.
+  const saveProgress = async (mode: "auto" | "explicit"): Promise<boolean> => {
+    if (!canSaveProgress || doneRef.current) return true;
+    if (autosaveTimer.current) {
+      clearTimeout(autosaveTimer.current);
+      autosaveTimer.current = null;
+    }
+    if (!dirtyRef.current) return true;
+    const form = formRef.current;
+    if (!form) return false;
+    let title = "";
+    let data: ListingDraftData;
+    try {
+      const payload = toInputPayload(draft, form, collectLists());
+      title = payload.title;
+      const typedRooms = draft.type === "stay" && multiRoom ? roomTypesRef.current?.getValue() : undefined;
+      data = { v: 1, listing: { ...(payload as unknown as DraftListing), type: draft.type, prefillImageUrl: draft.prefillImageUrl }, multiRoom: draft.type === "stay" ? multiRoom : undefined, roomTypes: typedRooms };
+    } catch (err) {
+      console.error("[listing drafts] snapshot", err);
+      return false;
+    }
+    dirtyRef.current = false;
+    setSavingProgress(true);
+    try {
+      draftRowRef.current = await saveListingDraft({ id: draftRowRef.current, type: draft.type as DraftListingType, title, step: stepRef.current, data });
+      setProgressSavedAt(Date.now());
+      onDraftsChanged?.();
+      return true;
+    } catch (err) {
+      dirtyRef.current = true;
+      console.error("[listing drafts] save", err);
+      if (mode === "explicit") toast.error("Couldn't save your progress. Check your connection and try again.");
+      return false;
+    } finally {
+      setSavingProgress(false);
+    }
+  };
+  saveProgressRef.current = saveProgress;
+
+  // Any edit in the form marks it unsaved and saves a few seconds later.
+  const markDirty = () => {
+    if (!canSaveProgress || doneRef.current) return;
+    dirtyRef.current = true;
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(() => void saveProgressRef.current?.("auto"), 3000);
+  };
+
+  // Closing (Save & exit, Escape, the overlay): a new listing with unsaved
+  // changes is saved first; if that fails the form stays open so nothing is lost.
+  const close = async () => {
+    if (canSaveProgress && (dirtyRef.current || draftRowRef.current) && !doneRef.current) {
+      const ok = await saveProgress("explicit");
+      if (!ok) return;
+      if (draftRowRef.current) toast(`Saved — continue anytime from ${draft.type === "tour" ? "Tours" : "Stays"} → Unfinished.`);
+    }
+    onOpenChange(false);
+  };
 
   // Google Places autocomplete fills the uncontrolled fields imperatively.
   const setField = (name: string, value: string) => {
@@ -543,20 +681,12 @@ function ListingFormDialog({
     }
     setSaving(true);
     setError(null);
+    if (autosaveTimer.current) {
+      clearTimeout(autosaveTimer.current);
+      autosaveTimer.current = null;
+    }
     try {
-      const payload = toInputPayload(draft, form, {
-        amenities: amenitiesRef.current?.getValue() ?? [],
-        photos: photosRef.current?.getValue() ?? [],
-        itinerary,
-        notIncluded: notIncludedRef.current?.getValue() ?? [],
-        whatToBring: whatToBringRef.current?.getValue() ?? [],
-        notSuitableFor: notSuitableForRef.current?.getValue() ?? [],
-        houseRules: houseRulesRef.current?.getValue() ?? [],
-        rooms: roomsRef.current?.getValue() ?? [],
-        seasonalRates: ratesRef.current?.getValue() ?? [],
-        coverFocus: photosRef.current?.getCoverFocus() ?? "50% 50%",
-        videoUrl: videoRef.current?.getValue() ?? "",
-      });
+      const payload = toInputPayload(draft, form, collectLists());
 
       // Keep the map pin (and the nearby-sights it drives) in sync with the
       // address: if the operator changed the city/region text but didn't move
@@ -606,6 +736,16 @@ function ListingFormDialog({
         }
       }
       toast(submitForReview ? `${payload.title} submitted for review.` : `${payload.title} saved as a draft.`);
+      // The listing exists now — its unfinished copy (0115) is no longer needed.
+      doneRef.current = true;
+      dirtyRef.current = false;
+      if (draftRowRef.current) {
+        const rowId = draftRowRef.current;
+        draftRowRef.current = null;
+        void deleteListingDraft(rowId)
+          .catch((e) => console.error("[listing drafts] delete", e))
+          .finally(() => onDraftsChanged?.());
+      }
       // Virtual tour (0109): build it from the photos, or add new ones — in the background.
       if (draft.type === "stay") void autoTourAfterSave(saved.id);
       onSaved();
@@ -620,7 +760,7 @@ function ListingFormDialog({
   const pct = ((step + 1) / STEPS.length) * 100;
 
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+    <DialogPrimitive.Root open={open} onOpenChange={(o) => (o ? onOpenChange(true) : void close())}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-basalt/25 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0" />
         <DialogPrimitive.Content
@@ -630,18 +770,26 @@ function ListingFormDialog({
           {/* Top bar — brand + save & exit */}
           <header className="flex items-center justify-between border-b border-basalt/10 px-4 py-3.5 sm:px-8">
             <BrandMark />
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              className="inline-flex items-center gap-2 rounded-none border border-basalt/15 px-3.5 py-2 text-[11px] font-bold uppercase tracking-[0.12em] text-basalt/65 transition-colors hover:border-apricot hover:text-apricot"
-            >
-              Exit <X className="h-3.5 w-3.5" />
-            </button>
+            <div className="flex items-center gap-3">
+              {canSaveProgress && (savingProgress || progressSavedAt) && (
+                <span className="hidden text-xs text-basalt/45 sm:inline" aria-live="polite">
+                  {savingProgress ? "Saving…" : "Progress saved"}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => void close()}
+                disabled={savingProgress && !canSaveProgress}
+                className="inline-flex items-center gap-2 rounded-none border border-basalt/15 px-3.5 py-2 text-[11px] font-bold uppercase tracking-[0.12em] text-basalt/65 transition-colors hover:border-apricot hover:text-apricot"
+              >
+                {canSaveProgress ? "Save & exit" : "Exit"} <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </header>
 
           {/* Scrollable middle — one section per screen */}
           <div className="flex-1 overflow-y-auto">
-            <form ref={formRef} noValidate onSubmit={submit} id="listing-onboarding" className="listing-form mx-auto w-full max-w-2xl px-5 py-10 sm:px-8 sm:py-16">
+            <form ref={formRef} noValidate onSubmit={submit} onChange={markDirty} onInput={markDirty} id="listing-onboarding" className="listing-form mx-auto w-full max-w-2xl px-5 py-10 sm:px-8 sm:py-16">
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-apricot">
                 {isEdit ? `Editing ${draft.type}` : `New ${draft.type}`} · Step {step + 1} of {STEPS.length}
               </p>
@@ -1541,6 +1689,13 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
   const items = listings.filter((l) => l.type === type && l.operatorId === user?.id);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draft, setDraft] = useState<DraftListing | null>(null);
+  // Unfinished new listings of this type (0115) — "save and continue later".
+  const [resume, setResume] = useState<ListingResume | null>(null);
+  const [unfinished, setUnfinished] = useState<ListingDraftRow[]>([]);
+  const reloadDrafts = useCallback(() => {
+    if (user) void listListingDrafts(user.id, type as DraftListingType).then(setUnfinished);
+  }, [user, type]);
+  useEffect(reloadDrafts, [reloadDrafts]);
   const [importUrl, setImportUrl] = useState("");
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
@@ -1564,13 +1719,33 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
   // wizard (App.tsx's /dashboard/experiences/*) instead of the shared dialog.
   const openAdd = () => {
     if (wizardMode) { navigate("/dashboard/experiences/new"); return; }
+    setResume(null);
     setDraft(emptyDraft(type));
     setDialogOpen(true);
   };
   const openEdit = (listing: LiveListing) => {
     if (wizardMode) { navigate(`/dashboard/experiences/${listing.id}/edit`); return; }
+    setResume(null);
     setDraft(listing);
     setDialogOpen(true);
+  };
+  const continueDraft = (row: ListingDraftRow) => {
+    if (wizardMode) { navigate(`/dashboard/experiences/new?draft=${row.id}`); return; }
+    const data = row.data as ListingDraftData;
+    setDraft(restoreListingDraft(type, data));
+    setResume({ rowId: row.id, step: row.step, roomTypes: restoreRoomTypes(data?.roomTypes) });
+    setDialogOpen(true);
+  };
+  const discardDraft = async (row: ListingDraftRow) => {
+    if (!window.confirm(`Discard "${row.title || `Untitled ${type}`}"? What you entered will be deleted.`)) return;
+    try {
+      await deleteListingDraft(row.id);
+      setUnfinished((all) => all.filter((r) => r.id !== row.id));
+      toast("Unfinished listing discarded.");
+    } catch (e) {
+      console.error("[listing drafts] discard", e);
+      toast.error("Couldn't discard it. Please try again.");
+    }
   };
 
   const handleImport = async (event: FormEvent) => {
@@ -1599,6 +1774,7 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
         navigate("/dashboard/experiences/new");
         return;
       }
+      setResume(null);
       setDraft({
         ...emptyDraft(type),
         title: prefill.title ?? "",
@@ -1655,6 +1831,28 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
       </div>
       {importError && <p className="mt-2 text-right text-xs text-destructive">{importError}</p>}
 
+      {unfinished.length > 0 && (
+        <div className="mt-5 border border-apricot/30 bg-apricot/[0.04]">
+          <p className="border-b border-apricot/20 px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-apricot">Unfinished · saved automatically</p>
+          <ul className="divide-y divide-apricot/15">
+            {unfinished.map((row) => (
+              <li key={row.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{row.title || `Untitled ${type}`}</p>
+                  <p className="text-xs text-basalt/55">
+                    Stopped at step {row.step + 1} of {wizardMode ? EXPERIENCE_STEP_COUNT : STEPS.length} · saved {savedAgo(row.updatedAt)}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" onClick={() => continueDraft(row)} className="rounded-none bg-apricot text-white hover:bg-apricot/90">Continue</Button>
+                  <Button size="sm" variant="ghost" onClick={() => void discardDraft(row)} className="rounded-none text-basalt/55 hover:text-destructive">Discard</Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {items.length === 0 ? (
         <p className="mt-5 border border-dashed border-basalt/20 bg-chalk px-6 py-10 text-center text-sm text-basalt/55">Nothing here yet — add your first one above.</p>
       ) : (
@@ -1665,7 +1863,19 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
         </ul>
       )}
 
-      {!wizardMode && <ListingFormDialog draft={draft} open={dialogOpen} onOpenChange={setDialogOpen} onSaved={() => setDialogOpen(false)} />}
+      {!wizardMode && (
+        <ListingFormDialog
+          draft={draft}
+          resume={resume}
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          onSaved={() => {
+            setDialogOpen(false);
+            reloadDrafts();
+          }}
+          onDraftsChanged={reloadDrafts}
+        />
+      )}
     </section>
   );
 }

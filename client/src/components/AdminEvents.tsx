@@ -70,7 +70,7 @@ export function AdminEvents() {
     <div>
       <PageHeader
         title="Events"
-        sub="Holidays and public events across Armenia for the next 12 months, found and re-checked automatically every week. Operators see verified ones next to their pricing."
+        sub="Holidays and public events across Armenia for the next 12 months, searched for automatically on the 1st and 15th of each month and re-checked every week. Operators see verified ones next to their pricing."
         actions={
           <div className="flex flex-wrap gap-2">
             {/* Only re-opens each upcoming event's source page — no paid searches, no cooldown. */}
@@ -90,7 +90,7 @@ export function AdminEvents() {
             {lastRun.detail ? ` (${lastRun.detail})` : ""}
           </>
         ) : (
-          "Not run yet — click Refresh now, or it runs automatically this week."
+          "Not run yet — click Refresh now, or it runs automatically on the 1st or 15th."
         )}
       </p>
       <div role="group" aria-label="Show" className="mb-4 inline-flex rounded-full border border-basalt/15 bg-paper p-1">

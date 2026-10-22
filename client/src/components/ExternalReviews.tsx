@@ -7,6 +7,7 @@
  */
 import { useEffect, useState } from "react";
 import { Languages, Star } from "lucide-react";
+import { reviewsNeedTranslation } from "@shared/reviewLanguage";
 import { fetchGoogleReviews, listHostReviews, translateReviews, ratingScaleFor, toFiveStar, type GoogleReviewsResult, type HostReview, type HostReviewSource } from "@/lib/externalReviews";
 import { computeMentions } from "@/lib/reviewMentions";
 
@@ -93,6 +94,9 @@ export function ExternalReviews({ operatorId, listingId, kind = "stay", classNam
   if (!hasGoogle && host.length === 0) return null;
 
   const show = (t: string) => (translated?.get(t) ?? t);
+  const allTexts = [...host.map((r) => r.body), ...((google?.reviews ?? []).map((r) => r.text))].filter(Boolean);
+  // Only offer Translate when some review likely isn't in the visitor's language.
+  const canTranslate = !!translated || reviewsNeedTranslation(allTexts, typeof navigator !== "undefined" ? navigator.language : "en");
   const toggleTranslate = async () => {
     if (translated) {
       setTranslated(null);
@@ -124,14 +128,14 @@ export function ExternalReviews({ operatorId, listingId, kind = "stay", classNam
           <p className="eyebrow">From around the web</p>
           <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">Reviews on other platforms.</h2>
         </div>
-        <button
+        {canTranslate && <button
           type="button"
           onClick={toggleTranslate}
           disabled={translating}
           className="mt-1 inline-flex items-center gap-1.5 rounded-[0.875rem] border border-basalt/20 px-3.5 py-2 text-sm font-semibold text-basalt transition-colors hover:border-apricot hover:text-apricot disabled:opacity-50"
         >
           <Languages className="h-4 w-4" /> {translating ? "Translating…" : translated ? "Show original" : "Translate"}
-        </button>
+        </button>}
       </div>
       {translated && <p className="mt-1 text-[11px] text-basalt/40">Translated by Google.</p>}
 

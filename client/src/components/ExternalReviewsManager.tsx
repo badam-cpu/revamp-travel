@@ -13,8 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { ExternalLink, Star, Trash2 } from "lucide-react";
-import { listHostReviews, addHostReview, deleteHostReview, ratingScaleFor, type HostReview, type HostReviewSource } from "@/lib/externalReviews";
+import { ExternalLink, Pencil, Star, Trash2 } from "lucide-react";
+import { listHostReviews, addHostReview, updateHostReview, deleteHostReview, ratingScaleFor, type HostReview, type HostReviewInput, type HostReviewSource } from "@/lib/externalReviews";
 import { GooglePlaceFinder } from "@/components/GooglePlaceFinder";
 
 const SOURCE_LABELS: Record<HostReviewSource, string> = { airbnb: "Airbnb", getyourguide: "GetYourGuide", booking: "Booking.com" };
@@ -76,7 +76,8 @@ export function ExternalReviewsManager() {
       if (idOverride) setPlaceId(idOverride);
       toast(id ? `Google Business connected${name ? ` — ${name}` : ""}.` : "Google Business disconnected.");
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't save.");
+      console.error("[external reviews] google place", e);
+      toast("Couldn't save your Google Business connection. Please try again.");
     } finally {
       setSavingPlace(false);
     }
@@ -97,7 +98,8 @@ export function ExternalReviewsManager() {
       toast("Review added.");
       load();
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't add the review.");
+      console.error("[external reviews] add", e);
+      toast("Couldn't add the review. Please try again.");
     } finally {
       setAdding(false);
     }
@@ -107,10 +109,48 @@ export function ExternalReviewsManager() {
     try {
       await deleteHostReview(id);
       setReviews((r) => r.filter((x) => x.id !== id));
+      if (editingId === id) setEditingId(null);
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't remove.");
+      console.error("[external reviews] remove", e);
+      toast("Couldn't remove the review. Please try again.");
     }
   };
+
+  // Inline editing — one review at a time, same fields as adding one.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<HostReviewInput | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const startEdit = (r: HostReview) => {
+    setEditingId(r.id);
+    setDraft({ source: r.source, reviewerName: r.reviewerName, rating: r.rating, body: r.body, reviewDate: r.reviewDate, listingId: r.listingId });
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setDraft(null);
+  };
+  const saveEdit = async () => {
+    if (!editingId || !draft) return;
+    if (!draft.reviewerName.trim() || !draft.body.trim()) {
+      toast("Keep at least a reviewer name and the review text.");
+      return;
+    }
+    const next: HostReviewInput = { ...draft, reviewerName: draft.reviewerName.trim(), body: draft.body.trim(), reviewDate: draft.reviewDate || null, listingId: draft.listingId || null };
+    setSavingEdit(true);
+    try {
+      await updateHostReview(editingId, next);
+      setReviews((all) => all.map((x) => (x.id === editingId ? { ...x, ...next } : x)));
+      cancelEdit();
+      toast("Review updated.");
+    } catch (e) {
+      console.error("[external reviews] update", e);
+      toast("Couldn't save your changes. Please try again.");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+  // The review's own platform stays selectable even if it no longer matches a listing type.
+  const editSources = (current: HostReviewSource) => (sourceOptions.includes(current) ? sourceOptions : [current, ...sourceOptions]);
+  const editListings = (s: HostReviewSource) => myListings.filter((l) => (SOURCE_FOR_TYPE[s] as ReadonlyArray<string>).includes(l.type));
 
   return (
     <div className="grid gap-6 border border-basalt/12 bg-paper p-6">
@@ -173,7 +213,46 @@ export function ExternalReviewsManager() {
 
         {reviews.length > 0 && (
           <ul className="grid gap-2">
-            {reviews.map((r) => (
+            {reviews.map((r) =>
+              editingId === r.id && draft ? (
+                <li key={r.id} className="grid gap-2 border border-apricot/40 bg-chalk/40 p-4">
+                  <p className="text-xs font-semibold text-basalt/60">Edit review</p>
+                  <div className="grid gap-2 sm:grid-cols-[auto_1fr_auto_auto]">
+                    <select
+                      aria-label="Source"
+                      value={draft.source}
+                      onChange={(e) => {
+                        const s = e.target.value as HostReviewSource;
+                        const max = ratingScaleFor(s);
+                        setDraft({ ...draft, source: s, rating: draft.rating == null ? null : Math.min(draft.rating, max), listingId: editListings(s).some((l) => (l as { id: string }).id === draft.listingId) ? draft.listingId : null });
+                      }}
+                      className="h-10 rounded-none border border-basalt/20 bg-paper px-2 text-sm"
+                    >
+                      {editSources(r.source).map((s) => <option key={s} value={s}>{SOURCE_LABELS[s]}</option>)}
+                    </select>
+                    <Input aria-label="Reviewer first name" value={draft.reviewerName} onChange={(e) => setDraft({ ...draft, reviewerName: e.target.value })} placeholder="Reviewer first name" className="h-10 rounded-none" />
+                    <select aria-label="Rating" value={draft.rating ?? ""} onChange={(e) => setDraft({ ...draft, rating: e.target.value === "" ? null : Number(e.target.value) })} className="h-10 rounded-none border border-basalt/20 bg-paper px-2 text-sm">
+                      {draft.rating == null && <option value="">No rating</option>}
+                      {Array.from({ length: ratingScaleFor(draft.source) }, (_, i) => ratingScaleFor(draft.source) - i).map((n) => (
+                        <option key={n} value={n}>{n} {ratingScaleFor(draft.source) === 10 ? "/ 10" : "★"}</option>
+                      ))}
+                    </select>
+                    <Input aria-label="Review date" type="date" value={draft.reviewDate ?? ""} onChange={(e) => setDraft({ ...draft, reviewDate: e.target.value || null })} className="h-10 rounded-none" />
+                  </div>
+                  <Textarea aria-label="Review text" rows={4} value={draft.body} onChange={(e) => setDraft({ ...draft, body: e.target.value })} className="rounded-none text-base" />
+                  <div className="grid gap-1">
+                    <Label className="text-xs font-semibold text-basalt/60">Show on</Label>
+                    <select value={draft.listingId ?? ""} onChange={(e) => setDraft({ ...draft, listingId: e.target.value || null })} className="h-10 max-w-md rounded-none border border-basalt/20 bg-paper px-2 text-sm">
+                      <option value="">All my listings</option>
+                      {editListings(draft.source).map((l) => <option key={l.id} value={(l as { id: string }).id}>{l.title}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button onClick={saveEdit} disabled={savingEdit} className="rounded-none bg-apricot font-semibold text-white hover:bg-apricot/90">{savingEdit ? "Saving…" : "Save changes"}</Button>
+                    <Button onClick={cancelEdit} disabled={savingEdit} variant="outline" className="rounded-none border-basalt/20">Cancel</Button>
+                  </div>
+                </li>
+              ) : (
               <li key={r.id} className="flex items-start gap-3 border border-basalt/10 bg-paper px-3 py-2">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 text-xs">
@@ -186,9 +265,13 @@ export function ExternalReviewsManager() {
                   </div>
                   <p className="mt-0.5 line-clamp-2 text-sm text-basalt/70">{r.body}</p>
                 </div>
-                <button type="button" onClick={() => remove(r.id)} className="shrink-0 text-basalt/40 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button type="button" onClick={() => startEdit(r)} aria-label={`Edit ${r.reviewerName}'s review`} title="Edit" className="grid h-8 w-8 place-items-center rounded-full text-basalt/45 hover:bg-basalt/5 hover:text-basalt"><Pencil className="h-4 w-4" /></button>
+                  <button type="button" onClick={() => remove(r.id)} aria-label={`Remove ${r.reviewerName}'s review`} title="Remove" className="grid h-8 w-8 place-items-center rounded-full text-basalt/40 hover:bg-destructive/5 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
+                </div>
               </li>
-            ))}
+              ),
+            )}
           </ul>
         )}
       </div>

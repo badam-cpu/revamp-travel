@@ -367,7 +367,6 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
       <SiteHeader />
       <main>
         <div className="container relative flex items-center justify-between py-5">
-          <span className="absolute left-1/2 top-1/2 hidden h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full bg-apricot/18 md:block" />
           <Link href="/explore" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-basalt/55 hover:text-apricot"><ArrowLeft className="h-4 w-4" /> Back to places</Link>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="rounded-none border-basalt/15 bg-paper" onClick={() => shareCurrentPage(listing.title)}><Share2 className="mr-2 h-4 w-4" /> Share</Button>
