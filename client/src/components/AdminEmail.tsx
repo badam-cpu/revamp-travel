@@ -60,6 +60,29 @@ const TEMPLATES: { value: string; label: string; subject: string; body: string }
 
 interface CampaignRow { id: string; subject: string; audience: string; channel?: string | null; recipient_count: number; sent_count: number; created_at: string }
 
+/**
+ * Where a new block ([[button/image/stat: …]]) goes when the admin hasn't put
+ * the cursor in the message: just above the sign-off ("Warmly,\nThe Revamp
+ * team"), else at the end — never at the very top.
+ */
+function smartBlockPosition(text: string): number {
+  const trimmed = text.replace(/\s+$/, "");
+  const lastBreak = trimmed.lastIndexOf("\n\n");
+  if (lastBreak < 0) return trimmed.length;
+  const last = trimmed.slice(lastBreak + 2);
+  const lines = last.split("\n");
+  const looksLikeSignOff = lines.length <= 3 && lines.every((l) => l.trim().length <= 60) && !last.includes("[[");
+  return looksLikeSignOff ? lastBreak + 2 : trimmed.length;
+}
+/** `text` with `line` placed at [start, end) on its own line (blank lines around it). */
+function withBlock(text: string, line: string, start: number, end = start): { text: string; caret: number } {
+  const before = text.slice(0, start).replace(/[ \t]*$/, "");
+  const after = text.slice(end).replace(/^[ \t]*/, "");
+  const pre = before && !before.endsWith("\n\n") ? (before.endsWith("\n") ? "\n" : "\n\n") : "";
+  const post = after && !after.startsWith("\n\n") ? (after.startsWith("\n") ? "\n" : "\n\n") : "";
+  return { text: `${before}${pre}${line}${post}${after}`, caret: (before + pre + line).length };
+}
+
 /** Share of people sent who did it, each person counted once ("0%" before any event). */
 const pct = (n: number | undefined, of: number) => (n && of ? `${Math.round((n / of) * 100)}%` : "0%");
 
@@ -92,6 +115,11 @@ export function AdminEmail() {
   const [statValue, setStatValue] = useState("");
   const [statLabel, setStatLabel] = useState("");
   const [stats, setStats] = useState<Record<string, Record<string, number>>>({});
+  // Where the admin last put the cursor in the message (null = never → blocks go above the sign-off).
+  const cursorRef = useRef<{ start: number; end: number } | null>(null);
+  const rememberCursor = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    cursorRef.current = { start: e.currentTarget.selectionStart, end: e.currentTarget.selectionEnd };
+  };
   const [generating, setGenerating] = useState(false);
   const [preview, setPreview] = useState<{ count: number; sample: string[] } | null>(null);
   const [counting, setCounting] = useState(false);
@@ -191,6 +219,7 @@ export function AdminEmail() {
     if (!t || !t.value) return;
     setSubject(t.subject);
     setBody(t.body);
+    cursorRef.current = null;
   };
 
   const insertTag = () => {
@@ -206,18 +235,44 @@ export function AdminEmail() {
   /** Put a block line ([[button/image/stat: …]]) at the cursor, on its own line. */
   const insertBlock = (line: string) => {
     const el = bodyRef.current;
-    const start = el?.selectionStart ?? body.length;
-    const end = el?.selectionEnd ?? body.length;
-    const before = body.slice(0, start).replace(/[ \t]*$/, "");
-    const after = body.slice(end).replace(/^[ \t]*/, "");
-    const pre = before && !before.endsWith("\n\n") ? (before.endsWith("\n") ? "\n" : "\n\n") : "";
-    const post = after && !after.startsWith("\n") ? "\n\n" : "";
-    setBody(`${before}${pre}${line}${post}${after}`);
+    const cur = cursorRef.current;
+    const pos = cur ? cur : { start: smartBlockPosition(body), end: smartBlockPosition(body) };
+    const { text, caret } = withBlock(body, line, Math.min(pos.start, body.length), Math.min(pos.end, body.length));
+    setBody(text);
+    cursorRef.current = { start: caret, end: caret };
     requestAnimationFrame(() => {
       if (!el) return;
       el.focus();
-      el.selectionStart = el.selectionEnd = (before + pre + line).length;
+      el.selectionStart = el.selectionEnd = caret;
     });
+  };
+
+  /**
+   * A stat / image / button filled in but never added to the message (easy to
+   * miss — the panel and the message box are separate). Before Preview, a test
+   * or the send, offer to add them; returns the message to use.
+   */
+  const resolvePending = (): string => {
+    const lines: { line: string; what: string }[] = [];
+    if (statValue.trim() && statLabel.trim()) lines.push({ line: statLine(statValue, statLabel), what: `the stat "${statValue.trim()}"` });
+    if (httpsUrl(imgUrl.trim()) && imgAlt.trim()) lines.push({ line: imageLine(imgUrl.trim(), imgAlt, httpsUrl(imgLink.trim())), what: "an image" });
+    if (btnLabel.trim() && httpsUrl(btnUrl.trim())) lines.push({ line: buttonLine(btnLabel, btnUrl, btnStyle), what: `the button "${btnLabel.trim()}"` });
+    if (!lines.length) return body;
+    const list = lines.map((l) => l.what).join(" and ");
+    if (!window.confirm(`You filled in ${list} but didn't add ${lines.length > 1 ? "them" : "it"} to the message yet. Add ${lines.length > 1 ? "them" : "it"} now (above the sign-off)?`)) return body;
+    let next = body;
+    for (const l of lines) next = withBlock(next, l.line, smartBlockPosition(next)).text;
+    setBody(next);
+    setStatValue("");
+    setStatLabel("");
+    setImgUrl("");
+    setImgAlt("");
+    setImgLink("");
+    setBtnLabel("");
+    setStatOpen(false);
+    setImgOpen(false);
+    setBtnOpen(false);
+    return next;
   };
   const openImagePanel = () => {
     setImgOpen((o) => !o);
@@ -249,23 +304,9 @@ export function AdminEmail() {
   const insertButton = () => {
     if (!btnLabel.trim()) return toast("Give the button a label, e.g. “Explore stays”.");
     if (!httpsUrl(btnUrl.trim())) return toast("The button link must start with https://");
-    const line = buttonLine(btnLabel, btnUrl, btnStyle);
-    const el = bodyRef.current;
-    const start = el?.selectionStart ?? body.length;
-    const end = el?.selectionEnd ?? body.length;
-    const before = body.slice(0, start).replace(/[ \t]*$/, "");
-    const after = body.slice(end).replace(/^[ \t]*/, "");
-    const pre = before && !before.endsWith("\n\n") ? (before.endsWith("\n") ? "\n" : "\n\n") : "";
-    const post = after && !after.startsWith("\n") ? "\n\n" : "";
-    const next = `${before}${pre}${line}${post}${after}`;
-    setBody(next);
+    insertBlock(buttonLine(btnLabel, btnUrl, btnStyle));
     setBtnOpen(false);
     setBtnLabel("");
-    requestAnimationFrame(() => {
-      if (!el) return;
-      el.focus();
-      el.selectionStart = el.selectionEnd = (before + pre + line).length;
-    });
   };
 
   const generate = async () => {
@@ -297,6 +338,7 @@ export function AdminEmail() {
 
   const sendTest = async () => {
     const to = testTo.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean);
+    const body = resolvePending();
     if (!subject.trim() || !body.trim()) return setTestResult({ ok: false, text: "Add a subject and a message first (step 2)." });
     if (!to.length) return setTestResult({ ok: false, text: "Add an email address to send the test to." });
     const v = cleanVisual();
@@ -337,6 +379,7 @@ export function AdminEmail() {
   };
 
   const doSend = async () => {
+    const body = resolvePending();
     if (!subject.trim() || !body.trim()) return toast("Add a subject and a message.");
     const count = preview?.count;
     const who = isTg ? "linked Telegram chat" : "recipient";
@@ -365,7 +408,7 @@ export function AdminEmail() {
             : {}),
       });
       toast.success(`Sent to ${r.sent} of ${r.total}${r.failed ? ` (${r.failed} failed)` : ""}.`);
-      setSubject(""); setBody(""); setPrompt(""); setPreheader(""); setVisual({ layout: "title_body" }); setTestResult(null);
+      setSubject(""); setBody(""); setPrompt(""); setPreheader(""); setVisual({ layout: "title_body" }); setTestResult(null); cursorRef.current = null;
       loadCampaigns();
     } catch (e) {
       toast(e instanceof ApiError || e instanceof Error ? e.message : "Couldn't send.");
@@ -553,7 +596,7 @@ export function AdminEmail() {
                           <button key={k} type="button" aria-pressed={btnStyle === k} onClick={() => setBtnStyle(k)} className={cn("px-3 py-1 text-xs font-semibold", btnStyle === k ? "bg-basalt text-paper" : "text-basalt/55 hover:text-basalt")}>{l}</button>
                         ))}
                       </div>
-                      <Button type="button" onClick={insertButton} className="h-9 rounded-none bg-basalt text-paper hover:bg-basalt/90">Insert at cursor</Button>
+                      <Button type="button" onClick={insertButton} className="h-9 rounded-none bg-basalt text-paper hover:bg-basalt/90">Add to message</Button>
                     </div>
                     <p className="text-xs text-basalt/50">It shows in the message as a <code>[[button: …]]</code> line — edit or delete that line to change it. Buttons are centred; one or two per email work best.</p>
                   </div>
@@ -595,7 +638,7 @@ export function AdminEmail() {
                         <Label htmlFor="img-link" className="text-xs font-semibold">Link when tapped <span className="font-normal text-basalt/45">(optional)</span></Label>
                         <Input id="img-link" type="url" value={imgLink} onChange={(e) => setImgLink(e.target.value)} placeholder="https://revampvacations.com/…" className="h-10 rounded-none bg-paper" />
                       </div>
-                      <Button type="button" onClick={insertImage} className="h-9 rounded-none bg-basalt text-paper hover:bg-basalt/90">Insert at cursor</Button>
+                      <Button type="button" onClick={insertImage} className="h-9 rounded-none bg-basalt text-paper hover:bg-basalt/90">Add to message</Button>
                     </div>
                     <p className="text-xs text-basalt/50">It shows in the message as an <code>[[image: …]]</code> line — move or delete that line to change it. Use it for a second picture mid-message, like a chart.</p>
                   </div>
@@ -613,12 +656,12 @@ export function AdminEmail() {
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-xs text-basalt/50">Stats right after each other sit side by side (up to 3). Only use real numbers you can back up.</p>
-                      <Button type="button" onClick={insertStat} className="h-9 rounded-none bg-basalt text-paper hover:bg-basalt/90">Insert at cursor</Button>
+                      <p className="text-xs text-basalt/50">Goes where your cursor is in the message (or just above the sign-off). Stats right after each other sit side by side (up to 3). Only use real numbers you can back up.</p>
+                      <Button type="button" onClick={insertStat} className="h-9 rounded-none bg-basalt text-paper hover:bg-basalt/90">Add to message</Button>
                     </div>
                   </div>
                 )}
-                <Textarea id="cm-body" ref={bodyRef} rows={12} value={body} onChange={(e) => setBody(e.target.value)} placeholder={"Hi {first_name},\n\nWe just added new stays in Dilijan…\n\n[Explore now](https://revampvacations.com/explore)"} className="rounded-none text-base" />
+                <Textarea id="cm-body" ref={bodyRef} rows={12} value={body} onChange={(e) => { setBody(e.target.value); rememberCursor(e); }} onSelect={rememberCursor} onClick={rememberCursor} onKeyUp={rememberCursor} placeholder={"Hi {first_name},\n\nWe just added new stays in Dilijan…\n\n[Explore now](https://revampvacations.com/explore)"} className="rounded-none text-base" />
               </div>
             </div>
           </Step>
@@ -636,7 +679,7 @@ export function AdminEmail() {
           <Step n={4} title="Check & send">
             <div className="grid gap-5">
               <div>
-                <Button type="button" variant="outline" onClick={() => setShowPreview(true)} className="h-10 rounded-none border-basalt/25">
+                <Button type="button" variant="outline" onClick={() => { resolvePending(); setShowPreview(true); }} className="h-10 rounded-none border-basalt/25">
                   <Eye className="mr-2 h-4 w-4" /> Preview {isTg ? "message" : "email"}
                 </Button>
               </div>

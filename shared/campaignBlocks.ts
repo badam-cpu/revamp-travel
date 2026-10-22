@@ -17,8 +17,8 @@
  *
  * Stats (2026-10-22): a line on its own
  *     [[stat: 22% | of travelers who saw similar listings clicked "Book later"]]
- * renders as a number card (big orange number, short label). Consecutive stat
- * lines sit side by side, up to 3 in a row — real text, so they read with
+ * renders as a number card (big orange number, short label). Stat lines with
+ * nothing but blank lines between them sit side by side, up to 3 in a row — real text, so they read with
  * images off and on every screen. On Telegram both become plain lines.
  */
 import { renderMarkdown } from "./markdown.js";
@@ -64,16 +64,21 @@ export function imageHtml(src: string, alt: string, link: string | null): string
   return `<div style="margin:22px 0;">${inner}</div>`;
 }
 
-/** 1–3 number cards in one row (an email-safe table; equal widths). */
+/**
+ * 1–3 number cards in one row (an email-safe table). Gaps are spacer cells, not
+ * border-spacing, so the cards line up with the text's left and right edges.
+ */
 export function statsHtml(stats: { value: string; label: string }[]): string {
-  const w = Math.floor(100 / stats.length);
+  const gap = 2; // % of the row between cards
+  const w = Math.floor((100 - gap * (stats.length - 1)) / stats.length);
+  const spacer = `<td width="${gap}%" style="font-size:0;line-height:0;">&nbsp;</td>`;
   const cells = stats
     .map(
       (st) =>
-        `<td width="${w}%" valign="top" style="background:#FDF1EB;border-radius:12px;padding:16px 16px 18px;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;"><div style="font-size:32px;line-height:1.05;font-weight:800;letter-spacing:-.02em;color:#F15822;">${esc(st.value)}</div><div style="margin-top:6px;font-size:13px;line-height:1.45;color:#4a463f;">${esc(st.label)}</div></td>`,
+        `<td class="rv-stat" width="${w}%" valign="top" style="background:#FDF1EB;border-radius:12px;padding:16px 16px 18px;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;"><div style="font-size:32px;line-height:1.05;font-weight:800;letter-spacing:-.02em;color:#F15822;">${esc(st.value)}</div><div style="margin-top:6px;font-size:13px;line-height:1.45;color:#4a463f;">${esc(st.label)}</div></td>`,
     )
-    .join("");
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;border-spacing:8px 0;margin:18px 0;"><tr>${cells}</tr></table>`;
+    .join(spacer);
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;border-spacing:0;margin:18px 0;"><tr>${cells}</tr></table>`;
 }
 
 /** Image/stat lines → plain text lines (Telegram): images dropped, a stat as "**22%** — label". */
@@ -150,6 +155,9 @@ export function renderCampaignBody(md: string, mapUrl: (u: string) => string = (
       stats.push({ value: st[1], label: st[2] });
       continue;
     }
+    // Stats separated only by blank lines still share a row (the composer adds
+    // each block with a blank line around it).
+    if (stats.length && !line.trim()) continue;
     flushStats();
     const m = line.match(BUTTON_LINE);
     const url = m ? httpsOnly(m[3]) : null;
