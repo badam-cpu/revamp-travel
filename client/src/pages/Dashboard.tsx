@@ -24,6 +24,7 @@
 import { PriceLog } from "@/components/PriceLog";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, CalendarDays, Check, ChevronDown, ChevronLeft, ExternalLink, MoreHorizontal, PauseCircle, PlayCircle, Copy, CreditCard, FileText, Footprints, Gift, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, PanelLeftClose, PanelLeftOpen, Pencil, Plug, Plus, QrCode, RefreshCw, Route, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
 import { Inbox } from "@/components/Inbox";
 import { PartnerHub } from "@/components/PartnerHub";
@@ -2034,6 +2035,33 @@ const OPERATOR_SECTIONS: { key: OperatorSection; label: string; icon: typeof Hom
   { key: "settings", label: "Settings", icon: Settings },
 ];
 
+/** The operator menu's links — the desktop sidebar and the phone sheet share them. */
+function SectionNavItems({ section, collapsed, onGo }: { section: OperatorSection; collapsed: boolean; onGo: (s: OperatorSection) => void }) {
+  return (
+    <>
+      <Link href="/" title={collapsed ? "Homepage" : undefined} className={cn("flex items-center gap-2.5 whitespace-nowrap px-3 py-2.5 text-sm font-semibold text-basalt/60 transition-colors hover:bg-chalk hover:text-basalt", collapsed && "lg:justify-center lg:px-0")}>
+        <Home className="h-4 w-4 shrink-0" /> <span className={cn(collapsed && "lg:sr-only")}>Homepage</span>
+      </Link>
+      {OPERATOR_SECTIONS.map(({ key, label, icon: Icon }) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => onGo(key)}
+          aria-current={section === key ? "page" : undefined}
+          title={collapsed ? label : undefined}
+          className={cn(
+            "flex items-center gap-2.5 whitespace-nowrap px-3 py-2.5 text-left text-sm font-semibold transition-colors",
+            section === key ? "bg-basalt text-paper" : "text-basalt/60 hover:bg-chalk hover:text-basalt",
+            collapsed && "lg:justify-center lg:px-0",
+          )}
+        >
+          <Icon className="h-4 w-4 shrink-0" /> <span className={cn(collapsed && "lg:sr-only")}>{label}</span>
+        </button>
+      ))}
+    </>
+  );
+}
+
 /** Bookings: the reservations list with its filters (OperatorBookings). */
 function BookingsSection() {
   return (
@@ -2046,7 +2074,7 @@ function BookingsSection() {
 
 const CALENDAR_VIEWS = [
   { key: "timeline", label: "Timeline", short: "Timeline", blurb: "Your listings across the calendar — bookings and synced-blocked dates at a glance." },
-  { key: "calendar", label: "Prices & availability", short: "Prices", blurb: "Prices and availability for all your listings. Select a day, or drag across several, to change the price or block dates." },
+  { key: "calendar", label: "Prices & availability", short: "Prices", blurb: "Prices and availability for all your listings. Select one day or several to change the price or block dates." },
   { key: "pricelog", label: "Price log", short: "Price log", blurb: "Every change to your prices — what changed, when, and who or what made it." },
 ] as const;
 type CalendarView = (typeof CALENDAR_VIEWS)[number]["key"];
@@ -2231,7 +2259,7 @@ function DashboardContent() {
   };
 
   // Desktop menu can shrink to an icon rail (more room for the timeline/calendar);
-  // remembered per browser. Phones keep the horizontal scrolling menu.
+  // remembered per browser. Below lg the menu opens from the left (a sheet).
   const [navCollapsed, setNavCollapsed] = useState(() => {
     try {
       return localStorage.getItem("revamp.dashboardNavCollapsed") === "1";
@@ -2249,6 +2277,8 @@ function DashboardContent() {
       return !c;
     });
 
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
   const mine = useMemo(() => listings.filter((l) => l.operatorId === user?.id), [listings, user?.id]);
   const published = mine.filter((l) => l.status === "published").length;
   const pending = mine.filter((l) => l.status === "pending").length;
@@ -2263,10 +2293,13 @@ function DashboardContent() {
   return (
     <div className="min-h-screen bg-paper text-basalt">
       <SiteHeader minimal wide />
-      <main className="mx-auto w-full max-w-[1680px] px-4 py-10 sm:px-6 lg:px-10 lg:py-14">
-        <div className={cn("grid gap-8", navCollapsed ? "lg:grid-cols-[44px_minmax(0,1fr)] lg:gap-6" : "lg:grid-cols-[210px_minmax(0,1fr)]")}>
-          <aside className="lg:sticky lg:top-[96px] lg:self-start">
-            <div className={cn("hidden items-center lg:flex", navCollapsed ? "justify-center" : "justify-between pl-3")}>
+      <main className="mx-auto w-full max-w-[1680px] px-4 py-6 sm:px-6 sm:py-10 lg:px-10 lg:py-14">
+        {/* grid-cols-[minmax(0,1fr)]: without an explicit column the implicit one
+            sizes to its widest content (a calendar grid is thousands of px), and
+            the whole page ends up wider than a phone. */}
+        <div className={cn("grid grid-cols-[minmax(0,1fr)] gap-5", navCollapsed ? "lg:grid-cols-[44px_minmax(0,1fr)] lg:gap-6" : "lg:grid-cols-[210px_minmax(0,1fr)] lg:gap-8")}>
+          <aside className="hidden lg:sticky lg:top-[96px] lg:block lg:self-start">
+            <div className={cn("flex items-center", navCollapsed ? "justify-center" : "justify-between pl-3")}>
               {!navCollapsed && <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-basalt/40">Operator</p>}
               <button
                 type="button"
@@ -2279,28 +2312,49 @@ function DashboardContent() {
                 {navCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
               </button>
             </div>
-            <nav className="mt-0 flex gap-1 overflow-x-auto pb-1 lg:mt-3 lg:flex-col lg:overflow-visible lg:pb-0">
-              <Link href="/" title={navCollapsed ? "Homepage" : undefined} className={cn("flex items-center gap-2.5 whitespace-nowrap px-3 py-2.5 text-sm font-semibold text-basalt/60 transition-colors hover:bg-chalk hover:text-basalt", navCollapsed && "lg:justify-center lg:px-0")}>
-                <Home className="h-4 w-4 shrink-0" /> <span className={cn(navCollapsed && "lg:sr-only")}>Homepage</span>
-              </Link>
-              {OPERATOR_SECTIONS.map(({ key, label, icon: Icon }) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => go(key)}
-                  aria-current={section === key}
-                  title={navCollapsed ? label : undefined}
-                  className={cn(
-                    "flex items-center gap-2.5 whitespace-nowrap px-3 py-2.5 text-sm font-semibold transition-colors",
-                    section === key ? "bg-basalt text-paper" : "text-basalt/60 hover:bg-chalk hover:text-basalt",
-                    navCollapsed && "lg:justify-center lg:px-0",
-                  )}
-                >
-                  <Icon className="h-4 w-4 shrink-0" /> <span className={cn(navCollapsed && "lg:sr-only")}>{label}</span>
-                </button>
-              ))}
+            <nav aria-label="Dashboard" className="mt-3 flex flex-col gap-1">
+              <SectionNavItems section={section} collapsed={navCollapsed} onGo={go} />
             </nav>
           </aside>
+
+          {/* Phones/tablets: the same menu, from the left, behind a "where am I" button. */}
+          <div className="lg:hidden">
+            <button
+              type="button"
+              onClick={() => setMobileNavOpen(true)}
+              aria-haspopup="dialog"
+              aria-expanded={mobileNavOpen}
+              className="flex h-12 w-full items-center gap-2.5 rounded-none border border-basalt/15 bg-paper px-4 text-sm font-semibold hover:border-basalt/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-apricot"
+            >
+              {(() => {
+                const cur = OPERATOR_SECTIONS.find((x) => x.key === section) ?? OPERATOR_SECTIONS[0];
+                return (
+                  <>
+                    <cur.icon className="h-4 w-4 shrink-0" />
+                    <span className="min-w-0 flex-1 truncate text-left">{cur.label}</span>
+                  </>
+                );
+              })()}
+              <span className="text-xs font-semibold text-basalt/55">Menu</span>
+              <ChevronDown className="h-4 w-4 shrink-0 text-basalt/55" />
+            </button>
+            <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+              <SheetContent side="left" className="w-[82%] max-w-xs gap-0 overflow-y-auto bg-paper p-0">
+                <SheetTitle className="px-5 pb-2 pt-5 text-[10px] font-bold uppercase tracking-[0.16em] text-basalt/40">Operator</SheetTitle>
+                <SheetDescription className="sr-only">Go to another part of your dashboard.</SheetDescription>
+                <nav aria-label="Dashboard" className="flex flex-col gap-1 px-2 pb-6">
+                  <SectionNavItems
+                    section={section}
+                    collapsed={false}
+                    onGo={(k) => {
+                      setMobileNavOpen(false);
+                      go(k);
+                    }}
+                  />
+                </nav>
+              </SheetContent>
+            </Sheet>
+          </div>
 
           <div>
             {section === "overview" && (

@@ -105,6 +105,25 @@ export function CalendarToolbar({
   );
 }
 
+/**
+ * The colour key under the toolbar. Always shown from sm up; on phones it folds
+ * behind a "Colour key" toggle so the grid isn't pushed below the fold.
+ */
+export function CalendarLegend({ children, className }: { children: React.ReactNode; className?: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mb-3">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="inline-flex h-8 items-center gap-1 text-xs font-semibold text-basalt/60 hover:text-basalt sm:hidden">
+        Colour key
+        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
+      </button>
+      <ul aria-label="Legend" className={cn("flex-wrap items-center gap-x-4 gap-y-2 text-xs sm:flex", open ? "mt-1 flex" : "hidden", className)}>
+        {children}
+      </ul>
+    </div>
+  );
+}
+
 /** A labelled pill select for the toolbar (Page size, Group by). */
 export function ToolbarSelect<T extends string | number>({
   id,

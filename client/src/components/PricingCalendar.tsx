@@ -162,6 +162,14 @@ export function PricingCalendar({ listing, room }: { listing: LiveListing; room?
   const extendDrag = (d: string) => {
     if (dragging.current && selectable(d)) setSel((s) => (s ? { ...s, b: d } : s));
   };
+  // Touch/pen never selects on touch-down (that fights scrolling the page): a
+  // tap picks a day, a second tap makes it a range, tapping the day again clears.
+  const [touch, setTouch] = useState(false);
+  const tap = (d: string) => {
+    if (!selectable(d)) return;
+    if (sel && sel.a === sel.b) setSel(d === sel.a ? null : { ...sel, b: d });
+    else setSel({ a: d, b: d });
+  };
   useEffect(() => {
     const up = () => (dragging.current = false);
     window.addEventListener("pointerup", up);
@@ -290,7 +298,7 @@ export function PricingCalendar({ listing, room }: { listing: LiveListing; room?
   return (
     <div>
       {/* Controls */}
-      <div className="mb-4 flex items-center gap-3">
+      <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1">
         <div className="flex items-center gap-1">
           <button type="button" onClick={() => setMonth((m) => (m.m === 0 ? { y: m.y - 1, m: 11 } : { y: m.y, m: m.m - 1 }))} aria-label="Previous month" className="grid h-8 w-8 place-items-center border border-basalt/15 hover:border-apricot hover:text-apricot"><ChevronLeft className="h-4 w-4" /></button>
           <button type="button" onClick={() => setMonth((m) => (m.m === 11 ? { y: m.y + 1, m: 0 } : { y: m.y, m: m.m + 1 }))} aria-label="Next month" className="grid h-8 w-8 place-items-center border border-basalt/15 hover:border-apricot hover:text-apricot"><ChevronRight className="h-4 w-4" /></button>
@@ -345,7 +353,11 @@ export function PricingCalendar({ listing, room }: { listing: LiveListing; room?
           return (
             <div
               key={d}
-              onPointerDown={() => canSelect && startDrag(d)}
+              onPointerDown={(e) => {
+                setTouch(e.pointerType !== "mouse");
+                if (e.pointerType === "mouse" && canSelect) startDrag(d);
+              }}
+              onClick={() => touch && tap(d)}
               onPointerEnter={() => extendDrag(d)}
               className={cn(
                 "relative min-h-[74px] border-b border-r border-basalt/10 p-1.5 text-left transition-colors",
@@ -381,6 +393,7 @@ export function PricingCalendar({ listing, room }: { listing: LiveListing; room?
             {selNights} day{selNights === 1 ? "" : "s"} selected
             <span className="ml-2 font-normal text-basalt/55">{selStart}{selNights > 1 ? ` → ${selEnd}` : ""}</span>
           </p>
+          {touch && selNights === 1 && <p className="mt-0.5 text-xs text-basalt/55">Tap another day to select a range.</p>}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="text-sm text-basalt/55">֏</span>
             <Input type="number" min={0} value={priceInput} onChange={(e) => setPriceInput(e.target.value)} placeholder={`price${unit} (AMD)`} className="h-9 w-44 rounded-none" />

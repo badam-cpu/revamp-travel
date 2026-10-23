@@ -6,8 +6,11 @@
  * type) is a grey cell with a diagonal stroke.
  *
  * Select one day, or drag / Shift+click across several in a row, and a panel
- * opens (right side on desktop, bottom sheet on phones) to set the price for
- * those dates, go back to the base price, or block / open them. The same
+ * opens on the right (desktop) to set the price for those dates, go back to the
+ * base price, or block / open them. Below desktop width the selection shows in
+ * a bar at the bottom and "Edit" opens the same panel as a bottom sheet. Touch
+ * never selects on touch-down (that would fight scrolling the grid): a tap
+ * picks a day, and a second tap in the same row makes it a range. The same
  * writes as the single-listing calendar (PricingCalendar):
  *   - listing: seasonal_rates (per-date price) + manual_blocked_ranges
  *   - hotel room type (0100): room_types.seasonal_rates, and a block closes
@@ -27,7 +30,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useListings, type BlockedRange, type LiveListing } from "@/contexts/ListingsContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import { applyGrouping, CalendarToolbar, GROUP_OPTIONS, groupOptionsFor, monthsOf, remember, remembered, rollingDays, ToolbarSelect, useColumnWindow, useCompactPrice, type GroupBy, type TypeFilter } from "@/components/CalendarToolbar";
+import { applyGrouping, CalendarLegend, CalendarToolbar, GROUP_OPTIONS, groupOptionsFor, monthsOf, remember, remembered, rollingDays, ToolbarSelect, useColumnWindow, useCompactPrice, type GroupBy, type TypeFilter } from "@/components/CalendarToolbar";
 import { fetchRoomTypes, updateRoomTypeRates, updateRoomUnitCalendar } from "@/lib/roomTypes";
 import { userMessage } from "@/lib/api";
 import type { RoomType, RoomUnit, SeasonalRate } from "@shared/listings";
@@ -343,6 +346,26 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
     if (extend && sel && sel.key === key) setSel({ ...sel, b: d });
     else setSel({ key, a: d, b: d });
   };
+  // Touch/pen: a tap picks a day; a second tap in the same row extends it to a
+  // range; tapping the single selected day again clears it.
+  const pointerKind = useRef("mouse");
+  const tap = (key: string, d: string) => {
+    if (d < today) return;
+    if (sel && sel.key === key && sel.a === sel.b) setSel(d === sel.a ? null : { ...sel, b: d });
+    else setSel({ key, a: d, b: d });
+  };
+  // Below desktop width the panel is a bottom sheet, opened from the selection bar.
+  const [sheetOpen, setSheetOpen] = useState(false);
+  useEffect(() => {
+    if (!sel) setSheetOpen(false);
+  }, [sel]);
+  // While the phone selection bar is up, the floating Aha AI button (bottom
+  // right) would sit on top of "Edit" — it hides via the body class.
+  const barShown = !desktop && !!selRow && !sheetOpen;
+  useEffect(() => {
+    document.body.classList.toggle("cal-selecting", barShown);
+    return () => document.body.classList.remove("cal-selecting");
+  }, [barShown]);
   useEffect(() => {
     if (!sel) return;
     const esc = (e: KeyboardEvent) => e.key === "Escape" && setSel(null);
@@ -513,10 +536,12 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
           aria-label={`${row.label}, ${fmtDay(d)}, ${why ? why.toLowerCase() : "available"}${priced ? `, ${compact(s.cents)}${s.custom ? " custom price" : ""}` : ""}${s.note ? `, ${s.note}` : ""}`}
           onFocus={() => setActive({ r, c: i })}
           onPointerDown={(e) => {
-            if (past || e.button !== 0) return;
+            pointerKind.current = e.pointerType;
+            if (past || e.button !== 0 || e.pointerType !== "mouse") return;
             dragging.current = true;
             pick(row.key, d, e.shiftKey);
           }}
+          onClick={() => pointerKind.current !== "mouse" && tap(row.key, d)}
           onPointerEnter={() => dragging.current && !past && sel?.key === row.key && setSel((x) => (x ? { ...x, b: d } : x))}
           className={cn(
             "absolute top-0 select-none border-r border-basalt/[0.08] outline-none focus-visible:z-[5] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-apricot",
@@ -597,12 +622,12 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
           />
         </div>
       </CalendarToolbar>
-      <ul className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-basalt/60" aria-label="Legend">
+      <CalendarLegend className="text-basalt/60">
         <li className="inline-flex items-center gap-1.5"><span className="text-[13px] tabular-nums text-basalt">֏30k</span> Your price</li>
         <li className="inline-flex items-center gap-1.5"><span className="text-[13px] font-semibold tabular-nums text-apricot">֏35k</span> Custom price for that date</li>
-        <li className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-apricot" /> Holiday or event (hover the date)</li>
+        <li className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-apricot" /> Holiday or event (hover or tap the date)</li>
         <li className="inline-flex items-center gap-1.5"><span className="cal-unavail h-4 w-6 border border-basalt/10" /> Not available — booked, synced from another site, or blocked</li>
-      </ul>
+      </CalendarLegend>
 
       <div className="flex items-start gap-4">
         <div
@@ -628,7 +653,7 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
                 const monthStart = i === 0 || dt.getUTCDate() === 1;
                 const evs = eventsOn(events, d);
                 return (
-                  <div key={d} role="columnheader" title={evs.length ? evs.map((e) => e.title).join(" · ") : undefined} aria-label={`${fmtDay(d)}${isToday ? ", today" : ""}${evs.length ? `, ${evs.map((e) => e.title).join(", ")}` : ""}`} style={{ width: CELL_W }} className={cn("relative flex shrink-0 flex-col items-center pb-1.5 pt-5", monthStart && i !== 0 && "border-l border-l-basalt/25")}>
+                  <div key={d} role="columnheader" title={evs.length ? evs.map((e) => e.title).join(" · ") : undefined} onClick={evs.length ? () => toast(`${fmtDay(d)}: ${evs.map((e) => e.title).join(" · ")}`) : undefined} aria-label={`${fmtDay(d)}${isToday ? ", today" : ""}${evs.length ? `, ${evs.map((e) => e.title).join(", ")}` : ""}`} style={{ width: CELL_W }} className={cn("relative flex shrink-0 flex-col items-center pb-1.5 pt-5", evs.length > 0 && "cursor-pointer", monthStart && i !== 0 && "border-l border-l-basalt/25")}>
                     {monthStart && (
                       <span aria-hidden className="absolute left-1.5 top-1 whitespace-nowrap text-[11px] font-bold uppercase tracking-wide text-basalt">
                         {dt.toLocaleDateString(undefined, { month: "short", year: dt.getUTCMonth() === 0 ? "numeric" : undefined, timeZone: "UTC" })}
@@ -736,8 +761,32 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
         </nav>
       )}
 
+      {!desktop && panel && !sheetOpen && (
+        <>
+          {/* Keeps the pager clear of the selection bar. */}
+          <div aria-hidden className="h-24" />
+          <div role="region" aria-label="Selected dates" className="fixed inset-x-0 bottom-0 z-40 border-t border-basalt/12 bg-paper px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
+            <div className="mx-auto flex max-w-xl items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">
+                  {selStart === selEnd ? fmtDay(selStart!) : `${fmtDay(selStart!)} – ${fmtDay(selEnd!)}`}
+                  <span className="font-normal text-basalt/60"> · {nightsLabel(selCount, selRow!)}</span>
+                </p>
+                <p className="truncate text-xs text-basalt/60">{selCount === 1 ? "Tap another day in this row to select a range" : selRow!.type ? `${selRow!.listing.title} · ${selRow!.label}` : selRow!.label}</p>
+              </div>
+              <button type="button" onClick={() => setSel(null)} className="h-11 shrink-0 px-3 text-sm font-semibold text-basalt/70 hover:text-basalt">
+                Clear
+              </button>
+              <button type="button" onClick={() => setSheetOpen(true)} className="h-11 shrink-0 rounded-none bg-apricot px-5 text-sm font-semibold text-white hover:bg-apricot/90">
+                Edit
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {!desktop && (
-        <Sheet open={!!panel} onOpenChange={(o) => !o && setSel(null)}>
+        <Sheet open={sheetOpen && !!panel} onOpenChange={(o) => !o && setSel(null)}>
           <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-[14px] p-0">
             <SheetTitle className="sr-only">Edit dates</SheetTitle>
             <SheetDescription className="sr-only">Change the price or availability of the selected dates.</SheetDescription>
