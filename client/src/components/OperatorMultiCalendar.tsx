@@ -638,6 +638,7 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
           setTypeFilter(t);
           setSel(null);
         }}
+        activeFilters={group !== "none" ? 1 : 0}
       >
         <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
           <ToolbarSelect
@@ -910,40 +911,46 @@ function SelectionPanel({
 
   return (
     <div className="p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-[11px] font-bold uppercase tracking-[0.12em] text-basalt/60">{row.type ? `${row.listing.title} · ${row.label}` : row.label}</p>
-          <h2 className="mt-1 font-display text-xl leading-tight tracking-[-0.02em]">
-            {start === end ? fmtDay(start) : `${fmtDay(start)} – ${fmtDay(end)}`}
-          </h2>
-          <p className="mt-0.5 text-sm text-basalt/60">{nightsLabel(count, row)}</p>
-        </div>
-        {closable && <button type="button" onClick={onClose} aria-label="Close" className="grid h-9 w-9 shrink-0 place-items-center rounded-full hover:bg-chalk focus-visible:outline-2 focus-visible:outline-apricot">
+      <div className="flex items-center justify-between gap-3">
+        <p className="min-w-0 truncate text-[11px] font-bold uppercase tracking-[0.12em] text-basalt/60">{row.type ? `${row.listing.title} · ${row.label}` : row.label}</p>
+        {closable && <button type="button" onClick={onClose} aria-label="Close" className="-mr-2 grid h-9 w-9 shrink-0 place-items-center rounded-full hover:bg-chalk focus-visible:outline-2 focus-visible:outline-apricot">
           <X className="h-4 w-4" />
         </button>}
       </div>
 
-      {/* Dates — pick the end (or a new start) here, like Airbnb's panel. */}
-      <div className="mt-4 grid grid-cols-2 gap-2">
+      {/* Dates — one Start | End box (Airbnb-style); each half opens the date picker. */}
+      <div className="mt-2 grid grid-cols-2 divide-x divide-basalt/15 rounded-[0.875rem] border border-basalt/15">
         {([
-          ["cal-start", "Start date", start, (v: string) => onRange(v, end < v ? v : end)],
-          ["cal-end", "End date", end, (v: string) => onRange(start, v)],
-        ] as const).map(([id, label, value, change]) => (
-          <div key={id} className="min-w-0">
-            <label htmlFor={id} className="text-xs font-semibold text-basalt/70">{label}</label>
+          ["cal-start", "Start", start, minDate, (v: string) => onRange(v, end < v ? v : end)],
+          ["cal-end", "End", end, start, (v: string) => onRange(start, v)],
+        ] as const).map(([id, label, value, min, change]) => (
+          <label key={id} htmlFor={id} className="relative block min-w-0 cursor-pointer px-3 py-2 first:rounded-l-[0.875rem] last:rounded-r-[0.875rem] hover:bg-chalk focus-within:bg-chalk focus-within:ring-2 focus-within:ring-inset focus-within:ring-basalt">
+            <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-basalt/55">{label}</span>
+            <span className="block truncate text-sm font-semibold">{fmtDay(value)}</span>
             <input
               id={id}
               type="date"
+              aria-label={`${label} date`}
               value={value}
-              min={id === "cal-end" ? start : minDate}
+              min={min}
               max={maxDate}
+              onClick={(e) => {
+                try {
+                  e.currentTarget.showPicker?.();
+                } catch {
+                  /* older browsers open it on their own */
+                }
+              }}
               onChange={(e) => e.target.value && change(e.target.value)}
-              className="mt-1 h-11 w-full min-w-0 rounded-[0.875rem] border border-basalt/15 bg-paper px-3 text-sm font-semibold tabular-nums outline-none focus:border-basalt"
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
             />
-          </div>
+          </label>
         ))}
       </div>
-      {count === 1 && <p className="mt-1.5 text-xs text-basalt/60">One day selected. Set an end date, or choose another day in this row.</p>}
+      <p className="mt-1.5 text-xs text-basalt/60">
+        {nightsLabel(count, row)}
+        {count === 1 && " · pick an end date to change several"}
+      </p>
 
       {(stats.booked > 0 || stats.synced > 0 || stats.full > 0) && (
         <p className="mt-3 border-l-2 border-basalt/20 pl-3 text-xs leading-5 text-basalt/70">

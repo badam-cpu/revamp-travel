@@ -2146,7 +2146,7 @@ function CalendarViewsSection() {
     <div>
       <PageHeader
         title="Calendar"
-        sub={blurb}
+        sub={<span className="hidden sm:inline">{blurb}</span>}
         actions={
           /* View switch — pills, same family as the toolbar below. Phones get
              the short labels so all three fit on one line. */

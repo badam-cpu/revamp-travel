@@ -655,6 +655,7 @@ export function OperatorBookingsTimeline() {
         types={availableTypes}
         type={typeFilter}
         onType={setTypeFilter}
+        activeFilters={group !== "none" ? 1 : 0}
       >
         <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
           <ToolbarSelect

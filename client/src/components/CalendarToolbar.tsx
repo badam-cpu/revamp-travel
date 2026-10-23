@@ -5,7 +5,8 @@
  * price used in both grids (֏45k / $116).
  */
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, SlidersHorizontal } from "lucide-react";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +43,25 @@ export function monthsOf(days: string[]): ToolbarMonth[] {
   return Array.from(seen.values());
 }
 
+function useIsPhone() {
+  const q = "(max-width: 639px)";
+  const [phone, setPhone] = useState(() => typeof window !== "undefined" && window.matchMedia(q).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(q);
+    const f = () => setPhone(mq.matches);
+    f();
+    mq.addEventListener("change", f);
+    return () => mq.removeEventListener("change", f);
+  }, []);
+  return phone;
+}
+
+/**
+ * On phones the toolbar is ONE row — Today · month · Filters — and the type
+ * chips plus `children` (Group by, Page size) move into a bottom sheet, so the
+ * grid starts on the first screen. `activeFilters` = how many of the children
+ * differ from their default (shown as a count on the Filters button).
+ */
 export function CalendarToolbar({
   onToday,
   months,
@@ -51,6 +71,7 @@ export function CalendarToolbar({
   type,
   onType,
   children,
+  activeFilters = 0,
 }: {
   onToday: () => void;
   months: ToolbarMonth[];
@@ -60,13 +81,35 @@ export function CalendarToolbar({
   type: TypeFilter;
   onType: (t: TypeFilter) => void;
   children?: React.ReactNode;
+  activeFilters?: number;
 }) {
+  const phone = useIsPhone();
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const typeChips = types.length > 2 && (
+    <div role="group" aria-label="Show" className="flex flex-wrap gap-1.5 sm:ml-2">
+      {types.map((t) => (
+        <button
+          key={t}
+          type="button"
+          aria-pressed={type === t}
+          onClick={() => onType(t)}
+          className={cn(
+            "h-10 rounded-full border px-4 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-apricot",
+            type === t ? "border-basalt bg-basalt text-paper" : "border-basalt/15 bg-paper text-basalt/70 hover:border-basalt/40 hover:text-basalt",
+          )}
+        >
+          {TYPE_LABEL[t]}
+        </button>
+      ))}
+    </div>
+  );
+  const count = activeFilters + (type !== "all" ? 1 : 0);
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2">
-      <button type="button" onClick={onToday} className="h-10 rounded-full border border-basalt/15 bg-paper px-4 text-sm font-semibold hover:border-basalt/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-apricot">
+      <button type="button" onClick={onToday} className="h-10 shrink-0 rounded-full border border-basalt/15 bg-paper px-4 text-sm font-semibold hover:border-basalt/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-apricot">
         Today
       </button>
-      <div className="relative inline-flex items-center">
+      <div className={cn("relative inline-flex items-center", phone && "min-w-0 flex-1")}>
         <select
           aria-label="Month in view"
           value={viewMonth}
@@ -74,33 +117,54 @@ export function CalendarToolbar({
             const m = months.find((x) => x.key === e.target.value);
             if (m) onMonth(m.offset);
           }}
-          className="h-10 min-w-[11rem] appearance-none rounded-full border border-basalt/15 bg-paper pl-4 pr-9 text-sm font-semibold hover:border-basalt/40 focus:border-basalt focus:outline-none"
+          className={cn("h-10 appearance-none rounded-full border border-basalt/15 bg-paper pl-4 pr-9 text-sm font-semibold hover:border-basalt/40 focus:border-basalt focus:outline-none", phone ? "w-full min-w-0" : "min-w-[11rem]")}
         >
           {months.map((m) => (
-            <option key={m.key} value={m.key}>{m.label}</option>
+            <option key={m.key} value={m.key}>
+              {phone ? new Date(m.key + "-01T00:00:00Z").toLocaleDateString(undefined, { month: "short", year: "numeric", timeZone: "UTC" }) : m.label}
+            </option>
           ))}
         </select>
         <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-basalt/70" />
       </div>
-      {types.length > 2 && (
-        <div role="group" aria-label="Show" className="flex flex-wrap gap-1.5 sm:ml-2">
-          {types.map((t) => (
+      {phone ? (
+        (typeChips || children) && (
+          <>
             <button
-              key={t}
               type="button"
-              aria-pressed={type === t}
-              onClick={() => onType(t)}
-              className={cn(
-                "h-10 rounded-full border px-4 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-apricot",
-                type === t ? "border-basalt bg-basalt text-paper" : "border-basalt/15 bg-paper text-basalt/70 hover:border-basalt/40 hover:text-basalt",
-              )}
+              onClick={() => setFiltersOpen(true)}
+              aria-haspopup="dialog"
+              className={cn("inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-apricot", count ? "border-basalt bg-basalt text-paper" : "border-basalt/15 bg-paper")}
             >
-              {TYPE_LABEL[t]}
+              <SlidersHorizontal className="h-4 w-4" />
+              Filters{count ? ` · ${count}` : ""}
             </button>
-          ))}
-        </div>
+            <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+              <SheetContent side="bottom" className="max-h-[85dvh] gap-0 overflow-y-auto rounded-t-[14px] bg-paper p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+                <SheetTitle className="text-base font-semibold">Filters</SheetTitle>
+                <SheetDescription className="sr-only">Choose what the calendar shows.</SheetDescription>
+                <div className="mt-4 grid gap-4">
+                  {typeChips && (
+                    <div>
+                      <p className="mb-2 text-sm font-semibold text-basalt/70">Show</p>
+                      {typeChips}
+                    </div>
+                  )}
+                  {children}
+                </div>
+                <button type="button" onClick={() => setFiltersOpen(false)} className="mt-6 h-12 w-full rounded-none bg-basalt text-sm font-semibold text-paper">
+                  Done
+                </button>
+              </SheetContent>
+            </Sheet>
+          </>
+        )
+      ) : (
+        <>
+          {typeChips}
+          {children}
+        </>
       )}
-      {children}
     </div>
   );
 }
