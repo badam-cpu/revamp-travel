@@ -12,6 +12,7 @@
  * untouched) via ListingsContext.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useHoldToDrag } from "@/components/CalendarToolbar";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useListings, type LiveListing, type BlockedRange } from "@/contexts/ListingsContext";
@@ -157,14 +158,37 @@ export function PricingCalendar({ listing, room }: { listing: LiveListing; room?
   const startDrag = (d: string) => {
     if (!selectable(d)) return;
     dragging.current = true;
-    setSel({ a: d, b: d });
+    // Airbnb-style: with one day selected, clicking another makes it a range —
+    // but if the press turns into a drag, the range starts from the pressed day.
+    pressedNew.current = sel && sel.a === sel.b && sel.a !== d ? d : null;
+    setSel((s) => (s && s.a === s.b && s.a !== d ? { ...s, b: d } : { a: d, b: d }));
   };
+  const pressedNew = useRef<string | null>(null);
   const extendDrag = (d: string) => {
-    if (dragging.current && selectable(d)) setSel((s) => (s ? { ...s, b: d } : s));
+    if (!dragging.current || !selectable(d)) return;
+    const p = pressedNew.current;
+    pressedNew.current = null;
+    setSel((s) => (p ? { a: p, b: d } : s ? { ...s, b: d } : s));
   };
   // Touch/pen never selects on touch-down (that fights scrolling the page): a
   // tap picks a day, a second tap makes it a range, tapping the day again clears.
   const [touch, setTouch] = useState(false);
+  // …or hold a day and slide across the month.
+  const gridRef = useRef<HTMLDivElement>(null);
+  const holdDrag = useHoldToDrag(
+    gridRef,
+    "[data-day]",
+    (cell) => {
+      const d = cell.dataset.day!;
+      if (!selectable(d)) return false;
+      setSel({ a: d, b: d });
+      return true;
+    },
+    (cell) => {
+      const d = cell.dataset.day!;
+      if (selectable(d)) setSel((s) => (s && s.b !== d ? { ...s, b: d } : s));
+    },
+  );
   const tap = (d: string) => {
     if (!selectable(d)) return;
     if (sel && sel.a === sel.b) setSel(d === sel.a ? null : { ...sel, b: d });
@@ -337,7 +361,7 @@ export function PricingCalendar({ listing, room }: { listing: LiveListing; room?
       </div>
 
       {/* Day grid */}
-      <div className="grid grid-cols-7 border-l border-t border-basalt/10 select-none">
+      <div ref={gridRef} className="grid grid-cols-7 border-l border-t border-basalt/10 select-none [-webkit-touch-callout:none]">
         {cells.map((d, i) => {
           if (!d) return <div key={`b${i}`} className="min-h-[74px] border-b border-r border-basalt/10 bg-basalt/[0.02]" />;
           const past = d < today;
@@ -357,7 +381,8 @@ export function PricingCalendar({ listing, room }: { listing: LiveListing; room?
                 setTouch(e.pointerType !== "mouse");
                 if (e.pointerType === "mouse" && canSelect) startDrag(d);
               }}
-              onClick={() => touch && tap(d)}
+              data-day={d}
+              onClick={() => !holdDrag.consumeClick() && touch && tap(d)}
               onPointerEnter={() => extendDrag(d)}
               className={cn(
                 "relative min-h-[74px] border-b border-r border-basalt/10 p-1.5 text-left transition-colors",
@@ -393,7 +418,7 @@ export function PricingCalendar({ listing, room }: { listing: LiveListing; room?
             {selNights} day{selNights === 1 ? "" : "s"} selected
             <span className="ml-2 font-normal text-basalt/55">{selStart}{selNights > 1 ? ` → ${selEnd}` : ""}</span>
           </p>
-          {touch && selNights === 1 && <p className="mt-0.5 text-xs text-basalt/55">Tap another day to select a range.</p>}
+          {touch && selNights === 1 && <p className="mt-0.5 text-xs text-basalt/55">Tap the end date, or hold a day and slide.</p>}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="text-sm text-basalt/55">֏</span>
             <Input type="number" min={0} value={priceInput} onChange={(e) => setPriceInput(e.target.value)} placeholder={`price${unit} (AMD)`} className="h-9 w-44 rounded-none" />

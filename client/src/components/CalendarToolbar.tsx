@@ -4,7 +4,7 @@
  * (only when the operator has more than one type). Plus the compact per-night
  * price used in both grids (֏45k / $116).
  */
-import { useEffect, useMemo, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { ChevronDown } from "lucide-react";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
@@ -259,4 +259,97 @@ export function useColumnWindow(ref: RefObject<HTMLElement | null>, cellW: numbe
     if (keep >= 0 && keep < total && (keep < win.from || keep >= win.to)) cols.push(keep);
     return { cols, from: win.from, to: win.to };
   }, [win, keep, total]);
+}
+
+/**
+ * Touch range-drag for the calendars: press and HOLD a day (~0.35 s), then slide
+ * to stretch the selection. A quick swipe still scrolls — the hold is what tells
+ * the two apart, so dragging never fights scrolling. While a drag is on, the
+ * page/grid doesn't scroll (touchmove is cancelled), and the grid scrolls itself
+ * when the finger nears its left/right edge. Cells are found with
+ * `cellSelector` under the finger. `onStart` returns false for a day that can't
+ * be picked. Call `consumeClick()` in the cell's onClick: true = the tap was the
+ * end of a hold/drag and must be ignored.
+ */
+export function useHoldToDrag(
+  ref: RefObject<HTMLElement | null>,
+  cellSelector: string,
+  onStart: (cell: HTMLElement) => boolean,
+  onMove: (cell: HTMLElement) => void,
+  /** False while the grid isn't mounted yet (loading skeleton). */
+  ready = true,
+): { consumeClick: () => boolean } {
+  const cb = useRef({ onStart, onMove });
+  cb.current = { onStart, onMove };
+  const swallow = useRef(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !ready) return;
+    let timer = 0;
+    let active = false;
+    let x0 = 0;
+    let y0 = 0;
+    let cell: HTMLElement | null = null;
+    const clear = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = 0;
+    };
+    const start = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return clear();
+      const t = e.touches[0];
+      cell = (e.target as HTMLElement).closest(cellSelector);
+      if (!cell) return;
+      x0 = t.clientX;
+      y0 = t.clientY;
+      clear();
+      timer = window.setTimeout(() => {
+        timer = 0;
+        if (cell && cb.current.onStart(cell)) {
+          active = true;
+          navigator.vibrate?.(8);
+        }
+      }, 350);
+    };
+    const move = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (!active) {
+        if (timer && Math.hypot(t.clientX - x0, t.clientY - y0) > 10) clear(); // a swipe: let it scroll
+        return;
+      }
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      if (el.scrollWidth > el.clientWidth) {
+        if (t.clientX > r.right - 40) el.scrollLeft += 14;
+        else if (t.clientX < r.left + 40) el.scrollLeft -= 14;
+      }
+      const under = document.elementFromPoint(t.clientX, t.clientY)?.closest(cellSelector) as HTMLElement | null;
+      if (under && el.contains(under)) cb.current.onMove(under);
+    };
+    const end = () => {
+      clear();
+      if (active) {
+        active = false;
+        swallow.current = true;
+        window.setTimeout(() => (swallow.current = false), 400);
+      }
+    };
+    el.addEventListener("touchstart", start, { passive: true });
+    el.addEventListener("touchmove", move, { passive: false });
+    el.addEventListener("touchend", end);
+    el.addEventListener("touchcancel", end);
+    return () => {
+      clear();
+      el.removeEventListener("touchstart", start);
+      el.removeEventListener("touchmove", move);
+      el.removeEventListener("touchend", end);
+      el.removeEventListener("touchcancel", end);
+    };
+  }, [ref, cellSelector, ready]);
+  return {
+    consumeClick: () => {
+      if (!swallow.current) return false;
+      swallow.current = false;
+      return true;
+    },
+  };
 }

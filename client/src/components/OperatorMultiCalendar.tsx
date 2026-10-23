@@ -30,7 +30,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useListings, type BlockedRange, type LiveListing } from "@/contexts/ListingsContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import { applyGrouping, CalendarLegend, CalendarToolbar, GROUP_OPTIONS, groupOptionsFor, monthsOf, remember, remembered, rollingDays, ToolbarSelect, useColumnWindow, useCompactPrice, type GroupBy, type TypeFilter } from "@/components/CalendarToolbar";
+import { applyGrouping, CalendarLegend, CalendarToolbar, GROUP_OPTIONS, groupOptionsFor, monthsOf, remember, remembered, rollingDays, ToolbarSelect, useColumnWindow, useCompactPrice, useHoldToDrag, type GroupBy, type TypeFilter } from "@/components/CalendarToolbar";
 import { fetchRoomTypes, updateRoomTypeRates, updateRoomUnitCalendar } from "@/lib/roomTypes";
 import { userMessage } from "@/lib/api";
 import type { RoomType, RoomUnit, SeasonalRate } from "@shared/listings";
@@ -332,6 +332,9 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
   // ── Selection ───────────────────────────────────────────────────────────────
   const [sel, setSel] = useState<{ key: string; a: string; b: string } | null>(null);
   const dragging = useRef(false);
+  // Mouse: pressing a second day sets the END (Airbnb click-click), but if the
+  // press turns into a drag, the range starts over from where it was pressed.
+  const pressedNew = useRef<{ key: string; d: string } | null>(null);
   useEffect(() => {
     const up = () => (dragging.current = false);
     window.addEventListener("pointerup", up);
@@ -341,10 +344,22 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
   const selStart = sel ? (sel.a < sel.b ? sel.a : sel.b) : null;
   const selEnd = sel ? (sel.a < sel.b ? sel.b : sel.a) : null;
   const inSel = (key: string, d: string) => !!sel && sel.key === key && d >= selStart! && d <= selEnd!;
+  // Airbnb-style: with ONE day selected, choosing another day in the same row
+  // makes it the other end of a range (no Shift needed); with a range selected,
+  // a choice starts over. Shift still extends a range.
   const pick = (key: string, d: string, extend: boolean) => {
     if (d < today) return;
-    if (extend && sel && sel.key === key) setSel({ ...sel, b: d });
+    const single = !!sel && sel.key === key && sel.a === sel.b;
+    if ((extend || single) && sel && sel.key === key) setSel({ ...sel, b: d });
     else setSel({ key, a: d, b: d });
+  };
+  /** From the panel's Start / End date fields. */
+  const setRange = (a: string, b: string) => {
+    if (!sel) return;
+    const last = days[days.length - 1];
+    const start = a < today ? today : a > last ? last : a;
+    const end = b < start ? start : b > last ? last : b;
+    setSel({ key: sel.key, a: start, b: end });
   };
   // Touch/pen: a tap picks a day; a second tap in the same row extends it to a
   // range; tapping the single selected day again clears it.
@@ -409,6 +424,24 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
   };
   // Only the days near the view are drawn (two years × every row is a lot of cells).
   const { cols, from: colFrom, to: colTo } = useColumnWindow(scrollRef, CELL_W, nameW, DAYS, bookings !== null && !loadError, active.c);
+  // Touch: hold a day, then slide along the row to stretch the range.
+  const holdDrag = useHoldToDrag(
+    scrollRef,
+    '[role="gridcell"][data-c]',
+    (cell) => {
+      const row = visibleRows[Number(cell.dataset.r)];
+      const d = days[Number(cell.dataset.c)];
+      if (!row || !d || d < today) return false;
+      setSel({ key: row.key, a: d, b: d });
+      return true;
+    },
+    (cell) => {
+      const key = visibleRows[Number(cell.dataset.r)]?.key;
+      const d = days[Number(cell.dataset.c)];
+      if (d && d >= today) setSel((x) => (x && x.key === key && x.b !== d ? { ...x, b: d } : x));
+    },
+    bookings !== null && !loadError,
+  );
 
   const onGridKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const t = e.target as HTMLElement;
@@ -539,12 +572,18 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
             pointerKind.current = e.pointerType;
             if (past || e.button !== 0 || e.pointerType !== "mouse") return;
             dragging.current = true;
+            pressedNew.current = !e.shiftKey && sel && sel.key === row.key && sel.a === sel.b && sel.a !== d ? { key: row.key, d } : null;
             pick(row.key, d, e.shiftKey);
           }}
-          onClick={() => pointerKind.current !== "mouse" && tap(row.key, d)}
-          onPointerEnter={() => dragging.current && !past && sel?.key === row.key && setSel((x) => (x ? { ...x, b: d } : x))}
+          onClick={() => !holdDrag.consumeClick() && pointerKind.current !== "mouse" && tap(row.key, d)}
+          onPointerEnter={() => {
+            if (!dragging.current || past || sel?.key !== row.key) return;
+            const p = pressedNew.current;
+            pressedNew.current = null;
+            setSel((x) => (p && p.key === row.key ? { key: row.key, a: p.d, b: d } : x ? { ...x, b: d } : x));
+          }}
           className={cn(
-            "absolute top-0 select-none border-r border-basalt/[0.08] outline-none focus-visible:z-[5] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-apricot",
+            "absolute top-0 select-none border-r border-basalt/[0.08] outline-none [-webkit-touch-callout:none] focus-visible:z-[5] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-apricot",
             i !== 0 && dt.getUTCDate() === 1 && "border-l border-l-basalt/25",
             !s.sellable && "cal-unavail",
             past ? "bg-basalt/[0.02]" : "cursor-pointer hover:bg-basalt/[0.03]",
@@ -567,10 +606,13 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
 
   const panel = selRow && selStart && selEnd && (
     <SelectionPanel
-      key={`${sel!.key}:${selStart}:${selEnd}`}
+      key={sel!.key}
       row={selRow}
       start={selStart}
       end={selEnd}
+      minDate={today}
+      maxDate={days[days.length - 1]}
+      onRange={setRange}
       count={selCount}
       nightsLabel={nightsLabel}
       saving={saving}
@@ -772,7 +814,7 @@ export function OperatorMultiCalendar({ onOpenListing }: { onOpenListing: (l: Li
                   {selStart === selEnd ? fmtDay(selStart!) : `${fmtDay(selStart!)} – ${fmtDay(selEnd!)}`}
                   <span className="font-normal text-basalt/60"> · {nightsLabel(selCount, selRow!)}</span>
                 </p>
-                <p className="truncate text-xs text-basalt/60">{selCount === 1 ? "Tap another day in this row to select a range" : selRow!.type ? `${selRow!.listing.title} · ${selRow!.label}` : selRow!.label}</p>
+                <p className="truncate text-xs text-basalt/60">{selCount === 1 ? "Tap the end date, or hold a day and slide" : selRow!.type ? `${selRow!.listing.title} · ${selRow!.label}` : selRow!.label}</p>
               </div>
               <button type="button" onClick={() => setSel(null)} className="h-11 shrink-0 px-3 text-sm font-semibold text-basalt/70 hover:text-basalt">
                 Clear
@@ -812,10 +854,17 @@ function SelectionPanel({
   onOpenListing,
   onClose,
   closable,
+  minDate,
+  maxDate,
+  onRange,
 }: {
   row: CalRow;
   start: string;
   end: string;
+  minDate: string;
+  maxDate: string;
+  /** Change the selection from the Start / End date fields. */
+  onRange: (start: string, end: string) => void;
   count: number;
   nightsLabel: (n: number, row: CalRow) => string;
   saving: boolean;
@@ -843,6 +892,16 @@ function SelectionPanel({
     return { booked, synced, blocked, custom, full, price: prices.size === 1 ? Array.from(prices)[0] : null };
   }, [row, start, end]);
   const [price, setPrice] = useState(stats.price ? String(Math.round(stats.price / 100)) : "");
+  // The panel stays mounted while the dates change (Start / End fields, clicks in
+  // the row): show the new dates' price unless the operator has typed one.
+  // A fresh single-day pick starts clean.
+  const typed = useRef(false);
+  const lastStart = useRef(start);
+  useEffect(() => {
+    if (count === 1 && start !== lastStart.current) typed.current = false;
+    lastStart.current = start;
+    if (!typed.current) setPrice(stats.price ? String(Math.round(stats.price / 100)) : "");
+  }, [stats.price, start, count]);
   const openable = count - stats.booked;
   const allBlocked = openable > 0 && stats.blocked >= openable;
   const changed = price.trim() !== "" && Math.round(Number(price)) * 100 !== stats.price;
@@ -863,6 +922,28 @@ function SelectionPanel({
           <X className="h-4 w-4" />
         </button>}
       </div>
+
+      {/* Dates — pick the end (or a new start) here, like Airbnb's panel. */}
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        {([
+          ["cal-start", "Start date", start, (v: string) => onRange(v, end < v ? v : end)],
+          ["cal-end", "End date", end, (v: string) => onRange(start, v)],
+        ] as const).map(([id, label, value, change]) => (
+          <div key={id} className="min-w-0">
+            <label htmlFor={id} className="text-xs font-semibold text-basalt/70">{label}</label>
+            <input
+              id={id}
+              type="date"
+              value={value}
+              min={id === "cal-end" ? start : minDate}
+              max={maxDate}
+              onChange={(e) => e.target.value && change(e.target.value)}
+              className="mt-1 h-11 w-full min-w-0 rounded-[0.875rem] border border-basalt/15 bg-paper px-3 text-sm font-semibold tabular-nums outline-none focus:border-basalt"
+            />
+          </div>
+        ))}
+      </div>
+      {count === 1 && <p className="mt-1.5 text-xs text-basalt/60">One day selected. Set an end date, or choose another day in this row.</p>}
 
       {(stats.booked > 0 || stats.synced > 0 || stats.full > 0) && (
         <p className="mt-3 border-l-2 border-basalt/20 pl-3 text-xs leading-5 text-basalt/70">
@@ -917,7 +998,10 @@ function SelectionPanel({
             id="cal-price"
             inputMode="numeric"
             value={price}
-            onChange={(e) => setPrice(e.target.value.replace(/[^\d]/g, ""))}
+            onChange={(e) => {
+              typed.current = true;
+              setPrice(e.target.value.replace(/[^\d]/g, ""));
+            }}
             placeholder={stats.price == null ? "Mixed prices" : ""}
             className="h-12 w-full bg-transparent pl-2 text-base font-semibold tabular-nums outline-none"
           />
