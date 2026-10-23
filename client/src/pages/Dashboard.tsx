@@ -2045,9 +2045,9 @@ function BookingsSection() {
 }
 
 const CALENDAR_VIEWS = [
-  { key: "timeline", label: "Timeline", blurb: "Your listings across the calendar — bookings and synced-blocked dates at a glance." },
-  { key: "calendar", label: "Prices & availability", blurb: "Prices and availability for all your listings. Select a day, or drag across several, to change the price or block dates." },
-  { key: "pricelog", label: "Price log", blurb: "Every change to your prices — what changed, when, and who or what made it." },
+  { key: "timeline", label: "Timeline", short: "Timeline", blurb: "Your listings across the calendar — bookings and synced-blocked dates at a glance." },
+  { key: "calendar", label: "Prices & availability", short: "Prices", blurb: "Prices and availability for all your listings. Select a day, or drag across several, to change the price or block dates." },
+  { key: "pricelog", label: "Price log", short: "Price log", blurb: "Every change to your prices — what changed, when, and who or what made it." },
 ] as const;
 type CalendarView = (typeof CALENDAR_VIEWS)[number]["key"];
 
@@ -2120,20 +2120,23 @@ function CalendarViewsSection() {
         title="Calendar"
         sub={blurb}
         actions={
-          /* View switch — pills, same family as the toolbar below. */
-        <div role="group" aria-label="View" className="inline-flex shrink-0 rounded-full border border-basalt/15 bg-paper p-1">
+          /* View switch — pills, same family as the toolbar below. Phones get
+             the short labels so all three fit on one line. */
+        <div role="group" aria-label="View" className="inline-flex max-w-full shrink-0 rounded-full border border-basalt/15 bg-paper p-1">
           {CALENDAR_VIEWS.map((v) => (
             <button
               key={v.key}
               type="button"
               aria-pressed={view === v.key}
+              aria-label={v.label}
               onClick={() => setView(v.key)}
               className={cn(
-                "h-9 whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-apricot",
+                "h-9 whitespace-nowrap rounded-full px-3.5 text-sm font-semibold sm:px-4 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-apricot",
                 view === v.key ? "bg-basalt text-paper" : "text-basalt/70 hover:text-basalt",
               )}
             >
-              {v.label}
+              <span className="sm:hidden">{v.short}</span>
+              <span className="hidden sm:inline">{v.label}</span>
             </button>
           ))}
         </div>
