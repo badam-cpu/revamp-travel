@@ -176,6 +176,7 @@ export function CampaignVisualPicker({ value, onChange, imageOnly = false }: { v
 
           <BannerMaker
             open={makerOpen}
+            defaultShowLogo={imageOnly}
             onOpenChange={setMakerOpen}
             onCreated={(img, alt) => {
               setImages((prev) => [img, ...(prev ?? [])]);

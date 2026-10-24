@@ -29,9 +29,21 @@ import {
 
 const FIELD = "h-12 w-full rounded-none border border-basalt/15 bg-paper px-3 text-base outline-none focus:border-basalt sm:h-10 sm:text-sm";
 
-export function BannerMaker({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (o: boolean) => void; onCreated: (img: CampaignImage, alt: string) => void }) {
+export function BannerMaker({
+  open,
+  onOpenChange,
+  onCreated,
+  defaultShowLogo = false,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  onCreated: (img: CampaignImage, alt: string) => void;
+  /** Email: off (the email header already has the logo). Telegram: on. */
+  defaultShowLogo?: boolean;
+}) {
   const { user } = useAuth();
-  const [spec, setSpec] = useState<BannerSpec>(DEFAULT_BANNER);
+  const fresh = (): BannerSpec => ({ ...DEFAULT_BANNER, showLogo: defaultShowLogo });
+  const [spec, setSpec] = useState<BannerSpec>(fresh);
   const [fontsReady, setFontsReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -40,6 +52,11 @@ export function BannerMaker({ open, onOpenChange, onCreated }: { open: boolean; 
   useEffect(() => {
     if (open) void loadBannerFonts().then(() => setFontsReady(true));
   }, [open]);
+  // The channel can change between openings (email ↔ Telegram): a fresh banner
+  // follows the current default.
+  useEffect(() => {
+    if (open) setSpec((s) => (s.headline.trim() ? s : { ...s, showLogo: defaultShowLogo }));
+  }, [open, defaultShowLogo]);
   // Redraw on every change (cheap: one 1200 × 600 canvas).
   useEffect(() => {
     if (open && canvasRef.current) drawBanner(canvasRef.current, spec);
@@ -58,7 +75,7 @@ export function BannerMaker({ open, onOpenChange, onCreated }: { open: boolean; 
       onCreated(img, bannerAlt(spec));
       toast.success("Banner saved to your library and added to the campaign.");
       onOpenChange(false);
-      setSpec(DEFAULT_BANNER);
+      setSpec(fresh());
     } catch (e) {
       console.error("[banner maker]", e);
       toast(e instanceof Error ? e.message : "Couldn't save the banner — try again.");
@@ -136,10 +153,17 @@ export function BannerMaker({ open, onOpenChange, onCreated }: { open: boolean; 
               </div>
             </div>
           </div>
-          <label className="flex min-h-10 items-center gap-2.5 text-sm">
-            <input type="checkbox" checked={spec.showSite} onChange={(e) => set("showSite", e.target.checked)} className="h-5 w-5 accent-[#F15822]" />
-            Show “revampvacations.com · Armenia” at the bottom
-          </label>
+          <div className="grid gap-1">
+            <label className="flex min-h-10 items-center gap-2.5 text-sm">
+              <input type="checkbox" checked={spec.showLogo} onChange={(e) => set("showLogo", e.target.checked)} className="h-5 w-5 accent-[#F15822]" />
+              Show the revamp. logo
+            </label>
+            <p className="pl-[1.875rem] text-xs text-basalt/55">Emails already show the logo at the top — turn this on for Telegram or anywhere the banner stands alone.</p>
+            <label className="flex min-h-10 items-center gap-2.5 text-sm">
+              <input type="checkbox" checked={spec.showSite} onChange={(e) => set("showSite", e.target.checked)} className="h-5 w-5 accent-[#F15822]" />
+              Show “revampvacations.com · Armenia” at the bottom
+            </label>
+          </div>
           <p className="bg-chalk/60 p-3 text-xs leading-5 text-basalt/70">
             The banner's words become its alt text, because many inboxes hide images until the reader allows them. Say the important part in the message too.
           </p>

@@ -45,6 +45,9 @@ export interface BannerSpec {
   accentLastLine: boolean;
   subline: string;
   showSite: boolean;
+  /** The `revamp.` wordmark top-left. Off for email (the email header already
+   * shows it — two logos stacked looked doubled); on for Telegram etc. */
+  showLogo: boolean;
 }
 
 export const DEFAULT_BANNER: BannerSpec = {
@@ -55,6 +58,7 @@ export const DEFAULT_BANNER: BannerSpec = {
   accentLastLine: true,
   subline: "",
   showSite: true,
+  showLogo: false,
 };
 
 const PALETTE: Record<BannerTheme, { bg: string; text: string; accent: string; soft: string; logo: string; pattern: string; patternAlpha: number }> = {
@@ -145,7 +149,7 @@ export function drawBanner(canvas: HTMLCanvasElement, spec: BannerSpec): void {
 
   // Wordmark, top-left (one colour, never recoloured per letter).
   const logoH = 40;
-  drawPath(ctx, WORDMARK_PATH, PAD, 64, logoH / 188.13, c.logo); // 188.13 = WORDMARK_VIEWBOX height
+  if (spec.showLogo) drawPath(ctx, WORDMARK_PATH, PAD, 64, logoH / 188.13, c.logo); // 188.13 = WORDMARK_VIEWBOX height
 
   const textW = BANNER_W - PAD * 2 - (spec.pattern === "right" ? 120 : 0);
   ctx.textBaseline = "alphabetic";
@@ -153,7 +157,7 @@ export function drawBanner(canvas: HTMLCanvasElement, spec: BannerSpec): void {
 
   // Measure the stack (eyebrow · headline · subline) and centre it in the space
   // between the wordmark and the site line.
-  const top = 64 + logoH + 40;
+  const top = spec.showLogo ? 64 + logoH + 40 : 64;
   const bottom = spec.showSite ? BANNER_H - 96 : BANNER_H - 64;
   // Written as typed — never forced to capitals: the brand is lowercase (`revamp.`).
   const eyebrow = spec.eyebrow.trim();
