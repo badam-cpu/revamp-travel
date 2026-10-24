@@ -6,7 +6,7 @@
  * same CampaignVisual (shared/campaignVisual.ts).
  */
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Check, ImagePlus, Info, Loader2, X } from "lucide-react";
+import { AlertTriangle, Check, ImagePlus, Info, Loader2, Type, X } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { CAMPAIGN_LAYOUTS, layoutHasImage, type CampaignLayout, type CampaignVisual } from "@shared/campaignVisual";
+import { BannerMaker } from "@/components/BannerMaker";
 import { IMAGE_GUIDE, STARTER_IMAGES, displaySrc, imageQuality, listCampaignImages, removeCampaignImage, uploadCampaignImage, type CampaignImage } from "@/lib/campaignImage";
 
 const LEVEL = {
@@ -28,6 +29,7 @@ export function CampaignVisualPicker({ value, onChange, imageOnly = false }: { v
   const [images, setImages] = useState<CampaignImage[] | null>(null);
   const [missing, setMissing] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [makerOpen, setMakerOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const withImage = imageOnly || layoutHasImage(value.layout);
 
@@ -147,6 +149,15 @@ export function CampaignVisualPicker({ value, onChange, imageOnly = false }: { v
                 {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
                 {uploading ? "Optimising…" : "Upload"}
               </button>
+              <button
+                type="button"
+                onClick={() => setMakerOpen(true)}
+                disabled={missing}
+                className="flex aspect-[2/1] flex-col items-center justify-center gap-1 border border-dashed border-basalt/25 text-[11px] font-semibold text-basalt/60 hover:border-apricot hover:text-apricot disabled:opacity-50"
+              >
+                <Type className="h-4 w-4" />
+                Make a banner
+              </button>
               {(images ?? []).map((img) => tile(img))}
             </div>
             <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.1em] text-basalt/40">Revamp starters</p>
@@ -162,6 +173,15 @@ export function CampaignVisualPicker({ value, onChange, imageOnly = false }: { v
               }}
             />
           </div>
+
+          <BannerMaker
+            open={makerOpen}
+            onOpenChange={setMakerOpen}
+            onCreated={(img, alt) => {
+              setImages((prev) => [img, ...(prev ?? [])]);
+              onChange({ ...value, imageUrl: img.url, imageAlt: alt || img.name });
+            }}
+          />
 
           {selected && quality && (
             <div className="grid gap-2 border border-basalt/10 p-3">
