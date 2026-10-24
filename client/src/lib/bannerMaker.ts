@@ -155,7 +155,8 @@ export function drawBanner(canvas: HTMLCanvasElement, spec: BannerSpec): void {
   // between the wordmark and the site line.
   const top = 64 + logoH + 40;
   const bottom = spec.showSite ? BANNER_H - 96 : BANNER_H - 64;
-  const eyebrow = spec.eyebrow.trim().toUpperCase();
+  // Written as typed — never forced to capitals: the brand is lowercase (`revamp.`).
+  const eyebrow = spec.eyebrow.trim();
   const subline = spec.subline.trim();
   const eyebrowH = eyebrow ? 22 + 20 : 0;
   ctx.font = `500 28px ${FONT}`;
@@ -167,8 +168,8 @@ export function drawBanner(canvas: HTMLCanvasElement, spec: BannerSpec): void {
   let y = top + Math.max(0, (bottom - top - stackH) / 2);
 
   if (eyebrow) {
-    ctx.font = `700 22px ${FONT}`;
-    setSpacing(ctx, 2.6);
+    ctx.font = `700 24px ${FONT}`;
+    setSpacing(ctx, 0.3);
     ctx.fillStyle = spec.theme === "paper" ? ORANGE : c.soft;
     ctx.fillText(eyebrow, PAD, y + 22);
     setSpacing(ctx, 0);
@@ -192,10 +193,10 @@ export function drawBanner(canvas: HTMLCanvasElement, spec: BannerSpec): void {
   }
 
   if (spec.showSite) {
-    ctx.font = `600 20px ${FONT}`;
-    setSpacing(ctx, 2);
+    ctx.font = `600 22px ${FONT}`;
+    setSpacing(ctx, 0.3);
     ctx.fillStyle = c.soft;
-    ctx.fillText("REVAMPVACATIONS.COM · ARMENIA", PAD, BANNER_H - 56);
+    ctx.fillText("revampvacations.com · Armenia", PAD, BANNER_H - 56);
     setSpacing(ctx, 0);
   }
 }
