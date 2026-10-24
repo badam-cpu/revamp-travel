@@ -34,6 +34,7 @@ const SCHEMA_TYPE_BY_PLACE_CATEGORY: Record<string, string> = {
   gallery: "ArtGallery",
   library: "Library",
   coworking: "LocalBusiness",
+  "gift-shop": "Store",
 };
 
 /** schema.org @type for a listing — place rows refine by category; a multi-room stay is a Hotel. */

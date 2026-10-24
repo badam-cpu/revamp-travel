@@ -28,6 +28,7 @@ export const isCuratedType = (t: ListingType): boolean => CURATED_TYPES.includes
  * Order here is the display order. */
 export const PLACE_GROUPS = [
   { slug: "culture", label: "Culture & sights" },
+  { slug: "shopping", label: "Shopping" },
   { slug: "everyday", label: "Everyday" },
   { slug: "work", label: "Work" },
 ] as const;
@@ -47,6 +48,7 @@ export const PLACE_CATEGORIES = [
   { slug: "theater", label: "Theater", plural: "Theaters", group: "culture" },
   { slug: "cinema", label: "Cinema", plural: "Cinemas", group: "culture" },
   { slug: "landmark", label: "Landmark", plural: "Landmarks", group: "culture" },
+  { slug: "gift-shop", label: "Gift shop", plural: "Gift shops", group: "shopping" },
   { slug: "supermarket", label: "Supermarket", plural: "Supermarkets", group: "everyday" },
   { slug: "pharmacy", label: "Pharmacy", plural: "Pharmacies", group: "everyday" },
   { slug: "atm", label: "ATM / Bank", plural: "ATMs & banks", group: "everyday" },
