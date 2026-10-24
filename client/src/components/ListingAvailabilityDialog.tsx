@@ -68,7 +68,7 @@ export function ListingAvailabilityDialog({ listing, mode, onClose }: { listing:
   const field = "h-12 w-full rounded-[0.875rem] border border-basalt/15 bg-paper px-3 text-base outline-none focus:border-basalt";
   return (
     <Dialog open={!!mode} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md rounded-[14px] p-6">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-md overflow-y-auto rounded-[14px] p-6">
         <DialogTitle className="font-display text-2xl tracking-[-0.02em]">{suspend ? "Suspend bookings" : "Make inactive"}</DialogTitle>
         <DialogDescription className="text-sm leading-6 text-basalt/70">
           {suspend
@@ -78,7 +78,7 @@ export function ListingAvailabilityDialog({ listing, mode, onClose }: { listing:
 
         {suspend && (
           <div className="mt-2 grid gap-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
               <label className="grid gap-1.5 text-sm font-semibold">
                 First day
                 <input type="date" value={from} min={todayIso()} onChange={(e) => setFrom(e.target.value)} className={field} />

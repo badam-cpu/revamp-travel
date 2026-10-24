@@ -98,7 +98,7 @@ export function SessionScheduleEditor({ listing }: { listing: LiveListing }) {
                   key={d.i}
                   type="button"
                   onClick={() => toggleDay(d.i)}
-                  className={cn("rounded-none border px-3 py-1.5 text-xs font-semibold", days.includes(d.i) ? "border-apricot bg-apricot text-white" : "border-basalt/15 text-basalt/60 hover:border-basalt/30")}
+                  className={cn("min-h-9 rounded-none border px-3 py-1.5 text-xs font-semibold sm:min-h-0", days.includes(d.i) ? "border-apricot bg-apricot text-white" : "border-basalt/15 text-basalt/60 hover:border-basalt/30")}
                 >
                   {d.l}
                 </button>
@@ -112,13 +112,13 @@ export function SessionScheduleEditor({ listing }: { listing: LiveListing }) {
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
               {times.map((t, i) => (
                 <span key={i} className="inline-flex items-center gap-1 border border-basalt/15">
-                  <Input type="time" value={t} onChange={(e) => setTime(i, e.target.value)} className="h-8 w-28 rounded-none border-0 text-xs" />
+                  <Input type="time" value={t} onChange={(e) => setTime(i, e.target.value)} className="h-11 w-28 rounded-none border-0 text-base sm:h-8 sm:text-xs" />
                   {times.length > 1 && (
-                    <button type="button" onClick={() => removeTime(i)} className="px-1.5 text-basalt/40 hover:text-destructive" aria-label="Remove time"><X className="h-3.5 w-3.5" /></button>
+                    <button type="button" onClick={() => removeTime(i)} className="grid min-h-11 min-w-10 place-items-center px-1.5 text-basalt/40 hover:text-destructive sm:min-h-0 sm:min-w-0" aria-label="Remove time"><X className="h-3.5 w-3.5" /></button>
                   )}
                 </span>
               ))}
-              <Button type="button" variant="outline" size="sm" className="h-8 rounded-none" onClick={addTime}><Plus className="mr-1 h-3.5 w-3.5" /> Add time</Button>
+              <Button type="button" variant="outline" size="sm" className="h-11 rounded-none sm:h-8" onClick={addTime}><Plus className="mr-1 h-3.5 w-3.5" /> Add time</Button>
             </div>
           </div>
 
@@ -126,15 +126,15 @@ export function SessionScheduleEditor({ listing }: { listing: LiveListing }) {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <div>
               <Label htmlFor={`cap-${listing.id}`} className="text-xs font-semibold">Seats / session</Label>
-              <Input id={`cap-${listing.id}`} type="number" min={1} value={capacity} onChange={(e) => setCapacity(e.target.value)} className="mt-1 h-9 rounded-none text-xs" />
+              <Input id={`cap-${listing.id}`} type="number" min={1} value={capacity} onChange={(e) => setCapacity(e.target.value)} className="mt-1 h-11 rounded-none text-base sm:h-9 sm:text-xs" />
             </div>
             <div>
               <Label htmlFor={`dur-${listing.id}`} className="text-xs font-semibold">Duration (min)</Label>
-              <Input id={`dur-${listing.id}`} type="number" min={15} step={15} value={durationMin} onChange={(e) => setDurationMin(e.target.value)} className="mt-1 h-9 rounded-none text-xs" />
+              <Input id={`dur-${listing.id}`} type="number" min={15} step={15} value={durationMin} onChange={(e) => setDurationMin(e.target.value)} className="mt-1 h-11 rounded-none text-base sm:h-9 sm:text-xs" />
             </div>
             <div>
               <Label htmlFor={`lead-${listing.id}`} className="text-xs font-semibold">Min notice (hrs)</Label>
-              <Input id={`lead-${listing.id}`} type="number" min={0} value={leadTimeHours} onChange={(e) => setLeadTimeHours(e.target.value)} className="mt-1 h-9 rounded-none text-xs" />
+              <Input id={`lead-${listing.id}`} type="number" min={0} value={leadTimeHours} onChange={(e) => setLeadTimeHours(e.target.value)} className="mt-1 h-11 rounded-none text-base sm:h-9 sm:text-xs" />
             </div>
           </div>
 
@@ -167,7 +167,7 @@ export function SessionScheduleEditor({ listing }: { listing: LiveListing }) {
       )}
 
       <div className="mt-3">
-        <Button type="button" size="sm" className="rounded-none" disabled={busy} onClick={save}>
+        <Button type="button" size="sm" className="h-10 rounded-none sm:h-8" disabled={busy} onClick={save}>
           {busy ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Saving…</> : <><Check className="mr-1.5 h-3.5 w-3.5" /> Save schedule</>}
         </Button>
       </div>

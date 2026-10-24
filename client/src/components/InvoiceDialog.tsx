@@ -113,7 +113,7 @@ export function InvoiceDialog({ bookingId, open, onClose, onSaved }: { bookingId
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="flex max-h-[94vh] w-full max-w-[calc(100%-1.5rem)] flex-col gap-0 overflow-hidden rounded-none p-0 sm:max-w-6xl">
+      <DialogContent className="flex max-h-[94dvh] w-full max-w-[calc(100%-1.5rem)] flex-col gap-0 overflow-hidden rounded-none p-0 sm:max-w-6xl">
         <div className="shrink-0 border-b border-basalt/10 bg-chalk px-5 py-4 pr-14">
           <DialogTitle className="text-lg font-semibold">{saved?.number ? `Invoice ${saved.number}` : "New invoice"}</DialogTitle>
           <DialogDescription className="mt-0.5 text-sm text-basalt/55">
@@ -240,25 +240,25 @@ export function InvoiceDialog({ bookingId, open, onClose, onSaved }: { bookingId
               {/* Live preview */}
               <div className="border-t border-basalt/10 bg-chalk p-4 sm:p-6 lg:overflow-y-auto lg:border-l lg:border-t-0">
                 <p className="mb-3 text-xs font-semibold text-basalt/50">Preview — what the guest receives</p>
-                <div className="overflow-x-auto rounded-none border border-basalt/10 bg-paper p-5 sm:p-8" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                <div className="overflow-x-auto rounded-none border border-basalt/10 bg-paper p-2 sm:p-8" dangerouslySetInnerHTML={{ __html: previewHtml }} />
               </div>
             </div>
 
             {/* Actions */}
-            <div className="flex shrink-0 flex-wrap items-center gap-3 border-t border-basalt/10 bg-paper px-5 py-3">
-              <Button onClick={() => void submit(true)} disabled={!!busy || !draft.invoiceable} className="h-11 rounded-none bg-apricot px-5 text-white hover:bg-apricot/90">
+            <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-basalt/10 bg-paper px-5 py-3 sm:gap-3">
+              <Button onClick={() => void submit(true)} disabled={!!busy || !draft.invoiceable} className="h-11 flex-1 rounded-none bg-apricot px-3 text-white hover:bg-apricot/90 sm:flex-none sm:px-5">
                 {busy === "send" ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden /> : <Send className="mr-1.5 h-4 w-4" aria-hidden />}
                 {saved?.sentAt ? "Send again" : "Send invoice"}
               </Button>
-              <Button variant="outline" onClick={() => void submit(false)} disabled={!!busy || !draft.invoiceable} className="h-11 rounded-none border-basalt/20">
-                {busy === "save" ? "Saving…" : "Save without sending"}
+              <Button variant="outline" onClick={() => void submit(false)} disabled={!!busy || !draft.invoiceable} className="h-11 flex-1 rounded-none border-basalt/20 sm:flex-none">
+                {busy === "save" ? "Saving…" : <>Save<span className="hidden sm:inline">&nbsp;without sending</span></>}
               </Button>
               {saved?.url && (
-                <div className="flex items-center gap-1 sm:ml-auto">
-                  <a href={saved.url} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center gap-1.5 px-2 text-sm font-semibold text-basalt/70 hover:text-apricot">
+                <div className="-ml-2 flex w-full items-center gap-1 sm:ml-auto sm:w-auto">
+                  <a href={saved.url} target="_blank" rel="noopener noreferrer" className="inline-flex h-10 items-center gap-1.5 px-2 text-xs font-semibold text-basalt/70 hover:text-apricot sm:h-11 sm:text-sm">
                     <ExternalLink className="h-4 w-4" aria-hidden /> Open
                   </a>
-                  <button type="button" onClick={() => void copyLink()} className="inline-flex h-11 items-center gap-1.5 px-2 text-sm font-semibold text-basalt/70 hover:text-apricot">
+                  <button type="button" onClick={() => void copyLink()} className="inline-flex h-10 items-center gap-1.5 px-2 text-xs font-semibold text-basalt/70 hover:text-apricot sm:h-11 sm:text-sm">
                     <Copy className="h-4 w-4" aria-hidden /> Copy link
                   </button>
                 </div>

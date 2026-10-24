@@ -39,6 +39,16 @@ export function TourEditor({ listing, open, onClose, onChanged }: { listing: { i
   const [previewOpen, setPreviewOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const panoInput = useRef<HTMLInputElement>(null);
+  const editorPane = useRef<HTMLDivElement>(null);
+
+  // Below lg the room list sits above the editor, so a tap on a room would
+  // otherwise change content off-screen — bring the editor into view.
+  const pickRoom = (id: string) => {
+    setSelected(id);
+    if (window.matchMedia("(max-width: 1023px)").matches) {
+      requestAnimationFrame(() => editorPane.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -202,7 +212,7 @@ export function TourEditor({ listing, open, onClose, onChanged }: { listing: { i
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && close()}>
-      <DialogContent className="flex max-h-[94vh] w-full max-w-[calc(100%-1.5rem)] flex-col gap-0 overflow-hidden rounded-none p-0 sm:max-w-6xl">
+      <DialogContent className="flex max-h-[94dvh] w-full max-w-[calc(100%-1.5rem)] flex-col gap-0 overflow-hidden rounded-none p-0 sm:max-w-6xl">
         <div className="flex shrink-0 flex-wrap items-start gap-3 border-b border-basalt/10 bg-chalk px-5 py-4 pr-14">
           <div className="min-w-0 flex-1">
             <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
@@ -265,7 +275,7 @@ export function TourEditor({ listing, open, onClose, onChanged }: { listing: { i
                 <ol className="grid gap-1">
                   {rooms.map((r, i) => (
                     <li key={r.id} className={cn("flex items-center gap-1 rounded-[10px] pr-1", selected === r.id ? "bg-chalk" : "hover:bg-chalk/60")}>
-                      <button type="button" onClick={() => setSelected(r.id)} aria-current={selected === r.id ? "true" : undefined} className="flex min-w-0 flex-1 items-center gap-2.5 p-2 text-left">
+                      <button type="button" onClick={() => pickRoom(r.id)} aria-current={selected === r.id ? "true" : undefined} className="flex min-w-0 flex-1 items-center gap-2.5 p-2 text-left">
                         <span className="relative h-10 w-14 shrink-0 overflow-hidden rounded-[6px] bg-basalt/10">
                           {r.photos[0] && <img {...imgAttrs(r.photos[0].url, "56px")} alt="" loading="lazy" className="h-full w-full object-cover" />}
                         </span>
@@ -277,10 +287,10 @@ export function TourEditor({ listing, open, onClose, onChanged }: { listing: { i
                           </span>
                         </span>
                       </button>
-                      <button type="button" onClick={() => moveRoom(r.id, -1)} disabled={i === 0} aria-label={`Move ${r.name} up`} className="grid h-8 w-8 place-items-center rounded-full text-basalt/50 hover:bg-paper hover:text-basalt disabled:opacity-25">
+                      <button type="button" onClick={() => moveRoom(r.id, -1)} disabled={i === 0} aria-label={`Move ${r.name} up`} className="grid h-10 w-10 shrink-0 place-items-center sm:h-8 sm:w-8 rounded-full text-basalt/50 hover:bg-paper hover:text-basalt disabled:opacity-25">
                         <ArrowUp className="h-3.5 w-3.5" />
                       </button>
-                      <button type="button" onClick={() => moveRoom(r.id, 1)} disabled={i === rooms.length - 1} aria-label={`Move ${r.name} down`} className="grid h-8 w-8 place-items-center rounded-full text-basalt/50 hover:bg-paper hover:text-basalt disabled:opacity-25">
+                      <button type="button" onClick={() => moveRoom(r.id, 1)} disabled={i === rooms.length - 1} aria-label={`Move ${r.name} down`} className="grid h-10 w-10 shrink-0 place-items-center sm:h-8 sm:w-8 rounded-full text-basalt/50 hover:bg-paper hover:text-basalt disabled:opacity-25">
                         <ArrowDown className="h-3.5 w-3.5" />
                       </button>
                     </li>
@@ -293,7 +303,7 @@ export function TourEditor({ listing, open, onClose, onChanged }: { listing: { i
                     value=""
                     onChange={(e) => e.target.value && addRoom(e.target.value as TourRoomKind)}
                     disabled={rooms.length >= TOUR_LIMITS.rooms}
-                    className="h-10 flex-1 rounded-[10px] border border-basalt/15 bg-paper px-3 text-sm"
+                    className="h-12 flex-1 rounded-[10px] border border-basalt/15 bg-paper px-3 text-base sm:h-10 sm:text-sm"
                   >
                     <option value="">+ Add a room…</option>
                     {TOUR_ROOM_KINDS.filter((k) => k.kind !== "other").map((k) => (
@@ -305,7 +315,7 @@ export function TourEditor({ listing, open, onClose, onChanged }: { listing: { i
                 </div>
                 <button
                   type="button"
-                  onClick={() => setSelected(LEFT_OUT)}
+                  onClick={() => pickRoom(LEFT_OUT)}
                   aria-current={viewingLeftOut ? "true" : undefined}
                   className={cn("mt-3 flex w-full items-center justify-between rounded-[10px] p-2.5 text-left text-sm", viewingLeftOut ? "bg-chalk font-semibold" : "text-basalt/60 hover:bg-chalk/60")}
                 >
@@ -314,7 +324,7 @@ export function TourEditor({ listing, open, onClose, onChanged }: { listing: { i
               </div>
 
               {/* Selected room */}
-              <div className="p-4 sm:p-5 lg:overflow-y-auto">
+              <div ref={editorPane} className="scroll-mt-2 p-4 sm:p-5 lg:overflow-y-auto">
                 {viewingLeftOut ? (
                   <div className="grid gap-3">
                     <h3 className="text-sm font-semibold">Not in the tour</h3>
@@ -326,7 +336,7 @@ export function TourEditor({ listing, open, onClose, onChanged }: { listing: { i
                         {leftOut.map((url) => (
                           <div key={url} className="grid gap-1.5">
                             <img {...imgAttrs(url, "220px")} alt="" loading="lazy" className="aspect-[4/3] w-full rounded-[8px] object-cover" />
-                            <select value="" onChange={(e) => e.target.value && movePhoto(url, e.target.value)} aria-label="Move this photo into a room" className="h-9 rounded-[8px] border border-basalt/15 bg-paper px-2 text-xs">
+                            <select value="" onChange={(e) => e.target.value && movePhoto(url, e.target.value)} aria-label="Move this photo into a room" className="h-12 rounded-[8px] border border-basalt/15 bg-paper px-2 text-base sm:h-9 sm:text-xs">
                               <option value="">Move to…</option>
                               {rooms.map((r) => (
                                 <option key={r.id} value={r.id}>
@@ -417,7 +427,7 @@ export function TourEditor({ listing, open, onClose, onChanged }: { listing: { i
                               <Label htmlFor={`cap-${i}`} className="sr-only">Caption</Label>
                               <Input id={`cap-${i}`} value={p.caption} maxLength={TOUR_LIMITS.caption} placeholder="Caption (optional)" onChange={(e) => setCaption(room.id, p.url, e.target.value)} className="h-10 rounded-none text-base sm:text-sm" />
                               <div className="flex items-center gap-1">
-                                <select value={room.id} onChange={(e) => movePhoto(p.url, e.target.value)} aria-label="Move this photo" className="h-9 min-w-0 flex-1 rounded-[8px] border border-basalt/15 bg-paper px-2 text-xs">
+                                <select value={room.id} onChange={(e) => movePhoto(p.url, e.target.value)} aria-label="Move this photo" className="h-12 min-w-0 flex-1 rounded-[8px] border border-basalt/15 bg-paper px-2 text-base sm:h-9 sm:text-xs">
                                   {rooms.map((r) => (
                                     <option key={r.id} value={r.id}>
                                       {r.id === room.id ? `In ${r.name}` : `Move to ${r.name}`}

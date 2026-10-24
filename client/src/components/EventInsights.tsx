@@ -192,7 +192,7 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
                 [false, "All"],
                 [true, "Big demand"],
               ] as const).map(([v, label]) => (
-                <button key={label} type="button" aria-pressed={bigOnly === v} onClick={() => setBigOnly(v)} className={cn("h-8 rounded-full px-3 text-xs font-semibold", bigOnly === v ? "bg-basalt text-paper" : "text-basalt/70 hover:text-basalt")}>
+                <button key={label} type="button" aria-pressed={bigOnly === v} onClick={() => setBigOnly(v)} className={cn("h-10 rounded-full px-3 text-xs font-semibold sm:h-8", bigOnly === v ? "bg-basalt text-paper" : "text-basalt/70 hover:text-basalt")}>
                   {label}
                 </button>
               ))}
@@ -203,7 +203,7 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
             <span className="text-xs font-semibold text-basalt/70">Event markup</span>
             <div role="group" aria-label="Event markup on big-demand dates" className="inline-flex rounded-full border border-basalt/15 bg-paper p-1">
               {MARKUPS.map((v) => (
-                <button key={v} type="button" aria-pressed={markup === v} onClick={() => chooseMarkup(v)} className={cn("h-8 rounded-full px-3 text-xs font-semibold tabular-nums", markup === v ? "bg-basalt text-paper" : "text-basalt/70 hover:text-basalt")}>
+                <button key={v} type="button" aria-pressed={markup === v} onClick={() => chooseMarkup(v)} className={cn("h-10 rounded-full px-3 text-xs font-semibold sm:h-8 tabular-nums", markup === v ? "bg-basalt text-paper" : "text-basalt/70 hover:text-basalt")}>
                   +{v}%
                 </button>
               ))}
@@ -223,7 +223,7 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
               <span className="min-w-0">
                 <strong>{e.title}</strong> was cancelled{e.statusReason ? ` (${e.statusReason.charAt(0).toLowerCase()}${e.statusReason.slice(1)})` : ""}. Your event price for <strong>{l.title}</strong> is still set on {rates.map((r) => fmtRange(r.start, r.end)).join(", ")}.
               </span>
-              <button type="button" disabled={applying === `rm:${l.id}:${e.id}`} onClick={() => void removeEventPrice(l, e)} className="h-9 shrink-0 rounded-none bg-basalt px-3 text-xs font-semibold text-paper hover:bg-basalt/90 disabled:opacity-50">
+              <button type="button" disabled={applying === `rm:${l.id}:${e.id}`} onClick={() => void removeEventPrice(l, e)} className="h-10 shrink-0 rounded-none bg-basalt px-3 text-xs font-semibold text-paper hover:bg-basalt/90 disabled:opacity-50 sm:h-9">
                 {applying === `rm:${l.id}:${e.id}` ? "Removing…" : "Remove event price"}
               </button>
             </li>
@@ -246,6 +246,7 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
               const cmp = rows;
               const isOpen = open === e.id;
               const d = new Date(e.start + "T00:00:00Z");
+              const countLabel = sugg.length ? `${sugg.length} price suggestion${sugg.length === 1 ? "" : "s"}` : `${ls.length} listing${ls.length === 1 ? "" : "s"}`;
               return (
                 <li key={e.id}>
                   <button
@@ -264,12 +265,12 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
                         {fmtRange(e.start, e.end)} · {e.city ?? "Nationwide"}
                         {e.expectedAttendance ? ` · ~${e.expectedAttendance.toLocaleString()} expected` : ""}
                       </span>
+                      {/* Phones: the count sits under the title so the title keeps the row's width. */}
+                      <span className={cn("mt-0.5 block text-xs font-semibold sm:hidden", sugg.length ? "text-basalt" : "text-basalt/55")}>{countLabel}</span>
                     </span>
                     <span className="flex items-center gap-3">
                       <span className={cn("hidden rounded-full px-2.5 py-0.5 text-[11px] font-bold sm:inline", e.impact === "high" ? "bg-apricot/15 text-apricot" : "bg-basalt/10 text-basalt/70")}>{IMPACT_LABEL[e.impact]}</span>
-                      <span className={cn("text-xs font-semibold", sugg.length ? "text-basalt" : "text-basalt/55")}>
-                        {sugg.length ? `${sugg.length} price suggestion${sugg.length === 1 ? "" : "s"}` : `${ls.length} listing${ls.length === 1 ? "" : "s"}`}
-                      </span>
+                      <span className={cn("hidden text-xs font-semibold sm:inline", sugg.length ? "text-basalt" : "text-basalt/55")}>{countLabel}</span>
                       <ChevronDown className={cn("h-4 w-4 text-basalt/50 transition-transform", isOpen && "rotate-180")} />
                     </span>
                   </button>
@@ -288,8 +289,8 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
                       {cmp.length > 0 && (
                         <div className="mt-2 divide-y divide-basalt/8">
                           {cmp.map((r) => (
-                            <div key={r.l.id} className="grid grid-cols-2 items-center gap-x-6 gap-y-1.5 py-2.5 text-sm lg:grid-cols-[minmax(0,1fr)_10rem_15rem_10rem]">
-                              <span className="col-span-2 min-w-0 truncate font-medium lg:col-span-1">
+                            <div key={r.l.id} className="grid grid-cols-1 items-center gap-x-6 gap-y-1.5 py-2.5 text-sm sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_10rem_15rem_10rem]">
+                              <span className="min-w-0 truncate font-medium sm:col-span-2 lg:col-span-1">
                                 {r.l.title}
                                 {r.activity && <span className="block text-xs font-normal text-basalt/60">{fmtRange(r.ds[0], r.ds[r.ds.length - 1])} (around the event)</span>}
                               </span>
@@ -304,17 +305,17 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
                                   type="button"
                                   disabled={applying === `${r.l.id}:${e.id}`}
                                   onClick={() => void apply(r.l, e, r.suggest, r.ds[0], r.ds[r.ds.length - 1], r.enough ? "event_market" : "event_markup", r.enough ? `median of ${r.peers} similar listings (${format(r.med)})` : `+${r.pct}% on usual ${format(r.usual)}`)}
-                                  className="col-span-2 inline-flex h-9 items-center justify-center gap-1.5 justify-self-start rounded-none bg-basalt px-3 text-xs font-semibold text-paper hover:bg-basalt/90 disabled:opacity-50 lg:col-span-1 lg:justify-self-end"
+                                  className="inline-flex h-10 items-center justify-center gap-1.5 justify-self-start rounded-none bg-basalt px-3 text-xs font-semibold text-paper hover:bg-basalt/90 disabled:opacity-50 sm:col-span-2 sm:h-9 lg:col-span-1 lg:justify-self-end"
                                   title={`Sets ${format(r.suggest)} per ${r.unit} for ${fmtRange(r.ds[0], r.ds[r.ds.length - 1])}`}
                                 >
                                   <Sparkles className="h-3.5 w-3.5 text-apricot" /> {applying === `${r.l.id}:${e.id}` ? "Applying…" : `Apply ${format(r.suggest)}`}
                                 </button>
                               ) : (
-                                <span className="col-span-2 text-xs text-basalt/60 lg:col-span-1 lg:text-right">
+                                <span className="text-xs text-basalt/60 sm:col-span-2 lg:col-span-1 lg:text-right">
                                   {r.l.multiRoom ? "Set room-type prices in Calendar" : r.usual <= 0 ? "No price set" : r.enough ? "In line with similar listings" : "Already priced for the event"}
                                 </span>
                               )}
-                              {r.hints.length > 0 && <p className="col-span-2 text-xs text-basalt/60 lg:col-span-4">{r.hints.join(" ")}</p>}
+                              {r.hints.length > 0 && <p className="text-xs text-basalt/60 sm:col-span-2 lg:col-span-4">{r.hints.join(" ")}</p>}
                             </div>
                           ))}
                         </div>
@@ -326,7 +327,7 @@ export function EventInsights({ embedded = false }: { embedded?: boolean } = {})
             })}
           </ul>
           {list.length > 6 && (
-            <button type="button" onClick={() => setShowAll((v) => !v)} className="mt-2 text-sm font-semibold text-basalt/70 underline-offset-4 hover:text-apricot hover:underline">
+            <button type="button" onClick={() => setShowAll((v) => !v)} className="mt-2 py-2 text-sm font-semibold text-basalt/70 underline-offset-4 hover:text-apricot hover:underline">
               {showAll ? "Show fewer" : `Show all ${list.length} events`}
             </button>
           )}

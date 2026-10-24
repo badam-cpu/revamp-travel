@@ -13,7 +13,9 @@ export function PageHeader({ title, sub, actions, className }: { title: React.Re
         <h1 className="font-display text-2xl leading-tight tracking-[-0.015em] [text-wrap:balance]">{title}</h1>
         {sub && <p className="mt-1 max-w-2xl text-sm leading-6 text-basalt/60">{sub}</p>}
       </div>
-      {actions && <div className="shrink-0">{actions}</div>}
+      {/* min-w-0 + max-w-full, not shrink-0: a shrink-0 item takes its max-content
+          width, so a row of pills could never wrap and ran off a phone screen. */}
+      {actions && <div className="min-w-0 max-w-full">{actions}</div>}
     </div>
   );
 }
@@ -25,7 +27,9 @@ export function SubHeader({ title, sub, actions, className }: { title: React.Rea
         <h2 className="text-lg font-semibold leading-tight tracking-[-0.01em]">{title}</h2>
         {sub && <p className="mt-1 max-w-2xl text-sm leading-6 text-basalt/60">{sub}</p>}
       </div>
-      {actions && <div className="shrink-0">{actions}</div>}
+      {/* min-w-0 + max-w-full, not shrink-0: a shrink-0 item takes its max-content
+          width, so a row of pills could never wrap and ran off a phone screen. */}
+      {actions && <div className="min-w-0 max-w-full">{actions}</div>}
     </div>
   );
 }

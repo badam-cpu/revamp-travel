@@ -212,7 +212,14 @@ export const PhotoUploader = forwardRef<
       >
         <ImagePlus className="h-6 w-6 text-apricot" />
         <p className="text-sm font-semibold">
-          {atCapacity ? `Up to ${max} photos` : "Drag & drop photos, or click to choose"}
+          {atCapacity ? (
+            `Up to ${max} photos`
+          ) : (
+            <>
+              <span className="sm:hidden">Tap to choose photos</span>
+              <span className="hidden sm:inline">Drag & drop photos, or click to choose</span>
+            </>
+          )}
         </p>
         <p className="text-xs text-basalt/45">
           {canUpload ? `${photos.length}/${max} added · use photos ${MIN_LONG_EDGE}px+ wide (2000px+ ideal)` : "Sign in as an operator to upload — or paste an image URL below."}
@@ -273,17 +280,18 @@ export const PhotoUploader = forwardRef<
                 type="button"
                 onClick={() => remove(photo.id)}
                 aria-label="Remove photo"
-                className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center bg-basalt/70 text-white opacity-0 transition-opacity hover:bg-destructive group-hover:opacity-100"
+                className="absolute right-1.5 top-1.5 grid h-9 w-9 place-items-center bg-basalt/70 text-white opacity-100 transition-opacity hover:bg-destructive sm:h-6 sm:w-6 sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover:opacity-100"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
-              <div className="absolute inset-x-0 bottom-0 flex justify-between bg-basalt/55 p-1 opacity-0 transition-opacity group-hover:opacity-100">
+              {/* Always shown on phones: no hover there, and HTML5 drag doesn't work on touch. */}
+              <div className="absolute inset-x-0 bottom-0 flex justify-between bg-basalt/55 p-1 opacity-100 transition-opacity sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover:opacity-100">
                 <button
                   type="button"
                   onClick={() => move(i, -1)}
                   disabled={i === 0}
                   aria-label="Move earlier"
-                  className="grid h-6 w-6 place-items-center text-white disabled:opacity-30"
+                  className="grid h-9 w-9 place-items-center text-white disabled:opacity-30 sm:h-6 sm:w-6"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" />
                 </button>
@@ -292,7 +300,7 @@ export const PhotoUploader = forwardRef<
                   onClick={() => move(i, 1)}
                   disabled={i === photos.length - 1}
                   aria-label="Move later"
-                  className="grid h-6 w-6 place-items-center text-white disabled:opacity-30"
+                  className="grid h-9 w-9 place-items-center text-white disabled:opacity-30 sm:h-6 sm:w-6"
                 >
                   <ArrowRight className="h-3.5 w-3.5" />
                 </button>
@@ -354,7 +362,7 @@ export const PhotoUploader = forwardRef<
             <img src={photos[0].url} alt="Cover preview" draggable={false} className="h-full w-full object-cover" style={{ objectPosition: `${focus.x}% ${focus.y}%` }} />
             <span className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-apricot/70 shadow" style={{ left: `${focus.x}%`, top: `${focus.y}%` }} />
           </div>
-          <p className="text-xs text-basalt/45">This is roughly how the cover crops on a card. Click or drag to choose the focal point.</p>
+          <p className="text-xs text-basalt/45">This is roughly how the cover crops on a card. <span className="sm:hidden">Tap</span><span className="hidden sm:inline">Click</span> or drag to choose the focal point.</p>
         </div>
       )}
 

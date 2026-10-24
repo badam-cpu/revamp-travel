@@ -250,10 +250,10 @@ export const RoomTypesEditor = forwardRef<RoomTypesEditorHandle, { defaultValue:
               </div>
             ))}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1">
-              <button type="button" onClick={() => addUnit(row.key)} className="inline-flex items-center gap-1 text-xs font-semibold text-apricot hover:underline">
+              <button type="button" onClick={() => addUnit(row.key)} className="inline-flex min-h-10 items-center gap-1 text-xs font-semibold text-apricot hover:underline sm:min-h-0">
                 <Plus className="h-3.5 w-3.5" /> Add room
               </button>
-              <span className="flex items-center gap-1.5 text-xs text-basalt/55">
+              <span className="flex flex-wrap items-center gap-1.5 text-xs text-basalt/55">
                 Add
                 <Input
                   id={`room-bulk-count-${i}`}
@@ -264,7 +264,7 @@ export const RoomTypesEditor = forwardRef<RoomTypesEditorHandle, { defaultValue:
                   onChange={(e) => setBulk((s) => ({ ...s, [row.key]: { from: s[row.key]?.from ?? "", count: e.target.value } }))}
                   placeholder="5"
                   aria-label="How many rooms to add"
-                  className="h-8 w-14 rounded-none px-2 text-xs"
+                  className="h-11 w-14 rounded-none px-2 text-base sm:h-8 sm:text-xs"
                 />
                 rooms numbered from
                 <Input
@@ -275,9 +275,9 @@ export const RoomTypesEditor = forwardRef<RoomTypesEditorHandle, { defaultValue:
                   onChange={(e) => setBulk((s) => ({ ...s, [row.key]: { count: s[row.key]?.count ?? "", from: e.target.value } }))}
                   placeholder={nextNumber(row.units) || "101"}
                   aria-label="First room number"
-                  className="h-8 w-16 rounded-none px-2 text-xs"
+                  className="h-11 w-16 rounded-none px-2 text-base sm:h-8 sm:text-xs"
                 />
-                <button type="button" onClick={() => addSeveral(row.key)} className="font-semibold text-apricot hover:underline">
+                <button type="button" onClick={() => addSeveral(row.key)} className="min-h-10 px-1 font-semibold text-apricot hover:underline sm:min-h-0 sm:px-0">
                   Add
                 </button>
               </span>

@@ -296,15 +296,15 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
 
   return (
     <Dialog open={!!bookingId} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg gap-0 overflow-hidden rounded-none p-0">
+      <DialogContent className="gap-0 overflow-hidden rounded-none p-0 sm:max-w-lg">
         {loading || !b ? (
           <div className="p-8 text-sm text-basalt/50">{loading ? "Loading…" : "Booking not found."}</div>
         ) : (
-          <div className="max-h-[85vh] overflow-y-auto">
+          <div className="max-h-[85dvh] overflow-y-auto">
             {/* Header */}
-            <div className="flex items-start justify-between gap-4 border-b border-basalt/10 bg-chalk p-5 pr-14">
+            <div className="flex flex-col items-start gap-2 border-b border-basalt/10 bg-chalk p-5 pr-14 sm:flex-row sm:justify-between sm:gap-4">
               <div className="min-w-0">
-                <DialogTitle className="truncate font-display text-2xl font-normal leading-tight">{b.listings?.title ?? "Booking"}</DialogTitle>
+                <DialogTitle className="line-clamp-2 font-display text-2xl font-normal leading-tight">{b.listings?.title ?? "Booking"}</DialogTitle>
                 <p className="mt-1 text-xs uppercase tracking-[0.1em] text-basalt/45">{b.listings?.type} · {b.listings?.city}</p>
               </div>
               <span className="shrink-0 rounded-full bg-basalt px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-paper">{STATUS_LABEL[b.status] ?? b.status}</span>
@@ -316,25 +316,25 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
                 <div className="flex items-center justify-between">
                   <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-basalt/45">Guest</h3>
                   {!editingContact && (
-                    <button type="button" onClick={startEditContact} className="inline-flex items-center gap-1 text-[11px] font-semibold text-basalt/50 transition-colors hover:text-apricot">
+                    <button type="button" onClick={startEditContact} className="-mr-2 inline-flex min-h-10 items-center gap-1 px-2 text-[11px] font-semibold text-basalt/50 transition-colors hover:text-apricot">
                       <Pencil className="h-3 w-3" /> Edit
                     </button>
                   )}
                 </div>
                 {editingContact ? (
                   <div className="mt-2 grid gap-2">
-                    <Input value={cName} onChange={(e) => setCName(e.target.value)} placeholder="Guest name" className="h-10 rounded-none" />
-                    <Input type="email" value={cEmail} onChange={(e) => setCEmail(e.target.value)} placeholder="Email (optional)" className="h-10 rounded-none" />
-                    <Input type="tel" value={cPhone} onChange={(e) => setCPhone(e.target.value)} placeholder="Phone (optional)" className="h-10 rounded-none" />
+                    <Input value={cName} onChange={(e) => setCName(e.target.value)} placeholder="Guest name" className="h-12 rounded-none sm:h-10" />
+                    <Input type="email" value={cEmail} onChange={(e) => setCEmail(e.target.value)} placeholder="Email (optional)" className="h-12 rounded-none sm:h-10" />
+                    <Input type="tel" value={cPhone} onChange={(e) => setCPhone(e.target.value)} placeholder="Phone (optional)" className="h-12 rounded-none sm:h-10" />
                     <div className="flex items-center gap-2">
-                      <Button onClick={saveContact} disabled={savingContact} className="h-9 rounded-none bg-apricot text-white hover:bg-apricot/90">{savingContact ? "Saving…" : "Save"}</Button>
+                      <Button onClick={saveContact} disabled={savingContact} className="h-12 rounded-none bg-apricot text-white hover:bg-apricot/90 sm:h-9">{savingContact ? "Saving…" : "Save"}</Button>
                       <button type="button" onClick={() => setEditingContact(false)} disabled={savingContact} className="text-sm font-semibold text-basalt/50 hover:text-basalt">Cancel</button>
                     </div>
                   </div>
                 ) : (
                   <div className="mt-2 grid gap-1.5 text-sm">
                     <p className="flex items-center gap-2"><User className="h-4 w-4 text-basalt/40" /> {guestName}</p>
-                    <p className="flex items-center gap-2"><Mail className="h-4 w-4 text-basalt/40" /> {b.guest_email ? <a href={`mailto:${b.guest_email}`} className="text-apricot hover:underline">{b.guest_email}</a> : <span className="text-basalt/40">{contactPending ? "Shared once the booking is paid" : "Not shared (account guest)"}</span>}</p>
+                    <p className="flex items-center gap-2"><Mail className="h-4 w-4 shrink-0 text-basalt/40" /> {b.guest_email ? <a href={`mailto:${b.guest_email}`} className="min-w-0 break-all text-apricot hover:underline">{b.guest_email}</a> : <span className="text-basalt/40">{contactPending ? "Shared once the booking is paid" : "Not shared (account guest)"}</span>}</p>
                     <p className="flex items-center gap-2"><Phone className="h-4 w-4 text-basalt/40" /> {b.guest_phone ? <a href={`tel:${b.guest_phone}`} className="text-apricot hover:underline">{b.guest_phone}</a> : <span className="text-basalt/40">{contactPending ? "Shared once the booking is paid" : "—"}</span>}</p>
                   </div>
                 )}
@@ -446,7 +446,7 @@ export function BookingDetailDialog({ bookingId, onClose, onChanged }: { booking
                               setSavingPay(false);
                             }
                           }}
-                          className={cn("px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition-colors disabled:opacity-50", (b.payment_status ?? "unpaid") === v ? (v === "paid" ? "bg-sevan text-white" : "bg-tuff text-white") : "text-basalt/55 hover:text-basalt")}
+                          className={cn("min-h-10 px-4 py-1.5 text-xs font-bold uppercase sm:min-h-0 sm:px-3 tracking-[0.08em] transition-colors disabled:opacity-50", (b.payment_status ?? "unpaid") === v ? (v === "paid" ? "bg-sevan text-white" : "bg-tuff text-white") : "text-basalt/55 hover:text-basalt")}
                         >
                           {v}
                         </button>

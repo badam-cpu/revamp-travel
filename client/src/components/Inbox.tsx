@@ -7,7 +7,7 @@
  * on an interval while open (Phase 3 swaps in Supabase Realtime).
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, ShieldAlert, Send } from "lucide-react";
+import { ChevronLeft, Loader2, ShieldAlert, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { listConversations, getMessages, markConversationRead, type InboxConversation, type InboxMessage } from "@/lib/messaging";
@@ -52,6 +52,15 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [tplOpen, setTplOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Phones show the list OR the conversation; switching scrolls the inbox back
+  // into view (otherwise opening thread #15 can land the page below it).
+  const boxRef = useRef<HTMLDivElement>(null);
+  const toInboxTop = () => {
+    if (window.matchMedia("(max-width: 767px)").matches) requestAnimationFrame(() => boxRef.current?.scrollIntoView({ block: "start" }));
+  };
+  // Phones have no Shift+Enter: there Enter makes a new line and the button sends.
+  const enterSends = typeof window !== "undefined" && window.matchMedia("(pointer: fine)").matches;
+  useEffect(() => () => document.body.classList.remove("composer-focus"), []);
 
   // Operator's own templates (travelers/admins own none → the control stays hidden).
   useEffect(() => {
@@ -78,6 +87,7 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
         setConvos((prev) => prev?.map((c) => (c.id === id ? { ...c, unread: 0 } : c)) ?? prev);
       }
       requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }));
+      toInboxTop();
     },
     [admin, userId],
   );
@@ -156,7 +166,7 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
   }
 
   return (
-    <div className="grid gap-0 overflow-hidden rounded-none border border-basalt/12 md:grid-cols-[300px_1fr]" style={{ minHeight: 460 }}>
+    <div ref={boxRef} className="grid scroll-mt-24 gap-0 overflow-hidden rounded-none border border-basalt/12 md:min-h-[460px] md:grid-cols-[300px_1fr]">
       {/* Thread list */}
       <ul className={cn("divide-y divide-basalt/10 border-basalt/12 md:border-r", active && "hidden md:block")}>
         {convos.map((c) => (
@@ -178,9 +188,9 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
                   <p className="min-w-0 flex-1 truncate text-sm font-semibold text-basalt">
                     {admin ? c.parties.map((p) => p.name).join(" ↔ ") : c.counterpart?.name ?? "Revamp"}
                   </p>
-                  <span className="shrink-0 text-[10px] text-basalt/40">{timeAgo(c.lastMessageAt)}</span>
+                  <span className="shrink-0 text-[11px] text-basalt/50">{timeAgo(c.lastMessageAt)}</span>
                 </div>
-                {c.listing?.title && <p className="truncate text-[11px] text-basalt/45">{c.listing.title}</p>}
+                {c.listing?.title && <p className="truncate text-xs text-basalt/50">{c.listing.title}</p>}
                 <p className="mt-0.5 truncate text-xs text-basalt/55">{c.preview}</p>
               </div>
               <div className="mt-0.5 flex shrink-0 flex-col items-end gap-1">
@@ -193,22 +203,31 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
       </ul>
 
       {/* Message pane */}
-      <div className={cn("flex flex-col", !active && "hidden md:flex")}>
+      {/* Phones: the open conversation fills the screen (header · messages · composer),
+          so the reply box and Back stay in view. */}
+      <div className={cn("flex min-w-0 flex-col max-md:h-[calc(100dvh-7rem)]", !active && "hidden md:flex")}>
         {!active ? (
           <div className="grid flex-1 place-items-center p-8 text-sm text-basalt/45">Select a conversation</div>
         ) : (
           <>
             <div className="flex items-center gap-3 border-b border-basalt/10 px-4 py-3">
-              <button type="button" onClick={() => setActiveId(null)} className="text-xs font-semibold text-apricot md:hidden">
-                ← Back
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveId(null);
+                  toInboxTop();
+                }}
+                className="-ml-2 inline-flex h-10 shrink-0 items-center gap-0.5 px-2 text-sm font-semibold text-apricot md:hidden"
+              >
+                <ChevronLeft className="h-4 w-4" /> Back
               </button>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold">
                   {admin ? active.parties.map((p) => `${p.name} (${p.role})`).join(" ↔ ") : active.counterpart?.name ?? "Revamp"}
-                  {active.status === "closed" && <span className="ml-2 rounded-full bg-basalt/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-basalt/50">Closed</span>}
                 </p>
-                {active.listing?.title && <p className="truncate text-[11px] text-basalt/45">{active.listing.title}</p>}
+                {active.listing?.title && <p className="truncate text-xs text-basalt/55">{active.listing.title}</p>}
               </div>
+              {active.status === "closed" && <span className="shrink-0 rounded-full bg-basalt/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-basalt/50">Closed</span>}
               {admin && (
                 <button type="button" onClick={toggleClose} className="shrink-0 text-xs font-semibold text-basalt/55 underline-offset-2 hover:text-basalt hover:underline">
                   {active.status === "closed" ? "Reopen" : "Close"}
@@ -216,7 +235,7 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
               )}
             </div>
 
-            <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto bg-chalk/30 px-4 py-4" style={{ maxHeight: 380 }}>
+            <div ref={scrollRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain bg-chalk/30 px-4 py-4 md:max-h-[380px]">
               {messages.map((m) => {
                 const mine = !admin && m.senderId === userId;
                 const isSupport = m.senderRole === "support";
@@ -226,8 +245,8 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
                   // declined / cancelled) — a centered, non-chat notice.
                   return (
                     <div key={m.id} className="flex justify-center">
-                      <div className="max-w-[88%] rounded-full border border-basalt/12 bg-paper px-3.5 py-1.5 text-center text-xs leading-snug text-basalt/70">
-                        <span className={cn("whitespace-pre-wrap break-words", m.redacted && "italic opacity-70")}>{m.body}</span>
+                      <div className="max-w-[88%] rounded-2xl border border-basalt/12 bg-paper px-3.5 py-1.5 text-center text-xs leading-snug text-basalt/70">
+                        <span className={cn("whitespace-pre-wrap [overflow-wrap:anywhere]", m.redacted && "italic opacity-70")}>{m.body}</span>
                         {admin && !m.redacted && (
                           <button type="button" onClick={() => redact(m.id)} className="ml-2 font-semibold text-amber-600 underline-offset-2 hover:underline">redact</button>
                         )}
@@ -244,13 +263,13 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
                       )}
                     >
                       {admin && <p className="mb-0.5 text-[10px] font-bold uppercase tracking-wide opacity-60">{m.senderRole}</p>}
-                      <p className={cn("whitespace-pre-wrap break-words", m.redacted && "italic opacity-70")}>{m.body}</p>
+                      <p className={cn("whitespace-pre-wrap [overflow-wrap:anywhere]", m.redacted && "italic opacity-70")}>{m.body}</p>
                       {admin && originals.get(m.id) && (
                         <p className="mt-1.5 border-t border-amber-500/30 pt-1.5 text-xs leading-snug text-amber-700">
                           <span className="font-semibold">As typed (only admins see this):</span> <span className="whitespace-pre-wrap break-words">{originals.get(m.id)}</span>
                         </p>
                       )}
-                      <p className={cn("mt-1 text-[10px]", mine || isSupport ? "text-white/60" : "text-basalt/40")}>
+                      <p className={cn("mt-1 text-[11px]", mine || isSupport ? "text-white/70" : "text-basalt/50")}>
                         {new Date(m.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                         {admin && m.flagged && <span className="ml-1 font-semibold text-amber-600">· flagged</span>}
                         {admin && !m.redacted && (
@@ -269,25 +288,27 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
             {active.status === "closed" && !admin ? (
               <div className="border-t border-basalt/10 p-4 text-center text-sm text-basalt/50">This conversation has been closed by Revamp.</div>
             ) : (
-            <div className="border-t border-basalt/10 p-3">
+            <div className="border-t border-basalt/10 bg-paper p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               {!admin && (
-                <p className="mb-1.5 text-[10px] leading-tight text-basalt/40">
+                <p className="mb-1.5 text-xs leading-snug text-basalt/55">
                   Phone numbers, emails and links are shared once a booking is confirmed — until then they're hidden. Keep bookings & payments on Revamp.
                 </p>
               )}
               {templates.length > 0 && (
                 <div className="relative mb-1.5">
-                  <button type="button" onClick={() => setTplOpen((o) => !o)} className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-apricot hover:underline">
+                  <button type="button" aria-expanded={tplOpen} onClick={() => setTplOpen((o) => !o)} className="-ml-2 inline-flex h-10 items-center gap-1.5 px-2 text-xs font-semibold text-apricot hover:underline">
                     <FileText className="h-3.5 w-3.5" /> Templates
                   </button>
+                  {/* Tap anywhere else to close. */}
+                  {tplOpen && <button type="button" aria-label="Close templates" tabIndex={-1} onClick={() => setTplOpen(false)} className="fixed inset-0 z-[9] cursor-default" />}
                   {tplOpen && (
-                    <div className="absolute bottom-6 left-0 z-10 max-h-56 w-72 overflow-y-auto border border-basalt/15 bg-paper shadow-lg">
+                    <div className="absolute bottom-11 left-0 z-10 max-h-56 w-[min(18rem,calc(100vw-3rem))] overflow-y-auto border border-basalt/15 bg-paper shadow-lg">
                       {templates.map((t) => (
                         <button
                           key={t.id}
                           type="button"
                           onClick={() => { setDraft((d) => (d.trim() ? `${d}\n${t.body}` : t.body)); setTplOpen(false); }}
-                          className="block w-full border-b border-basalt/8 px-3 py-2 text-left last:border-0 hover:bg-chalk/60"
+                          className="block w-full border-b border-basalt/8 px-3 py-2.5 text-left last:border-0 hover:bg-chalk/60"
                         >
                           <span className="block text-xs font-semibold text-basalt">{t.title}</span>
                           <span className="mt-0.5 block truncate text-[11px] text-basalt/50">{t.body}</span>
@@ -302,16 +323,20 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
+                    if (enterSends && e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
                       send();
                     }
                   }}
+                  // The floating Aha AI button would sit over Send while typing.
+                  onFocus={() => document.body.classList.add("composer-focus")}
+                  onBlur={() => document.body.classList.remove("composer-focus")}
                   rows={1}
+                  enterKeyHint={enterSends ? "send" : "enter"}
                   placeholder={admin ? "Reply as Revamp…" : "Write a message…"}
-                  className="max-h-28 min-h-10 flex-1 resize-none rounded-none border border-basalt/15 bg-paper px-3 py-2 text-sm outline-none focus:border-apricot"
+                  className="max-h-40 min-h-12 min-w-0 flex-1 resize-none rounded-none border border-basalt/15 bg-paper px-3 py-2.5 text-base outline-none [field-sizing:content] focus:border-apricot md:text-sm"
                 />
-                <Button onClick={send} disabled={sending || !draft.trim()} className="h-10 shrink-0 rounded-none bg-apricot px-4 text-white hover:bg-apricot/90">
+                <Button onClick={send} disabled={sending || !draft.trim()} aria-label="Send message" className="h-12 w-12 shrink-0 rounded-none bg-apricot p-0 text-white hover:bg-apricot/90">
                   {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 </Button>
               </div>

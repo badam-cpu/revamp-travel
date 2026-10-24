@@ -413,6 +413,15 @@ function TrendChart({ series, stage, loading }: { series: { bucket: Bucket; valu
   // Fewer x labels on phones.
   const every = Math.max(1, Math.ceil(n / 6));
   const everyPhone = Math.max(1, Math.ceil(n / 3));
+  // Tapped point (phones have no hover): shows its value; tapping it again or anywhere else clears it.
+  const [sel, setSel] = useState<number | null>(null);
+  useEffect(() => setSel(null), [stage, n]);
+  useEffect(() => {
+    if (sel === null) return;
+    const close = () => setSel(null);
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [sel]);
 
   return (
     <div className={cn("mt-6", loading && "opacity-50")}>
@@ -434,17 +443,35 @@ function TrendChart({ series, stage, loading }: { series: { bucket: Bucket; valu
           </svg>
           {series.map((s, i) => (
             <div key={s.bucket.label} className="group absolute -translate-x-1/2 translate-y-1/2" style={{ left: `${xPct(i)}%`, bottom: `${100 - yPct(values[i])}%` }}>
-              <span
-                tabIndex={0}
-                className={cn(
-                  "block h-2.5 w-2.5 rounded-full border-2 border-paper outline-none ring-basalt/30 focus-visible:ring-2",
-                  i === n - 1 ? "bg-apricot" : "bg-basalt",
-                )}
-              />
-              <span className="pointer-events-none absolute bottom-full left-1/2 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-basalt px-2 py-1 text-[11px] font-semibold tabular-nums text-paper group-hover:block group-focus-within:block">
-                {s.bucket.label}
-                {s.bucket.partial ? ` (${s.bucket.days.length} days)` : ""} · {fmtStage(stage, s.value)}
-              </span>
+              {/* Transparent 40px hit target on phones; just the dot from sm up. */}
+              <button
+                type="button"
+                aria-pressed={sel === i}
+                aria-label={`${s.bucket.label}: ${fmtStage(stage, s.value)}`}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => setSel((cur) => (cur === i ? null : i))}
+                className="group/pt flex size-10 items-center justify-center outline-none sm:size-auto"
+              >
+                <span className="relative block">
+                  <span
+                    className={cn(
+                      "block h-2.5 w-2.5 rounded-full border-2 border-paper ring-basalt/30 group-focus-visible/pt:ring-2",
+                      i === n - 1 ? "bg-apricot" : "bg-basalt",
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      "pointer-events-none absolute bottom-full z-10 mb-1.5 whitespace-nowrap rounded-md bg-basalt px-2 py-1 text-[11px] font-semibold tabular-nums text-paper",
+                      // First/last points anchor to their edge so the label isn't clipped.
+                      n > 1 && i === 0 ? "left-0" : n > 1 && i === n - 1 ? "right-0" : "left-1/2 -translate-x-1/2",
+                      sel === i ? "block" : "hidden group-hover:block group-focus-within:block",
+                    )}
+                  >
+                    {s.bucket.label}
+                    {s.bucket.partial ? ` (${s.bucket.days.length} days)` : ""} · {fmtStage(stage, s.value)}
+                  </span>
+                </span>
+              </button>
             </div>
           ))}
         </div>

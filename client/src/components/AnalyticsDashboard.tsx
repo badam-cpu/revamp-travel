@@ -57,7 +57,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
       type="button"
       onClick={onClick}
       className={cn(
-        "rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
+        "h-10 shrink-0 rounded-full px-3.5 text-xs font-semibold transition-colors sm:h-auto sm:px-3 sm:py-1.5",
         active ? "bg-basalt text-paper" : "border border-basalt/15 bg-paper text-basalt/60 hover:text-basalt",
       )}
     >
@@ -215,11 +215,11 @@ export function AnalyticsDashboard({ scope, embedded = false }: { scope: "admin"
       aria-sort={sort.key === k ? (sort.desc ? "descending" : "ascending") : "none"}
       className={cn("whitespace-nowrap px-3 py-2.5 font-semibold", align === "right" ? "text-right" : "text-left", k === "title" && "sticky left-0 z-[1] min-w-[150px] bg-chalk sm:min-w-[260px]")}
     >
-      <span className={cn("inline-flex items-center gap-1", align === "right" && "justify-end")}>
+      <span className={cn("inline-flex items-center gap-1.5 sm:gap-1", align === "right" && "justify-end")}>
         <button
           type="button"
           onClick={() => setSort((s) => ({ key: k, desc: s.key === k ? !s.desc : k !== "title" }))}
-          className={cn("inline-flex items-center gap-0.5 uppercase tracking-[0.08em] hover:text-basalt", sort.key === k && "text-basalt")}
+          className={cn("inline-flex min-h-10 items-center gap-0.5 uppercase tracking-[0.08em] hover:text-basalt sm:min-h-0", sort.key === k && "text-basalt")}
         >
           {label}
           <span aria-hidden className={cn("text-[9px]", sort.key === k ? "opacity-100" : "opacity-0")}>{sort.desc ? "▼" : "▲"}</span>
@@ -243,15 +243,15 @@ export function AnalyticsDashboard({ scope, embedded = false }: { scope: "admin"
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border border-basalt/10 bg-paper p-4">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 text-[10px] font-bold uppercase tracking-[0.12em] text-basalt/35">Range</span>
+        <div className="-mx-1 flex max-w-full flex-nowrap items-center gap-1.5 overflow-x-auto px-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+          <span className="mr-1 shrink-0 text-[10px] font-bold uppercase tracking-[0.12em] text-basalt/35">Range</span>
           {WINDOWS.map((w) => (
             <Chip key={w.days} active={windowDays === w.days} onClick={() => setWindowDays(w.days)}>{w.label}</Chip>
           ))}
         </div>
         {availableTypes.length > 1 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="mr-1 text-[10px] font-bold uppercase tracking-[0.12em] text-basalt/35">Type</span>
+          <div className="-mx-1 flex max-w-full flex-nowrap items-center gap-1.5 overflow-x-auto px-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+            <span className="mr-1 shrink-0 text-[10px] font-bold uppercase tracking-[0.12em] text-basalt/35">Type</span>
             <Chip active={type === "all"} onClick={() => { setType("all"); setListingId("all"); }}>All</Chip>
             {availableTypes.map((t) => (
               <Chip key={t} active={type === t} onClick={() => { setType(t); setListingId("all"); }}>{TYPE_LABEL[t]}</Chip>
@@ -259,13 +259,13 @@ export function AnalyticsDashboard({ scope, embedded = false }: { scope: "admin"
           </div>
         )}
         {listingOptions.length > 1 && (
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:flex-row sm:items-center">
             <label htmlFor="analytics-listing" className="text-[10px] font-bold uppercase tracking-[0.12em] text-basalt/35">Listing</label>
             <select
               id="analytics-listing"
               value={listingId}
               onChange={(e) => setListingId(e.target.value)}
-              className="h-8 max-w-[220px] rounded-none border border-basalt/15 bg-paper px-2 text-xs text-basalt"
+              className="h-12 w-full rounded-none border border-basalt/15 bg-paper px-2 text-base text-basalt sm:h-8 sm:w-auto sm:max-w-[220px] sm:text-xs"
             >
               <option value="all">All listings</option>
               {listingOptions.map((l) => (
@@ -300,7 +300,10 @@ export function AnalyticsDashboard({ scope, embedded = false }: { scope: "admin"
             <section aria-label="By listing" className="min-w-0">
               <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                 <h2 className="text-base font-semibold text-basalt">By listing</h2>
-                <p className="text-xs text-basalt/50">Click a listing to see its own graph. Click a column to sort.</p>
+                <p className="text-xs text-basalt/50">
+                  <span className="sm:hidden">Tap</span><span className="hidden sm:inline">Click</span> a listing to see its own graph.{" "}
+                  <span className="sm:hidden">Tap</span><span className="hidden sm:inline">Click</span> a column to sort.
+                </p>
               </div>
               <div className="overflow-x-auto border border-basalt/10">
                 <table className="w-full text-sm">
@@ -354,6 +357,7 @@ export function AnalyticsDashboard({ scope, embedded = false }: { scope: "admin"
                   </tbody>
                 </table>
               </div>
+              <p className="mt-2 text-xs text-basalt/55 sm:hidden">Swipe the table for more columns →</p>
             </section>
           )}
         </>

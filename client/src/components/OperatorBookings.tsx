@@ -367,46 +367,46 @@ export function OperatorBookings() {
   const canCancel = (b: Booking) => (b.status === "pending_payment" || b.status === "confirmed") && b.start_date >= todayIso();
   const actions = (b: Booking) =>
     b.status === "requested" ? (
-      <span className="inline-flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-        <button type="button" disabled={busy === b.id} onClick={() => void decide(b, false)} className="text-xs font-semibold text-basalt/60 hover:text-destructive hover:underline disabled:opacity-50">Decline</button>
-        <button type="button" disabled={busy === b.id} onClick={() => void decide(b, true)} className="rounded-none bg-apricot px-3 py-1.5 text-xs font-bold text-white hover:bg-apricot/90 disabled:opacity-50">{busy === b.id ? "…" : "Approve"}</button>
+      <span className="inline-flex items-center gap-3 sm:gap-2" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+        <button type="button" disabled={busy === b.id} onClick={() => void decide(b, false)} className="inline-flex min-h-10 items-center px-3 text-xs font-semibold text-basalt/60 hover:text-destructive hover:underline disabled:opacity-50 sm:min-h-0 sm:px-0">Decline</button>
+        <button type="button" disabled={busy === b.id} onClick={() => void decide(b, true)} className="inline-flex min-h-10 items-center rounded-none bg-apricot px-3 py-1.5 text-xs font-bold text-white hover:bg-apricot/90 disabled:opacity-50 sm:min-h-0">{busy === b.id ? "…" : "Approve"}</button>
       </span>
     ) : canCancel(b) ? (
-      <button type="button" disabled={busy === b.id} onClick={(e) => { e.stopPropagation(); void cancel(b); }} className="text-xs font-semibold text-basalt/60 hover:text-destructive hover:underline disabled:opacity-50">
+      <button type="button" disabled={busy === b.id} onClick={(e) => { e.stopPropagation(); void cancel(b); }} onKeyDown={(e) => e.stopPropagation()} className="inline-flex min-h-10 items-center px-3 text-xs font-semibold text-basalt/60 hover:text-destructive hover:underline disabled:opacity-50 sm:min-h-0 sm:px-0">
         {busy === b.id ? "Cancelling…" : "Cancel"}
       </button>
     ) : null;
 
-  const field = "h-11 rounded-full border border-basalt/15 bg-paper px-4 text-sm outline-none hover:border-basalt/40 focus:border-basalt";
+  const field = "h-12 rounded-full border border-basalt/15 bg-paper px-4 text-base outline-none sm:h-11 sm:text-sm hover:border-basalt/40 focus:border-basalt";
   const dates = (b: Booking) => ({ in: fmtDate(b.start_date) + (b.starts_at ? ` · ${formatSlotTime(b.starts_at)}` : ""), out: isStay(b) ? fmtDate(b.end_date) : "—" });
 
   return (
     <div>
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2">
-        <input aria-label="Booking ID" value={bookingId} onChange={(e) => setBookingId(e.target.value)} placeholder="Booking ID" className={cn(field, "w-36")} />
-        <input aria-label="Keywords" value={keywords} onChange={(e) => setKeywords(e.target.value)} placeholder="Guest, email, phone, listing…" className={cn(field, "w-full sm:w-64")} />
-        <div className="relative inline-flex items-center">
-          <select aria-label="Filter by date" value={dateField} onChange={(e) => setDateField(e.target.value as DateField)} className={cn(field, "appearance-none pr-9 font-semibold")}>
+      {/* Filters — phones: ID + Keywords, date field + More, then the range on its own row */}
+      <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] items-center gap-2 sm:flex sm:flex-wrap">
+        <input aria-label="Booking ID" value={bookingId} onChange={(e) => setBookingId(e.target.value)} placeholder="Booking ID" className={cn(field, "w-full sm:w-36")} />
+        <input aria-label="Keywords" value={keywords} onChange={(e) => setKeywords(e.target.value)} placeholder="Guest, email, phone, listing…" className={cn(field, "w-full min-w-0 sm:w-64")} />
+        <div className="relative flex min-w-0 items-center sm:inline-flex">
+          <select aria-label="Filter by date" value={dateField} onChange={(e) => setDateField(e.target.value as DateField)} className={cn(field, "w-full appearance-none pl-3 pr-9 font-semibold sm:w-auto sm:pl-4")}>
             {DATE_FIELDS.map((d) => (
               <option key={d.value} value={d.value}>{d.label}</option>
             ))}
           </select>
           <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-basalt/70" />
         </div>
-        <div className="inline-flex h-11 items-center gap-1 rounded-full border border-basalt/15 bg-paper pl-3 pr-1 text-sm">
-          <input type="date" aria-label="From" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-transparent tabular-nums outline-none" />
+        <div className="col-span-2 row-start-3 inline-flex h-12 w-full items-center gap-1 rounded-full border border-basalt/15 bg-paper pl-3 pr-1 text-base sm:h-11 sm:w-auto sm:text-sm">
+          <input type="date" aria-label="From" value={from} onChange={(e) => setFrom(e.target.value)} className="min-w-0 flex-1 bg-transparent tabular-nums outline-none sm:flex-none" />
           <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-basalt/40" />
-          <input type="date" aria-label="To" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} className="bg-transparent tabular-nums outline-none" />
+          <input type="date" aria-label="To" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} className="min-w-0 flex-1 bg-transparent tabular-nums outline-none sm:flex-none" />
           {(from || to) && (
-            <button type="button" onClick={() => { setFrom(""); setTo(""); }} aria-label="Any dates" title="Any dates" className="grid h-8 w-8 place-items-center rounded-full text-basalt/50 hover:bg-chalk hover:text-basalt">
+            <button type="button" onClick={() => { setFrom(""); setTo(""); }} aria-label="Any dates" title="Any dates" className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-basalt/50 sm:h-8 sm:w-8 hover:bg-chalk hover:text-basalt">
               <X className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
         <Popover>
           <PopoverTrigger asChild>
-            <button type="button" className={cn(field, "inline-flex items-center gap-2 font-semibold", activeMore > 0 && "border-basalt")}>
+            <button type="button" className={cn(field, "inline-flex w-full items-center justify-center gap-2 font-semibold sm:w-auto sm:justify-start", activeMore > 0 && "border-basalt")}>
               <SlidersHorizontal className="h-4 w-4" /> More
               {activeMore > 0 && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-basalt px-1 text-[11px] text-paper">{activeMore}</span>}
               <ChevronDown className="h-4 w-4 text-basalt/70" />
@@ -423,14 +423,14 @@ export function OperatorBookings() {
                       aria-label={f.all}
                       value={more[f.key]}
                       onChange={(e) => setMore((m) => ({ ...m, [f.key]: e.target.value }))}
-                      className={cn("h-11 w-full appearance-none rounded-[0.875rem] border bg-paper pl-3 pr-9 text-sm outline-none focus:border-basalt", more[f.key] ? "border-basalt font-semibold" : "border-basalt/15")}
+                      className={cn("h-12 w-full appearance-none rounded-[0.875rem] border bg-paper pl-3 pr-9 text-base outline-none sm:h-11 sm:text-sm focus:border-basalt", more[f.key] ? "border-basalt font-semibold" : "border-basalt/15")}
                     >
                       <option value="">{f.all}</option>
                       {f.options.map((o) => (
                         <option key={o.value} value={o.value}>{o.label}</option>
                       ))}
                     </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-basalt/70" />
+                    <ChevronDown className="pointer-events-none absolute right-3 top-4 h-4 w-4 sm:top-3.5 text-basalt/70" />
                   </div>
                 ))}
                 {activeMore > 0 && (
@@ -456,10 +456,10 @@ export function OperatorBookings() {
           { label: "Nights sold", value: nightsSold.toLocaleString(), hint: "Confirmed stays in the results" },
           { label: "Income", value: fmtMoney(income, "AMD"), hint: "Confirmed, before commission" },
         ].map((t, i) => (
-          <div key={t.label} className={cn("p-5", i % 2 === 1 && "border-l border-basalt/10", i >= 2 && "border-t border-basalt/10 lg:border-t-0", i === 2 && "lg:border-l")}>
+          <div key={t.label} className={cn("min-w-0 p-3 sm:p-5", i % 2 === 1 && "border-l border-basalt/10", i >= 2 && "border-t border-basalt/10 lg:border-t-0", i === 2 && "lg:border-l")}>
             <p className="text-sm text-basalt/70">{t.label}</p>
-            <p className="mt-1 font-display text-3xl tabular-nums tracking-[-0.02em] sm:text-4xl">{t.value}</p>
-            {t.hint && <p className="mt-1 text-[11px] text-basalt/55">{t.hint}</p>}
+            <p className={cn("mt-1 break-words font-display tabular-nums tracking-[-0.02em] sm:text-4xl", String(t.value).length > 9 ? "text-xl" : "text-2xl")}>{t.value}</p>
+            {t.hint && <p className="mt-1 hidden text-[11px] text-basalt/55 sm:block">{t.hint}</p>}
           </div>
         ))}
       </div>
@@ -472,9 +472,9 @@ export function OperatorBookings() {
           </p>
           {pages > 1 && (
             <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setPage(pageNow - 1)} disabled={pageNow === 0} aria-label="Previous page" className="grid h-9 w-9 place-items-center rounded-full border border-basalt/15 hover:border-basalt/40 disabled:opacity-35"><ChevronLeft className="h-4 w-4" /></button>
+              <button type="button" onClick={() => setPage(pageNow - 1)} disabled={pageNow === 0} aria-label="Previous page" className="grid h-10 w-10 place-items-center sm:h-9 sm:w-9 rounded-full border border-basalt/15 hover:border-basalt/40 disabled:opacity-35"><ChevronLeft className="h-4 w-4" /></button>
               <span className="tabular-nums text-basalt/70">Page {pageNow + 1} of {pages}</span>
-              <button type="button" onClick={() => setPage(pageNow + 1)} disabled={pageNow >= pages - 1} aria-label="Next page" className="grid h-9 w-9 place-items-center rounded-full border border-basalt/15 hover:border-basalt/40 disabled:opacity-35"><ChevronRight className="h-4 w-4" /></button>
+              <button type="button" onClick={() => setPage(pageNow + 1)} disabled={pageNow >= pages - 1} aria-label="Next page" className="grid h-10 w-10 place-items-center sm:h-9 sm:w-9 rounded-full border border-basalt/15 hover:border-basalt/40 disabled:opacity-35"><ChevronRight className="h-4 w-4" /></button>
             </div>
           )}
         </div>
@@ -561,7 +561,7 @@ export function OperatorBookings() {
                         <span className="ml-auto font-mono text-xs text-basalt/60">#{shortId(b.id)}{b.provider === "direct" ? " · Direct" : ""}</span>
                       </div>
                       <p className="font-semibold">{guestOf(b)} <span className="font-normal text-basalt/60">· {b.guests} guest{b.guests === 1 ? "" : "s"}</span></p>
-                      <p className="truncate text-sm text-basalt/70">{titleOf(b)}</p>
+                      <p className="line-clamp-2 text-sm text-basalt/70">{titleOf(b)}</p>
                       <div className="flex items-center justify-between gap-3 text-sm">
                         <span className="tabular-nums text-basalt/70">{d.in}{isStay(b) ? ` → ${d.out} · ${nightsOf(b)} night${nightsOf(b) === 1 ? "" : "s"}` : ""}</span>
                         <span className="font-semibold tabular-nums">{fmtMoney(b.amount_cents, b.currency)}</span>

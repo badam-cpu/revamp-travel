@@ -71,7 +71,7 @@ export function OperatorAssistant() {
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Open Aha AI assistant"
-          className="fixed bottom-20 right-4 z-50 inline-flex [.cal-selecting_&]:hidden items-center gap-2 rounded-full bg-basalt px-4 py-3 text-sm font-semibold text-paper shadow-[0_16px_40px_rgba(35,35,33,0.32)] transition-transform hover:-translate-y-0.5 lg:bottom-4"
+          className="fixed bottom-20 right-4 z-50 inline-flex [.cal-selecting_&]:hidden [.composer-focus_&]:hidden items-center gap-2 rounded-full bg-basalt px-4 py-3 text-sm font-semibold text-paper shadow-[0_16px_40px_rgba(35,35,33,0.32)] transition-transform hover:-translate-y-0.5 lg:bottom-4"
         >
           <Sparkles className="h-4 w-4 text-apricot" /> Aha AI
         </button>

@@ -58,7 +58,7 @@ export const RatesEditor = forwardRef<RatesEditorHandle, { defaultValue: Seasona
               type="button"
               disabled={c === "USD" && !usdAvailable}
               onClick={() => setCurrency(c)}
-              className={`px-2.5 py-1.5 transition-colors ${currency === c ? "bg-apricot text-white" : "text-basalt/60 hover:text-basalt disabled:opacity-30"}`}
+              className={`min-h-9 px-2.5 py-1.5 transition-colors sm:min-h-0 ${currency === c ? "bg-apricot text-white" : "text-basalt/60 hover:text-basalt disabled:opacity-30"}`}
             >
               {c}
             </button>
@@ -69,27 +69,27 @@ export const RatesEditor = forwardRef<RatesEditorHandle, { defaultValue: Seasona
       {rows.map((r) => (
         <div key={r.id} className="grid gap-2 border border-basalt/10 bg-paper p-3">
           <div className="flex items-center gap-2">
-            <Input value={r.label} onChange={(e) => update(r.id, { label: e.target.value })} placeholder="Label (e.g. New Year, High season)" className="h-10 rounded-none text-sm" />
-            <button type="button" onClick={() => remove(r.id)} aria-label="Remove rate" className="grid h-10 w-10 shrink-0 place-items-center border border-basalt/15 text-basalt/50 hover:border-destructive hover:text-destructive"><X className="h-4 w-4" /></button>
+            <Input value={r.label} onChange={(e) => update(r.id, { label: e.target.value })} placeholder="Label (e.g. New Year, High season)" className="h-11 rounded-none text-base sm:h-10 sm:text-sm" />
+            <button type="button" onClick={() => remove(r.id)} aria-label="Remove rate" className="grid h-11 w-11 shrink-0 place-items-center border border-basalt/15 sm:h-10 sm:w-10 text-basalt/50 hover:border-destructive hover:text-destructive"><X className="h-4 w-4" /></button>
           </div>
           <div className="grid gap-2 sm:grid-cols-3">
             <div className="grid gap-1">
               <Label className="text-xs font-semibold text-basalt/60">From</Label>
-              <Input type="date" value={r.start} onChange={(e) => update(r.id, { start: e.target.value })} className="h-10 rounded-none text-sm" />
+              <Input type="date" value={r.start} onChange={(e) => update(r.id, { start: e.target.value })} className="h-11 rounded-none text-base sm:h-10 sm:text-sm" />
             </div>
             <div className="grid gap-1">
               <Label className="text-xs font-semibold text-basalt/60">To</Label>
-              <Input type="date" value={r.end} onChange={(e) => update(r.id, { end: e.target.value })} className="h-10 rounded-none text-sm" />
+              <Input type="date" value={r.end} onChange={(e) => update(r.id, { end: e.target.value })} className="h-11 rounded-none text-base sm:h-10 sm:text-sm" />
             </div>
             <div className="grid gap-1">
               <Label className="text-xs font-semibold text-basalt/60">Rate / night ({currency})</Label>
-              <Input type="number" min={0} value={toDisplay(r.priceCents)} onChange={(e) => update(r.id, { priceCents: fromInput(e.target.value) })} placeholder={currency === "USD" ? "e.g. 120" : "e.g. 45000"} className="h-10 rounded-none text-sm" />
+              <Input type="number" min={0} value={toDisplay(r.priceCents)} onChange={(e) => update(r.id, { priceCents: fromInput(e.target.value) })} placeholder={currency === "USD" ? "e.g. 120" : "e.g. 45000"} className="h-11 rounded-none text-base sm:h-10 sm:text-sm" />
             </div>
           </div>
         </div>
       ))}
 
-      <button type="button" onClick={add} className="inline-flex items-center gap-1.5 self-start rounded-none border border-basalt/20 bg-paper px-4 py-2 text-sm font-semibold text-basalt hover:border-apricot"><Plus className="h-4 w-4" /> Add a rate period</button>
+      <button type="button" onClick={add} className="inline-flex min-h-10 items-center gap-1.5 self-start rounded-none border border-basalt/20 bg-paper px-4 py-2 text-sm sm:min-h-0 font-semibold text-basalt hover:border-apricot"><Plus className="h-4 w-4" /> Add a rate period</button>
     </div>
   );
 });

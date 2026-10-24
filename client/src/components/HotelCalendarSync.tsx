@@ -131,19 +131,19 @@ export function HotelCalendarSync({ listingId, published }: { listingId: string;
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <label className="grid gap-1">
                       <span className="text-[11px] font-semibold text-basalt/55">Airbnb</span>
-                      <Input id={`rc-airbnb-${unit.id}`} type="url" value={d.airbnb} onChange={(e) => set("airbnb", e.target.value)} placeholder="https://www.airbnb.com/calendar/ical/….ics" className="h-10 min-w-0 rounded-none text-xs" />
+                      <Input id={`rc-airbnb-${unit.id}`} type="url" value={d.airbnb} onChange={(e) => set("airbnb", e.target.value)} placeholder="https://www.airbnb.com/calendar/ical/….ics" className="h-11 min-w-0 rounded-none text-base sm:h-10 sm:text-xs" />
                     </label>
                     <label className="grid gap-1">
                       <span className="text-[11px] font-semibold text-basalt/55">Booking.com</span>
-                      <Input id={`rc-booking-${unit.id}`} type="url" value={d.booking} onChange={(e) => set("booking", e.target.value)} placeholder="https://admin.booking.com/…/ical.html?…" className="h-10 min-w-0 rounded-none text-xs" />
+                      <Input id={`rc-booking-${unit.id}`} type="url" value={d.booking} onChange={(e) => set("booking", e.target.value)} placeholder="https://admin.booking.com/…/ical.html?…" className="h-11 min-w-0 rounded-none text-base sm:h-10 sm:text-xs" />
                     </label>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="shrink-0 text-[11px] font-semibold text-basalt/55">Revamp link</span>
                     {published ? (
                       <>
-                        <Input readOnly value={`${origin}/api/ical/room/${unit.id}.ics`} onFocus={(e) => e.currentTarget.select()} className="h-9 min-w-0 flex-1 rounded-none bg-chalk text-xs" />
-                        <Button type="button" variant="outline" size="sm" className="h-9 shrink-0 rounded-none border-basalt/15 text-xs" onClick={() => void copy(unit.id)}>
+                        <Input readOnly value={`${origin}/api/ical/room/${unit.id}.ics`} onFocus={(e) => e.currentTarget.select()} className="h-11 min-w-0 flex-1 rounded-none bg-chalk text-base sm:h-9 sm:text-xs" />
+                        <Button type="button" variant="outline" size="sm" className="h-11 shrink-0 rounded-none border-basalt/15 text-xs sm:h-9" onClick={() => void copy(unit.id)}>
                           {copied === unit.id ? <><Check className="mr-1.5 h-3.5 w-3.5" /> Copied</> : <><Copy className="mr-1.5 h-3.5 w-3.5" /> Copy</>}
                         </Button>
                       </>

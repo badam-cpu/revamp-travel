@@ -50,9 +50,9 @@ function lastMonths(n: number): string[] {
   }
   return out;
 }
-function monthLabel(key: string): string {
+function monthLabel(key: string, withYear = false): string {
   const [y, m] = key.split("-").map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "short" });
+  return new Date(y, m - 1, 1).toLocaleDateString("en-US", withYear ? { month: "short", year: "numeric" } : { month: "short" });
 }
 
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
@@ -61,7 +61,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
       type="button"
       onClick={onClick}
       className={cn(
-        "rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
+        "h-10 shrink-0 rounded-full px-3.5 text-xs font-semibold transition-colors sm:h-auto sm:px-3 sm:py-1.5",
         active ? "bg-basalt text-paper" : "border border-basalt/15 bg-paper text-basalt/60 hover:text-basalt",
       )}
     >
@@ -77,6 +77,8 @@ export function OperatorAnalytics() {
   const [metric, setMetric] = useState<Metric>("bookings");
   const [basis, setBasis] = useState<Basis>("booked");
   const [type, setType] = useState<TypeFilter>("all");
+  // Tapped month — its value shows under the total (the bar title is hover-only).
+  const [selMonth, setSelMonth] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -122,6 +124,8 @@ export function OperatorAnalytics() {
 
   const max = Math.max(1, ...buckets.map((b) => b.value));
   const totalLabel = metric === "revenue" ? format(total) : `${total}`;
+  const valueLabel = (v: number) => (metric === "revenue" ? format(v) : `${v} booking${v === 1 ? "" : "s"}`);
+  const selBucket = selMonth ? buckets.find((b) => b.month === selMonth) : undefined;
 
   return (
     <div className="border border-basalt/10 bg-paper p-5">
@@ -131,6 +135,11 @@ export function OperatorAnalytics() {
             {metric === "revenue" ? "Revenue" : "Bookings"} · last 12 months
           </p>
           <p className="mt-1 font-display text-4xl font-normal tabular-nums">{totalLabel}</p>
+          {selBucket && (
+            <p className="mt-1 text-xs font-semibold tabular-nums text-basalt/60" aria-live="polite">
+              {monthLabel(selBucket.month, true)} · {valueLabel(selBucket.value)}
+            </p>
+          )}
         </div>
         <div className="inline-flex overflow-hidden rounded-full border border-basalt/15">
           {(["bookings", "revenue"] as Metric[]).map((m) => (
@@ -138,7 +147,7 @@ export function OperatorAnalytics() {
               key={m}
               type="button"
               onClick={() => setMetric(m)}
-              className={cn("px-3.5 py-1.5 text-xs font-semibold capitalize transition-colors", metric === m ? "bg-apricot text-white" : "text-basalt/60 hover:text-basalt")}
+              className={cn("h-10 px-3.5 text-xs font-semibold capitalize transition-colors sm:h-auto sm:py-1.5", metric === m ? "bg-apricot text-white" : "text-basalt/60 hover:text-basalt")}
             >
               {m}
             </button>
@@ -147,14 +156,14 @@ export function OperatorAnalytics() {
       </div>
 
       <div className="mt-4 flex flex-wrap gap-x-6 gap-y-3">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 text-[10px] font-bold uppercase tracking-[0.12em] text-basalt/35">Type</span>
+        <div className="-mx-1 flex max-w-full flex-nowrap items-center gap-1.5 overflow-x-auto px-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+          <span className="mr-1 shrink-0 text-[10px] font-bold uppercase tracking-[0.12em] text-basalt/35">Type</span>
           {TYPES.map((t) => (
             <Chip key={t.key} active={type === t.key} onClick={() => setType(t.key)}>{t.label}</Chip>
           ))}
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 text-[10px] font-bold uppercase tracking-[0.12em] text-basalt/35">Date</span>
+        <div className="-mx-1 flex max-w-full flex-nowrap items-center gap-1.5 overflow-x-auto px-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+          <span className="mr-1 shrink-0 text-[10px] font-bold uppercase tracking-[0.12em] text-basalt/35">Date</span>
           {BASES.map((b) => (
             <Chip key={b.key} active={basis === b.key} onClick={() => setBasis(b.key)}>{b.label}</Chip>
           ))}
@@ -164,18 +173,25 @@ export function OperatorAnalytics() {
       {rows === null ? (
         <p className="mt-8 text-sm text-basalt/45">Loading…</p>
       ) : (
-        <div className="mt-8 flex h-44 items-end gap-1.5" role="img" aria-label={`${metric} by month`}>
+        <div className="mt-8 flex h-44 items-end gap-1.5" role="group" aria-label={`${metric} by month`}>
           {buckets.map((b) => (
-            <div key={b.month} className="flex flex-1 flex-col items-center gap-2">
-              <div className="flex w-full flex-1 items-end">
-                <div
-                  className="w-full rounded-t-sm bg-apricot/85 transition-all hover:bg-apricot"
+            <button
+              key={b.month}
+              type="button"
+              aria-pressed={selMonth === b.month}
+              aria-label={`${monthLabel(b.month, true)}: ${valueLabel(b.value)}`}
+              onClick={() => setSelMonth((cur) => (cur === b.month ? null : b.month))}
+              className="group flex h-full min-w-0 flex-1 flex-col items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-apricot"
+            >
+              <span className="flex w-full flex-1 items-end">
+                <span
+                  className={cn("block w-full rounded-t-sm transition-all group-hover:bg-apricot", selMonth === b.month ? "bg-apricot" : "bg-apricot/85")}
                   style={{ height: `${b.value === 0 ? 0 : Math.max(4, (b.value / max) * 100)}%` }}
                   title={`${monthLabel(b.month)}: ${metric === "revenue" ? format(b.value) : b.value}`}
                 />
-              </div>
-              <span className="text-[10px] text-basalt/40">{monthLabel(b.month)}</span>
-            </div>
+              </span>
+              <span className={cn("text-[10px]", selMonth === b.month ? "font-semibold text-basalt" : "text-basalt/40")}>{monthLabel(b.month)}</span>
+            </button>
           ))}
         </div>
       )}

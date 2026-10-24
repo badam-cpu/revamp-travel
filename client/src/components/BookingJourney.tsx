@@ -77,7 +77,7 @@ export function BookingJourney({ bookingId, status, onSent }: { bookingId: strin
       <div className="flex items-center justify-between">
         <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-basalt/45">Customer journey</h3>
         {!picking && (
-          <button type="button" onClick={() => setPicking(true)} className="inline-flex items-center gap-1 text-[11px] font-semibold text-basalt/55 transition-colors hover:text-apricot">
+          <button type="button" onClick={() => setPicking(true)} className="-mr-2 inline-flex min-h-10 items-center gap-1 px-2 text-[11px] font-semibold text-basalt/55 transition-colors hover:text-apricot">
             <Send className="h-3 w-3" /> Send message
           </button>
         )}
@@ -132,7 +132,7 @@ export function BookingJourney({ bookingId, status, onSent }: { bookingId: strin
           {step && !preview && <p className="text-xs text-basalt/50">Loading preview…</p>}
           {preview && (
             <>
-              <div className="max-h-64 overflow-y-auto border border-basalt/10 bg-paper p-3">
+              <div className="border border-basalt/10 bg-paper p-3 sm:max-h-64 sm:overflow-y-auto">
                 <p className="text-sm font-semibold">{preview.subject}</p>
                 <RichText text={preview.body} className="mt-2 whitespace-pre-line text-[13px] leading-6 text-basalt/80" />
                 {preview.text && <p className="mt-3 border-t border-basalt/10 pt-2 text-xs text-basalt/55">Text: {preview.text}</p>}
@@ -143,19 +143,23 @@ export function BookingJourney({ bookingId, status, onSent }: { bookingId: strin
                 </p>
               )}
               <div className="flex flex-wrap gap-3 text-xs">
-                <label className={cn("inline-flex items-center gap-1.5", !preview.hasEmail && "opacity-40")}>
-                  <input type="checkbox" disabled={!preview.hasEmail} checked={channels.email} onChange={(e) => setChannels((c) => ({ ...c, email: e.target.checked }))} />
+                <label className={cn("inline-flex min-h-10 items-center gap-1.5 sm:min-h-0", !preview.hasEmail && "opacity-40")}>
+                  <input type="checkbox" className="size-5 sm:size-auto" disabled={!preview.hasEmail} checked={channels.email} onChange={(e) => setChannels((c) => ({ ...c, email: e.target.checked }))} />
                   <Mail className="h-3.5 w-3.5" /> Email
                 </label>
-                <label className={cn("inline-flex items-center gap-1.5", !preview.hasPhone && "opacity-40")} title={preview.hasPhone ? "SMS / WhatsApp / Viber if the guest opted in; Telegram if linked" : "No phone number on this booking"}>
-                  <input type="checkbox" disabled={!preview.hasPhone} checked={channels.text} onChange={(e) => setChannels((c) => ({ ...c, text: e.target.checked }))} />
+                <label className={cn("inline-flex min-h-10 items-center gap-1.5 sm:min-h-0", !preview.hasPhone && "opacity-40")} title={preview.hasPhone ? "SMS / WhatsApp / Viber if the guest opted in; Telegram if linked" : "No phone number on this booking"}>
+                  <input type="checkbox" className="size-5 sm:size-auto" disabled={!preview.hasPhone} checked={channels.text} onChange={(e) => setChannels((c) => ({ ...c, text: e.target.checked }))} />
                   <Smartphone className="h-3.5 w-3.5" /> Text
                 </label>
-                <label className="inline-flex items-center gap-1.5">
-                  <input type="checkbox" checked={channels.inbox} onChange={(e) => setChannels((c) => ({ ...c, inbox: e.target.checked }))} />
+                <label className="inline-flex min-h-10 items-center gap-1.5 sm:min-h-0">
+                  <input type="checkbox" className="size-5 sm:size-auto" checked={channels.inbox} onChange={(e) => setChannels((c) => ({ ...c, inbox: e.target.checked }))} />
                   <MessageSquare className="h-3.5 w-3.5" /> Inbox
                 </label>
               </div>
+              {/* Phones can't hover the Text label's title, so spell it out. */}
+              <p className="-mt-2 text-[11px] leading-4 text-basalt/50 sm:hidden">
+                {preview.hasPhone ? "Text: SMS / WhatsApp / Viber if the guest opted in; Telegram if linked." : "Text: no phone number on this booking."}
+              </p>
               <div className="flex items-center gap-3">
                 <Button onClick={() => void send()} disabled={sending || (!channels.email && !channels.text && !channels.inbox)} className="h-10 rounded-none bg-apricot text-white hover:bg-apricot/90">
                   {sending ? "Sending…" : "Send now"}

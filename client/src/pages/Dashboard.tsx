@@ -785,7 +785,7 @@ function ListingFormDialog({
                 type="button"
                 onClick={() => void close()}
                 disabled={savingProgress && !canSaveProgress}
-                className="inline-flex items-center gap-2 rounded-none border border-basalt/15 px-3.5 py-2 text-[11px] font-bold uppercase tracking-[0.12em] text-basalt/65 transition-colors hover:border-apricot hover:text-apricot"
+                className="inline-flex min-h-10 items-center gap-2 rounded-none border border-basalt/15 px-3.5 py-2 text-[11px] sm:min-h-0 font-bold uppercase tracking-[0.12em] text-basalt/65 transition-colors hover:border-apricot hover:text-apricot"
               >
                 {canSaveProgress ? "Save & exit" : "Exit"} <X className="h-3.5 w-3.5" />
               </button>
@@ -794,13 +794,13 @@ function ListingFormDialog({
 
           {/* Scrollable middle — one section per screen */}
           <div className="flex-1 overflow-y-auto">
-            <form ref={formRef} noValidate onSubmit={submit} onChange={markDirty} onInput={markDirty} id="listing-onboarding" className="listing-form mx-auto w-full max-w-2xl px-5 py-10 sm:px-8 sm:py-16">
+            <form ref={formRef} noValidate onSubmit={submit} onChange={markDirty} onInput={markDirty} id="listing-onboarding" className="listing-form mx-auto w-full max-w-2xl px-5 py-6 sm:px-8 sm:py-16">
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-apricot">
                 {isEdit ? `Editing ${draft.type}` : `New ${draft.type}`} · Step {step + 1} of {STEPS.length}
               </p>
 
               {/* Clickable step navigator — jump straight to any section. */}
-              <div className="mt-4 flex flex-wrap gap-1.5">
+              <div className="mt-4 flex flex-nowrap gap-1.5 overflow-x-auto sm:flex-wrap sm:overflow-visible">
                 {STEPS.map((s, i) => (
                   <button
                     key={s.title}
@@ -808,7 +808,7 @@ function ListingFormDialog({
                     onClick={() => goToStep(i)}
                     aria-current={i === step}
                     className={cn(
-                      "flex items-center gap-1.5 border px-3 py-1.5 text-xs font-semibold transition-colors",
+                      "flex min-h-9 shrink-0 items-center gap-1.5 whitespace-nowrap border px-3 py-1.5 text-xs font-semibold transition-colors sm:min-h-0 sm:shrink sm:whitespace-normal",
                       i === step ? "border-apricot bg-apricot text-white" : "border-basalt/15 text-basalt/60 hover:border-apricot hover:text-apricot",
                     )}
                   >
@@ -818,12 +818,12 @@ function ListingFormDialog({
               </div>
 
               <DialogPrimitive.Title asChild>
-                <h2 className="mt-6 font-display text-4xl leading-[1.02] tracking-[-0.03em] sm:text-5xl">{meta.title}</h2>
+                <h2 className="mt-6 font-display text-2xl leading-[1.02] tracking-[-0.03em] sm:text-5xl">{meta.title}</h2>
               </DialogPrimitive.Title>
               <p className="mt-3 max-w-md text-base leading-7 text-basalt/55">{meta.blurb(draft.type)}</p>
 
               {/* Step 1 — the basics */}
-              <div hidden={step !== 0} className="mt-10 grid gap-6">
+              <div hidden={step !== 0} className="mt-6 sm:mt-10 grid gap-6">
                 {draft.prefillImageUrl && (
                   <div className="flex items-start gap-3 border border-basalt/10 bg-chalk p-3">
                     <img src={draft.prefillImageUrl} alt="" className="h-16 w-16 shrink-0 rounded object-cover" />
@@ -866,7 +866,7 @@ function ListingFormDialog({
               </div>
 
               {/* Step 2 — where it is */}
-              <div hidden={step !== 1} className="mt-10 grid gap-6">
+              <div hidden={step !== 1} className="mt-6 sm:mt-10 grid gap-6">
                 {/* Existing listing: show the saved address so it's clear the
                     location is already set — the search below only changes it. */}
                 {isEdit && (draft.address || draft.city) && (
@@ -938,7 +938,7 @@ function ListingFormDialog({
               </div>
 
               {/* Step 3 — describe it */}
-              <div hidden={step !== 2} className="mt-10 grid gap-6">
+              <div hidden={step !== 2} className="mt-6 sm:mt-10 grid gap-6">
                 {/* Stay-only: what kind of place it is, then how it's laid out — a hotel's
                     room types (with their rooms and prices), or a home's rooms & beds. */}
                 {draft.type === "stay" && (
@@ -1038,7 +1038,7 @@ function ListingFormDialog({
               </div>
 
               {/* Step 4 — amenities & photos */}
-              <div hidden={step !== 3} className="mt-10 grid gap-8">
+              <div hidden={step !== 3} className="mt-6 sm:mt-10 grid gap-8">
                 <AmenityPicker ref={amenitiesRef} type={draft.type} defaultValue={draft.amenities ?? []} />
 
                 {draft.type === "stay" && (
@@ -1134,7 +1134,7 @@ function ListingFormDialog({
                     {[0, 1, 2, 3, 4, 5].map((i) => {
                       const [exLabel, exValue] = FACT_EXAMPLES[draft.type][i];
                       return (
-                        <div key={i} className="grid grid-cols-2 gap-2">
+                        <div key={i} className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2">
                           <Input name={`fact${i + 1}Label`} placeholder={`Label, e.g. ${exLabel}`} defaultValue={draft.facts?.[i]?.label} className={FIELD} />
                           <Input name={`fact${i + 1}Value`} placeholder={`Value, e.g. ${exValue}`} defaultValue={draft.facts?.[i]?.value} className={FIELD} />
                         </div>
@@ -1157,7 +1157,7 @@ function ListingFormDialog({
               </div>
 
               {/* Step 5 — pricing */}
-              <div hidden={step !== 4} className="mt-10 grid gap-8">
+              <div hidden={step !== 4} className="mt-6 sm:mt-10 grid gap-8">
 
                 {/* revampstay — "How do you want to offer it?" (stays only).
                     Nightly is always on (the price field below); monthly and
@@ -1402,19 +1402,20 @@ function ListingFormDialog({
             <div className="h-1 w-full bg-basalt/10">
               <div className="h-full bg-apricot transition-[width] duration-300 ease-out" style={{ width: `${pct}%` }} />
             </div>
-            <div className="mx-auto flex w-full max-w-2xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
-              <Button type="button" variant="ghost" className="rounded-none px-2 text-sm disabled:opacity-0" onClick={goBack} disabled={step === 0}>
-                <ArrowLeft className="mr-2 h-4 w-4" /> Back
+            <div className="mx-auto flex w-full max-w-2xl flex-wrap items-center justify-between gap-2 px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:flex-nowrap sm:gap-4 sm:px-8">
+              {/* Phones: icon-only Back so Save as draft + Submit fit beside it. */}
+              <Button type="button" variant="ghost" className="h-10 w-10 shrink-0 rounded-none px-0 text-sm disabled:opacity-0 sm:h-9 sm:w-auto sm:px-2" onClick={goBack} disabled={step === 0}>
+                <ArrowLeft className="h-4 w-4 sm:mr-2" /> <span className="sr-only sm:not-sr-only">Back</span>
               </Button>
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 flex-1 items-center justify-end gap-2 sm:flex-none">
                 {/* When editing, save/submit is available from any step; a new
                     listing keeps the guided flow (Continue until the last step). */}
                 {!isPublished && (isEdit || isLast) && (
-                  <Button type="button" variant="outline" className="rounded-none px-5" disabled={saving} onClick={() => persist(false)}>
+                  <Button type="button" variant="outline" className="h-10 rounded-none px-3 sm:h-9 sm:px-5" disabled={saving} onClick={() => persist(false)}>
                     Save as draft
                   </Button>
                 )}
-                <Button type="submit" form="listing-onboarding" className="rounded-none bg-apricot px-6 text-white hover:bg-apricot/90" disabled={saving}>
+                <Button type="submit" form="listing-onboarding" className="h-10 rounded-none bg-apricot px-3 text-white hover:bg-apricot/90 sm:h-9 sm:px-6" disabled={saving}>
                   {saving ? "Saving…" : !isEdit && !isLast ? "Continue" : isPublished ? "Save changes" : "Submit for review"}
                 </Button>
               </div>
@@ -1541,20 +1542,20 @@ function SingleCalendarSync({ listing }: { listing: LiveListing }) {
             setErr(null);
           }}
           placeholder={source.placeholder}
-          className="h-9 min-w-0 flex-1 rounded-none text-xs"
+          className="h-11 min-w-0 flex-1 rounded-none text-base sm:h-9 sm:text-xs"
         />
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className={cn("h-9 shrink-0 rounded-none border-basalt/15 text-xs", isSynced && "border-green-600/40 bg-green-600/10 text-green-700 hover:bg-green-600/15")}
+          className={cn("h-11 shrink-0 rounded-none border-basalt/15 text-xs sm:h-9", isSynced && "border-green-600/40 bg-green-600/10 text-green-700 hover:bg-green-600/15")}
           disabled={busy}
           onClick={save}
         >
           {busy ? "Syncing…" : isSynced ? <><Check className="mr-1.5 h-3.5 w-3.5" /> Synced</> : url.trim() ? "Save & sync" : "Save"}
         </Button>
         {hasSaved && (
-          <Button type="button" variant="ghost" size="sm" className="h-9 shrink-0 rounded-none text-xs text-basalt/60 hover:text-basalt" disabled={busy} onClick={resync} title="Re-pull the connected calendar now">
+          <Button type="button" variant="ghost" size="sm" className="h-11 shrink-0 rounded-none text-xs text-basalt/60 hover:text-basalt sm:h-9" disabled={busy} onClick={resync} title="Re-pull the connected calendar now">
             <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", busy && "animate-spin")} /> Re-sync
           </Button>
         )}
@@ -1649,22 +1650,22 @@ function StayCalendarSync({ listing }: { listing: LiveListing }) {
         <CalendarClock className="h-3.5 w-3.5" /> Import calendars
       </p>
       <div className="grid gap-2">
-        <div className="flex items-center gap-2">
-          <span className="w-24 shrink-0 text-xs font-semibold text-basalt/60">Airbnb</span>
-          <Input type="url" value={airbnb} onChange={(e) => { setAirbnb(e.target.value); setMsg(null); setErr(null); }} placeholder="https://www.airbnb.com/calendar/ical/….ics" className="h-9 min-w-0 flex-1 rounded-none text-xs" />
+        <div className="flex flex-col items-stretch gap-1 sm:flex-row sm:items-center sm:gap-2">
+          <span className="shrink-0 text-xs font-semibold text-basalt/60 sm:w-24">Airbnb</span>
+          <Input type="url" value={airbnb} onChange={(e) => { setAirbnb(e.target.value); setMsg(null); setErr(null); }} placeholder="https://www.airbnb.com/calendar/ical/….ics" className="h-11 min-w-0 flex-1 rounded-none text-base sm:h-9 sm:text-xs" />
         </div>
-        <div className="flex items-center gap-2">
-          <span className="w-24 shrink-0 text-xs font-semibold text-basalt/60">Booking.com</span>
-          <Input type="url" value={booking} onChange={(e) => { setBooking(e.target.value); setMsg(null); setErr(null); }} placeholder="https://admin.booking.com/hotel/…/ical.html?…" className="h-9 min-w-0 flex-1 rounded-none text-xs" />
+        <div className="flex flex-col items-stretch gap-1 sm:flex-row sm:items-center sm:gap-2">
+          <span className="shrink-0 text-xs font-semibold text-basalt/60 sm:w-24">Booking.com</span>
+          <Input type="url" value={booking} onChange={(e) => { setBooking(e.target.value); setMsg(null); setErr(null); }} placeholder="https://admin.booking.com/hotel/…/ical.html?…" className="h-11 min-w-0 flex-1 rounded-none text-base sm:h-9 sm:text-xs" />
         </div>
       </div>
       <div className="mt-2 flex justify-end gap-2">
         {hasSaved && (
-          <Button type="button" variant="ghost" size="sm" className="h-9 rounded-none text-xs text-basalt/60 hover:text-basalt" disabled={busy} onClick={resync} title="Re-pull the connected calendars now">
+          <Button type="button" variant="ghost" size="sm" className="h-10 rounded-none text-xs text-basalt/60 hover:text-basalt sm:h-9" disabled={busy} onClick={resync} title="Re-pull the connected calendars now">
             <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", busy && "animate-spin")} /> Re-sync
           </Button>
         )}
-        <Button type="button" variant="outline" size="sm" className={cn("h-9 rounded-none border-basalt/15 text-xs", isSynced && "border-green-600/40 bg-green-600/10 text-green-700 hover:bg-green-600/15")} disabled={busy} onClick={save}>
+        <Button type="button" variant="outline" size="sm" className={cn("h-10 rounded-none border-basalt/15 text-xs sm:h-9", isSynced && "border-green-600/40 bg-green-600/10 text-green-700 hover:bg-green-600/15")} disabled={busy} onClick={save}>
           {busy ? "Syncing…" : isSynced ? <><Check className="mr-1.5 h-3.5 w-3.5" /> Synced</> : "Save & sync"}
         </Button>
       </div>
@@ -1677,8 +1678,8 @@ function StayCalendarSync({ listing }: { listing: LiveListing }) {
         <CalendarClock className="h-3.5 w-3.5" /> Export to Airbnb / Booking.com
       </p>
       <div className="flex items-center gap-2">
-        <Input readOnly value={exportUrl} onFocus={(e) => e.currentTarget.select()} className="h-9 min-w-0 flex-1 rounded-none bg-chalk text-xs" />
-        <Button type="button" variant="outline" size="sm" className="h-9 shrink-0 rounded-none border-basalt/15 text-xs" onClick={copy}>
+        <Input readOnly value={exportUrl} onFocus={(e) => e.currentTarget.select()} className="h-11 min-w-0 flex-1 rounded-none bg-chalk text-base sm:h-9 sm:text-xs" />
+        <Button type="button" variant="outline" size="sm" className="h-11 shrink-0 rounded-none border-basalt/15 text-xs sm:h-9" onClick={copy}>
           {copied ? <><Check className="mr-1.5 h-3.5 w-3.5" /> Copied</> : <><Copy className="mr-1.5 h-3.5 w-3.5" /> Copy</>}
         </Button>
       </div>
@@ -1816,19 +1817,19 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
           </h2>
           <p className="mt-1 max-w-md text-sm text-basalt/60">{description}</p>
         </div>
-        <div className="flex flex-col items-end gap-2">
-          <Button onClick={openAdd} className="rounded-none bg-apricot text-white hover:bg-apricot/90">
+        <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
+          <Button onClick={openAdd} className="h-11 rounded-none bg-apricot text-white hover:bg-apricot/90 sm:h-9">
             <Plus className="mr-2 h-4 w-4" /> Add {type}
           </Button>
-          <form onSubmit={handleImport} className="flex items-center gap-2">
+          <form onSubmit={handleImport} className="flex w-full items-center gap-2 sm:w-auto">
             <Input
               type="url"
               value={importUrl}
               onChange={(e) => setImportUrl(e.target.value)}
               placeholder="Or paste a listing link to prefill"
-              className="h-9 w-64 rounded-none text-xs"
+              className="h-12 min-w-0 flex-1 rounded-none text-base sm:h-9 sm:w-64 sm:flex-none sm:text-xs"
             />
-            <Button type="submit" variant="outline" size="sm" className="h-9 shrink-0 rounded-none border-basalt/15 text-xs" disabled={importing || !importUrl.trim()}>
+            <Button type="submit" variant="outline" size="sm" className="h-12 shrink-0 rounded-none border-basalt/15 text-xs sm:h-9" disabled={importing || !importUrl.trim()}>
               <Link2 className="mr-1.5 h-3.5 w-3.5" /> {importing ? "Fetching…" : "Prefill"}
             </Button>
           </form>
@@ -1849,8 +1850,8 @@ function DashboardSection({ type, title, description, wizardMode }: { type: List
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button size="sm" onClick={() => continueDraft(row)} className="rounded-none bg-apricot text-white hover:bg-apricot/90">Continue</Button>
-                  <Button size="sm" variant="ghost" onClick={() => void discardDraft(row)} className="rounded-none text-basalt/55 hover:text-destructive">Discard</Button>
+                  <Button size="sm" onClick={() => continueDraft(row)} className="h-10 rounded-none bg-apricot text-white hover:bg-apricot/90 sm:h-8">Continue</Button>
+                  <Button size="sm" variant="ghost" onClick={() => void discardDraft(row)} className="h-10 rounded-none text-basalt/55 hover:text-destructive sm:h-8">Discard</Button>
                 </div>
               </li>
             ))}
@@ -1929,13 +1930,16 @@ function OperatorListingRow({ listing, onEdit, tour = null, onTourChanged }: { l
       <div className="flex items-center gap-3 px-4 py-3">
         {listing.image ? <img src={listing.image} alt="" className={cn("h-12 w-12 shrink-0 rounded-md object-cover", !active && "opacity-40 grayscale")} /> : <span aria-hidden className="h-12 w-12 shrink-0 rounded-md bg-chalk" />}
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-2">
-            <button type="button" onClick={onEdit} title="Edit listing" className="min-w-0 truncate text-left text-base font-semibold text-basalt underline-offset-4 hover:text-apricot hover:underline focus-visible:outline-2 focus-visible:outline-apricot">
-              {listing.title}
-            </button>
-            <a href={`/listing/${listing.slug}`} target="_blank" rel="noopener noreferrer" aria-label={`Open ${listing.title} in a new tab`} title="Open the guest page in a new tab" className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-basalt/55 hover:bg-chalk hover:text-apricot">
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
+          {/* Phones: title + ↗ get their own line, badges wrap below it. */}
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 sm:flex-nowrap">
+            <span className="flex min-w-0 basis-full items-center gap-2 sm:basis-auto">
+              <button type="button" onClick={onEdit} title="Edit listing" className="min-w-0 truncate text-left text-base font-semibold text-basalt underline-offset-4 hover:text-apricot hover:underline focus-visible:outline-2 focus-visible:outline-apricot">
+                {listing.title}
+              </button>
+              <a href={`/listing/${listing.slug}`} target="_blank" rel="noopener noreferrer" aria-label={`Open ${listing.title} in a new tab`} title="Open the guest page in a new tab" className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-basalt/55 hover:bg-chalk hover:text-apricot sm:h-7 sm:w-7">
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </span>
             <span className="shrink-0"><StatusBadge status={listing.status} reviewNote={listing.reviewNote} /></span>
             {!active && <span className="shrink-0 border border-basalt/30 bg-basalt px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-paper">Inactive</span>}
             {isStay && tour && (
@@ -1950,7 +1954,12 @@ function OperatorListingRow({ listing, onEdit, tour = null, onTourChanged }: { l
           </div>
           <p className="mt-0.5 truncate text-xs text-basalt/60">
             {listing.city} · {listing.priceLabel}{listing.price > 0 ? ` / ${listing.priceUnit}` : ""}
-            {paused && <span className="font-semibold text-basalt"> · Bookings suspended {suspensionLabel(listing)}</span>}
+            {paused && <span className="hidden font-semibold text-basalt sm:inline"> · Bookings suspended {suspensionLabel(listing)}</span>}
+          </p>
+          {paused && <p className="mt-0.5 text-xs font-semibold text-basalt sm:hidden">Bookings suspended {suspensionLabel(listing)}</p>}
+          {/* The sync pill below is desktop-only; phones still need to see sync problems. */}
+          <p className={cn("mt-0.5 flex items-center gap-1 text-xs sm:hidden", cal.warn ? "font-semibold text-apricot" : "text-basalt/50")}>
+            <CalendarClock className="h-3 w-3 shrink-0" aria-hidden /> {cal.text}
           </p>
         </div>
         <button
@@ -2209,9 +2218,9 @@ function SectionHead({ title, sub, actions }: { title: string; sub: string; acti
 
 function StatTile({ n, label }: { n: number; label: string }) {
   return (
-    <div className="border border-basalt/10 bg-paper p-5">
-      <p className="font-display text-4xl font-normal tabular-nums">{n}</p>
-      <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-basalt/45">{label}</p>
+    <div className="min-w-0 border border-basalt/10 bg-paper p-3 sm:p-5">
+      <p className="font-display text-2xl font-normal tabular-nums sm:text-4xl">{n}</p>
+      <p className="mt-1 text-[10px] font-semibold uppercase leading-tight tracking-[0.1em] text-basalt/45 sm:text-xs">{label}</p>
     </div>
   );
 }
@@ -2365,7 +2374,8 @@ function DashboardContent() {
               <div>
                 <SectionHead title={firstName ? `Hi ${firstName}.` : "Welcome."} sub="Your listings, bookings, and payouts — all in one place." />
                 {offlineBanner}
-                <div className="grid gap-3 sm:grid-cols-3">
+                {/* Three across on phones too — stacked they filled the first screen. */}
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
                   <StatTile n={mine.length} label="Listings" />
                   <StatTile n={published} label="Published" />
                   <StatTile n={pending} label="Pending review" />
