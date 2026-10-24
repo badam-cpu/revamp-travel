@@ -108,6 +108,9 @@ interface WizardData {
   importantInfo: string;
   photos: string[];
   coverFocus: string;
+  photoCaptions: Record<string, string>;
+  /** The listing already had captions when loaded — so clearing them must be saved. */
+  hadPhotoCaptions?: boolean;
   videoUrl: string;
   prefillImageUrl?: string;
   price: number;
@@ -151,6 +154,7 @@ function emptyWizardData(): WizardData {
     importantInfo: "",
     photos: [],
     coverFocus: "50% 50%",
+    photoCaptions: {},
     videoUrl: "",
     price: 0,
     priceUnit: "person",
@@ -224,6 +228,8 @@ function listingToWizardData(listing: LiveListing): WizardData {
     importantInfo: listing.importantInfo ?? "",
     photos: realPhotos(listing),
     coverFocus: listing.coverFocus ?? "50% 50%",
+    photoCaptions: listing.photoCaptions ?? {},
+    hadPhotoCaptions: Object.keys(listing.photoCaptions ?? {}).length > 0,
     videoUrl: listing.videoUrl ?? "",
     price: listing.price,
     priceUnit: listing.priceUnit,
@@ -267,6 +273,7 @@ function toListingInput(data: WizardData): ListingInput {
     videoUrl: data.videoUrl || undefined,
     gallery: data.photos.length ? data.photos : undefined,
     coverFocus: data.coverFocus || undefined,
+    photoCaptions: Object.keys(data.photoCaptions).length || data.hadPhotoCaptions ? data.photoCaptions : undefined,
     shortDescription: data.shortDescription.trim(),
     longDescription: data.longDescription.trim(),
     price,
@@ -412,7 +419,7 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
     const value = amenitiesRef.current?.getValue();
     if (value) setData((d) => ({ ...d, amenities: value }));
     const photos = photosRef.current?.getValue();
-    if (photos) setData((d) => ({ ...d, photos, coverFocus: photosRef.current?.getCoverFocus() ?? d.coverFocus }));
+    if (photos) setData((d) => ({ ...d, photos, coverFocus: photosRef.current?.getCoverFocus() ?? d.coverFocus, photoCaptions: photosRef.current?.getCaptions() ?? d.photoCaptions }));
     const video = videoRef.current?.getValue();
     if (video !== undefined) setData((d) => ({ ...d, videoUrl: video }));
   }, [currentStep]);
@@ -458,6 +465,7 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
     amenities: amenitiesRef.current?.getValue() ?? data.amenities,
     photos: photosRef.current?.getValue() ?? data.photos,
     coverFocus: photosRef.current?.getCoverFocus() ?? data.coverFocus,
+    photoCaptions: photosRef.current?.getCaptions() ?? data.photoCaptions,
     videoUrl: videoRef.current?.getValue() ?? data.videoUrl,
   });
   const saveProgress = async (mode: "auto" | "explicit"): Promise<boolean> => {
@@ -827,7 +835,7 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                     )}
                     <StepField label="Photos" help="Drag &amp; drop or click to upload — the first photo is the cover. Leave empty to use a brand illustration.">
                       {/* keyed on `hydrated` so an edit reseeds the uploader once the listing's photos load */}
-                      <PhotoUploader key={hydrated ? "ready" : "loading"} ref={photosRef} defaultValue={data.photos} defaultFocus={data.coverFocus} />
+                      <PhotoUploader key={hydrated ? "ready" : "loading"} ref={photosRef} captions defaultCaptions={data.photoCaptions} defaultValue={data.photos} defaultFocus={data.coverFocus} />
                     </StepField>
                     <StepField label="Intro video (optional)" help="A short clip (≤ 60s) really helps bookings — upload one, or paste a YouTube/Vimeo link.">
                       <VideoField key={hydrated ? "v-ready" : "v-loading"} ref={videoRef} defaultValue={data.videoUrl} />

@@ -7,6 +7,7 @@
  * so the card leads with information that's actually true instead.
  */
 import { useState } from "react";
+import { photoCaption } from "@shared/listings";
 import { Bookmark, ChevronLeft, ChevronRight, Clock, Gauge, MapPin, Play, Star, Users } from "lucide-react";
 import { Link } from "wouter";
 import { Listing } from "@/data/listings";
@@ -57,7 +58,7 @@ export function TourCard({ listing, surface = "tours" }: { listing: Listing; sur
             <img
               key={src + i}
               {...imgAttrs(src, "(min-width:1024px) 33vw, (min-width:640px) 50vw, 100vw")}
-              alt={`${listing.title} — photo ${i + 1} of ${images.length}`}
+              alt={photoCaption(listing, src) || `${listing.title} — photo ${i + 1} of ${images.length}`}
               loading="lazy"
               style={i === 0 ? { objectPosition: listing.coverFocus || undefined } : undefined}
               className={cn("absolute inset-0 h-full w-full object-cover transition-opacity duration-300", i === index ? "opacity-100" : "opacity-0")}

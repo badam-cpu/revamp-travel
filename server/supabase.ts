@@ -54,6 +54,8 @@ interface CatalogRow {
   lng: number;
   image: string;
   gallery: string[];
+  /** 0117 — absent on older databases. */
+  photo_captions?: Record<string, string> | null;
   short_description: string;
   long_description: string;
   price_cents: number;
@@ -112,6 +114,7 @@ function mapCatalogRow(row: CatalogRow): PublicListing {
     coordinates: { lat: row.lat, lng: row.lng },
     image: row.image,
     gallery: row.gallery,
+    photoCaptions: row.photo_captions && typeof row.photo_captions === "object" ? row.photo_captions : undefined,
     shortDescription: row.short_description,
     longDescription: row.long_description,
     price,

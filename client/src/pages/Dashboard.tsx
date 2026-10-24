@@ -166,6 +166,7 @@ interface RefLists {
   seasonalRates: import("@shared/listings").SeasonalRate[];
   coverFocus: string;
   videoUrl: string;
+  photoCaptions: Record<string, string>;
 }
 
 function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLists): ListingInput {
@@ -212,6 +213,8 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
     image: photos[0] || undefined,
     gallery: photos.length ? photos : undefined,
     coverFocus: lists.coverFocus || undefined,
+    // Sent when there are captions — or when clearing ones the listing had.
+    photoCaptions: Object.keys(lists.photoCaptions).length || Object.keys(draft.photoCaptions ?? {}).length ? lists.photoCaptions : undefined,
     videoUrl: lists.videoUrl || undefined,
     shortDescription: get("shortDescription").trim(),
     longDescription: get("longDescription").trim(),
@@ -489,6 +492,7 @@ function ListingFormDialog({
     seasonalRates: ratesRef.current?.getValue() ?? [],
     coverFocus: photosRef.current?.getCoverFocus() ?? "50% 50%",
     videoUrl: videoRef.current?.getValue() ?? "",
+    photoCaptions: photosRef.current?.getCaptions() ?? {},
   });
 
   // Save the unfinished form to listing_drafts (0115). "auto" stays quiet on
@@ -1139,7 +1143,7 @@ function ListingFormDialog({
                   </div>
                 </details>
 
-                <PhotoUploader ref={photosRef} defaultValue={realPhotos(draft)} defaultFocus={draft.coverFocus} max={draft.type === "stay" && multiRoom ? HOTEL_MAX_PHOTOS : undefined} />
+                <PhotoUploader ref={photosRef} captions defaultCaptions={draft.photoCaptions} defaultValue={realPhotos(draft)} defaultFocus={draft.coverFocus} max={draft.type === "stay" && multiRoom ? HOTEL_MAX_PHOTOS : undefined} />
 
                 <div className="grid gap-2">
                   <p className="text-sm font-semibold text-basalt">Intro video <span className="font-normal text-basalt/45">(optional — a short clip really helps)</span></p>

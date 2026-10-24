@@ -34,7 +34,7 @@ import { boldToHtml } from "../shared/richText.js";
 import { GIFT_CARD_AMOUNTS_CENTS, GIFT_CARD_VALID_MONTHS } from "../shared/giftcards.js";
 import { findRegionGuide, listingInRegion, type RegionGuide } from "../shared/regionGuides.js";
 import { LANDING_COPY, LANDING_PATH, TYPE_WORD, clipMeta, landingCrossLinks, landingDescription, landingItems, matchLandingPath, resolveLandingRegion, type LandingType } from "../shared/regionLanding.js";
-import { isDiscoverable } from "../shared/listings.js";
+import { isDiscoverable, photoCaption } from "../shared/listings.js";
 
 export type PageKind =
   | "home"
@@ -818,7 +818,11 @@ function renderListingDetail(listing: PublicListing, catalog: PublicListing[], o
   const amenitiesHtml = listing.amenities.length > 0 ? `<ul>${listing.amenities.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
   const galleryHtml = [listing.image, ...listing.gallery]
     .filter((src, index, all) => all.indexOf(src) === index)
-    .map((src) => `<img src="${escapeHtml(imgUrl(src, origin))}" alt="${escapeHtml(listing.title)}" />`)
+    .map((src) => {
+      const caption = photoCaption(listing, src);
+      const img = `<img src="${escapeHtml(imgUrl(src, origin))}" alt="${escapeHtml(caption || listing.title)}" />`;
+      return caption ? `<figure>${img}<figcaption>${escapeHtml(caption)}</figcaption></figure>` : img;
+    })
     .join("\n");
   const tagsHtml = listing.tags.length > 0 ? `<p>${listing.tags.map((tag) => escapeHtml(tag)).join(", ")}</p>` : "";
   // "Itinerary" for experiences, "Highlights" for tours — same `highlights`

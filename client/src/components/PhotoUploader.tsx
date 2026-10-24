@@ -17,6 +17,9 @@
  * `ref.getValue()` (an array of public URLs), read once at submit time. A
  * "paste a URL" fallback remains for externally-hosted images and for the
  * link-import reference photo the operator may choose to keep.
+ *
+ * `captions` turns on an optional caption field under each photo (0117 — operator
+ * listing forms only); `ref.getCaptions()` returns them keyed by photo URL.
  */
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type DragEvent } from "react";
 import { ImagePlus, Star, X, ArrowLeft, ArrowRight, Loader2, Link2 } from "lucide-react";
@@ -28,8 +31,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { PHOTO_CAPTION_MAX, cleanPhotoCaptions } from "@shared/listings";
 
-export type PhotoUploaderHandle = { getValue: () => string[]; getCoverFocus: () => string };
+export type PhotoUploaderHandle = { getValue: () => string[]; getCoverFocus: () => string; getCaptions: () => Record<string, string> };
 
 /** Default cap; hotels (the listing and each room type) allow more — see `max`. */
 const MAX_PHOTOS = 24;
@@ -62,7 +66,10 @@ function parseFocus(s?: string): { x: number; y: number } {
   return { x: Math.min(100, Math.max(0, Number(m[1]))), y: Math.min(100, Math.max(0, Number(m[2]))) };
 }
 
-export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: string[]; defaultFocus?: string; onChange?: (urls: string[]) => void; max?: number }>(function PhotoUploader({ defaultValue = [], defaultFocus, onChange, max = MAX_PHOTOS }, ref) {
+export const PhotoUploader = forwardRef<
+  PhotoUploaderHandle,
+  { defaultValue?: string[]; defaultFocus?: string; onChange?: (urls: string[]) => void; max?: number; captions?: boolean; defaultCaptions?: Record<string, string> }
+>(function PhotoUploader({ defaultValue = [], defaultFocus, onChange, max = MAX_PHOTOS, captions: withCaptions = false, defaultCaptions }, ref) {
   const { user } = useAuth();
   const [photos, setPhotos] = useState<Photo[]>(() => defaultValue.filter(Boolean).map((url) => ({ id: crypto.randomUUID(), url })));
   const [pending, setPending] = useState<Pending[]>([]);
@@ -71,11 +78,21 @@ export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: st
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const [focus, setFocus] = useState(() => parseFocus(defaultFocus));
+  // Keyed by URL, so reordering/removing photos never moves a caption.
+  const [captions, setCaptions] = useState<Record<string, string>>(() => ({ ...(defaultCaptions ?? {}) }));
   const [posing, setPosing] = useState(false); // dragging the focal point
   const inputRef = useRef<HTMLInputElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
 
-  useImperativeHandle(ref, () => ({ getValue: () => photos.map((p) => p.url), getCoverFocus: () => `${Math.round(focus.x)}% ${Math.round(focus.y)}%` }), [photos, focus]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      getValue: () => photos.map((p) => p.url),
+      getCoverFocus: () => `${Math.round(focus.x)}% ${Math.round(focus.y)}%`,
+      getCaptions: () => cleanPhotoCaptions(captions, photos.map((p) => p.url)),
+    }),
+    [photos, focus, captions],
+  );
   // Optional live notification (e.g. per-photo captions next to the uploader).
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -165,6 +182,7 @@ export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: st
         <Label className="text-sm font-semibold">Photos</Label>
         <p className="mt-1 text-xs text-basalt/45">
           JPG or PNG, landscape works best, at least 1200px wide (up to ~10 MB each). The first photo is the cover; drag to reorder. Large images are optimized automatically.
+          {withCaptions && " You can add a short caption under any photo — optional, shown to guests."}
         </p>
       </div>
 
@@ -216,8 +234,8 @@ export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: st
       {(photos.length > 0 || pending.length > 0) && (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {photos.map((photo, i) => (
+            <div key={photo.id} className="grid content-start gap-1">
             <div
-              key={photo.id}
               draggable
               onDragStart={(e) => {
                 setDragIndex(i);
@@ -245,7 +263,7 @@ export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: st
                 overIndex === i && dragIndex !== i && "ring-2 ring-apricot",
               )}
             >
-              <img src={photo.url} alt={`Listing photo ${i + 1}`} draggable={false} className="h-full w-full object-cover" />
+              <img src={photo.url} alt={captions[photo.url]?.trim() || `Listing photo ${i + 1}`} draggable={false} className="h-full w-full object-cover" />
               {i === 0 && (
                 <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 bg-apricot px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-white">
                   <Star className="h-2.5 w-2.5" /> Cover
@@ -279,6 +297,21 @@ export const PhotoUploader = forwardRef<PhotoUploaderHandle, { defaultValue?: st
                   <ArrowRight className="h-3.5 w-3.5" />
                 </button>
               </div>
+            </div>
+            {withCaptions && (
+              <input
+                type="text"
+                value={captions[photo.url] ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value.slice(0, PHOTO_CAPTION_MAX);
+                  setCaptions((prev) => ({ ...prev, [photo.url]: v }));
+                }}
+                maxLength={PHOTO_CAPTION_MAX}
+                placeholder="Add a caption (optional)"
+                aria-label={`Caption for photo ${i + 1} (optional)`}
+                className="h-12 w-full min-w-0 rounded-none border border-basalt/15 bg-paper px-3 text-base outline-none placeholder:text-basalt/40 focus:border-basalt"
+              />
+            )}
             </div>
           ))}
           {pending.map((p) => (

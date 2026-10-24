@@ -25,7 +25,7 @@ import { DiscountBadge } from "@/components/DiscountBadge";
 import { houseRuleIcon } from "@/lib/houseRules";
 import { nearbySights, distanceMeters } from "@/lib/yerevanSights";
 import { findListing, typeLabels } from "@/data/listings";
-import { isCuratedType, placeCategoryLabel, placeGroupForCategory, formatStayType, hasOffer } from "@shared/listings";
+import { isCuratedType, placeCategoryLabel, placeGroupForCategory, formatStayType, hasOffer, photoCaption } from "@shared/listings";
 import { useListings } from "@/contexts/ListingsContext";
 import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
@@ -68,7 +68,7 @@ const AMENITIES_INLINE_LIMIT = 10;
  * respects reduced motion), with arrows, windowed dots, and a "Show all photos"
  * button. Clicking a photo opens the full-screen lightbox at that index.
  */
-function HeroCarousel({ photos, title, onOpen, badge, coverFocus, topRight }: { photos: string[]; title: string; onOpen: (i: number) => void; badge?: ReactNode; coverFocus?: string; topRight?: ReactNode }) {
+function HeroCarousel({ photos, title, onOpen, badge, coverFocus, topRight, captionOf }: { photos: string[]; title: string; onOpen: (i: number) => void; badge?: ReactNode; coverFocus?: string; topRight?: ReactNode; captionOf?: (url: string) => string }) {
   const [i, setI] = useState(0);
   const [paused, setPaused] = useState(false);
   const total = photos.length;
@@ -103,7 +103,7 @@ function HeroCarousel({ photos, title, onOpen, badge, coverFocus, topRight }: { 
           >
             {/* Only the current photo and its neighbours are fetched (not the whole gallery). */}
             {Math.min(Math.abs(idx - i), total - Math.abs(idx - i)) <= 1 && (
-              <img {...imgAttrs(src, "(min-width:1024px) 1100px, 100vw")} alt={idx === 0 ? title : ""} loading={idx === 0 ? undefined : "lazy"} style={idx === 0 ? { objectPosition: coverFocus || undefined } : undefined} className="h-full w-full object-cover" />
+              <img {...imgAttrs(src, "(min-width:1024px) 1100px, 100vw")} alt={captionOf?.(src) || (idx === 0 ? title : "")} loading={idx === 0 ? undefined : "lazy"} style={idx === 0 ? { objectPosition: coverFocus || undefined } : undefined} className="h-full w-full object-cover" />
             )}
           </button>
         ))}
@@ -383,6 +383,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
             title={listing.title}
             onOpen={setLightbox}
             coverFocus={listing.coverFocus}
+            captionOf={(url) => photoCaption(listing, url)}
             badge={<DiscountBadge listing={listing} className="absolute left-4 top-4 z-10" />}
             topRight={
               showTour ? (
@@ -731,7 +732,15 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
                 <ChevronRight className="h-5 w-5" />
               </button>
             )}
-            <img {...imgAttrs(photos[lightbox], "90vw")} alt={`${listing.title} photo ${lightbox + 1}`} className="max-h-[86vh] max-w-[88vw] object-contain" />
+            {(() => {
+              const caption = photoCaption(listing, photos[lightbox]);
+              return (
+                <figure className="m-0 flex max-w-[88vw] flex-col items-center">
+                  <img {...imgAttrs(photos[lightbox], "90vw")} alt={caption || `${listing.title} photo ${lightbox + 1}`} className={cn("max-w-[88vw] object-contain", caption ? "max-h-[78vh]" : "max-h-[86vh]")} />
+                  {caption && <figcaption className="mt-3 max-w-xl px-4 text-center text-sm leading-6 text-basalt/70">{caption}</figcaption>}
+                </figure>
+              );
+            })()}
           </div>
         );
       })()}

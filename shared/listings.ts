@@ -268,6 +268,8 @@ export interface Listing {
   accent: "apricot" | "sevan" | "tuff";
   /** Cover-photo focal point as a CSS object-position ("50% 30%"); frames crops. */
   coverFocus?: string;
+  /** Optional photo captions (0117), keyed by photo URL. See photoCaption(). */
+  photoCaptions?: Record<string, string>;
   /** Short intro/hero video (stay/tour/experience): an uploaded MP4/WebM public
    * URL, or a YouTube/Vimeo link. Detected + rendered by client/src/lib/video.ts. */
   videoUrl?: string;
@@ -874,6 +876,8 @@ export interface ListingInput {
   accent: "apricot" | "sevan" | "tuff";
   /** Cover-photo focal point as a CSS object-position ("50% 30%"); frames crops. */
   coverFocus?: string;
+  /** Optional photo captions (0117), keyed by photo URL. See photoCaption(). */
+  photoCaptions?: Record<string, string>;
   /** Short intro/hero video (stay/tour/experience): an uploaded MP4/WebM public
    * URL, or a YouTube/Vimeo link. Detected + rendered by client/src/lib/video.ts. */
   videoUrl?: string;
@@ -995,3 +999,23 @@ export function suspensionLabel(l: AvailabilityStatus): string | null {
   const f = (iso: string) => new Date(iso + "T00:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
   return l.suspendedUntil ? `${f(l.suspendedFrom)} – ${f(l.suspendedUntil)}` : `from ${f(l.suspendedFrom)}, until further notice`;
 }
+
+/** Longest photo caption an operator can write (0117). */
+export const PHOTO_CAPTION_MAX = 120;
+
+/** A photo's caption, or "" when it has none. */
+export function photoCaption(listing: { photoCaptions?: Record<string, string> | null }, url: string): string {
+  const c = listing.photoCaptions?.[url];
+  return typeof c === "string" ? c.trim() : "";
+}
+
+/** Captions worth saving: only the listing's current photos, trimmed, non-empty, within the limit. */
+export function cleanPhotoCaptions(captions: Record<string, string> | undefined, photos: string[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const url of photos) {
+    const c = (captions?.[url] ?? "").replace(/\s+/g, " ").trim().slice(0, PHOTO_CAPTION_MAX);
+    if (c) out[url] = c;
+  }
+  return out;
+}
+

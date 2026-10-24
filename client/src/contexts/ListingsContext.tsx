@@ -159,6 +159,8 @@ interface ListingRow {
   venue_type: string | null;
   category: string | null;
   cover_focus: string | null;
+  /** 0117 — absent on older databases (select("*") just omits it). */
+  photo_captions?: Record<string, string> | null;
   video_url: string | null;
   // revampstay offers (0091) — absent (undefined) on a client that selects "*"
   // before the migration runs; mapListingRow defaults every one of them.
@@ -264,6 +266,7 @@ function mapListingRow(row: ListingRow): LiveListing {
     rooms: Array.isArray(row.rooms) ? row.rooms : [],
     multiRoom: row.multi_room === true,
     coverFocus: row.cover_focus ?? undefined,
+    photoCaptions: row.photo_captions && typeof row.photo_captions === "object" ? row.photo_captions : undefined,
     videoUrl: row.video_url ?? undefined,
     // revampstay offers (0091): all null-safe — undefined pre-migration, which
     // listingOffers() reads as ["nightly"], so revampvacations is unchanged.
@@ -384,6 +387,9 @@ function toRow(input: ListingInput) {
     rooms: input.rooms ?? [],
     seasonal_rates: input.seasonalRates ?? [],
     cover_focus: input.coverFocus?.trim() || null,
+    // 0117: only written when the form sends captions (any set, or clearing old
+    // ones), so saving never depends on the column existing.
+    ...(input.photoCaptions !== undefined ? { photo_captions: input.photoCaptions } : {}),
     video_url: input.videoUrl?.trim() || null,
     venue_type: input.venueType?.trim() || null,
     category: input.category?.trim() || null,

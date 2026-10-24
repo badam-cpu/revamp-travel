@@ -11,7 +11,7 @@ import { imgAttrs } from "@/lib/responsiveImg";
 import { DiscountBadge } from "@/components/DiscountBadge";
 import { PhotoDots } from "@/components/PhotoDots";
 import { formatLocation } from "@/lib/region";
-import { isCuratedType, placeCategoryLabel } from "@shared/listings";
+import { isCuratedType, photoCaption, placeCategoryLabel } from "@shared/listings";
 import { useExternalRatings } from "@/hooks/useExternalRatings";
 import { useImpressionRef, trackListing } from "@/lib/track";
 import { usePromoBadges } from "@/hooks/usePromoBadges";
@@ -68,7 +68,7 @@ export function ListingCard({ listing, large = false, active = false, onHover, s
             <img
               key={src + i}
               {...imgAttrs(src, large ? "(min-width:1024px) 66vw, 100vw" : "(min-width:1024px) 33vw, (min-width:640px) 50vw, 100vw")}
-              alt={images.length > 1 ? `${listing.title} — photo ${i + 1} of ${images.length}` : listing.title}
+              alt={photoCaption(listing, src) || (images.length > 1 ? `${listing.title} — photo ${i + 1} of ${images.length}` : listing.title)}
               loading="lazy"
               style={i === 0 ? { objectPosition: listing.coverFocus || undefined } : undefined}
               className={cn("absolute inset-0 h-full w-full object-cover transition-opacity duration-300", i === index ? "opacity-100" : "opacity-0")}
