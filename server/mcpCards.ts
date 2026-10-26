@@ -24,7 +24,7 @@ const RE_SVG = `<svg viewBox="${RE_VIEWBOX}" aria-hidden="true" focusable="false
 const FONT_CSS = "https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap";
 
 /** Versioned: hosts cache by URI, so bump it when the HTML/CSS/JS changes. */
-export const CARDS_URI = "ui://revamp/cards-v6.html";
+export const CARDS_URI = "ui://revamp/cards-v7.html";
 export const CARDS_MIME = "text/html;profile=mcp-app";
 
 const SITE = () => (process.env.URL || "https://revampvacations.com").replace(/\/+$/, "");
@@ -150,7 +150,7 @@ svg{display:block}
     var h=el("div","hd"); h.appendChild(mark("wm","wm","revamp."));
     if(data.startDate){
       var free=(results||[]).filter(function(r){return r.available===true;}).length, toCheck=(results||[]).length-free;
-      h.appendChild(el("b",null,(free?free+" free":toCheck?"":"Nothing free")+(toCheck?(free?" + ":"")+toCheck+" to check rooms":"")));
+      h.appendChild(el("b",null,(free?free+" available":toCheck?"":"Nothing available")+(toCheck?(free?" + ":"")+toCheck+" to check rooms":"")));
       h.appendChild(el("span",null,(data.endDate?day(data.startDate,false)+" \u2192 "+day(data.endDate,true):day(data.startDate,true))+" \u00b7 "+(data.guests||2)+" guest"+(data.guests===1?"":"s")));
     } else if(results&&results.length){
       h.appendChild(el("b",null,results.length+" match"+(results.length===1?"":"es")));
@@ -165,7 +165,7 @@ svg{display:block}
       if(r.totalFormatted){
         var pp=el("div","p",r.totalFormatted+" "); pp.appendChild(el("small",null,"total")); pp.appendChild(el("span","sub",(r.nights?r.nights+" night"+(r.nights===1?"":"s")+" · ":"")+"fees & tax incl.")); b.appendChild(pp);
       } else if(r.price){ b.appendChild(el("div","p",r.price)); }
-      if(r.available===true) b.appendChild(el("span","free ok",r.slots&&r.slots.length?"Free · "+r.slots.join(", "):r.room?"Free · "+r.room:"Free on your dates"));
+      if(r.available===true) b.appendChild(el("span","free ok",r.slots&&r.slots.length?"Available · "+r.slots.join(", "):r.room?"Available · "+r.room:"Available on your dates"));
       else if(r.available===null) b.appendChild(el("span","free na",r.rooms?"Check rooms":"Check on the listing"));
       b.appendChild(el("div","go",(/\\/checkout\\//.test(r.bookUrl||"")?"Book on Revamp":"View on Revamp")+" ↗"));
       c.appendChild(b); c.addEventListener("click",function(){ open(r.bookUrl||r.url); }); rail.appendChild(c);

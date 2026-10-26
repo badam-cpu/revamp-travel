@@ -140,7 +140,7 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
     {
       title: "Search Revamp listings",
       description:
-        "Search Revamp Vacations' published listings in Armenia: places to stay, tours, experiences, restaurants (eat) and places to visit. Returns each match's slug, type, location, headline price in AMD, short description, page link, and the listing's own cover photo (image) — use that photo when showing the result. When the user gives dates, pass startDate (and endDate for stays) and guests: the search then returns only listings that are actually free for those dates, each with its exact all-in total (fees and tax included), cheapest first. For one listing's full price breakdown and terms, use get_quote.",
+        "Search Revamp Vacations' published listings in Armenia: places to stay, tours, experiences, restaurants (eat) and places to visit. Returns each match's slug, type, location, headline price in AMD, short description, page link, and the listing's own cover photo (image) — use that photo when showing the result. When the user gives dates, pass startDate (and endDate for stays) and guests: the search then returns only listings that are actually available for those dates, each with its exact all-in total (fees and tax included), cheapest first. For one listing's full price breakdown and terms, use get_quote.",
       annotations: READ_ONLY,
       _meta: cardsToolMeta("Searching Revamp…", "Revamp listings"),
       inputSchema: {
@@ -149,7 +149,7 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
         query: z.string().optional().describe("Free-text match on title, description, tags, cuisine, city."),
         cuisine: z.string().optional().describe("For restaurants: a cuisine/venue type, e.g. 'Armenian', 'Fast food'."),
         limit: z.number().int().min(1).max(50).optional().describe("Max results (default 10)."),
-        startDate: DATE.optional().describe("Optional. Check-in date for stays, or the activity date, YYYY-MM-DD — returns only listings free then, with totals."),
+        startDate: DATE.optional().describe("Optional. Check-in date for stays, or the activity date, YYYY-MM-DD — returns only listings available then, with totals."),
         endDate: DATE.optional().describe("Stays: check-out date, YYYY-MM-DD (with startDate)."),
         guests: z.number().int().min(1).max(30).optional().describe("Party size (default 2) — used with dates."),
       },
@@ -211,7 +211,7 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
         checked: bookable.length,
         count: results.length,
         results,
-        note: results.length ? undefined : "Nothing matching is free for those dates on Revamp. Try other dates or a nearby area.",
+        note: results.length ? undefined : "Nothing matching is available for those dates on Revamp. Try other dates or a nearby area.",
       });
     },
   );
@@ -263,7 +263,7 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
     {
       title: "Check availability",
       description:
-        "Check whether a stay is free for a date range, or which time slots a tour or experience has on a date. Dates are YYYY-MM-DD; for stays endDate is the check-out day. Returns available (true/false, or null with a reason when it can't be confirmed here, e.g. hotels where a room type is chosen on the page). Use get_quote for the price.",
+        "Check whether a stay is available for a date range, or which time slots a tour or experience has on a date. Dates are YYYY-MM-DD; for stays endDate is the check-out day. Returns available (true/false, or null with a reason when it can't be confirmed here, e.g. hotels where a room type is chosen on the page). Use get_quote for the price.",
       annotations: READ_ONLY,
       inputSchema: {
         slug: z.string().describe("The listing slug."),

@@ -246,7 +246,7 @@ export async function quoteListing(
       nightlyFrom: t.priceCents ? amd(t.priceCents) : null,
       nightlyFromFormatted: t.priceCents ? fmt(t.priceCents) : null,
     }));
-    const unknown = { ...base, available: null, reason: "This is a hotel: free rooms and the exact total depend on the room type, chosen on the listing page.", rooms };
+    const unknown = { ...base, available: null, reason: "This is a hotel: available rooms and the exact total depend on the room type, chosen on the listing page.", rooms };
     if (!types?.length) return unknown;
     const minStay = minStayOf(r.facts);
     if (nights! < minStay) return { ...base, available: false, reason: `This stay has a ${minStay}-night minimum.`, rooms };
@@ -267,13 +267,13 @@ export async function quoteListing(
       const got = bestRoomFor(listing, t, avail, start, end!, guests);
       if (got && got.quote.totalCents > 0 && (!best || got.quote.totalCents < best.quote.totalCents)) best = { type: t, quote: got.quote };
     }
-    if (!best) return { ...base, available: false, reason: `No room is free for all of these nights for ${guests} guest${guests === 1 ? "" : "s"}.`, rooms };
+    if (!best) return { ...base, available: false, reason: `No room is available for all of these nights for ${guests} guest${guests === 1 ? "" : "s"}.`, rooms };
     return {
       ...base,
       available: true,
       room: best.type.name,
       price: roomPrice(best.quote, best.type.name),
-      reason: `Cheapest free room for these dates: ${best.type.name}. Other rooms are on the listing page.`,
+      reason: `Cheapest available room for these dates: ${best.type.name}. Other rooms are on the listing page.`,
       rooms,
     };
   }
@@ -309,7 +309,7 @@ export async function quoteListing(
     const slots = ((sess ?? []) as { starts_at: string; duration_min: number; capacity: number; seats_taken: number }[])
       .filter((s) => Date.parse(s.starts_at) > now && s.capacity - s.seats_taken >= guests)
       .map((s) => ({ startsAt: s.starts_at, localTime: formatSlotTime(s.starts_at), durationMinutes: s.duration_min, seatsLeft: s.capacity - s.seats_taken }));
-    if (!slots.length) return { ...base, available: false, reason: `No time slots with ${guests} free seat${guests === 1 ? "" : "s"} on this date.`, slots: [], price };
+    if (!slots.length) return { ...base, available: false, reason: `No time slots with ${guests} seat${guests === 1 ? "" : "s"} left on this date.`, slots: [], price };
     return { ...base, available: true, slots, price, reason: "Pick a time slot on the listing page to book." };
   }
   // Booked by date (no time slots set up).
