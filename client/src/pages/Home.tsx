@@ -1,13 +1,13 @@
 /** Revamp brandbook: bold sans hierarchy, white/orange/charcoal surfaces, rounded media, cropped logo patterns, and Armenian photography. */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, ChevronLeft, ChevronRight, Compass, MapPin, MoveUpRight, Pause, Play } from "lucide-react";
 import { Link } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SearchBar } from "@/components/SearchBar";
 import { imgAttrs } from "@/lib/responsiveImg";
-import { ListingCard } from "@/components/ListingCard";
-import { ListingCardSkeleton } from "@/components/ListingCardSkeleton";
+import { ListingRail } from "@/components/ListingRail";
+import { buildHomeRows } from "@/lib/homeRows";
 import { ArmeniaMap } from "@/components/ArmeniaMap";
 import { Button } from "@/components/ui/button";
 import { brandAssets, regions } from "@/data/listings";
@@ -104,15 +104,10 @@ export default function Home() {
     hc.mapIntro?.trim() ||
     "Hover a place to follow it across Armenia, then open the full atlas when geography—not category—is leading the plan.";
 
-  // Featured row: admin's ordered slug list (published only) if set, else the
-  // automatic pick (listings flagged `featured`, falling back to the first few).
-  const adminFeatured = settings.featuredSlugs
-    .map((slug) => listings.find((l) => l.slug === slug))
-    .filter((l): l is (typeof listings)[number] => Boolean(l));
-  // Cap at 8: with the large first card spanning 2 columns, 8 fills the 3-column
-  // grid exactly (2+1, 3, 3) — 6 left a gap in the last row.
-  const autoFeatured = (listings.filter((listing) => listing.featured).length ? listings.filter((listing) => listing.featured) : listings).slice(0, 8);
-  const featured = (adminFeatured.length ? adminFeatured : autoFeatured).slice(0, 8);
+  // Showcase: "Our picks" (admin's pinned slugs → featured flag → a daily
+  // rotation of the rest) + one swipeable row per type (daily rotation), so
+  // the home page keeps showing a fair share of a growing catalog. See lib/homeRows.ts.
+  const { picks: featured, rows: typeRows } = useMemo(() => buildHomeRows(listings, settings.featuredSlugs), [listings, settings.featuredSlugs]);
   const [selectedId, setSelectedId] = useState(featured[0]?.id);
 
   useDocumentMeta({
@@ -260,11 +255,10 @@ export default function Home() {
               <div><p className="eyebrow">{editEyebrow}</p><h2 className="mt-3 whitespace-pre-line font-display text-5xl tracking-[-0.04em] sm:text-6xl">{editTitle}</h2></div>
               <Link href="/explore" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.17em] text-apricot hover:text-basalt">See every place <ArrowRight className="h-4 w-4" /></Link>
             </div>
-            <div className="mt-12 grid gap-x-7 gap-y-12 md:grid-cols-2 lg:grid-cols-3">
-              {loading && featured.length === 0
-                ? Array.from({ length: 5 }).map((_, i) => <div key={i} className={i === 0 ? "md:col-span-2 lg:col-span-2" : ""}><ListingCardSkeleton large={i === 0} /></div>)
-                : featured.map((listing, index) => <div key={listing.id} className={index === 0 ? "md:col-span-2 lg:col-span-2" : ""}><ListingCard listing={listing} large={index === 0} /></div>)}
-            </div>
+            <ListingRail className="mt-12" title="Our picks" items={featured} loading={loading} />
+            {typeRows.map((r) => (
+              <ListingRail key={r.key} className="mt-16" title={r.title} href={r.href} linkLabel={r.linkLabel} items={r.items} />
+            ))}
           </div>
         </section>
 
