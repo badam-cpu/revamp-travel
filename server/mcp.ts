@@ -24,6 +24,7 @@ import { getPublishedCatalog, listPublishedForPlanner, type PublicListing } from
 import { planTrip } from "./planner.js";
 import { isDiscoverable, photoCaption } from "../shared/listings.js";
 import { listingPhotos, quoteListing } from "./mcpQuote.js";
+import { cardsToolMeta, registerCardsResource } from "./mcpCards.js";
 import { publicClient } from "./supabase.js";
 
 const SITE = () => (process.env.URL || "https://revampvacations.com").replace(/\/+$/, "");
@@ -39,7 +40,8 @@ function summarize(l: PublicListing) {
     slug: l.slug,
     type: l.type,
     title: l.title,
-    location: [l.city, l.region].filter(Boolean).join(", "),
+    // "Yerevan, Yerevan" → "Yerevan" (city and region are the same for the capital).
+    location: Array.from(new Set([l.city, l.region].filter(Boolean))).join(", "),
     price: l.price > 0 ? `${l.priceLabel} / ${l.priceUnit}` : l.priceLabel,
     description: l.shortDescription,
     tags: l.tags?.slice(0, 6),
@@ -71,6 +73,8 @@ function detail(l: PublicListing) {
 }
 
 const TEXT = (data: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] });
+/** Text for the model + the same data as structuredContent for our result cards (server/mcpCards.ts). */
+const CARDS = (data: Record<string, unknown>) => ({ ...TEXT(data), structuredContent: data });
 /** A tool-level error the assistant can relay — plain words, no internals. */
 const ERROR = (message: string) => ({ isError: true, content: [{ type: "text" as const, text: JSON.stringify({ error: message }) }] });
 /** Every public tool only reads published data (MCP tool annotations). */
@@ -90,6 +94,8 @@ export interface PublicServerOptions {
 export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
   const links = opts.links ?? "checkout";
   const server = new McpServer({ name: "revamp-vacations", version: "1.0.0" });
+  // Our own result cards — so hosts show the listing's real photo, not a web image search's.
+  registerCardsResource(server);
 
   server.registerTool(
     "search_listings",
@@ -98,6 +104,7 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
       description:
         "Search Revamp Vacations' published listings in Armenia: places to stay, tours, experiences, restaurants (eat) and places to visit. Returns each match's slug, type, location, headline price in AMD, short description, page link, and the listing's own cover photo (image) — use that photo when showing the result. For an exact all-in price and availability on dates, use get_quote.",
       annotations: READ_ONLY,
+      _meta: cardsToolMeta("Searching Revamp…", "Revamp listings"),
       inputSchema: {
         type: z.enum(["stay", "tour", "experience", "eat", "place"]).optional().describe("Limit to one listing type."),
         region: z.string().optional().describe("Armenian region or city, e.g. 'Yerevan', 'Tavush', 'Dilijan'."),
@@ -125,7 +132,7 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
         })
         .slice(0, limit ?? 10)
         .map(summarize);
-      return TEXT({ count: results.length, results });
+      return CARDS({ kind: "listings", count: results.length, results });
     },
   );
 
@@ -152,6 +159,7 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
       description:
         `Exact availability and all-in price for one stay, tour or experience. Stays: checks the dates against the host's calendars, existing bookings, minimum stay and capacity, and returns the itemised total (accommodation, discounts, fees, tax) in AMD. Tours and experiences: returns the open time slots with seats left for that date and the total for the party. Also returns the cancellation terms, how payment works, and ${links === "checkout" ? "a link to book" : "a link to the listing page, where it can be booked"}. Hotels list their room types (rooms are chosen on the listing page). Read-only: nothing is held or booked.`,
       annotations: READ_ONLY,
+      _meta: cardsToolMeta("Checking dates and price…", "Revamp quote"),
       inputSchema: {
         slug: z.string().describe("The listing slug (from search_listings)."),
         startDate: DATE.describe("Check-in date for stays, or the activity date; YYYY-MM-DD."),
@@ -162,7 +170,7 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
     async ({ slug, startDate, endDate, guests }) => {
       try {
         const q = await quoteListing(publicClient(), { slug, startDate, endDate, guests }, links);
-        return "error" in q ? ERROR(q.error) : TEXT(q);
+        return "error" in q ? ERROR(q.error) : CARDS({ kind: "quote", ...q });
       } catch (err) {
         console.error("[mcp] get_quote", err);
         return ERROR("Couldn't get a quote right now. Please try again shortly.");
