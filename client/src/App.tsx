@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch, useLocation } from "wouter";
-import { useEffect } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { DEFAULT_TITLE, initAnalytics, isPrivatePath, setInternalTraffic, trackPageView } from "./lib/analytics";
 import { storeReferralCode } from "./lib/referrals";
 import { isTeamDevice } from "./lib/track";
@@ -17,45 +17,86 @@ import { CurrencyProvider } from "./contexts/CurrencyContext";
 import { AnnouncementBanner } from "./components/AnnouncementBanner";
 import { ImpersonationBar } from "./components/ImpersonationBar";
 import { CookieConsent } from "./components/CookieConsent";
-import { SupportWidget } from "./components/SupportWidget";
-import { OperatorAssistant } from "./components/OperatorAssistant";
+import { SiteHeader } from "./components/SiteHeader";
+// Loaded on demand: the support chat (guests) and the Aha assistant (operators)
+// aren't needed to show the first page.
+const SupportWidget = lazy(() => import("./components/SupportWidget").then((m) => ({ default: m.SupportWidget })));
+const OperatorAssistant = lazy(() => import("./components/OperatorAssistant").then((m) => ({ default: m.OperatorAssistant })));
 import Home from "./pages/Home";
-import Explore from "./pages/Explore";
-import Tours from "./pages/Tours";
-import EatGuide from "./pages/EatGuide";
-import EatLanding from "./pages/EatLanding";
-import RegionLanding from "./pages/RegionLanding";
-import QrLanding from "./pages/QrLanding";
-import MapPage from "./pages/MapPage";
-import ListingPage from "./pages/ListingPage";
-import Dashboard from "./pages/Dashboard";
-import ExperienceOnboarding from "./pages/ExperienceOnboarding";
-import AdminReview from "./pages/AdminReview";
-import Login from "./pages/Login";
-import Signup from "./pages/Signup";
-import ResetPassword from "./pages/ResetPassword";
-import ForgotPassword from "./pages/ForgotPassword";
-import Account from "./pages/Account";
-import VenueDashboard from "./pages/VenueDashboard";
-import Checkout from "./pages/Checkout";
-import Blog from "./pages/Blog";
-import BlogPost from "./pages/BlogPost";
-import Privacy from "./pages/Privacy";
-import Terms from "./pages/Terms";
-import Faq from "./pages/Faq";
-import Partners from "./pages/Partners";
-import GiftCards from "./pages/GiftCards";
-import Region from "./pages/Region";
-import Guide from "./pages/Guide";
-import Events from "./pages/Events";
-import Host from "./pages/Host";
-import RedeemStation from "./pages/RedeemStation";
-import TripPage from "./pages/TripPage";
-import InvoicePage from "./pages/InvoicePage";
-import Plan from "./pages/Plan";
-import Developers from "./pages/Developers";
-import StayHome from "./pages/StayHome";
+const Explore = lazy(() => import("./pages/Explore"));
+const Tours = lazy(() => import("./pages/Tours"));
+const EatGuide = lazy(() => import("./pages/EatGuide"));
+const EatLanding = lazy(() => import("./pages/EatLanding"));
+const RegionLanding = lazy(() => import("./pages/RegionLanding"));
+const QrLanding = lazy(() => import("./pages/QrLanding"));
+const MapPage = lazy(() => import("./pages/MapPage"));
+const ListingPage = lazy(() => import("./pages/ListingPage"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const ExperienceOnboarding = lazy(() => import("./pages/ExperienceOnboarding"));
+const AdminReview = lazy(() => import("./pages/AdminReview"));
+const Login = lazy(() => import("./pages/Login"));
+const Signup = lazy(() => import("./pages/Signup"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const Account = lazy(() => import("./pages/Account"));
+const VenueDashboard = lazy(() => import("./pages/VenueDashboard"));
+const Checkout = lazy(() => import("./pages/Checkout"));
+const Blog = lazy(() => import("./pages/Blog"));
+const BlogPost = lazy(() => import("./pages/BlogPost"));
+const Privacy = lazy(() => import("./pages/Privacy"));
+const Terms = lazy(() => import("./pages/Terms"));
+const Faq = lazy(() => import("./pages/Faq"));
+const Partners = lazy(() => import("./pages/Partners"));
+const GiftCards = lazy(() => import("./pages/GiftCards"));
+const Region = lazy(() => import("./pages/Region"));
+const Guide = lazy(() => import("./pages/Guide"));
+const Events = lazy(() => import("./pages/Events"));
+const Host = lazy(() => import("./pages/Host"));
+const RedeemStation = lazy(() => import("./pages/RedeemStation"));
+const TripPage = lazy(() => import("./pages/TripPage"));
+const InvoicePage = lazy(() => import("./pages/InvoicePage"));
+const Plan = lazy(() => import("./pages/Plan"));
+const Developers = lazy(() => import("./pages/Developers"));
+const StayHome = lazy(() => import("./pages/StayHome"));
 import { SiteProvider, useSite } from "@/contexts/SiteContext";
+
+/*
+ * Code splitting: every page except the home page loads on demand
+ * (React.lazy), so a guest opening one listing no longer downloads the
+ * operator dashboard, admin and campaign tools. Bots are unaffected (they get
+ * server-rendered HTML from server/prerender.ts). A tab left open across a
+ * deploy can ask for a chunk that no longer exists — main.tsx reloads once
+ * on Vite's "vite:preloadError".
+ */
+
+/** While a page's code loads: the site header over a blank page, so a first
+ * visit to a page doesn't flash white. */
+function PageFallback() {
+  return (
+    <div className="min-h-screen bg-paper" aria-busy="true">
+      <SiteHeader />
+    </div>
+  );
+}
+
+/** The Aha assistant is operator-only — guests never download its code. */
+function OperatorAssistantGate() {
+  const { profile } = useAuth();
+  return profile?.role === "operator" ? <OperatorAssistant /> : null;
+}
+
+/** Warm the pages guests most often open next, once the browser is idle. */
+function usePrefetchCommonPages() {
+  useEffect(() => {
+    const go = () => {
+      void import("./pages/ListingPage");
+      void import("./pages/Explore");
+    };
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
+    const t = window.setTimeout(() => (w.requestIdleCallback ? w.requestIdleCallback(go, { timeout: 4000 }) : go()), 2500);
+    return () => window.clearTimeout(t);
+  }, []);
+}
 
 /** The "/" landing: revampstay gets StayHome, revampvacations keeps Home. */
 function SiteHome() {
@@ -123,7 +164,9 @@ function ReferralCapture({ code }: { code: string }) {
 }
 
 function Router() {
+  usePrefetchCommonPages();
   return (
+    <Suspense fallback={<PageFallback />}>
     <Switch>
       <Route path="/" component={SiteHome} />
       <Route path="/r/:code">{(params) => <ReferralCapture code={params.code} />}</Route>
@@ -172,6 +215,7 @@ function Router() {
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
+    </Suspense>
   );
 }
 
@@ -192,8 +236,10 @@ function App() {
                     <AnnouncementBanner />
                     <ImpersonationBar />
                     <Router />
-                    <SupportWidget />
-                    <OperatorAssistant />
+                    <Suspense fallback={null}>
+                      <SupportWidget />
+                      <OperatorAssistantGate />
+                    </Suspense>
                     <CookieConsent />
                   </TooltipProvider>
                 </CurrencyProvider>
