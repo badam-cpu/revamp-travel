@@ -81,6 +81,21 @@ const ERROR = (message: string) => ({ isError: true, content: [{ type: "text" as
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
+/** Run fn over items with at most `n` in flight (keeps a dated search to a few DB calls at a time). */
+async function mapLimit<T, R>(items: T[], n: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(n, items.length) }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        out[i] = await fn(items[i]);
+      }
+    }),
+  );
+  return out;
+}
+
 /**
  * `links: "listing"` = the ChatGPT variant (/mcp/chatgpt): identical tools, but
  * quotes link to the listing page, never a checkout page (OpenAI's directory
@@ -102,7 +117,7 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
     {
       title: "Search Revamp listings",
       description:
-        "Search Revamp Vacations' published listings in Armenia: places to stay, tours, experiences, restaurants (eat) and places to visit. Returns each match's slug, type, location, headline price in AMD, short description, page link, and the listing's own cover photo (image) — use that photo when showing the result. For an exact all-in price and availability on dates, use get_quote.",
+        "Search Revamp Vacations' published listings in Armenia: places to stay, tours, experiences, restaurants (eat) and places to visit. Returns each match's slug, type, location, headline price in AMD, short description, page link, and the listing's own cover photo (image) — use that photo when showing the result. When the user gives dates, pass startDate (and endDate for stays) and guests: the search then returns only listings that are actually free for those dates, each with its exact all-in total (fees and tax included), cheapest first. For one listing's full price breakdown and terms, use get_quote.",
       annotations: READ_ONLY,
       _meta: cardsToolMeta("Searching Revamp…", "Revamp listings"),
       inputSchema: {
@@ -111,14 +126,17 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
         query: z.string().optional().describe("Free-text match on title, description, tags, cuisine, city."),
         cuisine: z.string().optional().describe("For restaurants: a cuisine/venue type, e.g. 'Armenian', 'Fast food'."),
         limit: z.number().int().min(1).max(50).optional().describe("Max results (default 10)."),
+        startDate: DATE.optional().describe("Optional. Check-in date for stays, or the activity date, YYYY-MM-DD — returns only listings free then, with totals."),
+        endDate: DATE.optional().describe("Stays: check-out date, YYYY-MM-DD (with startDate)."),
+        guests: z.number().int().min(1).max(30).optional().describe("Party size (default 2) — used with dates."),
       },
     },
-    async ({ type, region, query, cuisine, limit }) => {
+    async ({ type, region, query, cuisine, limit, startDate, endDate, guests }) => {
       const catalog = await getPublishedCatalog();
       const q = (query || "").trim().toLowerCase();
       const reg = (region || "").trim().toLowerCase();
       const cui = (cuisine || "").trim().toLowerCase();
-      const results = catalog
+      const matches = catalog
         .filter((l) => {
           if (!isDiscoverable(l)) return false; // paused by the host (0101)
           if (type && l.type !== type) return false;
@@ -130,9 +148,47 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
           }
           return true;
         })
-        .slice(0, limit ?? 10)
-        .map(summarize);
-      return CARDS({ kind: "listings", count: results.length, results });
+        ;
+      if (!startDate) {
+        const results = matches.slice(0, limit ?? 10).map(summarize);
+        return CARDS({ kind: "listings", count: results.length, results });
+      }
+      // With dates: quote the matching bookable listings (same logic as get_quote)
+      // and keep only the ones that are free, cheapest all-in total first. Hotels
+      // (rooms chosen on the page) come after, clearly marked.
+      const bookable = matches.filter((l) => (l.type === "stay" ? !!endDate : l.type === "tour" || l.type === "experience")).slice(0, 24);
+      const quotes = await mapLimit(bookable, 6, async (l) => {
+        try {
+          const q = await quoteListing(publicClient(), { slug: l.slug, startDate, endDate, guests }, links);
+          return "error" in q ? null : { l, q };
+        } catch (err) {
+          console.error("[mcp] search quote", l.slug, err);
+          return null;
+        }
+      });
+      const free = quotes.filter((x): x is NonNullable<typeof x> => !!x && x.q.available !== false);
+      free.sort((a, b) => Number(a.q.available !== true) - Number(b.q.available !== true) || (a.q.price?.total ?? Infinity) - (b.q.price?.total ?? Infinity));
+      const results = free.slice(0, limit ?? 10).map(({ l, q }) => ({
+        ...summarize(l),
+        available: q.available,
+        reason: q.available === true ? undefined : q.reason,
+        nights: q.nights,
+        total: q.price?.total,
+        totalFormatted: q.price?.totalFormatted,
+        slots: q.slots?.map((s) => s.localTime),
+        rooms: q.rooms?.length ? q.rooms.map((r) => r.name) : undefined,
+        bookUrl: q.bookUrl,
+      }));
+      return CARDS({
+        kind: "listings",
+        startDate,
+        endDate: endDate ?? undefined,
+        guests: guests ?? 2,
+        checked: bookable.length,
+        count: results.length,
+        results,
+        note: results.length ? undefined : "Nothing matching is free for those dates on Revamp. Try other dates or a nearby area.",
+      });
     },
   );
 

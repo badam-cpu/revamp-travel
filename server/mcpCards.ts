@@ -17,7 +17,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 /** Versioned: hosts cache by URI, so bump it when the HTML/CSS/JS changes. */
-export const CARDS_URI = "ui://revamp/cards-v1.html";
+export const CARDS_URI = "ui://revamp/cards-v2.html";
 export const CARDS_MIME = "text/html;profile=mcp-app";
 
 const SITE = () => (process.env.URL || "https://revampvacations.com").replace(/\/+$/, "");
@@ -74,7 +74,7 @@ export function cardsHtml(site: string): string {
 .bd{padding:10px 12px 12px;display:flex;flex-direction:column;gap:3px;flex:1}
 .t{font-weight:700;font-size:15px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .m{color:var(--muted);font-size:12.5px}
-.p{margin-top:auto;padding-top:6px;font-weight:700}.p small{font-weight:400;color:var(--muted)}
+.p{margin-top:auto;padding-top:6px;font-weight:700}.p small{font-weight:400;color:var(--muted)}.p .sub{display:block;font-size:12px;font-weight:400;color:var(--muted)}
 .go{color:var(--accent);font-weight:700;font-size:12.5px;margin-top:4px}
 .one{display:grid;grid-template-columns:minmax(0,200px) minmax(0,1fr);gap:0;background:var(--bg);border:1px solid var(--line);border-radius:14px;overflow:hidden}
 @media (max-width:520px){.one{grid-template-columns:1fr}}
@@ -88,6 +88,8 @@ export function cardsHtml(site: string): string {
 .slots{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}.slot{background:var(--chip);border-radius:8px;padding:4px 8px;font-size:12.5px;font-weight:600}
 .btn{align-self:flex-start;margin-top:8px;background:var(--accent);color:#fff;border:0;border-radius:10px;padding:9px 14px;font:inherit;font-weight:700;cursor:pointer}
 .empty{color:var(--muted);padding:8px 2px}
+.hd{font-size:13px;font-weight:700;margin:0 2px 8px;color:var(--fg)}.hd span{font-weight:400;color:var(--muted)}
+.free{align-self:flex-start;font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px;margin-top:4px}
 </style></head>
 <body><div id="root" aria-live="polite"></div>
 <script>
@@ -110,17 +112,28 @@ export function cardsHtml(site: string): string {
   function photo(url,tag){ var d=el("div","ph"); var u=url&&safeImg(url); if(u) d.style.backgroundImage="url(\\""+u.replace(/"/g,"%22")+"\\")"; if(tag) d.appendChild(el("span","tag",tag)); d.setAttribute("role","img"); d.setAttribute("aria-label",tag?tag+" photo":"Listing photo"); return d; }
   var TYPE={stay:"Stay",tour:"Tour",experience:"Experience",eat:"Eat",place:"Visit"};
   function day(iso,withYear){ try{ return new Date(iso+"T00:00:00Z").toLocaleDateString(document.documentElement.lang||undefined,{day:"numeric",month:"short",year:withYear?"numeric":undefined,timeZone:"UTC"}); }catch(e){ return iso; } }
-  function listCards(results){
+  function listCards(data){
+    var results=data.results;
     root.textContent="";
-    if(!results||!results.length){ root.appendChild(el("p","empty","No Revamp listings matched.")); return; }
+    if(data.startDate){
+      var free=(results||[]).filter(function(r){return r.available===true;}).length, toCheck=(results||[]).length-free;
+      var h=el("div","hd",(free?free+" free on Revamp":toCheck?"On Revamp":"Nothing free on Revamp")+(toCheck?(free?" + ":" ")+toCheck+" to check rooms ":" "));
+      h.appendChild(el("span",null,"· "+(data.endDate?day(data.startDate,false)+" → "+day(data.endDate,true):day(data.startDate,true))+" · "+(data.guests||2)+" guest"+(data.guests===1?"":"s")));
+      root.appendChild(h);
+    }
+    if(!results||!results.length){ root.appendChild(el("p","empty",data.note||"No Revamp listings matched.")); return; }
     var rail=el("div","rail");
     results.slice(0,10).forEach(function(r){
       var c=el("button","card"); c.type="button";
       c.appendChild(photo(r.image,TYPE[r.type]||""));
       var b=el("div","bd"); b.appendChild(el("div","t",r.title)); if(r.location) b.appendChild(el("div","m",r.location));
-      if(r.price){ b.appendChild(el("div","p",r.price)); }
-      b.appendChild(el("div","go","View on Revamp \\u2197"));
-      c.appendChild(b); c.addEventListener("click",function(){ open(r.url); }); rail.appendChild(c);
+      if(r.totalFormatted){
+        var pp=el("div","p",r.totalFormatted+" "); pp.appendChild(el("small",null,"total")); pp.appendChild(el("span","sub",(r.nights?r.nights+" night"+(r.nights===1?"":"s")+" · ":"")+"fees & tax incl.")); b.appendChild(pp);
+      } else if(r.price){ b.appendChild(el("div","p",r.price)); }
+      if(r.available===true) b.appendChild(el("span","free ok",r.slots&&r.slots.length?"Free · "+r.slots.join(", "):"Free on your dates"));
+      else if(r.available===null) b.appendChild(el("span","free na",r.rooms?"Check rooms":"Check on the listing"));
+      b.appendChild(el("div","go",(/\\/checkout\\//.test(r.bookUrl||"")?"Book on Revamp":"View on Revamp")+" ↗"));
+      c.appendChild(b); c.addEventListener("click",function(){ open(r.bookUrl||r.url); }); rail.appendChild(c);
     });
     root.appendChild(rail);
   }
@@ -148,7 +161,7 @@ export function cardsHtml(site: string): string {
   }
   function render(data){
     if(!data||typeof data!=="object") return;
-    if(data.kind==="listings") listCards(data.results);
+    if(data.kind==="listings") listCards(data);
     else if(data.kind==="quote") quoteCard(data);
     else return;
     rendered=true; setTimeout(resize,0); Array.prototype.forEach.call(document.images,function(i){ i.addEventListener("load",resize); });
