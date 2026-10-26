@@ -58,7 +58,9 @@ const InvoicePage = lazy(() => import("./pages/InvoicePage"));
 const Plan = lazy(() => import("./pages/Plan"));
 const Developers = lazy(() => import("./pages/Developers"));
 const StayHome = lazy(() => import("./pages/StayHome"));
+const PlaceCategoryLanding = lazy(() => import("./pages/PlaceCategoryLanding"));
 import { SiteProvider, useSite } from "@/contexts/SiteContext";
+import { resolvePlaceCategoryHub } from "@shared/regionLanding";
 
 /*
  * Code splitting: every page except the home page loads on demand
@@ -177,7 +179,8 @@ function Router() {
       <Route path="/stay/:region">{(params) => <RegionLanding type="stay" region={params.region} />}</Route>
       <Route path="/tour/:region">{(params) => <RegionLanding type="tour" region={params.region} />}</Route>
       <Route path="/experience/:region">{(params) => <RegionLanding type="experience" region={params.region} />}</Route>
-      <Route path="/visit/:region">{(params) => <RegionLanding type="place" region={params.region} />}</Route>
+      {/* /visit/<x>: a Visit category page when <x> is a category hub (museums, coworking…), else a region page. */}
+      <Route path="/visit/:slug">{(params) => (resolvePlaceCategoryHub(params.slug) ? <PlaceCategoryLanding hub={params.slug} /> : <RegionLanding type="place" region={params.slug} />)}</Route>
       <Route path="/explore/:category">{(params) => <Explore initialType={params.category} />}</Route>
       <Route path="/explore">{() => <Explore />}</Route>
       <Route path="/map" component={MapPage} />

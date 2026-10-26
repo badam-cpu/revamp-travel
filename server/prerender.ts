@@ -33,7 +33,7 @@ import { renderMarkdown, markdownToPlain } from "../shared/markdown.js";
 import { boldToHtml } from "../shared/richText.js";
 import { GIFT_CARD_AMOUNTS_CENTS, GIFT_CARD_VALID_MONTHS } from "../shared/giftcards.js";
 import { findRegionGuide, listingInRegion, type RegionGuide } from "../shared/regionGuides.js";
-import { LANDING_COPY, LANDING_PATH, TYPE_WORD, clipMeta, landingCrossLinks, landingDescription, landingItems, matchLandingPath, resolveLandingRegion, type LandingType } from "../shared/regionLanding.js";
+import { LANDING_COPY, LANDING_PATH, TYPE_WORD, clipMeta, landingCrossLinks, landingDescription, landingItems, matchLandingPath, matchPlaceCategoryPath, placeCategoryCrossLinks, placeCategoryDescription, placeCategoryH1, placeCategoryItems, placeCategoryPath, populatedPlaceCategoryPaths, resolveLandingRegion, resolvePlaceCategoryHub, type LandingType } from "../shared/regionLanding.js";
 import { isDiscoverable, photoCaption } from "../shared/listings.js";
 
 export type PageKind =
@@ -50,6 +50,7 @@ export type PageKind =
   | "guide-hub"
   | "events"
   | "region-landing"
+  | "place-category"
   | "guide"
   | "host-hub"
   | "host"
@@ -94,6 +95,9 @@ export function matchRoute(pathname: string): MatchedRoute {
   const eatRegionMatch = path.match(/^\/eat\/([^/]+)$/);
   if (eatRegionMatch) return { kind: "eat-region", slug: decodeURIComponent(eatRegionMatch[1]) };
   if (path === "/events") return { kind: "events" };
+  // /visit/<category hub> before the generic /visit/<region> landing.
+  const placeCat = matchPlaceCategoryPath(path);
+  if (placeCat) return { kind: "place-category", slug: placeCat.hub };
   const landing = matchLandingPath(path);
   if (landing) return { kind: "region-landing", landingType: landing.type, slug: landing.slug };
   if (path === "/guide") return { kind: "guide-hub" };
@@ -169,6 +173,10 @@ export async function renderForBot(pathname: string, origin: string): Promise<Re
       return { status: 200, body: await renderEvents(origin) };
     case "region-landing": {
       const body = route.landingType ? renderRegionLanding(catalog, origin, route.landingType, route.slug ?? "") : null;
+      return body ? { status: 200, body } : { status: 404, body: renderNotFound(origin) };
+    }
+    case "place-category": {
+      const body = renderPlaceCategory(catalog, origin, route.slug ?? "");
       return body ? { status: 200, body } : { status: 404, body: renderNotFound(origin) };
     }
     case "guide": {
@@ -661,6 +669,7 @@ function renderRegionLanding(catalog: PublicListing[], origin: string, type: Lan
 <p>${escapeHtml(description)}</p>
 ${listingGridHtml(items, origin)}
 ${alsoHere.length ? `<h2>Also in ${escapeHtml(label)}</h2><ul>${alsoHere.map((t) => `<li><a href="${origin}${typePath(t)}">${escapeHtml(TYPE_WORD[t])} in ${escapeHtml(label)}</a></li>`).join("")}</ul>` : ""}
+${type === "place" ? placeTypesHtml(items, origin) : ""}
 ${otherRegions.length ? `<h2>${escapeHtml(copy.browseLabel.replace("All ", ""))} in other regions</h2><ul>${otherRegions.map((r) => `<li><a href="${origin}/${LANDING_PATH[type]}/${slugify(r)}">${escapeHtml(r)}</a></li>`).join("")}</ul>` : ""}
 <p><a href="${origin}${copy.browse}">${escapeHtml(copy.browseLabel)}</a></p>`;
   return renderPageShell({
@@ -674,6 +683,50 @@ ${otherRegions.length ? `<h2>${escapeHtml(copy.browseLabel.replace("All ", ""))}
         { name: "Home", path: "/" },
         { name: copy.browseLabel, path: copy.browse },
         { name: label, path },
+      ]),
+    ],
+    bodyHtml,
+  });
+}
+
+/** On a /visit/<region> page: links to the Armenia-wide pages of the kinds found here. */
+function placeTypesHtml(items: PublicListing[], origin: string): string {
+  const cats = populatedPlaceCategoryPaths(items);
+  if (!cats.length) return "";
+  return `<h2>By type, across Armenia</h2><ul>${cats.map((p) => { const c = matchPlaceCategoryPath(p)!; return `<li><a href="${origin}${p}">${escapeHtml(c.plural)}</a></li>`; }).join("")}</ul>`;
+}
+
+/** /visit/<hub> — "Museums in Armenia" etc. (shared/regionLanding.ts; same rules as the React page). */
+function renderPlaceCategory(catalog: PublicListing[], origin: string, hub: string): string | null {
+  const cat = resolvePlaceCategoryHub(hub);
+  if (!cat) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  const live = catalog.filter((l) => isDiscoverable(l, today));
+  const items = placeCategoryItems(live, cat);
+  if (items.length === 0) return null;
+  const path = placeCategoryPath(cat);
+  const h1 = placeCategoryH1(cat);
+  const description = placeCategoryDescription(cat, items);
+  const { otherCategories, regions } = placeCategoryCrossLinks(live, cat);
+  const bodyHtml = `
+<nav aria-label="Breadcrumb"><a href="${origin}/">Home</a> › <a href="${origin}/explore/place">All places to visit</a> › ${escapeHtml(cat.plural)}</nav>
+<h1>${escapeHtml(h1)}</h1>
+<p>${escapeHtml(description)}</p>
+${listingGridHtml(items, origin)}
+${regions.length ? `<h2>Places to visit by area</h2><ul>${regions.map((r) => `<li><a href="${origin}/visit/${slugify(r)}">${escapeHtml(r)}</a></li>`).join("")}</ul>` : ""}
+${otherCategories.length ? `<h2>More to visit in Armenia</h2><ul>${otherCategories.map((c) => `<li><a href="${origin}${placeCategoryPath(c)}">${escapeHtml(c.plural)}</a></li>`).join("")}</ul>` : ""}
+<p><a href="${origin}/explore/place">All places to visit</a></p>`;
+  return renderPageShell({
+    title: `${h1} | Revamp Vacations`,
+    description: clipMeta(description),
+    canonical: `${origin}${path}`,
+    ogImage: `${origin}${OG_IMAGE}`,
+    jsonLd: [
+      buildCollectionPageJsonLd(origin, path, h1, items),
+      buildBreadcrumbJsonLd(origin, [
+        { name: "Home", path: "/" },
+        { name: "All places to visit", path: "/explore/place" },
+        { name: cat.plural, path },
       ]),
     ],
     bodyHtml,

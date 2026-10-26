@@ -25,6 +25,8 @@ import { slugify } from "@/lib/slug";
 import { buildCollectionPageJsonLd, buildBreadcrumbJsonLd } from "@shared/seo";
 import {
   LANDING_COPY as COPY,
+  matchPlaceCategoryPath,
+  populatedPlaceCategoryPaths,
   LANDING_PATH,
   TYPE_WORD,
   landingCrossLinks,
@@ -118,6 +120,17 @@ export default function RegionLanding({ type, region }: { type: LandingType; reg
             <div className="mt-4 flex flex-wrap gap-2.5">
               {alsoHere.map((t) => (
                 <Link key={t} href={typePath(t)} className="rounded-none border border-basalt/15 px-3.5 py-2 text-sm hover:border-apricot hover:text-apricot">{typeWord[t]} in {label}</Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {type === "place" && populatedPlaceCategoryPaths(items).length > 0 && (
+          <section className="mt-12">
+            <h2 className="text-sm font-bold uppercase tracking-[0.12em] text-basalt/50">By type, across Armenia</h2>
+            <div className="mt-4 flex flex-wrap gap-2.5">
+              {populatedPlaceCategoryPaths(items).map((p) => (
+                <Link key={p} href={p} className="rounded-none border border-basalt/15 px-3.5 py-2 text-sm hover:border-apricot hover:text-apricot">{matchPlaceCategoryPath(p)!.plural}</Link>
               ))}
             </div>
           </section>

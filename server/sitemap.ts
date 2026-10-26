@@ -13,7 +13,7 @@ import { REGION_GUIDES } from "../shared/regionGuides.js";
 import { GUIDES } from "../shared/guides.js";
 import { HOST_PAGES } from "../shared/hostLanding.js";
 import { slugify } from "../shared/slug.js";
-import { populatedLandingPaths } from "../shared/regionLanding.js";
+import { populatedLandingPaths, populatedPlaceCategoryPaths } from "../shared/regionLanding.js";
 import { isDiscoverable } from "../shared/listings.js";
 
 const STATIC_ROUTES = ["/", "/explore", "/explore/stay", "/explore/eat", "/explore/tour", "/explore/experience", "/map", "/plan", "/faq", "/partners", "/gift-cards", "/blog", "/guide", "/events", "/host", "/developers", ...REGION_GUIDES.map((g) => `/region/${g.slug}`), ...GUIDES.map((g) => `/guide/${g.slug}`), ...HOST_PAGES.map((p) => `/host/${p.type}`)];
@@ -53,7 +53,9 @@ export async function sitemapHandler(req: Request, res: Response): Promise<void>
   // Region landing pages (/stay|tour|experience|visit/:region) that have at least
   // one discoverable listing — same rule as the page itself (shared/regionLanding.ts).
   const today = new Date().toISOString().slice(0, 10);
-  const landingUrls = populatedLandingPaths(catalog.filter((l) => isDiscoverable(l, today))).map((p) => `<url><loc>${origin}${p}</loc></url>`);
+  const discoverable = catalog.filter((l) => isDiscoverable(l, today));
+  // + Visit-guide category pages (/visit/museums …) with at least one place.
+  const landingUrls = [...populatedLandingPaths(discoverable), ...populatedPlaceCategoryPaths(discoverable)].map((p) => `<url><loc>${origin}${p}</loc></url>`);
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

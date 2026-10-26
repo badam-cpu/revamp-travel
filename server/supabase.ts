@@ -73,6 +73,8 @@ interface CatalogRow {
   max_guests: number | null;
   venue_type: string | null;
   cuisine: string | null;
+  /** Visit-guide sub-kind for `type: "place"` (0084) — museum, coworking, … */
+  category?: string | null;
   featured: boolean | null;
   editor_rank: number | null;
   google_rating: number | null;
@@ -135,6 +137,7 @@ function mapCatalogRow(row: CatalogRow): PublicListing {
     maxGuests: row.max_guests ?? undefined,
     venueType: row.venue_type ?? undefined,
     cuisine: row.cuisine ?? undefined,
+    category: row.category ?? undefined,
     featured: row.featured ?? undefined,
     editorRank: row.editor_rank ?? null,
     googleRating: row.google_rating ?? undefined,

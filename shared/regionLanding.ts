@@ -9,7 +9,7 @@
  * got the prerender's 404 for every one of them. Any new landing type must be
  * added HERE, not in one of the three consumers.
  */
-import { ARMENIA_REGIONS, type ListingType } from "./listings.js";
+import { ARMENIA_REGIONS, PLACE_CATEGORIES, type ListingType } from "./listings.js";
 import { compareEatListings, type EatSortable } from "./eat.js";
 import { slugify } from "./slug.js";
 
@@ -99,3 +99,58 @@ export function landingCrossLinks(listings: { type: string; region?: string | nu
 }
 
 export const TYPE_WORD: Record<ListingType, string> = { stay: "Stays", eat: "Restaurants", tour: "Tours", experience: "Experiences", place: "Places to visit" };
+
+// ── Visit-guide category pages: /visit/museums, /visit/coworking, … ──────────
+// Same rules as the region pages: one definition shared by the React page
+// (PlaceCategoryLanding.tsx), the bot prerender and the sitemap; a page exists
+// only when real published places of that kind do. URL = the category's `hub`
+// (shared/listings.ts PLACE_CATEGORIES), never a region slug — so /visit/<x>
+// is a category page when <x> is a hub, otherwise a region page.
+
+export type PlaceCategoryHub = (typeof PLACE_CATEGORIES)[number];
+
+export function resolvePlaceCategoryHub(slug: string): PlaceCategoryHub | null {
+  return PLACE_CATEGORIES.find((c) => c.hub === slug) ?? null;
+}
+
+/** "/visit/museums" → the category; anything else (incl. /visit/yerevan) → null. */
+export function matchPlaceCategoryPath(path: string): PlaceCategoryHub | null {
+  const m = path.match(/^\/visit\/([^/]+)$/);
+  return m ? resolvePlaceCategoryHub(decodeURIComponent(m[1])) : null;
+}
+
+export const placeCategoryPath = (c: PlaceCategoryHub): string => `/visit/${c.hub}`;
+export const placeCategoryH1 = (c: PlaceCategoryHub): string => `${c.plural} in Armenia`;
+
+/** Published places of one kind, in the Visit guide's own order (pin + curation rank). */
+export function placeCategoryItems<T extends { type: string; category?: string | null }>(listings: T[], c: PlaceCategoryHub): T[] {
+  return listings
+    .filter((l) => l.type === "place" && l.category === c.slug)
+    .sort((a, b) => compareEatListings(a as unknown as EatSortable, b as unknown as EatSortable));
+}
+
+/** "Museums" → "museums", but acronyms stay ("ATMs & banks"). */
+const lowerNoun = (s: string) => (/^[A-Z]{2}/.test(s) ? s : s.charAt(0).toLowerCase() + s.slice(1));
+
+/** Factual intro: the count, the real cities and real names only. */
+export function placeCategoryDescription(c: PlaceCategoryHub, items: { title: string; city?: string | null }[]): string {
+  const n = items.length;
+  const noun = n === 1 ? lowerNoun(c.label) : lowerNoun(c.plural);
+  const cities = Array.from(new Set(items.map((l) => (l.city || "").trim()).filter(Boolean)));
+  const where = cities.length ? ` in ${proseList(cities.slice(0, 4))}${cities.length > 4 ? " and more" : ""}` : "";
+  const examples = items.slice(0, 3).map((l) => l.title);
+  return `${n} ${noun}${where} on Revamp's Visit guide${examples.length ? `, including ${proseList(examples)}` : ""}. Hand-picked, honest listings.`;
+}
+
+/** Every category page that has at least one place — for the sitemap. */
+export function populatedPlaceCategoryPaths(listings: { type: string; category?: string | null }[]): string[] {
+  return PLACE_CATEGORIES.filter((c) => placeCategoryItems(listings, c).length > 0).map(placeCategoryPath);
+}
+
+/** Other categories with places (cross-links) and the regions that have this kind. */
+export function placeCategoryCrossLinks(listings: { type: string; category?: string | null; region?: string | null }[], c: PlaceCategoryHub) {
+  const otherCategories = PLACE_CATEGORIES.filter((o) => o.slug !== c.slug && placeCategoryItems(listings, o).length > 0);
+  const regions = ARMENIA_REGIONS.filter((r) => listings.some((l) => l.type === "place" && l.category === c.slug && inRegion(l, r)));
+  return { otherCategories, regions };
+}
+

@@ -38,22 +38,23 @@ export type PlaceGroupSlug = (typeof PLACE_GROUPS)[number]["slug"];
 /** Venue sub-kinds for `type: "place"`, each tagged with its parent `group`.
  * Adding one here is all it takes to offer a new kind — the DB stores it as free
  * text (`category`); no schema change. `slug` drives the /visit/:category hubs
- * and filters; `label`/`plural` are display copy; `group` places it under a
+ * and filters; `hub` is its /visit/<hub> category page (never a region slug);
+ * `label`/`plural` are display copy; `group` places it under a
  * PLACE_GROUPS bucket in the UI. Existing rows (museum/gallery/library/coworking)
  * map onto their group automatically. */
 export const PLACE_CATEGORIES = [
-  { slug: "museum", label: "Museum", plural: "Museums", group: "culture" },
-  { slug: "gallery", label: "Gallery", plural: "Galleries", group: "culture" },
-  { slug: "library", label: "Library", plural: "Libraries", group: "culture" },
-  { slug: "theater", label: "Theater", plural: "Theaters", group: "culture" },
-  { slug: "cinema", label: "Cinema", plural: "Cinemas", group: "culture" },
-  { slug: "landmark", label: "Landmark", plural: "Landmarks", group: "culture" },
-  { slug: "gift-shop", label: "Gift shop", plural: "Gift shops", group: "shopping" },
-  { slug: "supermarket", label: "Supermarket", plural: "Supermarkets", group: "everyday" },
-  { slug: "pharmacy", label: "Pharmacy", plural: "Pharmacies", group: "everyday" },
-  { slug: "atm", label: "ATM / Bank", plural: "ATMs & banks", group: "everyday" },
-  { slug: "clinic", label: "Clinic", plural: "Clinics", group: "everyday" },
-  { slug: "coworking", label: "Coworking", plural: "Coworking spaces", group: "work" },
+  { slug: "museum", label: "Museum", plural: "Museums", group: "culture", hub: "museums" },
+  { slug: "gallery", label: "Gallery", plural: "Galleries", group: "culture", hub: "galleries" },
+  { slug: "library", label: "Library", plural: "Libraries", group: "culture", hub: "libraries" },
+  { slug: "theater", label: "Theater", plural: "Theaters", group: "culture", hub: "theaters" },
+  { slug: "cinema", label: "Cinema", plural: "Cinemas", group: "culture", hub: "cinemas" },
+  { slug: "landmark", label: "Landmark", plural: "Landmarks", group: "culture", hub: "landmarks" },
+  { slug: "gift-shop", label: "Gift shop", plural: "Gift shops", group: "shopping", hub: "gift-shops" },
+  { slug: "supermarket", label: "Supermarket", plural: "Supermarkets", group: "everyday", hub: "supermarkets" },
+  { slug: "pharmacy", label: "Pharmacy", plural: "Pharmacies", group: "everyday", hub: "pharmacies" },
+  { slug: "atm", label: "ATM / Bank", plural: "ATMs & banks", group: "everyday", hub: "atms-and-banks" },
+  { slug: "clinic", label: "Clinic", plural: "Clinics", group: "everyday", hub: "clinics" },
+  { slug: "coworking", label: "Coworking", plural: "Coworking spaces", group: "work", hub: "coworking" },
 ] as const;
 
 export type PlaceCategorySlug = (typeof PLACE_CATEGORIES)[number]["slug"];
