@@ -45,9 +45,9 @@
 
 | # | Description | Prompt | Tools triggered | Expected behavior |
 |---|---|---|---|---|
-| 1 | Find stays in a town | Find a cozy place to stay in Dilijan for two people | `search_listings` | Lists real Revamp stays in Dilijan with location, nightly price and a link to each listing |
-| 2 | Exact quote for dates | Is "1br-w-scenic-views-pool-sauna" free from 10 to 14 February 2027 for 2 guests, and what's the total? | `get_quote` | Says it's available and gives the itemised total (accommodation, cleaning fee, 10% tax) in AMD, the cancellation terms, how payment works, and the listing link |
-| 3 | Time slots for an activity | What time slots does "run-the-city-before-it-wakes-up" have on 7 November 2026 for 2 people? | `check_availability` | Lists the open time slots (e.g. 08:00 and 10:00) with seats left, and the listing link |
+| 1 | Available stays for dates | Find me a place to stay in Yerevan for 2 people from 15 to 17 January 2027 | `search_listings` | Shows a row of Revamp cards with only the stays available on those dates, each with its own photo, the total for 2 nights (fees and 10% tax included) and a link to the listing |
+| 2 | Exact quote for dates | Is "1br-w-scenic-views-pool-sauna" free from 10 to 14 February 2027 for 2 guests, and what's the total? | `get_quote` | Shows a Revamp card: available, the itemised total in AMD (accommodation, cleaning fee, 10% tax — ֏148,500 at the time of writing), the cancellation terms, how payment works, and the listing link |
+| 3 | Time slots for an activity | What time slots does "run-the-city-before-it-wakes-up" have on 12 December 2026 for 2 people? | `check_availability` | Lists the open time slots (08:00 and 10:00) with seats left, and the listing link |
 | 4 | Listing details | Tell me about "1br-w-scenic-views-pool-sauna" — its amenities and key facts | `get_listing` | Describes the listing using its real description, amenities and facts, with the link |
 | 5 | Trip plan | Plan a 2-day trip in Armenia focused on food and history | `plan_trip` | Returns a day-by-day plan using real Revamp listings, with links; says booking happens on the site |
 
