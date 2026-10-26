@@ -9,7 +9,7 @@
  */
 import { useState } from "react";
 import { Link } from "wouter";
-import { Search, FileText, CalendarCheck, Map, Plug, Copy, Check, ArrowRight, Terminal } from "lucide-react";
+import { Search, FileText, CalendarCheck, Map, Plug, Copy, Check, ArrowRight, Terminal, Receipt } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { Button } from "@/components/ui/button";
@@ -19,9 +19,10 @@ const MCP_URL = "https://mcp.revampvacations.com/mcp";
 
 const TOOLS = [
   { icon: Search, name: "search_listings", blurb: "Search stays, tours, experiences, restaurants and places to visit across Armenia — by type, region, cuisine or free text." },
-  { icon: FileText, name: "get_listing", blurb: "Fetch full details for one listing by slug: description, amenities, highlights, branches and the booking link." },
-  { icon: CalendarCheck, name: "check_availability", blurb: "Check whether a stay is free for a date range, with its busy ranges returned." },
-  { icon: Map, name: "plan_trip", blurb: "Generate a day-by-day Armenia itinerary grounded in the real, published catalog." },
+  { icon: FileText, name: "get_listing", blurb: "Fetch full details for one listing by slug: description, amenities, highlights, facts, capacity and the page link." },
+  { icon: Receipt, name: "get_quote", blurb: "Exact all-in price for real dates and party size — itemised fees and tax, cancellation terms, payment — plus open time slots for tours and experiences, and a link to book." },
+  { icon: CalendarCheck, name: "check_availability", blurb: "Whether a stay is free for a date range, or which time slots a tour or experience has on a date." },
+  { icon: Map, name: "plan_trip", blurb: "Generate a suggested day-by-day Armenia itinerary using the published catalog." },
 ] as const;
 
 const CLAUDE_STEPS = [
@@ -29,6 +30,39 @@ const CLAUDE_STEPS = [
   `Paste the URL: ${MCP_URL}`,
   "Choose “No sign-in” and connect.",
   "Ask: “Use the Revamp connector to find stays in Dilijan.”",
+];
+
+const REFERENCE = [
+  {
+    name: "search_listings",
+    inputs: "type (stay · tour · experience · eat · place), region, query, cuisine, limit (1–50, default 10) — all optional.",
+    returns: "count and results: slug, type, title, location, headline price in AMD, short description, tags, Google rating where shown (labelled), page URL.",
+    errors: "None expected — no match returns an empty list.",
+  },
+  {
+    name: "get_listing",
+    inputs: "slug.",
+    returns: "Everything from search plus long description, amenities, highlights, facts, maximum guests and branches.",
+    errors: "“No published listing with that slug.”",
+  },
+  {
+    name: "get_quote",
+    inputs: "slug, startDate (YYYY-MM-DD), endDate (stays: check-out), guests (default 2).",
+    returns: "available (true / false / null with a reason), itemised price in AMD (accommodation or per-guest price, discount, fees, tax, total), time slots with seats left (tours, experiences), room types (hotels), cancellation terms, payment terms, booking mode, and a link to book (pre-filled checkout for stays).",
+    errors: "Unknown slug, past date, check-out before check-in, restaurant or place (not bookable), or a temporary failure — each with a plain message.",
+  },
+  {
+    name: "check_availability",
+    inputs: "slug, startDate, endDate (stays), guests (default 2).",
+    returns: "available (true / false / null with a reason), time slots or room types where relevant, and the booking link.",
+    errors: "Same as get_quote.",
+  },
+  {
+    name: "plan_trip",
+    inputs: "days (1–14), startCity, travelers, pace (relaxed · balanced · packed), budget (budget · mid-range · comfort), interests.",
+    returns: "A suggested day-by-day itinerary using published listings, with links. It doesn't check dates or book.",
+    errors: "“The trip planner is unavailable right now.”",
+  },
 ];
 
 const CURSOR_CONFIG = `{
@@ -99,7 +133,7 @@ export default function Developers() {
     "@type": "WebAPI",
     name: "Revamp Vacations MCP",
     description:
-      "A public, read-only Model Context Protocol (MCP) server exposing Revamp Vacations' live Armenia travel catalog — stays, tours, experiences, restaurants and places — to AI assistants. Tools: search_listings, get_listing, check_availability, plan_trip.",
+      "A public, read-only Model Context Protocol (MCP) server exposing Revamp Vacations' live Armenia travel catalog — stays, tours, experiences, restaurants and places — to AI assistants. Tools: search_listings, get_listing, get_quote, check_availability, plan_trip.",
     documentation: `${origin}/developers`,
     termsOfService: `${origin}/terms`,
     provider: { "@type": "Organization", name: "Revamp Vacations", url: origin },
@@ -109,7 +143,7 @@ export default function Developers() {
   useDocumentMeta({
     title: "Developers — Revamp MCP for AI assistants",
     description:
-      "Connect any MCP-capable AI assistant to Revamp's live Armenia travel catalog. Read-only, no auth. Tools: search_listings, get_listing, check_availability, plan_trip.",
+      "Connect any MCP-capable AI assistant to Revamp's live Armenia travel catalog. Read-only, no auth. Tools: search_listings, get_listing, get_quote, check_availability, plan_trip.",
     canonicalPath: "/developers",
     jsonLd,
   });
@@ -143,8 +177,8 @@ export default function Developers() {
 
         {/* Tools */}
         <section className="mx-auto max-w-5xl px-5 py-14">
-          <h2 className="font-display text-2xl tracking-tight text-basalt">Four tools</h2>
-          <p className="mt-2 max-w-2xl text-basalt/65">Everything returns real, currently-published data with a link back to each listing.</p>
+          <h2 className="font-display text-2xl tracking-tight text-basalt">Five tools</h2>
+          <p className="mt-2 max-w-2xl text-basalt/65">All read-only: they return currently published data — prices, dates and time slots included — with a link back to each listing. Nothing is held or booked.</p>
           <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 [&>*]:min-w-0">
             {TOOLS.map((t) => (
               <div key={t.name} className="rounded-none border border-basalt/10 bg-paper p-5">
@@ -158,6 +192,38 @@ export default function Developers() {
               </div>
             ))}
           </div>
+        </section>
+
+        {/* Reference — what each tool takes and returns, permissions, errors, limits, data (for connector reviews, e.g. Meta Muse). */}
+        <section className="mx-auto max-w-5xl px-5 pb-14" id="reference">
+          <h2 className="font-display text-2xl tracking-tight text-basalt">Reference</h2>
+          <div className="mt-6 grid gap-3">
+            {REFERENCE.map((t) => (
+              <details key={t.name} className="group border border-basalt/10 bg-paper">
+                <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-3">
+                  <code className="text-sm font-medium text-basalt">{t.name}</code>
+                  <span className="shrink-0 rounded-full bg-chalk px-2.5 py-0.5 text-xs font-semibold text-basalt/70">Read · no side effects</span>
+                </summary>
+                <dl className="grid gap-3 border-t border-basalt/10 px-5 py-4 text-sm leading-6 text-basalt/75 sm:grid-cols-[8rem_minmax(0,1fr)]">
+                  <dt className="font-semibold text-basalt">Inputs</dt>
+                  <dd>{t.inputs}</dd>
+                  <dt className="font-semibold text-basalt">Returns</dt>
+                  <dd>{t.returns}</dd>
+                  <dt className="font-semibold text-basalt">Errors</dt>
+                  <dd>{t.errors}</dd>
+                </dl>
+              </details>
+            ))}
+          </div>
+          <dl className="mt-8 grid gap-4 text-sm leading-6 text-basalt/75 sm:grid-cols-2 [&>div]:min-w-0">
+            <div><dt className="font-semibold text-basalt">Permissions</dt><dd>Every tool is a read (MCP <code>readOnlyHint: true</code>): no accounts, bookings, payments, messages or other changes. Booking and payment happen on revampvacations.com.</dd></div>
+            <div><dt className="font-semibold text-basalt">Authentication</dt><dd>None — the catalog is public, so there's no account or test account to set up.</dd></div>
+            <div><dt className="font-semibold text-basalt">Errors</dt><dd>Tool errors come back as a normal tool result with <code>isError: true</code> and a plain message (never internal details). Malformed requests get a JSON-RPC error.</dd></div>
+            <div><dt className="font-semibold text-basalt">Rate limits</dt><dd>120 requests a minute per IP, and 10 <code>plan_trip</code> calls a minute per IP. Over the limit: HTTP 429 with <code>Retry-After: 60</code> and a JSON-RPC error.</dd></div>
+            <div><dt className="font-semibold text-basalt">Data</dt><dd>Tools receive only what's in the request (search words, dates, party size, trip preferences) — no names, emails or payment details. We keep only counts of tool use (tool name and day), not request contents. <code>plan_trip</code> sends the trip preferences to Anthropic to write the itinerary. Nothing is sold or used to train models. See our <Link href="/privacy" className="text-apricot hover:underline">Privacy Policy</Link>.</dd></div>
+            <div><dt className="font-semibold text-basalt">Prices</dt><dd>In Armenian dram (AMD). Quotes use the same rules as checkout — discounts, fees and 10% tax included — and show the cancellation terms. A booking is confirmed only after payment is verified on the site.</dd></div>
+            <div><dt className="font-semibold text-basalt">Support and security</dt><dd><a href="mailto:hello@revampvacations.com" className="text-apricot hover:underline">hello@revampvacations.com</a> — Revamp Hospitality LLC, Yerevan, Armenia.</dd></div>
+          </dl>
         </section>
 
         {/* Connect */}

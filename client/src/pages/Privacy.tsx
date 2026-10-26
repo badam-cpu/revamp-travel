@@ -9,7 +9,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 
-const UPDATED = "September 16, 2026";
+const UPDATED = "October 26, 2026";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -67,6 +67,11 @@ export default function Privacy() {
               <li><strong className="text-basalt">Sign-in &amp; maps</strong> — power optional third-party sign-in and the maps shown on listing pages.</li>
               <li><strong className="text-basalt">AI features</strong> — the messages you send to the support chat and trip planner are processed by an AI provider to generate a response.</li>
             </ul>
+          </Section>
+
+          <Section title="AI assistants and our catalog connection">
+            <p>AI assistants (such as ChatGPT, Claude or Meta AI) can look up Revamp's published listings through our public, read-only catalog connection (an MCP server; details at <a href="/developers" className="text-apricot hover:underline">revampvacations.com/developers</a>). It needs no account and can't book, pay or change anything.</p>
+            <p>When an assistant uses it, we receive only what that request contains — for example a place, dates, number of guests or trip preferences — not your name, email or payment details. We use it only to answer that request, and we keep only counts of which tools were used and when, not what was asked. Trip-planning requests are sent to our AI provider to write the itinerary. We don't sell this information or use it for advertising or to train AI models. What the assistant itself does with your conversation is covered by that assistant's own privacy policy.</p>
           </Section>
 
           <Section title="Cookies &amp; local storage">

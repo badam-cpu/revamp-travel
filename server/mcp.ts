@@ -5,7 +5,11 @@
  * stay's availability, and generate a trip plan grounded in real inventory.
  *
  * READ-ONLY and public: it exposes only the same published data the website
- * already shows (no auth, no secrets, no writes/bookings). Served over the MCP
+ * already shows (no auth, no secrets, no writes/bookings). Every tool is
+ * annotated readOnlyHint (Meta Muse classifies them all as "Read"). get_quote /
+ * check_availability give the outcome — exact all-in price, real dates and time
+ * slots, cancellation terms (server/mcpQuote.ts) — not just a link. Errors are
+ * calm, never internal details (isError: true). Rate-limited in server/routes.ts. Served over the MCP
  * Streamable HTTP transport in STATELESS mode (a fresh server + transport per
  * request, JSON responses) so it works inside the Netlify Function. Wired at
  * POST /mcp (and /api/mcp) in server/routes.ts.
@@ -16,9 +20,11 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import type { Request, Response } from "express";
-import { getPublishedCatalog, listPublishedForPlanner, getListingBusyRangesBySlug, type PublicListing } from "./supabase.js";
+import { getPublishedCatalog, listPublishedForPlanner, type PublicListing } from "./supabase.js";
 import { planTrip } from "./planner.js";
 import { isDiscoverable } from "../shared/listings.js";
+import { quoteListing } from "./mcpQuote.js";
+import { publicClient } from "./supabase.js";
 
 const SITE = () => (process.env.URL || "https://revampvacations.com").replace(/\/+$/, "");
 
@@ -38,7 +44,8 @@ function summarize(l: PublicListing) {
     tags: l.tags?.slice(0, 6),
     cuisine: l.cuisine,
     venueType: l.venueType,
-    rating: typeof l.googleRating === "number" ? l.googleRating : undefined,
+    // Google's rating of the business (restaurants/places) — labelled as such, never a Revamp rating.
+    googleRating: typeof l.googleRating === "number" ? l.googleRating : undefined,
     url: listingUrl(l.slug),
   };
 }
@@ -57,6 +64,11 @@ function detail(l: PublicListing) {
 }
 
 const TEXT = (data: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] });
+/** A tool-level error the assistant can relay — plain words, no internals. */
+const ERROR = (message: string) => ({ isError: true, content: [{ type: "text" as const, text: JSON.stringify({ error: message }) }] });
+/** Every public tool only reads published data (MCP tool annotations). */
+const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
+const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export function createPublicServer(): McpServer {
   const server = new McpServer({ name: "revamp-vacations", version: "1.0.0" });
@@ -66,7 +78,8 @@ export function createPublicServer(): McpServer {
     {
       title: "Search Revamp listings",
       description:
-        "Search the live, published Revamp Vacations catalog across Armenia: places to stay, tours, experiences, restaurants (eat), and places to visit. Returns matching listings with a link to each. All data is real and current.",
+        "Search Revamp Vacations' published listings in Armenia: places to stay, tours, experiences, restaurants (eat) and places to visit. Returns each match's slug, type, location, headline price in AMD, short description and page link. For an exact all-in price and availability on dates, use get_quote.",
+      annotations: READ_ONLY,
       inputSchema: {
         type: z.enum(["stay", "tour", "experience", "eat", "place"]).optional().describe("Limit to one listing type."),
         region: z.string().optional().describe("Armenian region or city, e.g. 'Yerevan', 'Tavush', 'Dilijan'."),
@@ -102,35 +115,66 @@ export function createPublicServer(): McpServer {
     "get_listing",
     {
       title: "Get a Revamp listing",
-      description: "Fetch full details for one listing by its slug (from search_listings), including description, amenities, highlights, and the booking link.",
+      description: "Fetch full details for one listing by its slug (from search_listings): description, amenities, highlights, facts, capacity and the page link.",
+      annotations: READ_ONLY,
       inputSchema: { slug: z.string().describe("The listing slug, e.g. 'forest-house-dilijan'.") },
     },
     async ({ slug }) => {
       const catalog = await getPublishedCatalog();
       const l = catalog.find((x) => x.slug === slug);
-      if (!l) return TEXT({ error: "No published listing with that slug." });
+      if (!l) return ERROR("No published listing with that slug.");
       return TEXT(detail(l));
+    },
+  );
+
+  server.registerTool(
+    "get_quote",
+    {
+      title: "Get an exact quote",
+      description:
+        "Exact availability and all-in price for one stay, tour or experience. Stays: checks the dates against the host's calendars, existing bookings, minimum stay and capacity, and returns the itemised total (accommodation, discounts, fees, tax) in AMD. Tours and experiences: returns the open time slots with seats left for that date and the total for the party. Also returns the cancellation terms, how payment works, and a link to book. Hotels list their room types (rooms are chosen on the listing page). Read-only: nothing is held or booked.",
+      annotations: READ_ONLY,
+      inputSchema: {
+        slug: z.string().describe("The listing slug (from search_listings)."),
+        startDate: DATE.describe("Check-in date for stays, or the activity date; YYYY-MM-DD."),
+        endDate: DATE.optional().describe("Stays only: check-out date, YYYY-MM-DD (the night before is the last night)."),
+        guests: z.number().int().min(1).max(30).optional().describe("Party size (default 2)."),
+      },
+    },
+    async ({ slug, startDate, endDate, guests }) => {
+      try {
+        const q = await quoteListing(publicClient(), { slug, startDate, endDate, guests });
+        return "error" in q ? ERROR(q.error) : TEXT(q);
+      } catch (err) {
+        console.error("[mcp] get_quote", err);
+        return ERROR("Couldn't get a quote right now. Please try again shortly.");
+      }
     },
   );
 
   server.registerTool(
     "check_availability",
     {
-      title: "Check a stay's availability",
-      description: "Check whether a stay is available for a date range. Dates are YYYY-MM-DD; end date is the check-out day (exclusive). Returns whether the range is free plus the listing's busy ranges.",
+      title: "Check availability",
+      description:
+        "Check whether a stay is free for a date range, or which time slots a tour or experience has on a date. Dates are YYYY-MM-DD; for stays endDate is the check-out day. Returns available (true/false, or null with a reason when it can't be confirmed here, e.g. hotels where a room type is chosen on the page). Use get_quote for the price.",
+      annotations: READ_ONLY,
       inputSchema: {
-        slug: z.string().describe("The stay's slug."),
-        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe("Check-in, YYYY-MM-DD."),
-        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe("Check-out, YYYY-MM-DD (exclusive)."),
+        slug: z.string().describe("The listing slug."),
+        startDate: DATE.describe("Check-in (stays) or activity date, YYYY-MM-DD."),
+        endDate: DATE.optional().describe("Stays: check-out, YYYY-MM-DD."),
+        guests: z.number().int().min(1).max(30).optional().describe("Party size (default 2)."),
       },
     },
-    async ({ slug, startDate, endDate }) => {
-      if (endDate <= startDate) return TEXT({ error: "endDate must be after startDate." });
-      const busy = await getListingBusyRangesBySlug(slug);
-      if (!busy) return TEXT({ error: "No published listing with that slug." });
-      // Overlap test against [start, end) ranges (iCal/booked ranges are exclusive-end).
-      const overlaps = busy.ranges.some((r) => startDate < r.end && endDate > r.start);
-      return TEXT({ slug, title: busy.title, requested: { startDate, endDate }, available: !overlaps, busyRanges: busy.ranges });
+    async ({ slug, startDate, endDate, guests }) => {
+      try {
+        const q = await quoteListing(publicClient(), { slug, startDate, endDate, guests });
+        if ("error" in q) return ERROR(q.error);
+        return TEXT({ slug: q.slug, title: q.title, type: q.type, startDate: q.startDate, endDate: q.endDate, guests: q.guests, available: q.available, reason: q.reason, slots: q.slots, rooms: q.rooms, bookUrl: q.bookUrl });
+      } catch (err) {
+        console.error("[mcp] check_availability", err);
+        return ERROR("Couldn't check availability right now. Please try again shortly.");
+      }
     },
   );
 
@@ -138,7 +182,8 @@ export function createPublicServer(): McpServer {
     "plan_trip",
     {
       title: "Plan an Armenia trip",
-      description: "Generate a day-by-day Armenia itinerary grounded in Revamp's live catalog (real stays, tours, experiences, restaurants). Returns a structured plan.",
+      description: "Generate a suggested day-by-day Armenia itinerary using Revamp's published listings (stays, tours, experiences, restaurants). Returns a structured plan with listing links; it doesn't check dates or book anything — use get_quote for that.",
+      annotations: { ...READ_ONLY, idempotentHint: false },
       inputSchema: {
         days: z.number().int().min(1).max(14).describe("Trip length in days."),
         startCity: z.string().optional().describe("Base city (default 'Yerevan')."),
@@ -164,7 +209,8 @@ export function createPublicServer(): McpServer {
         );
         return TEXT(itinerary);
       } catch (err) {
-        return TEXT({ error: err instanceof Error ? err.message : "The trip planner is unavailable right now." });
+        console.error("[mcp] plan_trip", err);
+        return ERROR("The trip planner is unavailable right now. Please try again shortly.");
       }
     },
   );
@@ -263,7 +309,7 @@ export function mcpInfo() {
     description: "Read-only MCP server for the live Revamp Vacations catalog (Armenia): search stays, tours, experiences, restaurants and places; check availability; plan a trip.",
     transport: "streamable-http",
     endpoint: `${SITE()}/mcp`,
-    tools: ["search_listings", "get_listing", "check_availability", "plan_trip"],
-    docs: `${SITE()}/`,
+    tools: ["search_listings", "get_listing", "get_quote", "check_availability", "plan_trip"],
+    docs: `${SITE()}/developers`,
   };
 }

@@ -22,6 +22,12 @@ const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_
 
 const client = url && anonKey ? createClient(url, anonKey) : null;
 
+/** The public (anon-key, RLS-limited) client — for server code that only reads
+ * what the website already shows, e.g. the MCP quote tool (least privilege). */
+export function publicClient() {
+  return client;
+}
+
 /**
  * Cheap liveness check for GET /api/health: confirms the anon Supabase client is
  * configured and the database answers a trivial read. Head+count on the public

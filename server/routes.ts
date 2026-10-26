@@ -462,6 +462,12 @@ const giftLookupHits = new Map<string, number[]>();
 const giftPurchaseHits = new Map<string, number[]>();
 // Per-IP cap for the public (unauthenticated) AI trip planner — protects the Anthropic bill.
 const planTripHits = new Map<string, number[]>();
+// Public MCP connector: per-IP request cap, and a tighter one for plan_trip (each
+// call runs the AI planner). Best-effort per warm function, like the others.
+const mcpHits = new Map<string, number[]>();
+const mcpPlanHits = new Map<string, number[]>();
+export const MCP_RATE_LIMIT_PER_MIN = 120;
+export const MCP_PLAN_TRIP_LIMIT_PER_MIN = 10;
 const aiReferralHits = new Map<string, number[]>();
 const ahaCopyHits = new Map<string, number[]>();
 const trackHits = new Map<string, number[]>();
@@ -1077,6 +1083,14 @@ export function registerApiRoutes(app: Express) {
     app.post(mcpPath, async (req: Request, res: Response) => {
       mcpCors(res);
       res.setHeader("Mcp-Protocol-Version", MCP_PROTOCOL_VERSION);
+      // Rate limits (documented on /developers): over the cap → a JSON-RPC error, HTTP 429.
+      const ip = req.ip || "?";
+      const msgs = (Array.isArray(req.body) ? req.body : [req.body]) as { method?: string; params?: { name?: string }; id?: unknown }[];
+      const plans = msgs.some((m) => m?.method === "tools/call" && m.params?.name === "plan_trip");
+      if (rateLimited(mcpHits, ip, MCP_RATE_LIMIT_PER_MIN) || (plans && rateLimited(mcpPlanHits, ip, MCP_PLAN_TRIP_LIMIT_PER_MIN))) {
+        res.setHeader("Retry-After", "60");
+        return res.status(429).json({ jsonrpc: "2.0", error: { code: -32000, message: "Rate limit reached. Please try again in a minute." }, id: msgs[0]?.id ?? null });
+      }
       // AI assistants analytics (0114): count connections + tool calls (never blocks the reply).
       void recordMcpUse(supabaseAdmin(), req.body, req.get("user-agent"), req.ip);
       try {

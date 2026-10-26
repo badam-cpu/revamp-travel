@@ -42,7 +42,7 @@ These crawl/accept remote MCP servers and are where people browse:
 - **Awesome MCP Servers** (GitHub) — https://github.com/punkpeye/awesome-mcp-servers → PR adding a line under a fitting category (Travel / Location), e.g.:
   `- [Revamp Vacations](https://revampvacations.com/developers) — Live Armenia travel catalog (stays, tours, restaurants), availability, and AI trip planning.`
 
-For each: name **Revamp Vacations**, URL `https://mcp.revampvacations.com/mcp`, transport **streamable-http**, auth **none**, tools **search_listings, get_listing, check_availability, plan_trip**.
+For each: name **Revamp Vacations**, URL `https://mcp.revampvacations.com/mcp`, transport **streamable-http**, auth **none**, tools **search_listings, get_listing, get_quote, check_availability, plan_trip**.
 
 ## 3. Announce
 
@@ -67,7 +67,7 @@ Meta opened Muse to third-party connectors in Sept 2026. Two routes:
 
 ### A. Try it now — private custom connector (only you see it, no review)
 In the Muse app, send: *"Connect to the Revamp Vacations MCP server at https://mcp.revampvacations.com/mcp"*.
-When Muse asks: transport **HTTP (Streamable HTTP)**, authentication **none**. Ask it to test all four tools, save it, and set approval to **read-only**. Then try: *"Use Revamp to find a cabin in Dilijan for 2 next weekend."*
+When Muse asks: transport **HTTP (Streamable HTTP)**, authentication **none**. Ask it to test all five tools, save it, and set approval to **read-only**. Then try: *"Use Revamp to find a cabin in Dilijan for 2 next weekend."*
 
 ### B. Public listing — submit at https://muse.ai/platform → "Submit a connector"
 (Sign in with a work email; Meta reviews end-to-end against the live endpoint; onboarding in waves.)
@@ -95,6 +95,9 @@ When Muse asks: transport **HTTP (Streamable HTTP)**, authentication **none**. A
 - Documentation: `https://revampvacations.com/developers`
 - Access requirements: *None — public, no account, no paid plan, all regions. Read-only; returns only the published catalog. Fair-use rate limiting.*
 - Authentication: **Other → "None (public, read-only)"** (don't tick API keys or OAuth)
-- Tools: `search_listings`, `get_listing`, `check_availability`, `plan_trip`
+- Tools (all **Read**, MCP `readOnlyHint: true`, no side effects): `search_listings`, `get_listing`, `get_quote`, `check_availability`, `plan_trip`
+- Value beyond the browser (Muse core requirement): `get_quote` returns the outcome — real availability for dates/party (calendars, bookings, minimum stay, capacity, time slots with seats left) and the exact all-in price (itemised discounts, fees, 10% tax, AMD), cancellation + payment terms, and a pre-filled checkout link. Booking/payment stay on revampvacations.com (connector accepts no payments).
+- Rate limits: 120 req/min/IP, 10 plan_trip/min/IP (HTTP 429 + Retry-After). Errors: `isError: true` + plain message.
+- Data: request parameters only (no personal data); only per-tool usage counts kept; plan_trip preferences go to Anthropic to generate the itinerary; no selling/training. Matches /privacy → "AI assistants and our catalog connection".
 
 **Step 3 — Review:** confirm you're authorized for the brand assets, accept the Muse Connector Terms, submit. (Your account + acceptance — do it yourself.)
