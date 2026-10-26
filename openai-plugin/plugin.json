@@ -1,0 +1,28 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "revamp-vacations",
+  "version": "1.0.0",
+  "description": "Read-only access to Revamp Vacations' published Armenia travel listings: search, details, availability and quotes, and trip plans.",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Revamp Vacations",
+        "shortDescription": "Armenia stays, tours & dining",
+        "longDescription": "Revamp Vacations is a curated travel marketplace for Armenia. This app gives ChatGPT read-only access to Revamp's published listings: guesthouses, apartments and hotels; guided tours; hands-on experiences; restaurants; and places to visit.\n\nYou can search by place, type or interest; read a listing's full details; check real availability for your dates and group size, including time slots with seats left for tours and experiences; see the full price breakdown with fees, tax, cancellation terms and how payment works; and get a day-by-day itinerary built from real listings.\n\nThe app never books, pays or changes anything. Each result links to the listing on revampvacations.com, where you can book. No account is needed.",
+        "developerName": "Revamp Hospitality LLC",
+        "category": "Travel",
+        "capabilities": ["Read"],
+        "websiteURL": "https://revampvacations.com",
+        "privacyPolicyURL": "https://revampvacations.com/privacy",
+        "termsOfServiceURL": "https://revampvacations.com/terms",
+        "defaultPrompt": [
+          "Find a cozy stay in Dilijan for two next weekend",
+          "Is this Yerevan apartment free 10–14 Feb for 2, and what's the total?",
+          "Plan a 3-day Armenia trip with wine, hiking and good food"
+        ],
+        "brandColor": "#F15822",
+        "logo": "./assets/logo.png"
+      }
+    }
+  }
+}
