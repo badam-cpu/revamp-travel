@@ -25,6 +25,18 @@ async function startServer() {
       ? path.resolve(__dirname, "public")
       : path.resolve(__dirname, "..", "dist", "public");
 
+  // The connector host (mcp.revampvacations.com, Railway) runs this same server
+  // only for the MCP connector — its website copy has no catalog (no VITE_
+  // Supabase vars at build) and would be a duplicate for search engines. So on
+  // an mcp.* host every page permanently redirects to the real site; the
+  // connector (/mcp…), the API and /.well-known (domain verification) stay.
+  const publicSite = (process.env.PUBLIC_SITE_URL || "https://revampvacations.com").replace(/\/+$/, "");
+  app.use((req, res, next) => {
+    if (!(req.hostname || "").toLowerCase().startsWith("mcp.")) return next();
+    if (/^\/(mcp|api|\.well-known)(\/|$)/.test(req.path)) return next();
+    res.redirect(301, publicSite + req.originalUrl);
+  });
+
   // Belt-and-suspenders noindex on the auth-gated routes — robots.txt's
   // Disallow alone doesn't de-index an already-linked page, so every response
   // under these paths also carries the header, regardless of user agent. (On
