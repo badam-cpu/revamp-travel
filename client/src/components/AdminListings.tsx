@@ -6,10 +6,18 @@
  * to a traveler. Reassigning affects who sees/edits the listing in their
  * dashboard and who future payouts accrue to; existing bookings/payouts keep
  * their recorded amounts.
+ *
+ * Also: switch a listing between Tour and Experience. The two share every
+ * column (same detail page, sessions, booking, payouts), so only `type` changes
+ * — the page address, bookings, photos and prices stay. It moves the listing to
+ * the other section (/explore/tour ↔ /explore/experience, home rows, region
+ * pages, the operator's dashboard section). Other types have different data and
+ * aren't offered. Admin RLS allows it; the review gate only guards `status`.
  */
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { supabase } from "@/lib/supabase";
+import { useListings } from "@/contexts/ListingsContext";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
@@ -31,6 +39,7 @@ export function AdminListings() {
   const [ops, setOps] = useState<Op[]>([]);
   const [q, setQ] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
+  const { refresh } = useListings();
 
   const load = async () => {
     const [{ data: listings }, { data: profiles }] = await Promise.all([
@@ -69,6 +78,27 @@ export function AdminListings() {
     }
   };
 
+  const switchType = async (row: Row, type: "tour" | "experience") => {
+    if (type === row.type) return;
+    const to = type === "tour" ? "Tours" : "Experiences";
+    if (!window.confirm(`Move "${row.title}" to ${to}?\n\nIts page address, bookings, photos and prices stay the same — it just shows under ${to} on the site and in the operator's dashboard.`)) return;
+    setSavingId(row.id);
+    const prev = row.type;
+    setRows((rs) => rs?.map((r) => (r.id === row.id ? { ...r, type } : r)) ?? rs);
+    try {
+      const { error } = await supabase.from("listings").update({ type }).eq("id", row.id);
+      if (error) throw new Error(error.message);
+      toast(`"${row.title}" is now under ${to}.`);
+      void refresh();
+    } catch (e) {
+      console.error("[admin listings] type change", e);
+      setRows((rs) => rs?.map((r) => (r.id === row.id ? { ...r, type: prev } : r)) ?? rs);
+      toast("Couldn't change the type — try again.");
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return (rows ?? []).filter((r) => !needle || r.title.toLowerCase().includes(needle));
@@ -76,7 +106,7 @@ export function AdminListings() {
 
   return (
     <div>
-      <PageHeader title="Assign listings to operators" sub="Reassign any listing to another operator — they manage it and receive its future payouts. Only operator accounts are listed." />
+      <PageHeader title="Assign listings to operators" sub="Reassign a listing to another operator, or move a tour to Experiences (and back)." />
 
       <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search listings by title…" className="mb-5 h-11 max-w-md rounded-none" />
 
@@ -92,12 +122,25 @@ export function AdminListings() {
                 <p className="truncate text-sm font-semibold text-basalt">{r.title}</p>
                 <p className="mt-0.5 text-[11px] uppercase tracking-[0.1em] text-basalt/40">{r.type} · {r.status}</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                {(r.type === "tour" || r.type === "experience") && (
+                  <select
+                    aria-label={`Type of ${r.title}`}
+                    value={r.type}
+                    disabled={savingId === r.id}
+                    onChange={(e) => switchType(r, e.target.value as "tour" | "experience")}
+                    className="h-12 rounded-none border border-basalt/20 bg-paper px-2 text-base outline-none focus:border-apricot disabled:opacity-50 sm:h-10 sm:text-sm"
+                  >
+                    <option value="tour">Tour</option>
+                    <option value="experience">Experience</option>
+                  </select>
+                )}
                 <select
+                  aria-label={`Operator of ${r.title}`}
                   value={r.operator_id}
                   disabled={savingId === r.id}
                   onChange={(e) => assign(r, e.target.value)}
-                  className="h-10 rounded-none border border-basalt/20 bg-paper px-2 text-sm outline-none focus:border-apricot disabled:opacity-50"
+                  className="h-12 min-w-0 flex-1 rounded-none border border-basalt/20 bg-paper px-2 text-base outline-none focus:border-apricot disabled:opacity-50 sm:h-10 sm:flex-none sm:text-sm"
                 >
                   {!ops.some((o) => o.id === r.operator_id) && <option value={r.operator_id}>Current owner (not an operator)</option>}
                   {ops.map((o) => (
