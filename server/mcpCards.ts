@@ -17,7 +17,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 /** Versioned: hosts cache by URI, so bump it when the HTML/CSS/JS changes. */
-export const CARDS_URI = "ui://revamp/cards-v3.html";
+export const CARDS_URI = "ui://revamp/cards-v4.html";
 export const CARDS_MIME = "text/html;profile=mcp-app";
 
 const SITE = () => (process.env.URL || "https://revampvacations.com").replace(/\/+$/, "");
@@ -171,18 +171,20 @@ export function cardsHtml(site: string): string {
     else return;
     rendered=true; setTimeout(resize,0); Array.prototype.forEach.call(document.images,function(i){ i.addEventListener("load",resize); });
   }
+  // The full card data travels in the result's _meta (not shown to the model); fall back to structuredContent.
+  function full(meta){ return meta&&typeof meta==="object"&&meta["revamp/cards"]&&typeof meta["revamp/cards"]==="object"?meta["revamp/cards"]:null; }
   function theme(t){ document.documentElement.classList.toggle("dark",t==="dark"); }
   window.addEventListener("message",function(ev){
     if(ev.source!==window.parent) return;
     var m=ev.data; if(!m||typeof m!=="object") return;
-    if(m.method==="ui/notifications/tool-result"&&m.params) render(m.params.structuredContent);
+    if(m.method==="ui/notifications/tool-result"&&m.params) render(full(m.params._meta)||m.params.structuredContent);
     else if(m.method==="ui/notifications/host-context-changed"&&m.params&&m.params.theme) theme(m.params.theme);
     else if(m.id===1&&m.result){ var hc=m.result.hostContext||{}; if(hc.theme) theme(hc.theme); notify("ui/notifications/initialized",{}); }
   });
   if(window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches) theme("dark");
   request("ui/initialize",{protocolVersion:"2026-01-26",appCapabilities:{availableDisplayModes:["inline"]}});
   // ChatGPT also exposes the result directly (compatibility alias).
-  function fromOpenai(){ var o=window.openai; if(!o) return; if(o.theme) theme(o.theme); if(!rendered&&o.toolOutput) render(o.toolOutput); }
+  function fromOpenai(){ var o=window.openai; if(!o) return; if(o.theme) theme(o.theme); var d=full(o.toolResponseMetadata)||o.toolOutput; if(!rendered&&d) render(d); }
   fromOpenai(); window.addEventListener("openai:set_globals",fromOpenai);
   new ResizeObserver(function(){ if(rendered) resize(); }).observe(document.body);
 })();

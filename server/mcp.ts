@@ -78,10 +78,24 @@ const TEXT = (data: unknown) => ({ content: [{ type: "text" as const, text: JSON
 // other properties. Say so in the result itself, next to the data the model reads.
 const CARD_NOTE =
   "The user already sees this as Revamp cards with each listing's own photo, price and link. Keep your reply short and don't add images from the web — they show other properties, not these listings.";
-const CARDS = (data: Record<string, unknown>) => ({
-  content: [{ type: "text" as const, text: CARD_NOTE }, ...TEXT(data).content],
-  structuredContent: data,
-});
+// The model gets the facts it needs to answer (title, place, price, availability, link) but
+// not the marketing copy — with descriptions it wrote its own illustrated list under our cards,
+// with web photos of other properties. The cards get everything via `_meta` (widget-only).
+function forModel(data: Record<string, unknown>): Record<string, unknown> {
+  if (!Array.isArray(data.results)) return data;
+  return {
+    ...data,
+    results: (data.results as Record<string, unknown>[]).map(({ description: _d, tags: _t, ...rest }) => rest),
+  };
+}
+const CARDS = (data: Record<string, unknown>) => {
+  const slim = forModel(data);
+  return {
+    content: [{ type: "text" as const, text: CARD_NOTE }, ...TEXT(slim).content],
+    structuredContent: slim,
+    _meta: { "revamp/cards": data },
+  };
+};
 const PHOTO_NOTE =
   "If you show pictures, use only the URLs in `photos` — images found on the web show other properties, not this listing.";
 /** A tool-level error the assistant can relay — plain words, no internals. */
