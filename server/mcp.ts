@@ -22,8 +22,8 @@ import { z } from "zod";
 import type { Request, Response } from "express";
 import { getPublishedCatalog, listPublishedForPlanner, type PublicListing } from "./supabase.js";
 import { planTrip } from "./planner.js";
-import { isDiscoverable } from "../shared/listings.js";
-import { quoteListing } from "./mcpQuote.js";
+import { isDiscoverable, photoCaption } from "../shared/listings.js";
+import { listingPhotos, quoteListing } from "./mcpQuote.js";
 import { publicClient } from "./supabase.js";
 
 const SITE = () => (process.env.URL || "https://revampvacations.com").replace(/\/+$/, "");
@@ -31,6 +31,7 @@ const SITE = () => (process.env.URL || "https://revampvacations.com").replace(/\
 function listingUrl(slug: string): string {
   return `${SITE()}/listing/${slug}`;
 }
+
 
 /** Compact, AI-friendly summary of a listing (used by search). */
 function summarize(l: PublicListing) {
@@ -44,6 +45,8 @@ function summarize(l: PublicListing) {
     tags: l.tags?.slice(0, 6),
     cuisine: l.cuisine,
     venueType: l.venueType,
+    // The listing's own cover photo — use it when showing this result.
+    image: listingPhotos(l)[0],
     // Google's rating of the business (restaurants/places) — labelled as such, never a Revamp rating.
     googleRating: typeof l.googleRating === "number" ? l.googleRating : undefined,
     url: listingUrl(l.slug),
@@ -60,6 +63,10 @@ function detail(l: PublicListing) {
     facts: Array.isArray(l.facts) && l.facts.length ? l.facts : undefined,
     maxGuests: l.maxGuests,
     branches: l.branches?.map((b) => ({ label: b.label, address: b.address })),
+    // The listing's own photos (up to 6) with the host's captions where set.
+    photos: listingPhotos(l)
+      .slice(0, 6)
+      .map((url) => ({ url, caption: photoCaption(l, url) || undefined })),
   };
 }
 
@@ -89,7 +96,7 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
     {
       title: "Search Revamp listings",
       description:
-        "Search Revamp Vacations' published listings in Armenia: places to stay, tours, experiences, restaurants (eat) and places to visit. Returns each match's slug, type, location, headline price in AMD, short description and page link. For an exact all-in price and availability on dates, use get_quote.",
+        "Search Revamp Vacations' published listings in Armenia: places to stay, tours, experiences, restaurants (eat) and places to visit. Returns each match's slug, type, location, headline price in AMD, short description, page link, and the listing's own cover photo (image) — use that photo when showing the result. For an exact all-in price and availability on dates, use get_quote.",
       annotations: READ_ONLY,
       inputSchema: {
         type: z.enum(["stay", "tour", "experience", "eat", "place"]).optional().describe("Limit to one listing type."),
@@ -126,7 +133,7 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
     "get_listing",
     {
       title: "Get a Revamp listing",
-      description: "Fetch full details for one listing by its slug (from search_listings): description, amenities, highlights, facts, capacity and the page link.",
+      description: "Fetch full details for one listing by its slug (from search_listings): description, amenities, highlights, facts, capacity, the page link, and the listing's own photos (with captions) — use these photos when showing it.",
       annotations: READ_ONLY,
       inputSchema: { slug: z.string().describe("The listing slug, e.g. 'forest-house-dilijan'.") },
     },

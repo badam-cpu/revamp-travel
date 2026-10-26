@@ -27,6 +27,22 @@ const fmt = (cents: number) => `֏${amd(cents).toLocaleString("en-US")}`;
 const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 const todayArmenia = () => new Date(Date.now() + 4 * 3600_000).toISOString().slice(0, 10);
 
+/**
+ * The listing's own photos (absolute URLs). Without these, assistants decorate
+ * results with images from elsewhere on the web — ChatGPT showed thumbnails that
+ * weren't Revamp's (2026-10-26). Only real uploaded photos; the brand SVG
+ * fallbacks (/images, /brand) are left out rather than shown as "the place".
+ */
+export function listingPhotos(l: { image?: string | null; gallery?: string[] | null }): string[] {
+  const all = [l.image, ...(l.gallery ?? [])].filter((u): u is string => typeof u === "string" && !!u);
+  return Array.from(new Set(all))
+    .filter((u) => !u.startsWith("/images/") && !u.startsWith("/brand/") && !/\.svg(\?|$)/i.test(u))
+    .map((u) => (/^https?:\/\//i.test(u) ? u : `${SITE()}${u.startsWith("/") ? "" : "/"}${u}`))
+    // Uploaded photos have size variants (…_w2560.webp, _w1280, …): 1280 px is
+    // plenty for an assistant's card and far lighter (same choice as the Telegram bot).
+    .map((u) => u.replace(/_w\d+\.webp$/i, "_w1280.webp"));
+}
+
 type Range = { start: string; end: string };
 type Row = Record<string, unknown> & { id: string; slug: string; title: string; type: string };
 
@@ -34,6 +50,8 @@ export interface Quote {
   slug: string;
   title: string;
   type: string;
+  /** The listing's own cover photo (absolute URL), when it has one. */
+  image?: string;
   currency: "AMD";
   guests: number;
   startDate: string;
@@ -133,6 +151,7 @@ export async function quoteListing(
     slug: r.slug,
     title: r.title,
     type: r.type,
+    image: listingPhotos({ image: r.image as string | null, gallery: r.gallery as string[] | null })[0],
     currency: "AMD",
     guests,
     startDate: start,
