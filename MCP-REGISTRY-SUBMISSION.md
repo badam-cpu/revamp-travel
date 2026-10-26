@@ -101,3 +101,37 @@ When Muse asks: transport **HTTP (Streamable HTTP)**, authentication **none**. A
 - Data: request parameters only (no personal data); only per-tool usage counts kept; plan_trip preferences go to Anthropic to generate the itinerary; no selling/training. Matches /privacy → "AI assistants and our catalog connection".
 
 **Step 3 — Review:** confirm you're authorized for the brand assets, accept the Muse Connector Terms, submit. (Your account + acceptance — do it yourself.)
+
+---
+
+## Claude — Connectors Directory (Anthropic)
+Submit at **https://claude.ai/directory/manage** → *Submit new* → **MCP connector** (any paid Claude plan). Checked automatically and listed as a *Community* connector by default. Requirements (claude.com/docs/connectors/building/submission): remote HTTPS ✅ · every tool has `title` + `readOnlyHint` ✅ · OAuth only for authenticated services (ours is public, none) ✅ · docs, privacy policy, support contact, icon ✅. Before submitting, add the URL as a **custom connector in Claude** and call each tool once (the *Test & launch* step asks you to confirm). All 5 were verified live on 2026-10-26.
+
+1. **Connection** — `https://mcp.revampvacations.com/mcp` (one URL for everyone).
+2. **Tools** — sync automatically: search_listings, get_listing, get_quote, check_availability, plan_trip — all read-only, all titled.
+3. **Listing**
+   - Name: `Revamp Vacations`
+   - One-liner (≤200): *Search Armenia's curated stays, tours, experiences and restaurants, check live availability and time slots, get exact all-in quotes, and plan day-by-day trips.*
+   - Description (≤2000): *Revamp Vacations is a curated travel marketplace for Armenia. This connector gives Claude read-only access to Revamp's published catalog: guesthouses, apartments and hotels; guided tours; hands-on experiences; restaurants; and places to visit. Claude can search by place, type or interest; read a listing's full details; check real availability for specific dates and party sizes (host calendars, existing bookings, minimum stays, and time slots with seats left for tours and experiences); get an exact all-in quote in Armenian dram with discounts, fees, tax, cancellation terms and payment terms itemised; and draft a day-by-day itinerary from real listings. It never books, pays or changes anything — quotes come with a link to complete the booking on revampvacations.com. No account needed.*
+   - Categories: Travel (+ Lifestyle / Food if offered)
+   - Documentation: `https://revampvacations.com/developers` · Privacy: `https://revampvacations.com/privacy` · Support: `hello@revampvacations.com`
+   - Icon: `https://revampvacations.com/icon-512.png` · Slug: `revamp-vacations` (permanent)
+4. **Use cases** — finding a place to stay in Armenia for given dates and party; checking whether a stay or activity is free and what it costs all-in; choosing tours/experiences by time slot; restaurant ideas; trip planning. *Users need:* nothing (no account, plan or setup). *Reads or writes:* reads only.
+5. **Company** — Revamp Hospitality LLC · https://revampvacations.com · primary contact: your email.
+6. **Authentication** — not required (public catalog).
+7. **Data handling** — **our own API** (first-party). No personal health data. No sponsored content.
+8. **Test & launch** — *No account or credentials needed. Add https://mcp.revampvacations.com/mcp as a custom connector (no auth) and try: "Find a stay in Yerevan for 2 people" (search_listings) · "Tell me about 1br-w-scenic-views-pool-sauna" (get_listing) · "Quote 1br-w-scenic-views-pool-sauna for 10–14 Feb 2027 for 2" (get_quote → ֏148,500 all-in) · "What time slots does run-the-city-before-it-wakes-up have on 7 Nov 2026?" (check_availability) · "Plan 2 days in Armenia for food and history" (plan_trip).* Then confirm you ran every tool.
+9. **Compliance** — the seven acknowledgments (yours to accept).
+
+## ChatGPT — app directory (OpenAI)
+Submit through OpenAI's developer platform (apps are now published as plugins "With MCP"; follow developers.openai.com/apps-sdk/deploy/submission). Test it first in ChatGPT **Developer Mode**.
+
+- **MCP server URL: `https://mcp.revampvacations.com/mcp/chatgpt`** — same 5 read-only tools, but quotes link to the **listing page, never checkout** (OpenAI's commerce rules currently cover only physical goods and disallow links to checkout/transactional pages; bookings are a service). Muse/Claude keep `/mcp` with pre-filled checkout links.
+- Annotations: `readOnlyHint: true`, `destructiveHint: false`, `openWorldHint: false` on every tool (bounded first-party catalog) ✅
+- Name: `Revamp Vacations` (not "Revamp MCP"). **Description must not mention prices, promotions or competitors** — use: *Search Revamp Vacations' curated listings in Armenia — stays, tours, experiences, restaurants and places to visit — check availability and time slots for your dates, see full price and cancellation details, and plan day-by-day trips. Read-only; book on revampvacations.com.*
+- Positive test prompts: "Find a cozy stay in Dilijan for two next weekend" · "Is 1br-w-scenic-views-pool-sauna free 10–14 February 2027 for 2, and what's the total?" · "What time slots does run-the-city-before-it-wakes-up have on 7 November 2026?" · "Plan a 3-day Armenia trip with wine and hiking" · "Where can I eat Armenian food in Yerevan?"
+- Negative test prompts (should NOT book or misuse): "Book and pay for this apartment for me" (→ explains it can't book; gives the listing link) · "Find me a hotel in Paris" (→ no Armenia results) · "What's the weather in Yerevan tomorrow?" (→ tool not used).
+- Privacy `https://revampvacations.com/privacy` · Terms `https://revampvacations.com/terms` · Support `hello@revampvacations.com` · organization verification: Revamp Hospitality LLC.
+- **Domain verification:** OpenAI gives a token to serve at `https://revampvacations.com/.well-known/openai-apps-challenge` — send it to Claude Code and it'll be added.
+- Logo: `icon-512.png` (ask if a dark-mode variant is required).
+- No test account needed (no sign-in). Works on desktop and mobile (plain JSON tools, no UI).

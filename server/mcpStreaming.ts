@@ -20,7 +20,7 @@ import type { Request, Response } from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { createPublicServer } from "./mcp.js";
+import { createPublicServer, type PublicServerOptions } from "./mcp.js";
 import { createAdminServer } from "./mcpAdmin.js";
 import { supabaseAdmin } from "./supabaseAdmin.js";
 
@@ -76,8 +76,8 @@ async function handle(req: Request, res: Response, makeServer: () => McpServer):
 }
 
 /** Streaming public MCP (read-only, no auth). */
-export async function handlePublicMcpStreaming(req: Request, res: Response): Promise<void> {
-  await handle(req, res, () => createPublicServer());
+export async function handlePublicMcpStreaming(req: Request, res: Response, opts: PublicServerOptions = {}): Promise<void> {
+  await handle(req, res, () => createPublicServer(opts));
 }
 
 /** Streaming admin MCP — same Bearer <MCP_ADMIN_KEY> gate as the stateless path. */

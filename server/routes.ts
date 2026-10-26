@@ -14,7 +14,7 @@ import { z } from "zod";
 import { listPublishedForPlanner, verifyUser, userClient, getListingBusyRanges, getOperatorGooglePlaceId, pingDb } from "./supabase.js";
 import { collectHealth } from "./health.js";
 import { getReferralSummary, attachReferral, listAllReferrals, markReferralPaid, setReferralConfig } from "./referrals.js";
-import { handlePublicMcp } from "./mcp.js";
+import { handlePublicMcp, type PublicServerOptions } from "./mcp.js";
 import { handleAdminMcp } from "./mcpAdmin.js";
 import { mcpStreamingEnabled, handlePublicMcpStreaming, handleAdminMcpStreaming } from "./mcpStreaming.js";
 import { fetchPlaceReviews, fetchPlaceDetails, placesServerKeySet } from "./googlePlaces.js";
@@ -1049,7 +1049,15 @@ export function registerApiRoutes(app: Express) {
     res.setHeader("Access-Control-Expose-Headers", "Mcp-Session-Id, Mcp-Protocol-Version");
   };
   const MCP_PROTOCOL_VERSION = "2025-06-18";
-  for (const mcpPath of ["/mcp", "/api/mcp"]) {
+  // /mcp/chatgpt = the same tools for ChatGPT's directory: quotes link to the
+  // listing page instead of checkout (OpenAI doesn't allow checkout links).
+  const MCP_ENDPOINTS: [string, PublicServerOptions][] = [
+    ["/mcp", {}],
+    ["/api/mcp", {}],
+    ["/mcp/chatgpt", { links: "listing" }],
+    ["/api/mcp/chatgpt", { links: "listing" }],
+  ];
+  for (const [mcpPath, mcpOpts] of MCP_ENDPOINTS) {
     app.options(mcpPath, (_req: Request, res: Response) => {
       mcpCors(res);
       res.status(204).end();
@@ -1062,7 +1070,7 @@ export function registerApiRoutes(app: Express) {
     app.get(mcpPath, async (req: Request, res: Response) => {
       mcpCors(res);
       if (mcpStreamingEnabled()) {
-        try { await handlePublicMcpStreaming(req, res); }
+        try { await handlePublicMcpStreaming(req, res, mcpOpts); }
         catch (err) { console.error("[mcp]", err); if (!res.headersSent) res.status(500).end(); }
         return;
       }
@@ -1074,7 +1082,7 @@ export function registerApiRoutes(app: Express) {
     app.delete(mcpPath, async (req: Request, res: Response) => {
       mcpCors(res);
       if (mcpStreamingEnabled()) {
-        try { await handlePublicMcpStreaming(req, res); }
+        try { await handlePublicMcpStreaming(req, res, mcpOpts); }
         catch (err) { console.error("[mcp]", err); if (!res.headersSent) res.status(500).end(); }
         return;
       }
@@ -1094,8 +1102,8 @@ export function registerApiRoutes(app: Express) {
       // AI assistants analytics (0114): count connections + tool calls (never blocks the reply).
       void recordMcpUse(supabaseAdmin(), req.body, req.get("user-agent"), req.ip);
       try {
-        if (mcpStreamingEnabled()) await handlePublicMcpStreaming(req, res);
-        else await handlePublicMcp(req, res);
+        if (mcpStreamingEnabled()) await handlePublicMcpStreaming(req, res, mcpOpts);
+        else await handlePublicMcp(req, res, mcpOpts);
       } catch (err) {
         console.error("[mcp]", err);
         if (!res.headersSent) res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal server error" }, id: null });

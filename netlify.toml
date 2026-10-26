@@ -115,6 +115,13 @@
   status = 200
   force = true
 
+# ChatGPT's directory endpoint: same read-only tools, listing-page links instead of checkout.
+[[redirects]]
+  from = "/mcp/chatgpt"
+  to = "/.netlify/functions/api/mcp/chatgpt"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/mcp"
   to = "/.netlify/functions/api/mcp"

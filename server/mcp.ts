@@ -70,7 +70,18 @@ const ERROR = (message: string) => ({ isError: true, content: [{ type: "text" as
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
-export function createPublicServer(): McpServer {
+/**
+ * `links: "listing"` = the ChatGPT variant (/mcp/chatgpt): identical tools, but
+ * quotes link to the listing page, never a checkout page (OpenAI's directory
+ * rules don't allow links to checkout/transactional pages). Muse, Claude and
+ * others use /mcp with pre-filled checkout links.
+ */
+export interface PublicServerOptions {
+  links?: "checkout" | "listing";
+}
+
+export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
+  const links = opts.links ?? "checkout";
   const server = new McpServer({ name: "revamp-vacations", version: "1.0.0" });
 
   server.registerTool(
@@ -132,7 +143,7 @@ export function createPublicServer(): McpServer {
     {
       title: "Get an exact quote",
       description:
-        "Exact availability and all-in price for one stay, tour or experience. Stays: checks the dates against the host's calendars, existing bookings, minimum stay and capacity, and returns the itemised total (accommodation, discounts, fees, tax) in AMD. Tours and experiences: returns the open time slots with seats left for that date and the total for the party. Also returns the cancellation terms, how payment works, and a link to book. Hotels list their room types (rooms are chosen on the listing page). Read-only: nothing is held or booked.",
+        `Exact availability and all-in price for one stay, tour or experience. Stays: checks the dates against the host's calendars, existing bookings, minimum stay and capacity, and returns the itemised total (accommodation, discounts, fees, tax) in AMD. Tours and experiences: returns the open time slots with seats left for that date and the total for the party. Also returns the cancellation terms, how payment works, and ${links === "checkout" ? "a link to book" : "a link to the listing page, where it can be booked"}. Hotels list their room types (rooms are chosen on the listing page). Read-only: nothing is held or booked.`,
       annotations: READ_ONLY,
       inputSchema: {
         slug: z.string().describe("The listing slug (from search_listings)."),
@@ -143,7 +154,7 @@ export function createPublicServer(): McpServer {
     },
     async ({ slug, startDate, endDate, guests }) => {
       try {
-        const q = await quoteListing(publicClient(), { slug, startDate, endDate, guests });
+        const q = await quoteListing(publicClient(), { slug, startDate, endDate, guests }, links);
         return "error" in q ? ERROR(q.error) : TEXT(q);
       } catch (err) {
         console.error("[mcp] get_quote", err);
@@ -168,7 +179,7 @@ export function createPublicServer(): McpServer {
     },
     async ({ slug, startDate, endDate, guests }) => {
       try {
-        const q = await quoteListing(publicClient(), { slug, startDate, endDate, guests });
+        const q = await quoteListing(publicClient(), { slug, startDate, endDate, guests }, links);
         if ("error" in q) return ERROR(q.error);
         return TEXT({ slug: q.slug, title: q.title, type: q.type, startDate: q.startDate, endDate: q.endDate, guests: q.guests, available: q.available, reason: q.reason, slots: q.slots, rooms: q.rooms, bookUrl: q.bookUrl });
       } catch (err) {
@@ -298,8 +309,8 @@ export async function dispatchMcp(server: McpServer, req: Request, res: Response
 }
 
 /** Express handler for the public MCP endpoint (read-only, no auth). */
-export async function handlePublicMcp(req: Request, res: Response): Promise<void> {
-  await dispatchMcp(createPublicServer(), req, res);
+export async function handlePublicMcp(req: Request, res: Response, opts: PublicServerOptions = {}): Promise<void> {
+  await dispatchMcp(createPublicServer(opts), req, res);
 }
 
 /** Human/discovery info for a GET on the MCP endpoint (clients use POST). */

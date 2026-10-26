@@ -97,9 +97,15 @@ function priceFor(r: Row, startDate: string, endDate: string, guests: number): Q
   return { lines, tax: { label: `Tax (${TAX_PERCENT}%)`, amount: amd(charge.taxCents) }, total: amd(charge.totalCents), totalFormatted: fmt(charge.totalCents) };
 }
 
+/**
+ * `links`: "checkout" (default) returns a pre-filled checkout link where one
+ * exists; "listing" always links the listing page — used by the ChatGPT endpoint
+ * (/mcp/chatgpt), whose directory rules don't allow links to checkout pages.
+ */
 export async function quoteListing(
   admin: SupabaseClient | null,
   input: { slug: string; startDate: string; endDate?: string; guests?: number },
+  links: "checkout" | "listing" = "checkout",
 ): Promise<Quote | { error: string }> {
   if (!admin) return { error: "Quotes are unavailable right now. Please try again later." };
   const { data } = await admin.from("listings").select("*").eq("slug", input.slug).eq("status", "published").maybeSingle();
@@ -166,7 +172,7 @@ export async function quoteListing(
     const price = priceFor(r, start, end!, guests);
     if (!price) return { ...base, available: true, reason: "The host sets the price on request — ask on the listing page." };
     const q = new URLSearchParams({ start, end: end!, guests: String(guests) });
-    return { ...base, available: true, price, bookUrl: `${SITE()}/checkout/${r.slug}?${q.toString()}` };
+    return { ...base, available: true, price, ...(links === "checkout" ? { bookUrl: `${SITE()}/checkout/${r.slug}?${q.toString()}` } : {}) };
   }
 
   // Tours / experiences.
@@ -193,5 +199,5 @@ export async function quoteListing(
   // Booked by date (no time slots set up).
   if (busyOf(r, booked).some((b) => start < b.end && end! > b.start)) return { ...base, available: false, reason: "Not available on this date.", price };
   const q = new URLSearchParams({ start, end: end!, guests: String(guests) });
-  return { ...base, available: true, price, bookUrl: `${SITE()}/checkout/${r.slug}?${q.toString()}` };
+  return { ...base, available: true, price, ...(links === "checkout" ? { bookUrl: `${SITE()}/checkout/${r.slug}?${q.toString()}` } : {}) };
 }
