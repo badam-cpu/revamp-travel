@@ -3,7 +3,7 @@
  *
  * Our picks = the admin's pinned slugs (Admin → Site content, in that order),
  * then listings flagged `featured`, then a daily rotation of everything else
- * to fill the row. Type rows (Stays · Tours & experiences · Places to eat) are
+ * to fill the row. Type rows (Stays · Tours · Experiences · Places to eat) are
  * a daily rotation of that type. Rotation is seeded by the Armenia date, so
  * everyone sees the same lineup on a given day and every listing gets its turn
  * as the catalog grows. Places to visit (free venues) aren't in these rows.
@@ -48,7 +48,8 @@ export interface HomeRow {
 
 const TYPE_ROWS: { key: string; title: string; href: string; linkLabel: string; types: string[] }[] = [
   { key: "stays", title: "Stays", href: "/explore/stay", linkLabel: "See all stays", types: ["stay"] },
-  { key: "do", title: "Tours and experiences", href: "/explore/tour", linkLabel: "See all tours", types: ["tour", "experience"] },
+  { key: "tours", title: "Tours", href: "/explore/tour", linkLabel: "See all tours", types: ["tour"] },
+  { key: "experiences", title: "Experiences", href: "/explore/experience", linkLabel: "See all experiences", types: ["experience"] },
   { key: "eat", title: "Places to eat", href: "/explore/eat", linkLabel: "See the Eat guide", types: ["eat"] },
 ];
 
