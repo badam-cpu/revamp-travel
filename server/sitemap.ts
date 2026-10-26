@@ -16,7 +16,7 @@ import { slugify } from "../shared/slug.js";
 import { populatedLandingPaths, populatedPlaceCategoryPaths } from "../shared/regionLanding.js";
 import { isDiscoverable } from "../shared/listings.js";
 
-const STATIC_ROUTES = ["/", "/explore", "/explore/stay", "/explore/eat", "/explore/tour", "/explore/experience", "/map", "/plan", "/faq", "/partners", "/gift-cards", "/blog", "/guide", "/events", "/host", "/developers", ...REGION_GUIDES.map((g) => `/region/${g.slug}`), ...GUIDES.map((g) => `/guide/${g.slug}`), ...HOST_PAGES.map((p) => `/host/${p.type}`)];
+const STATIC_ROUTES = ["/", "/explore", "/explore/stay", "/explore/eat", "/explore/tour", "/explore/experience", "/map", "/plan", "/faq", "/partners", "/gift-cards", "/blog", "/guide", "/events", "/host", "/developers", "/ai", ...REGION_GUIDES.map((g) => `/region/${g.slug}`), ...GUIDES.map((g) => `/guide/${g.slug}`), ...HOST_PAGES.map((p) => `/host/${p.type}`)];
 
 const normalizeRegionName = (r: string) => r.trim().replace(/\s+(province|marz)$/i, "").trim();
 

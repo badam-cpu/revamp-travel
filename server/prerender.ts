@@ -35,6 +35,7 @@ import { GIFT_CARD_AMOUNTS_CENTS, GIFT_CARD_VALID_MONTHS } from "../shared/giftc
 import { findRegionGuide, listingInRegion, type RegionGuide } from "../shared/regionGuides.js";
 import { LANDING_COPY, LANDING_PATH, TYPE_WORD, clipMeta, landingCrossLinks, landingDescription, landingItems, matchLandingPath, matchPlaceCategoryPath, placeCategoryCrossLinks, placeCategoryDescription, placeCategoryH1, placeCategoryItems, placeCategoryPath, populatedPlaceCategoryPaths, resolveLandingRegion, resolvePlaceCategoryHub, type LandingType } from "../shared/regionLanding.js";
 import { isDiscoverable, photoCaption } from "../shared/listings.js";
+import { AI_APPS, AI_BENEFITS, AI_PAGE, AI_PAGE_PATH, AI_PROMPTS } from "../shared/aiPage.js";
 
 export type PageKind =
   | "home"
@@ -43,6 +44,8 @@ export type PageKind =
   | "tour-browser"
   | "map"
   | "plan"
+  | "ai"
+  | "developers"
   | "listing-detail"
   | "region"
   | "eat-region"
@@ -85,6 +88,8 @@ export function matchRoute(pathname: string): MatchedRoute {
   if (path.startsWith("/explore/")) return { kind: "explore" }; // unrecognized category → unfiltered explore, not a 404
   if (path === "/map") return { kind: "map" };
   if (path === "/plan") return { kind: "plan" };
+  if (path === AI_PAGE_PATH) return { kind: "ai" };
+  if (path === "/developers") return { kind: "developers" };
   if (path === "/login") return { kind: "login" };
   if (path === "/signup") return { kind: "signup" };
   if (path === "/faq") return { kind: "faq" };
@@ -148,6 +153,10 @@ export async function renderForBot(pathname: string, origin: string): Promise<Re
       return { status: 200, body: renderMap(catalog, origin) };
     case "plan":
       return { status: 200, body: renderPlan(origin) };
+    case "ai":
+      return { status: 200, body: renderAiPage(origin) };
+    case "developers":
+      return { status: 200, body: renderDevelopers(origin) };
     case "faq":
       return { status: 200, body: await renderFaq(origin) };
     case "partners":
@@ -436,6 +445,57 @@ function renderPlan(origin: string): string {
     title: "AI Trip Planner | Revamp Vacations",
     description: "Generate a day-by-day Armenia itinerary grounded in Revamp Vacations's live, published catalog.",
     canonical: `${origin}/plan`,
+    ogImage: `${origin}${OG_IMAGE}`,
+    bodyHtml,
+  });
+}
+
+function renderAiPage(origin: string): string {
+  const bodyHtml = `
+<nav aria-label="Breadcrumb"><a href="${origin}/">Home</a> › AI assistants</nav>
+<h1>${escapeHtml(AI_PAGE.title)}</h1>
+<p>${escapeHtml(AI_PAGE.intro)}</p>
+<h2>What you get in the chat</h2>
+<ul>${AI_BENEFITS.map((b) => `<li><strong>${escapeHtml(b.title)}.</strong> ${escapeHtml(b.body)}</li>`).join("")}</ul>
+<h2>Try asking</h2>
+<ul>${AI_PROMPTS.map((p) => `<li>“${escapeHtml(p)}”</li>`).join("")}</ul>
+<h2>Add Revamp to your assistant</h2>
+${AI_APPS.map(
+  (a) => `<section><h3>${escapeHtml(a.name)}</h3>${
+    a.listingUrl
+      ? `<p><a href="${escapeHtml(a.listingUrl)}">Add Revamp Vacations to ${escapeHtml(a.name)}</a></p>`
+      : `<p>${escapeHtml(a.pending)}</p><ol>${a.steps.map((s) => `<li>${escapeHtml(s)}</li>`).join("")}</ol><p>Connector address: <code>${escapeHtml(a.connectorUrl)}</code></p>`
+  }</section>`,
+).join("\n")}
+<p>The assistant only sends Revamp what it needs to search — like the place, dates and number of guests — never your chat history. <a href="${origin}/privacy">Privacy policy</a> · <a href="${origin}/developers">Developer docs</a> · <a href="${origin}/plan">Revamp AI trip planner</a></p>`;
+  return renderPageShell({
+    title: `${AI_PAGE.metaTitle} | Revamp Vacations`,
+    description: AI_PAGE.description,
+    canonical: `${origin}${AI_PAGE_PATH}`,
+    ogImage: `${origin}${OG_IMAGE}`,
+    bodyHtml,
+  });
+}
+
+function renderDevelopers(origin: string): string {
+  const bodyHtml = `
+<nav aria-label="Breadcrumb"><a href="${origin}/">Home</a> › Developers</nav>
+<h1>Bring Armenia's live travel catalog into your AI assistant</h1>
+<p>Revamp runs a public, read-only MCP (Model Context Protocol) server so any MCP-capable assistant can search real stays, tours, experiences and restaurants across Armenia, check availability and exact prices, and plan trips grounded in the live catalog. No sign-up, no API key.</p>
+<p>Endpoint: <code>https://mcp.revampvacations.com/mcp</code> (Streamable HTTP, no authentication).</p>
+<h2>Tools</h2>
+<ul>
+<li><code>search_listings</code> — search stays, tours, experiences, restaurants and places to visit; with dates, only what's available, with the all-in total.</li>
+<li><code>get_listing</code> — full details for one listing, with its own photos.</li>
+<li><code>get_quote</code> — the exact all-in price for real dates and party size, cancellation and payment terms.</li>
+<li><code>check_availability</code> — whether a stay is available for a date range, or a tour's time slots on a date.</li>
+<li><code>plan_trip</code> — a day-by-day Armenia itinerary from the published catalog.</li>
+</ul>
+<p>All tools are read-only: nothing is held or booked. For travellers: <a href="${origin}${AI_PAGE_PATH}">use Revamp in ChatGPT or Claude</a>.</p>`;
+  return renderPageShell({
+    title: "Developers — Revamp MCP for AI assistants | Revamp Vacations",
+    description: "Connect any MCP-capable AI assistant to Revamp's live Armenia travel catalog. Read-only, no auth. Tools: search_listings, get_listing, get_quote, check_availability, plan_trip.",
+    canonical: `${origin}/developers`,
     ogImage: `${origin}${OG_IMAGE}`,
     bodyHtml,
   });

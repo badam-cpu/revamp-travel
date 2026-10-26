@@ -25,6 +25,7 @@ const FOOTER_EXPLORE: [string, string][] = [
 ];
 const FOOTER_PLAN: [string, string][] = [
   ["/plan", "AI trip planner"],
+  ["/ai", "Revamp in ChatGPT & Claude"],
   ["/guide", "Travel guide"],
   ["/events", "Events in Armenia"],
   ["/gift-cards", "Gift cards"],

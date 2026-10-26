@@ -60,6 +60,12 @@ export default function Plan() {
         <p className="mt-4 max-w-xl text-base leading-7 text-basalt/60">
           Tell it how long you have and what you're after — it drafts a day-by-day plan, naming real stays, tables, and tours from the Revamp Vacations marketplace where they fit.
         </p>
+        <p className="mt-3 text-sm text-basalt/60">
+          Prefer ChatGPT or Claude?{" "}
+          <Link href="/ai" className="font-medium text-apricot underline-offset-4 hover:underline">
+            Use Revamp there →
+          </Link>
+        </p>
 
         <div className="mt-10 grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
           <form onSubmit={submit} className="border border-basalt/12 bg-chalk p-6">
