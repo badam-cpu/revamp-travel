@@ -17,7 +17,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 /** Versioned: hosts cache by URI, so bump it when the HTML/CSS/JS changes. */
-export const CARDS_URI = "ui://revamp/cards-v4.html";
+export const CARDS_URI = "ui://revamp/cards-v5.html";
 export const CARDS_MIME = "text/html;profile=mcp-app";
 
 const SITE = () => (process.env.URL || "https://revampvacations.com").replace(/\/+$/, "");
@@ -135,7 +135,7 @@ export function cardsHtml(site: string): string {
       if(r.totalFormatted){
         var pp=el("div","p",r.totalFormatted+" "); pp.appendChild(el("small",null,"total")); pp.appendChild(el("span","sub",(r.nights?r.nights+" night"+(r.nights===1?"":"s")+" · ":"")+"fees & tax incl.")); b.appendChild(pp);
       } else if(r.price){ b.appendChild(el("div","p",r.price)); }
-      if(r.available===true) b.appendChild(el("span","free ok",r.slots&&r.slots.length?"Free · "+r.slots.join(", "):"Free on your dates"));
+      if(r.available===true) b.appendChild(el("span","free ok",r.slots&&r.slots.length?"Free · "+r.slots.join(", "):r.room?"Free · "+r.room:"Free on your dates"));
       else if(r.available===null) b.appendChild(el("span","free na",r.rooms?"Check rooms":"Check on the listing"));
       b.appendChild(el("div","go",(/\\/checkout\\//.test(r.bookUrl||"")?"Book on Revamp":"View on Revamp")+" ↗"));
       c.appendChild(b); c.addEventListener("click",function(){ open(r.bookUrl||r.url); }); rail.appendChild(c);
@@ -152,7 +152,7 @@ export function cardsHtml(site: string): string {
     b.appendChild(el("span","badge "+st[0],st[1]));
     if(q.reason) b.appendChild(el("div","m",q.reason));
     if(q.slots&&q.slots.length){ var s=el("div","slots"); q.slots.forEach(function(x){ s.appendChild(el("span","slot",x.localTime+" \\u00b7 "+x.seatsLeft+" left")); }); b.appendChild(s); }
-    if(q.rooms&&q.rooms.length){ var rl=el("div","lines"); q.rooms.forEach(function(x){ var l=el("div","ln"); l.appendChild(el("span",null,x.name)); l.appendChild(el("span",null,x.nightlyFromFormatted?"from "+x.nightlyFromFormatted+" / night":"")); rl.appendChild(l); }); b.appendChild(rl); }
+    if(q.rooms&&q.rooms.length&&q.available!==true){ var rl=el("div","lines"); q.rooms.forEach(function(x){ var l=el("div","ln"); l.appendChild(el("span",null,x.name)); l.appendChild(el("span",null,x.nightlyFromFormatted?"from "+x.nightlyFromFormatted+" / night":"")); rl.appendChild(l); }); b.appendChild(rl); }
     if(q.price){
       var ls=el("div","lines");
       (q.price.lines||[]).forEach(function(x){ var l=el("div","ln"); l.appendChild(el("span",null,x.label)); l.appendChild(el("span",null,(x.amount<0?"\\u2212":"")+"\\u058f"+Math.abs(x.amount).toLocaleString("en-US"))); ls.appendChild(l); });

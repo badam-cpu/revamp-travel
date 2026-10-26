@@ -199,7 +199,8 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
         total: q.price?.total,
         totalFormatted: q.price?.totalFormatted,
         slots: q.slots?.map((s) => s.localTime),
-        rooms: q.rooms?.length ? q.rooms.map((r) => r.name) : undefined,
+        room: q.room,
+        rooms: q.available !== true && q.rooms?.length ? q.rooms.map((r) => r.name) : undefined,
         bookUrl: q.bookUrl,
       }));
       return CARDS({
@@ -275,7 +276,7 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
       try {
         const q = await quoteListing(publicClient(), { slug, startDate, endDate, guests }, links);
         if ("error" in q) return ERROR(q.error);
-        return TEXT({ slug: q.slug, title: q.title, type: q.type, startDate: q.startDate, endDate: q.endDate, guests: q.guests, available: q.available, reason: q.reason, slots: q.slots, rooms: q.rooms, bookUrl: q.bookUrl });
+        return TEXT({ slug: q.slug, title: q.title, type: q.type, startDate: q.startDate, endDate: q.endDate, guests: q.guests, available: q.available, reason: q.reason, slots: q.slots, room: q.room, rooms: q.rooms, bookUrl: q.bookUrl });
       } catch (err) {
         console.error("[mcp] check_availability", err);
         return ERROR("Couldn't check availability right now. Please try again shortly.");

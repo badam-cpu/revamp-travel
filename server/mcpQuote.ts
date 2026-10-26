@@ -11,14 +11,15 @@
  * website already shows guests (least privilege; no service-role key).
  *   - stays: dates checked against synced calendars, the host's blocks,
  *     confirmed bookings, suspensions, minimum stay and max guests
- *   - hotels (multi-room): rooms are assigned at checkout, so the quote lists
- *     the room types and says so (never claims a room is free)
+ *   - hotels (multi-room): the cheapest room free for every night that fits the
+ *     party, priced like checkout (bestRoomFor) — the room types are listed too
  *   - tours / experiences with time slots: the open slots that day with enough
  *     seats; without slots, booked by date (same checks as stays, one day)
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { computeBookingAmountCents, computeBookingCharge, describeCancellationPolicy, listingFeeCents, listingFeeLabel, nightsBetween, promoDiscount, TAX_PERCENT } from "../shared/bookings.js";
-import { overlapsSuspension } from "../shared/listings.js";
+import { overlapsSuspension, type RoomType, type RoomUnit } from "../shared/listings.js";
+import { bestRoomFor, type RoomAvailability, type RoomQuote } from "../shared/rooms.js";
 import { formatSlotTime } from "../shared/sessions.js";
 
 const SITE = () => (process.env.URL || "https://revampvacations.com").replace(/\/+$/, "");
@@ -64,6 +65,8 @@ export interface Quote {
   price?: { lines: { label: string; amount: number }[]; tax: { label: string; amount: number }; total: number; totalFormatted: string };
   slots?: { startsAt: string; localTime: string; durationMinutes: number; seatsLeft: number }[];
   rooms?: { name: string; maxGuests: number | null; nightlyFrom: number | null; nightlyFromFormatted: string | null }[];
+  /** Hotels: the room type a guest would get (the cheapest one free for the whole stay that fits the party). */
+  room?: string;
   cancellation?: string;
   payment?: string;
   bookingMode?: "instant" | "request";
@@ -113,6 +116,69 @@ function priceFor(r: Row, startDate: string, endDate: string, guests: number): Q
   if (promo.active && promo.discountCents > 0) lines.push({ label: "Discount", amount: -amd(promo.discountCents) });
   if (fee > 0) lines.push({ label: listingFeeLabel(feeListing, guests), amount: amd(fee) });
   return { lines, tax: { label: `Tax (${TAX_PERCENT}%)`, amount: amd(charge.taxCents) }, total: amd(charge.totalCents), totalFormatted: fmt(charge.totalCents) };
+}
+
+/** Room types with their rooms, read like checkout reads them (public RLS). */
+async function hotelRooms(admin: SupabaseClient, listingId: string): Promise<RoomType[] | null> {
+  const { data, error } = await admin.from("room_types").select("*, room_units(*)").eq("listing_id", listingId).order("sort_order", { ascending: true });
+  if (error) return null;
+  return ((data ?? []) as Record<string, any>[]).map((t) => ({
+    id: t.id,
+    listingId: t.listing_id,
+    name: t.name,
+    beds: [],
+    maxGuests: t.max_guests,
+    priceCents: t.price_cents,
+    priceUnit: t.price_unit || "night",
+    seasonalRates: Array.isArray(t.seasonal_rates) ? t.seasonal_rates : [],
+    quantity: t.quantity,
+    gallery: [],
+    amenities: [],
+    sortOrder: t.sort_order ?? 0,
+    units: ((t.room_units ?? []) as Record<string, any>[])
+      .map(
+        (u): RoomUnit => ({
+          id: u.id,
+          roomTypeId: u.room_type_id,
+          name: u.name,
+          priceCents: u.price_cents ?? undefined,
+          seasonalRates: Array.isArray(u.seasonal_rates) ? u.seasonal_rates : [],
+          manualBlockedRanges: Array.isArray(u.manual_blocked_ranges) ? u.manual_blocked_ranges : [],
+          blockedRanges: Array.isArray(u.blocked_ranges) ? u.blocked_ranges : [],
+          active: u.active !== false,
+          sortOrder: u.sort_order ?? 0,
+        }),
+      )
+      .sort((a, b) => a.sortOrder - b.sortOrder),
+  }));
+}
+
+/** Confirmed bookings per room and per room type — the identity-free views the listing page uses. */
+async function roomAvailability(admin: SupabaseClient, types: RoomType[]): Promise<RoomAvailability | null> {
+  const typeIds = types.map((t) => t.id);
+  const unitIds = types.flatMap((t) => t.units.map((u) => u.id));
+  const by = async (view: string, key: string, ids: string[]) => {
+    const out = new Map<string, Range[]>();
+    if (!ids.length) return out;
+    const { data, error } = await admin.from(view).select(`${key}, start_date, end_date`).in(key, ids);
+    if (error) throw error;
+    for (const row of (data ?? []) as unknown as Record<string, string>[]) out.set(row[key], [...(out.get(row[key]) ?? []), { start: row.start_date, end: row.end_date }]);
+    return out;
+  };
+  try {
+    const [byType, byUnit] = await Promise.all([by("room_type_booked_ranges", "room_type_id", typeIds), by("room_unit_booked_ranges", "room_unit_id", unitIds)]);
+    return { byType, byUnit };
+  } catch {
+    return null;
+  }
+}
+
+/** A room's charge itemised like checkout. */
+function roomPrice(rq: RoomQuote, roomName: string): NonNullable<Quote["price"]> {
+  const lines = [{ label: `Accommodation · ${roomName}`, amount: amd(rq.accommodationCents) }];
+  if (rq.discountCents > 0) lines.push({ label: "Discount", amount: -amd(rq.discountCents) });
+  if (rq.cleaningCents > 0) lines.push({ label: "Cleaning fee", amount: amd(rq.cleaningCents) });
+  return { lines, tax: { label: `Tax (${TAX_PERCENT}%)`, amount: amd(rq.charge.taxCents) }, total: amd(rq.totalCents), totalFormatted: fmt(rq.totalCents) };
 }
 
 /**
@@ -169,16 +235,47 @@ export async function quoteListing(
     return { ...base, available: false, reason: "The host isn't taking bookings on these dates." };
   }
 
-  // Hotels: rooms are chosen and assigned at checkout — list the room types honestly.
+  // Hotels: price the room a guest would get — for each room type that fits the party, the
+  // cheapest room free for every night (bestRoomFor, the same rule checkout assigns rooms
+  // by) — and quote the cheapest of those. If the rooms can't be read, say so honestly.
   if (isStay && r.multi_room) {
-    const { data: types } = await admin.from("room_types").select("name, max_guests, price_cents, sort_order").eq("listing_id", r.id).order("sort_order", { ascending: true });
-    const rooms = ((types ?? []) as { name: string; max_guests: number | null; price_cents: number | null }[]).map((t) => ({
+    const types = await hotelRooms(admin, r.id);
+    const rooms = (types ?? []).map((t) => ({
       name: t.name,
-      maxGuests: t.max_guests,
-      nightlyFrom: t.price_cents ? amd(t.price_cents) : null,
-      nightlyFromFormatted: t.price_cents ? fmt(t.price_cents) : null,
+      maxGuests: t.maxGuests,
+      nightlyFrom: t.priceCents ? amd(t.priceCents) : null,
+      nightlyFromFormatted: t.priceCents ? fmt(t.priceCents) : null,
     }));
-    return { ...base, available: null, reason: "This is a hotel: free rooms and the exact total depend on the room type, chosen on the listing page.", rooms };
+    const unknown = { ...base, available: null, reason: "This is a hotel: free rooms and the exact total depend on the room type, chosen on the listing page.", rooms };
+    if (!types?.length) return unknown;
+    const minStay = minStayOf(r.facts);
+    if (nights! < minStay) return { ...base, available: false, reason: `This stay has a ${minStay}-night minimum.`, rooms };
+    const avail = await roomAvailability(admin, types);
+    if (!avail) return unknown;
+    const listing = {
+      cancellationPolicy: (r.cancellation_policy as never) ?? "flexible",
+      nonrefundableDiscountPercent: Number(r.nonrefundable_discount_percent) || 0,
+      cleaningFeeCents: Number(r.cleaning_fee_cents) || 0,
+      discountType: r.discount_type as never,
+      discountValue: (r.discount_value as number | null) ?? undefined,
+      discountStart: (r.discount_start as string | null) ?? undefined,
+      discountEnd: (r.discount_end as string | null) ?? undefined,
+    };
+    let best: { type: RoomType; quote: RoomQuote } | null = null;
+    for (const t of types) {
+      if (t.maxGuests && guests > t.maxGuests) continue;
+      const got = bestRoomFor(listing, t, avail, start, end!, guests);
+      if (got && got.quote.totalCents > 0 && (!best || got.quote.totalCents < best.quote.totalCents)) best = { type: t, quote: got.quote };
+    }
+    if (!best) return { ...base, available: false, reason: `No room is free for all of these nights for ${guests} guest${guests === 1 ? "" : "s"}.`, rooms };
+    return {
+      ...base,
+      available: true,
+      room: best.type.name,
+      price: roomPrice(best.quote, best.type.name),
+      reason: `Cheapest free room for these dates: ${best.type.name}. Other rooms are on the listing page.`,
+      rooms,
+    };
   }
 
   const { data: bookedRows } = await admin.from("listing_booked_ranges").select("start_date, end_date").eq("listing_id", r.id);
