@@ -17,7 +17,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 /** Versioned: hosts cache by URI, so bump it when the HTML/CSS/JS changes. */
-export const CARDS_URI = "ui://revamp/cards-v2.html";
+export const CARDS_URI = "ui://revamp/cards-v3.html";
 export const CARDS_MIME = "text/html;profile=mcp-app";
 
 const SITE = () => (process.env.URL || "https://revampvacations.com").replace(/\/+$/, "");
@@ -52,7 +52,12 @@ export function registerCardsResource(server: McpServer): void {
           uri: CARDS_URI,
           mimeType: CARDS_MIME,
           text: cardsHtml(SITE()),
-          _meta: { ui: { prefersBorder: false, csp: { resourceDomains: domains, connectDomains: [] } } },
+          _meta: {
+            ui: { prefersBorder: false, csp: { resourceDomains: domains, connectDomains: [] } },
+            // ChatGPT reads this so it doesn't re-describe (and re-illustrate) what the card shows.
+            "openai/widgetDescription":
+              "Shows Revamp listings as cards with each listing's own photo, dates, availability, all-in price and link. The user already sees these details, so don't repeat them or add images — pictures found on the web show other properties.",
+          },
         },
       ],
     }),

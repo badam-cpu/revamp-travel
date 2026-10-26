@@ -74,7 +74,16 @@ function detail(l: PublicListing) {
 
 const TEXT = (data: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] });
 /** Text for the model + the same data as structuredContent for our result cards (server/mcpCards.ts). */
-const CARDS = (data: Record<string, unknown>) => ({ ...TEXT(data), structuredContent: data });
+// Hosts (ChatGPT) like to decorate an answer with images from a web search — those show
+// other properties. Say so in the result itself, next to the data the model reads.
+const CARD_NOTE =
+  "The user already sees this as Revamp cards with each listing's own photo, price and link. Keep your reply short and don't add images from the web — they show other properties, not these listings.";
+const CARDS = (data: Record<string, unknown>) => ({
+  content: [{ type: "text" as const, text: CARD_NOTE }, ...TEXT(data).content],
+  structuredContent: data,
+});
+const PHOTO_NOTE =
+  "If you show pictures, use only the URLs in `photos` — images found on the web show other properties, not this listing.";
 /** A tool-level error the assistant can relay — plain words, no internals. */
 const ERROR = (message: string) => ({ isError: true, content: [{ type: "text" as const, text: JSON.stringify({ error: message }) }] });
 /** Every public tool only reads published data (MCP tool annotations). */
@@ -204,7 +213,7 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
       const catalog = await getPublishedCatalog();
       const l = catalog.find((x) => x.slug === slug);
       if (!l) return ERROR("No published listing with that slug.");
-      return TEXT(detail(l));
+      return { content: [{ type: "text" as const, text: PHOTO_NOTE }, ...TEXT(detail(l)).content] };
     },
   );
 
