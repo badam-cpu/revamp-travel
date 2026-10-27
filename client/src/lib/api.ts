@@ -368,6 +368,18 @@ export async function saveListingFaq(listingId: string, items: { q: string; a: s
   });
 }
 
+/** Aha drafts a reply for the host from the listing's details + FAQ (0119). Nothing is sent. */
+export async function ahaSuggestReply(conversationId: string): Promise<{ reply: string | null; reason?: string }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<{ reply: string | null; reason?: string }>("/api/inbox/ai-suggest", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ conversationId }),
+  });
+}
+
 /** Operator/admin approves a request-to-book slot → guest gets a pay link. */
 export async function approveBooking(bookingId: string): Promise<{ ok: boolean }> {
   const { data } = await supabase.auth.getSession();

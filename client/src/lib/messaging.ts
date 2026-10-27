@@ -21,6 +21,8 @@ export interface InboxMessage {
   body: string;
   flagged: boolean;
   redacted: boolean;
+  /** Answered automatically by Aha from the listing's details (0119). */
+  ai: boolean;
   createdAt: string;
 }
 
@@ -51,6 +53,7 @@ function mapMsg(m: any): InboxMessage {
     body: m.redacted ? "(message removed by Revamp)" : m.body,
     flagged: !!m.flagged,
     redacted: !!m.redacted,
+    ai: !!m.ai,
     createdAt: m.created_at,
   };
 }
@@ -126,7 +129,7 @@ export async function listConversations(userId: string): Promise<InboxConversati
 export async function getMessages(conversationId: string): Promise<InboxMessage[]> {
   const { data } = await supabase
     .from("messages")
-    .select("id, conversation_id, sender_id, sender_role, body, flagged, redacted, created_at")
+    .select("*") // "*" so the 0119 `ai` flag is read when present
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true })
     .limit(500);

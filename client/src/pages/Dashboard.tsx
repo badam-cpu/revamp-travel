@@ -2442,7 +2442,7 @@ function DashboardContent() {
               <div>
                 <SectionHead title="Messages" sub="Talk with guests about their bookings. Keep bookings and payments on Revamp — off-platform deals aren't protected." />
                 <OperatorResponseStat />
-                {user && <Inbox userId={user.id} />}
+                {user && <Inbox userId={user.id} host />}
                 <div className="mt-10 border-t border-basalt/10 pt-8">
                   <SubHeader title="Templates & auto-reply" />
                   <MessageTemplatesSettings />

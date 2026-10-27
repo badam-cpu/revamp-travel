@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, Plus, Trash2, Sparkles } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { listTemplates, createTemplate, deleteTemplate, getAutoReply, setAutoReply, type MessageTemplate } from "@/lib/templates";
+import { listTemplates, createTemplate, deleteTemplate, getAutoReply, setAutoReply, getAiReply, setAiReply, type AiReplySettings, type MessageTemplate } from "@/lib/templates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,12 +25,32 @@ export function MessageTemplatesSettings() {
   const [autoMsg, setAutoMsg] = useState("");
   const [autoSaving, setAutoSaving] = useState(false);
 
+  // Aha automatic answers (0119). null = not available yet (migration not run).
+  const [ai, setAi] = useState<AiReplySettings | null>(null);
+  const [aiSaving, setAiSaving] = useState(false);
+
   const reload = () => { if (user) listTemplates(user.id).then(setTemplates); };
   useEffect(() => {
     if (!user) return;
     listTemplates(user.id).then(setTemplates);
     getAutoReply(user.id).then((s) => { setAutoEnabled(s.enabled); setAutoMsg(s.message); });
+    getAiReply(user.id).then(setAi).catch(() => setAi(null));
   }, [user]);
+
+  const saveAi = async (next: AiReplySettings) => {
+    if (!user) return;
+    setAi(next);
+    setAiSaving(true);
+    try {
+      await setAiReply(user.id, next);
+      toast.success(next.auto ? `Aha will answer guests after ${next.delayMinutes} minutes when your listing has the answer.` : "Aha automatic answers are off.");
+    } catch (e) {
+      console.error(e);
+      toast("Couldn't save that. Please try again.");
+    } finally {
+      setAiSaving(false);
+    }
+  };
 
   const add = async () => {
     if (!user) return;
@@ -56,6 +76,36 @@ export function MessageTemplatesSettings() {
 
   return (
     <div className="grid gap-8">
+      {/* Aha answers (0119) */}
+      {ai && (
+        <div className="border border-basalt/12 bg-paper p-5">
+          <h3 className="flex items-center gap-2 font-display text-xl font-normal text-basalt"><Sparkles className="h-4 w-4 text-apricot" /> Aha answers guests</h3>
+          <p className="mt-1 max-w-2xl text-sm text-basalt/55">
+            When a guest's message waits without a reply, Aha answers it — only if your listing details or Guest FAQ have the answer, in the guest's language, labelled as Aha. Booking changes, cancellations, payments, complaints and anything it isn't sure of stay with you. You can always use “Suggest a reply” in the inbox.
+          </p>
+          <label className="mt-4 flex min-h-11 items-center gap-3 text-sm font-semibold">
+            <input type="checkbox" checked={ai.auto} disabled={aiSaving} onChange={(e) => saveAi({ ...ai, auto: e.target.checked })} className="h-5 w-5 accent-[#F15822]" />
+            Let Aha answer when I haven't replied
+          </label>
+          <label className="mt-2 flex flex-wrap items-center gap-3 text-sm text-basalt/70">
+            Answer after
+            <select
+              value={ai.delayMinutes}
+              disabled={!ai.auto || aiSaving}
+              onChange={(e) => saveAi({ ...ai, delayMinutes: Number(e.target.value) })}
+              className="h-12 rounded-none border border-basalt/15 bg-paper px-3 text-base disabled:opacity-50 sm:h-10 sm:text-sm"
+            >
+              {[5, 15, 30, 60, 120].map((m) => (
+                <option key={m} value={m}>
+                  {m < 60 ? `${m} minutes` : `${m / 60} hour${m === 60 ? "" : "s"}`}
+                </option>
+              ))}
+            </select>
+            without a reply from you
+          </label>
+        </div>
+      )}
+
       {/* Auto-reply */}
       <div className="border border-basalt/12 bg-paper p-5">
         <h3 className="flex items-center gap-2 font-display text-xl font-normal text-basalt"><Sparkles className="h-4 w-4 text-apricot" /> Automatic first reply</h3>

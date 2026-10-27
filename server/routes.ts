@@ -37,6 +37,7 @@ import { startOperatorSubscription, reconcileOperatorSubscriptions, cancelOperat
 import { syncListingSessions, reserveSeats, releaseSeats } from "./sessions.js";
 import { generateListingCopy, generateJourneyTemplate, ahaCopyConfigured } from "./ahaCopy.js";
 import { draftVerifiedFaq } from "./listingFaqAuto.js";
+import { inboxAiConfigured, suggestInboxReply } from "./inboxAi.js";
 import { cleanFaq } from "../shared/listingFaq.js";
 import { scanTextFixes, suggestTextFix, applyTextFixes } from "./textFixes.js";
 import { generateSupportReply, type SupportTurn } from "./support.js";
@@ -3318,6 +3319,31 @@ export function registerApiRoutes(app: Express) {
     } catch (err) {
       console.error("[message-send]", err);
       res.status(500).json({ error: "Couldn't send your message. Please try again." });
+    }
+  });
+
+  // POST /api/inbox/ai-suggest — Aha drafts a reply for the host (0119) from the
+  // listing's own details + FAQ and the conversation. Returns { reply } or
+  // { reply: null, reason } when it's one for the host. Nothing is sent.
+  const inboxAiHits = new Map<string, number[]>();
+  app.post("/api/inbox/ai-suggest", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId || !token) return res.status(401).json({ error: "Sign in." });
+    if (!inboxAiConfigured()) return res.status(503).json({ error: "Aha isn't available right now." });
+    if (rateLimited(inboxAiHits, userId, 20)) return res.status(429).json({ error: "You're going a bit fast — give Aha a few seconds." });
+    const conversationId = typeof req.body?.conversationId === "string" ? req.body.conversationId : "";
+    if (!/^[0-9a-f-]{36}$/i.test(conversationId)) return res.status(400).json({ error: "Conversation not found." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Aha isn't available right now." });
+    const { data: part } = await admin.from("conversation_participants").select("role").eq("conversation_id", conversationId).eq("user_id", userId).maybeSingle();
+    if (part?.role !== "operator") return res.status(403).json({ error: "Only the host of this conversation can use this." });
+    try {
+      res.json(await suggestInboxReply(admin, conversationId));
+    } catch (err) {
+      console.error("[inbox-ai-suggest]", err);
+      res.status(500).json({ error: "Aha couldn't draft a reply. Please try again." });
     }
   });
 

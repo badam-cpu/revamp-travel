@@ -12,8 +12,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { listConversations, getMessages, markConversationRead, type InboxConversation, type InboxMessage } from "@/lib/messaging";
 import { listTemplates, type MessageTemplate } from "@/lib/templates";
-import { sendInboxMessage, moderateInbox } from "@/lib/api";
-import { FileText } from "lucide-react";
+import { ahaSuggestReply, sendInboxMessage, moderateInbox, userMessage } from "@/lib/api";
+import { FileText, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 
@@ -25,7 +25,7 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-export function Inbox({ userId, admin = false }: { userId: string; admin?: boolean }) {
+export function Inbox({ userId, admin = false, host = false }: { userId: string; admin?: boolean; host?: boolean }) {
   const [convos, setConvos] = useState<InboxConversation[] | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<InboxMessage[]>([]);
@@ -51,6 +51,7 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
   const [sending, setSending] = useState(false);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [tplOpen, setTplOpen] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   // Phones show the list OR the conversation; switching scrolls the inbox back
   // into view (otherwise opening thread #15 can land the page below it).
@@ -143,6 +144,23 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
       toast(err instanceof Error ? err.message : "Couldn't send your message.");
     } finally {
       setSending(false);
+    }
+  };
+
+  // Aha drafts a reply from the listing's details + FAQ into the box — the host edits and sends it.
+  const suggest = async () => {
+    if (!activeId || suggesting) return;
+    setSuggesting(true);
+    try {
+      const r = await ahaSuggestReply(activeId);
+      if (r.reply) {
+        setDraft((d) => (d.trim() ? `${d}\n${r.reply}` : (r.reply as string)));
+        toast("Aha drafted a reply — check it, then send.");
+      } else toast(r.reason || "This one needs you — Aha couldn't answer it from your listing.");
+    } catch (e) {
+      toast(userMessage(e, "Aha couldn't draft a reply right now. Please try again."));
+    } finally {
+      setSuggesting(false);
     }
   };
 
@@ -264,6 +282,11 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
                     >
                       {admin && <p className="mb-0.5 text-[10px] font-bold uppercase tracking-wide opacity-60">{m.senderRole}</p>}
                       <p className={cn("whitespace-pre-wrap [overflow-wrap:anywhere]", m.redacted && "italic opacity-70")}>{m.body}</p>
+                      {m.ai && (
+                        <p className={cn("mt-1 flex items-center gap-1 text-[11px] font-semibold", mine ? "text-white/80" : "text-apricot")}>
+                          <Sparkles className="h-3 w-3" aria-hidden /> Answered automatically by Aha from the listing details
+                        </p>
+                      )}
                       {admin && originals.get(m.id) && (
                         <p className="mt-1.5 border-t border-amber-500/30 pt-1.5 text-xs leading-snug text-amber-700">
                           <span className="font-semibold">As typed (only admins see this):</span> <span className="whitespace-pre-wrap break-words">{originals.get(m.id)}</span>
@@ -294,9 +317,15 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
                   Phone numbers, emails and links are shared once a booking is confirmed — until then they're hidden. Keep bookings & payments on Revamp.
                 </p>
               )}
-              {templates.length > 0 && (
-                <div className="relative mb-1.5">
-                  <button type="button" aria-expanded={tplOpen} onClick={() => setTplOpen((o) => !o)} className="-ml-2 inline-flex h-10 items-center gap-1.5 px-2 text-xs font-semibold text-apricot hover:underline">
+              {(templates.length > 0 || (host && active.kind !== "support")) && (
+                <div className="relative mb-1.5 flex flex-wrap items-center gap-x-3">
+                  {host && active.kind !== "support" && (
+                    <button type="button" onClick={suggest} disabled={suggesting} className="-ml-2 inline-flex h-10 items-center gap-1.5 px-2 text-xs font-semibold text-apricot hover:underline disabled:opacity-60">
+                      {suggesting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} Suggest a reply
+                    </button>
+                  )}
+                  {templates.length > 0 && (<>
+                  <button type="button" aria-expanded={tplOpen} onClick={() => setTplOpen((o) => !o)} className={cn("inline-flex h-10 items-center gap-1.5 px-2 text-xs font-semibold text-apricot hover:underline", !(host && active.kind !== "support") && "-ml-2")}>
                     <FileText className="h-3.5 w-3.5" /> Templates
                   </button>
                   {/* Tap anywhere else to close. */}
@@ -316,6 +345,7 @@ export function Inbox({ userId, admin = false }: { userId: string; admin?: boole
                       ))}
                     </div>
                   )}
+                  </>)}
                 </div>
               )}
               <div className="flex items-end gap-2">

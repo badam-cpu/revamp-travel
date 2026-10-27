@@ -51,3 +51,20 @@ export async function setAutoReply(operatorId: string, s: AutoReplySettings): Pr
   const { error } = await supabase.from("profiles").update({ auto_reply_enabled: s.enabled, auto_reply_message: s.message.trim() || null }).eq("id", operatorId);
   if (error) throw new Error(error.message);
 }
+
+/** Aha automatic answers (0119): off by default; delay = how long a guest waits before Aha answers. */
+export interface AiReplySettings {
+  auto: boolean;
+  delayMinutes: number;
+}
+
+export async function getAiReply(operatorId: string): Promise<AiReplySettings | null> {
+  const { data, error } = await supabase.from("profiles").select("ai_reply_auto, ai_reply_delay_minutes").eq("id", operatorId).maybeSingle();
+  if (error) return null; // before 0119
+  return { auto: !!data?.ai_reply_auto, delayMinutes: Number(data?.ai_reply_delay_minutes) || 15 };
+}
+
+export async function setAiReply(operatorId: string, s: AiReplySettings): Promise<void> {
+  const { error } = await supabase.from("profiles").update({ ai_reply_auto: s.auto, ai_reply_delay_minutes: s.delayMinutes }).eq("id", operatorId);
+  if (error) throw new Error(error.message);
+}
