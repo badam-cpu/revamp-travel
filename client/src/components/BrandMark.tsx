@@ -49,7 +49,7 @@ export function BrandMark({ light = false, compact = false }: { light?: boolean;
   const label = site === "stay" ? "Revamp Stay home" : "Revamp home";
   if (compact) {
     return (
-      <Link href="/" aria-label={label} className="inline-flex">
+      <Link href="/" aria-label={label} className="inline-flex rounded-[12px] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-apricot">
         <BrandIcon light={light} />
       </Link>
     );
@@ -59,7 +59,7 @@ export function BrandMark({ light = false, compact = false }: { light?: boolean;
   // designer supplies an official revampstay lockup.
   if (site === "stay") {
     return (
-      <Link href="/" className="inline-flex items-center py-2" aria-label={label}>
+      <Link href="/" className="inline-flex items-center rounded-[10px] py-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-apricot" aria-label={label}>
         <span className={cn("brand-wordmark text-[1.85rem] font-medium leading-none tracking-[-0.07em]", light ? "text-white" : "text-[#212121]")}>
           revamp<span className="text-[#F15822]">stay.</span>
         </span>
@@ -67,9 +67,11 @@ export function BrandMark({ light = false, compact = false }: { light?: boolean;
     );
   }
 
+  // The wordmark's box includes the "p" descender, so centring the box sets the
+  // letters ~3px high next to the nav text; the nudge lines their middle up.
   return (
-    <Link href="/" className="inline-flex items-center py-2" aria-label={label}>
-      <Wordmark title={null} className={cn("h-[1.55rem]", light ? "text-white" : "text-[#F15822]")} />
+    <Link href="/" className="inline-flex items-center rounded-[10px] py-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-apricot" aria-label={label}>
+      <Wordmark title={null} className={cn("h-[1.55rem] translate-y-[3px]", light ? "text-white" : "text-[#F15822]")} />
     </Link>
   );
 }

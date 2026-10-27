@@ -36,11 +36,11 @@ export const LOGO_EMAIL_RATIO = WORDMARK_RATIO;
 /** `<img>` of the wordmark for email HTML (height in px). */
 export function wordmarkImg(height = 24, white = false): string {
   const w = Math.round(height * WORDMARK_RATIO);
-  return `<img src="${white ? LOGO_EMAIL_PNG_WHITE : LOGO_EMAIL_PNG}" width="${w}" height="${height}" alt="revamp." style="display:block;border:0;outline:none;text-decoration:none;height:${height}px;width:${w}px;">`;
+  return `<img src="${white ? LOGO_EMAIL_PNG_WHITE : LOGO_EMAIL_PNG}" width="${w}" height="${height}" alt="Revamp Vacations" style="display:block;border:0;outline:none;text-decoration:none;height:${height}px;width:${w}px;">`;
 }
 
 /** Inline SVG markup of the wordmark (server-rendered HTML pages). */
 export function wordmarkSvg(color = "#F15822", height = 26): string {
   const w = Math.round(height * WORDMARK_RATIO * 100) / 100;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${WORDMARK_VIEWBOX}" width="${w}" height="${height}" role="img" aria-label="revamp."><path fill="${color}" d="${WORDMARK_PATH}"/></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${WORDMARK_VIEWBOX}" width="${w}" height="${height}" role="img" aria-label="Revamp Vacations"><path fill="${color}" d="${WORDMARK_PATH}"/></svg>`;
 }
