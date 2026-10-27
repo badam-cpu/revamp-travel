@@ -329,8 +329,11 @@ function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }
   }
 
   return (
-    // Fills the Aha AI panel so the footer note sits at the bottom, not mid-panel.
-    <div className="flex h-full flex-col gap-5">
+    // Same panel size as Chat / Plan a trip: the call sits centred in it (my-auto —
+    // still scrolls from the top when search cards make it taller) and the note
+    // stays at the bottom.
+    <div className="flex min-h-full flex-col gap-5">
+      <div className="my-auto grid gap-5">
       <div className="grid place-items-center py-2">
         <div
           aria-hidden
@@ -386,8 +389,9 @@ function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }
       )}
       {problem && <p className="rounded-none border border-apricot/30 bg-apricot/[0.05] p-3 text-sm leading-6 text-basalt/80">{problem}</p>}
       {DEBUG && debug.length > 0 && <pre className="max-h-40 overflow-auto whitespace-pre-wrap bg-chalk p-2 text-[11px] leading-4 text-basalt/70">{debug.join("\n")}</pre>}
+      </div>
 
-      <p className="mt-auto text-xs leading-5 text-basalt/50">
+      <p className="text-xs leading-5 text-basalt/50">
         You always book and pay yourself.{" "}
         <Link href="/privacy" className="underline underline-offset-2">Privacy Policy</Link>
       </p>

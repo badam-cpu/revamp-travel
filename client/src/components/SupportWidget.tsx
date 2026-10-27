@@ -227,7 +227,7 @@ export function SupportWidget() {
       {/* Panel */}
       {open && (
         // z-[110]: above the photo viewer (z-100) so Aha's controls stay reachable while it shows a photo.
-        <div className={cn("fixed bottom-4 right-4 z-[110] flex w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-basalt/10 bg-paper shadow-[0_24px_70px_rgba(35,35,33,0.28)]", compact ? "" : mode === "chat" ? "h-[min(600px,82dvh)]" : "max-h-[min(640px,86dvh)]")}>
+        <div className={cn("fixed bottom-4 right-4 z-[110] flex w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-basalt/10 bg-paper shadow-[0_24px_70px_rgba(35,35,33,0.28)]", compact ? "" : "h-[min(600px,82dvh)]")}>
           <div className="flex items-center justify-between gap-2 bg-basalt px-4 py-3 text-white">
             <div className="min-w-0">
               <p className="flex items-center gap-1.5 text-sm font-bold"><Sparkles className="h-3.5 w-3.5 text-apricot" /> Aha AI</p>
