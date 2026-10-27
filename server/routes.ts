@@ -39,7 +39,7 @@ import { syncListingSessions, reserveSeats, releaseSeats } from "./sessions.js";
 import { generateListingCopy, generateJourneyTemplate, ahaCopyConfigured } from "./ahaCopy.js";
 import { draftVerifiedFaq } from "./listingFaqAuto.js";
 import { inboxAiConfigured, suggestInboxReply } from "./inboxAi.js";
-import { voiceContext, voiceQuote, voiceSearch, homePrompt, MAX_CALL_SECONDS } from "./voice.js";
+import { voiceContext, voiceQuote, voiceSearch, homePrompt, listingPrompt, MAX_CALL_SECONDS } from "./voice.js";
 import { cleanFaq } from "../shared/listingFaq.js";
 import { scanTextFixes, suggestTextFix, applyTextFixes } from "./textFixes.js";
 import { generateSupportReply, type SupportTurn } from "./support.js";
@@ -3446,7 +3446,7 @@ export function registerApiRoutes(app: Express) {
     res.json({
       ...(signedUrl ? { signedUrl } : { agentId }),
       maxSeconds: MAX_CALL_SECONDS,
-      ...(ctx ? { title: ctx.title, context: ctx.context } : { prompt: homePrompt(lang) }),
+      ...(ctx ? { title: ctx.title, context: ctx.context, prompt: listingPrompt(lang, ctx.title, ctx.context) } : { prompt: homePrompt(lang) }),
     });
   });
 
