@@ -118,7 +118,7 @@ How to help:
 ### Budget (2026-10-27 — keep voice under about $20 a month on top of the plan)
 - Every call is counted by the website first (migration `0121`, `claim_voice_call`):
   at most **90 calls a month** and **8 a day** (Netlify env `VOICE_MONTHLY_CALLS` /
-  `VOICE_DAILY_CALLS` change them) and 6 per visitor per hour. With 4-minute calls the
+  `VOICE_DAILY_CALLS` change them); signed-in team accounts are never counted. With 4-minute calls the
   worst case is ~360 minutes a month.
 - Optional, stronger: Agent → Security → **Enable authentication**, and put an
   ElevenLabs API key in Netlify as `ELEVENLABS_API_KEY` (a secret). The website then

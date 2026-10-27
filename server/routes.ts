@@ -3391,7 +3391,6 @@ export function registerApiRoutes(app: Express) {
    * agent then refuses calls that didn't come through here), else the public
    * agent id; plus the listing context, or the homepage prompt.
    */
-  const voiceSessionHits = new Map<string, number[]>();
   app.post("/api/voice/session", async (req: Request, res: Response) => {
     const scope = req.body?.scope === "home" ? "home" : "listing";
     const slug = String(req.body?.slug ?? "");
@@ -3401,11 +3400,12 @@ export function registerApiRoutes(app: Express) {
     const client = publicClient();
     if (!agentId || !client) return res.status(503).json({ error: "unavailable" });
     // Team testing (signed-in operators/admins) never uses up guests' daily calls.
+    // No per-visitor limit (user, 2026-10-27: that message should never show) —
+    // the daily + monthly caps below are what protect the budget.
     const bearer = (req.get("authorization") || "").replace(/^Bearer /, "");
     const callerId = bearer ? await verifyUser(bearer) : null;
     const { data: caller } = callerId && supabaseAdmin() ? await supabaseAdmin()!.from("profiles").select("role").eq("id", callerId).maybeSingle() : { data: null };
     const team = caller?.role === "admin" || caller?.role === "operator";
-    if (!team && rateLimited(voiceSessionHits, req.ip || "?", 6, 3_600_000)) return res.status(429).json({ error: "visitor_limit" });
 
     const ctx = scope === "listing" ? await voiceContext(client, slug, supabaseAdmin()) : null;
     if (scope === "listing" && !ctx) return res.status(404).json({ error: "Listing not found." });

@@ -49,10 +49,6 @@ const LIMIT_MSG: Record<string, Record<VoiceScope, string>> = {
     listing: "Aha isn't taking calls right now. Please ask the host in writing.",
     home: "Aha isn't taking calls right now. Please use the search box above.",
   },
-  visitor_limit: {
-    listing: "You've started a few calls in a row — please wait a little before trying again.",
-    home: "You've started a few calls in a row — please wait a little before trying again.",
-  },
 };
 
 interface VoiceCard {
@@ -331,10 +327,7 @@ function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }
       {DEBUG && debug.length > 0 && <pre className="max-h-40 overflow-auto whitespace-pre-wrap bg-chalk p-2 text-[11px] leading-4 text-basalt/70">{debug.join("\n")}</pre>}
 
       <p className="text-xs leading-5 text-basalt/50">
-        {scope === "home"
-          ? "Aha is an AI voice assistant. It searches Revamp's real listings and shows them here — you choose, book and pay yourself."
-          : "Aha is an AI voice assistant. It answers from this listing's details, checks your dates, shows photos and can fill in the booking form — you book and pay yourself on this page."}{" "}
-        Calls last up to {Math.round(maxSeconds.current / 60)} minutes. Your voice is processed by our voice provider to reply.{" "}
+        Aha is an AI assistant. You always book yourself.{" "}
         <Link href="/privacy" className="underline underline-offset-2">Privacy</Link>
       </p>
     </div>
