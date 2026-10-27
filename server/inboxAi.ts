@@ -18,7 +18,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { cleanFaq } from "../shared/listingFaq.js";
 import { listingFaqFacts } from "./listingFaqAuto.js";
 import { contactsAllowed, maskContacts } from "./messaging.js";
-import { sendNewMessage } from "./email.js";
+import { sendAhaAnswered, sendNewMessage } from "./email.js";
 
 let client: Anthropic | null | undefined;
 function getClient(): Anthropic | null {
@@ -205,11 +205,26 @@ export async function runInboxAutoReplies(
         out.answered++;
         // Let the guest know, like a host reply.
         const { data: parts } = await admin.from("conversation_participants").select("user_id, role, muted").eq("conversation_id", c.id).eq("role", "traveler");
+        let guestName = "a guest";
         for (const p of (parts ?? []) as Row[]) {
+          const { data: prof } = await admin.from("profiles").select("display_name").eq("id", p.user_id).maybeSingle();
+          if (prof?.display_name) guestName = String(prof.display_name).split(" ")[0];
           if (p.muted) continue;
           const { data: u } = await admin.auth.admin.getUserById(p.user_id);
           const to = u?.user?.email || c.guest_email || null;
           if (to) await sendNewMessage(to, { fromName: String(c.op.business_name || c.op.display_name || "Your host"), listingTitle: c.listings?.title, snippet: body.length > 140 ? `${body.slice(0, 140)}…` : body, recipientRole: "traveler" });
+        }
+        // And tell the host what Aha said — Telegram if linked, otherwise email.
+        try {
+          const question = ctx!.messages.filter((m) => m.role === "Guest").slice(-1)[0]?.body ?? "";
+          const note = { operatorId: c.op.id, guestName, listingTitle: c.listings?.title, question, answer: body };
+          const { alertOperatorAhaAnswered } = await import("./telegramBot.js");
+          if (!(await alertOperatorAhaAnswered(admin, note))) {
+            const { data: hu } = await admin.auth.admin.getUserById(c.op.id);
+            if (hu?.user?.email) await sendAhaAnswered(hu.user.email, note);
+          }
+        } catch (notifyErr) {
+          console.error("[inbox-ai] host notice", notifyErr);
         }
       } catch (err) {
         console.error("[inbox-ai] reply", c.id, err);

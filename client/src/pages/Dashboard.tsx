@@ -91,6 +91,7 @@ import { QrManager } from "@/components/QrManager";
 import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
 import { OperatorResponseStat } from "@/components/OperatorResponseStat";
 import { MessageTemplatesSettings } from "@/components/MessageTemplatesSettings";
+import { AhaInvite } from "@/components/AhaInvite";
 import { OperatorSettings } from "@/components/OperatorSettings";
 import { PageHeader, SubHeader } from "@/components/PageHeader";
 import { EventInsights } from "@/components/EventInsights";
@@ -2409,6 +2410,7 @@ function DashboardContent() {
               <div>
                 <SectionHead title={firstName ? `Hi ${firstName}.` : "Welcome."} sub="Your listings, bookings, and payouts — all in one place." />
                 {offlineBanner}
+                {user && <AhaInvite userId={user.id} onLearnMore={() => go("messages")} />}
                 {/* Three across on phones too — stacked they filled the first screen. */}
                 <div className="grid grid-cols-3 gap-2 sm:gap-3">
                   <StatTile n={mine.length} label="Listings" />

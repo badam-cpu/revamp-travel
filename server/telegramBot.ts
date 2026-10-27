@@ -138,6 +138,32 @@ async function chatOf(admin: SupabaseClient, userId: string): Promise<string | n
 
 // ── Operator alerts ─────────────────────────────────────────────────────────
 
+/** Aha answered a guest for this host (0119) — so the host stays in the loop. */
+export async function alertOperatorAhaAnswered(
+  admin: SupabaseClient,
+  opts: { operatorId: string; guestName: string; listingTitle?: string; question: string; answer: string },
+): Promise<boolean> {
+  try {
+    if (!process.env.TELEGRAM_BOT_TOKEN) return false;
+    const chat = await chatOf(admin, opts.operatorId);
+    if (!chat) return false;
+    const clip = (t: string, n: number) => (t.length > n ? `${t.slice(0, n)}…` : t);
+    await sendTelegram(
+      chat,
+      [
+        `✨ <b>Aha answered ${esc(opts.guestName)}</b>${opts.listingTitle ? ` — ${esc(opts.listingTitle)}` : ""}`,
+        `💬 ${esc(clip(opts.question, 300))}`,
+        `↪️ ${esc(clip(opts.answer, 500))}`,
+      ].join("\n"),
+      { html: true, keyboard: [[{ text: "Open conversation", url: `${SITE()}/dashboard?section=messages` }]] },
+    );
+    return true;
+  } catch (err) {
+    console.error("[telegram] aha alert", err);
+    return false;
+  }
+}
+
 function requestMessage(b: BookingView, status?: string): string {
   return [
     `🙋 <b>New request to book</b> — ${esc(b.listing.title)}`,
