@@ -21,6 +21,7 @@ import { useLocation } from "wouter";
 import { ChevronUp, Loader2, MessageCircle, Mic, Route, Send, Sparkles, X } from "lucide-react";
 import { useListings } from "@/contexts/ListingsContext";
 import { onAhaOpen, type AhaMode } from "@/lib/ahaPanel";
+import { useVoiceAvailable } from "@/lib/voiceStatus";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { renderMarkdown } from "@shared/markdown";
@@ -47,6 +48,9 @@ export function SupportWidget() {
   const [talkMounted, setTalkMounted] = useState(false);
   const [compact, setCompact] = useState(false);
   const { pageListings } = useListings();
+  // No voice budget left → the Talk tab isn't offered (a call already running stays).
+  const voiceOk = useVoiceAvailable();
+  const talkOn = VOICE && (voiceOk || talkMounted);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -104,13 +108,16 @@ export function SupportWidget() {
   };
   // "Talk to Aha" buttons elsewhere open this panel (lib/ahaPanel.ts).
   useEffect(() => onAhaOpen((m) => {
-    if (hidden || (m === "talk" && !VOICE)) return false;
+    if (hidden || (m === "talk" && !talkOn)) return false;
     show(m);
     return true;
-  }), [hidden]);
+  }), [hidden, talkOn]);
   // Talk is about the listing on a stay / tour / experience page, a search anywhere else.
   const slugOnPage = location.match(/^\/listing\/([^/?#]+)/)?.[1];
   const voiceListing = slugOnPage ? pageListings.find((l) => l.slug === slugOnPage && ["stay", "tour", "experience"].includes(l.type)) : undefined;
+  useEffect(() => {
+    if (mode === "talk" && !talkOn) setMode("chat");
+  }, [mode, talkOn]);
   const close = () => {
     setOpen(false);
     setCompact(false);
@@ -239,10 +246,10 @@ export function SupportWidget() {
           </div>
 
           {!compact && (
-            <div role="tablist" aria-label="Ways to use Aha AI" className="grid grid-cols-3 gap-1 border-b border-basalt/10 p-1.5">
+            <div role="tablist" aria-label="Ways to use Aha AI" className={cn("grid gap-1 border-b border-basalt/10 p-1.5", talkOn ? "grid-cols-3" : "grid-cols-2")}>
               {([
                 ["chat", "Chat", MessageCircle],
-                ...(VOICE ? [["talk", "Talk", Mic] as const] : []),
+                ...(talkOn ? [["talk", "Talk", Mic] as const] : []),
                 ["plan", "Plan a trip", Route],
               ] as const).map(([m, label, Icon]) => (
                 <button

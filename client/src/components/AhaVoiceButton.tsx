@@ -16,12 +16,14 @@ import { createPortal } from "react-dom";
 import { ChevronDown, ChevronUp, Loader2, Mic, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { openAha } from "@/lib/ahaPanel";
+import { useVoiceAvailable } from "@/lib/voiceStatus";
 
 const AhaVoiceCall = lazy(() => import("@/components/AhaVoiceCall"));
 const ENABLED = !!import.meta.env.VITE_ELEVENLABS_AGENT_ID;
 
 export function AhaVoiceButton({ listing }: { listing: { slug: string; title: string; type: string } }) {
-  if (!ENABLED || !["stay", "tour", "experience"].includes(listing.type)) return null;
+  const voiceOk = useVoiceAvailable();
+  if (!ENABLED || !voiceOk || !["stay", "tour", "experience"].includes(listing.type)) return null;
   return (
     <VoicePanel subtitle={`${listing.title} · English or Russian`} slug={listing.slug}>
       {(open) => (
@@ -39,7 +41,8 @@ export function AhaVoiceButton({ listing }: { listing: { slug: string; title: st
 
 /** Homepage: "Tell Aha what you're looking for" — voice search with result cards. */
 export function AhaVoiceSearchButton({ className }: { className?: string }) {
-  if (!ENABLED) return null;
+  const voiceOk = useVoiceAvailable();
+  if (!ENABLED || !voiceOk) return null;
   return (
     <VoicePanel subtitle="AI voice search · English or Russian">
       {(open) => (

@@ -3,6 +3,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { AlertTriangle, ArrowRight, Compass, MessageCircle, Mic, Route, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { openAha } from "@/lib/ahaPanel";
+import { useVoiceAvailable } from "@/lib/voiceStatus";
 import { Link, useSearch } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -31,6 +32,7 @@ export default function Plan() {
   const [interests, setInterests] = useState<string[]>(["History & monasteries", "Nature & hiking"]);
 
   const search = useSearch();
+  const voiceOk = useVoiceAvailable();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
@@ -108,7 +110,7 @@ export default function Plan() {
             panel (SupportWidget, via openAha); the form is below. */}
         <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            { icon: Mic, title: "Talk to Aha AI", text: "Say how many days you have and what you love. Aha AI plans it and opens it here.", action: "Start talking", onClick: () => openOrNote("talk"), show: VOICE },
+            { icon: Mic, title: "Talk to Aha AI", text: "Say how many days you have and what you love. Aha AI plans it and opens it here.", action: "Start talking", onClick: () => openOrNote("talk"), show: VOICE && voiceOk },
             { icon: MessageCircle, title: "Chat with Aha AI", text: "Ask about places, seasons, getting around or booking, in your own words.", action: "Open chat", onClick: () => openOrNote("chat"), show: true },
             { icon: Route, title: "Fill in a few details", text: "Days, starting town, pace, budget and interests — then one tap.", action: "Use the form", onClick: () => document.getElementById("plan-form")?.scrollIntoView({ behavior: "smooth", block: "start" }), show: true },
             { icon: Compass, title: "In ChatGPT or Claude", text: "Connect Revamp to the assistant you already use and plan there.", action: "How it works", href: "/ai", show: true },

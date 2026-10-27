@@ -3450,6 +3450,34 @@ export function registerApiRoutes(app: Express) {
     });
   });
 
+  // GET /api/voice/status — is there voice budget left today/this month? The site
+  // hides its voice entry points when there isn't, so guests never meet a
+  // refusal (user, 2026-10-27). Counts only; cached a minute per warm function.
+  let voiceStatusCache: { at: number; available: boolean } | null = null;
+  app.get("/api/voice/status", async (req: Request, res: Response) => {
+    res.set("Cache-Control", "no-store");
+    const bearer = (req.get("authorization") || "").replace(/^Bearer /, "");
+    if (bearer) {
+      const uid = await verifyUser(bearer);
+      const { data: me } = uid && supabaseAdmin() ? await supabaseAdmin()!.from("profiles").select("role").eq("id", uid).maybeSingle() : { data: null };
+      if (me?.role === "admin" || me?.role === "operator") return res.json({ available: true });
+    }
+    if (voiceStatusCache && Date.now() - voiceStatusCache.at < 60_000) return res.json({ available: voiceStatusCache.available });
+    const admin = supabaseAdmin();
+    let available = true;
+    if (admin) {
+      const day = new Date(Date.now() + 4 * 3_600_000).toISOString().slice(0, 10);
+      const { data, error } = await admin.from("voice_call_days").select("day, calls").gte("day", `${day.slice(0, 7)}-01`).lte("day", day);
+      if (!error && data) {
+        const month = data.reduce((n, r) => n + (r.calls ?? 0), 0);
+        const today = data.filter((r) => r.day === day).reduce((n, r) => n + (r.calls ?? 0), 0);
+        available = today < (Number(process.env.VOICE_DAILY_CALLS) || 8) && month < (Number(process.env.VOICE_MONTHLY_CALLS) || 90);
+      }
+    }
+    voiceStatusCache = { at: Date.now(), available };
+    res.json({ available });
+  });
+
   // The homepage agent's `search_places` client tool (called from the browser).
   app.post("/api/voice/search", async (req: Request, res: Response) => {
     if (rateLimited(voiceHits, `s:${req.ip || "?"}`, 20)) return res.status(429).json({ say: "Too many searches right now — please try again in a minute.", cards: [] });

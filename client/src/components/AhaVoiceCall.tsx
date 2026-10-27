@@ -23,6 +23,7 @@ import { isoDay, requestAhaFill, requestAhaPhoto } from "@/lib/ahaBooking";
 import { imgAttrs } from "@/lib/responsiveImg";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
+import { markVoiceUnavailable } from "@/lib/voiceStatus";
 
 const AGENT_ID = import.meta.env.VITE_ELEVENLABS_AGENT_ID as string | undefined;
 
@@ -40,15 +41,11 @@ const FIRST: Record<VoiceScope, Record<Lang, string>> = {
   },
 };
 /** What the budget refusals mean for the visitor (POST /api/voice/session → 429). */
-const LIMIT_MSG: Record<string, Record<VoiceScope, string>> = {
-  day_limit: {
-    listing: "Aha AI has taken all the calls it can for today. Please ask the host in writing, or try again tomorrow.",
-    home: "Aha AI has taken all the calls it can for today. Please use the search box above, or try again tomorrow.",
-  },
-  month_limit: {
-    listing: "Aha AI isn't taking calls right now. Please ask the host in writing.",
-    home: "Aha AI isn't taking calls right now. Please use the search box above.",
-  },
+// If the budget runs out between the page check and this tap: a warm note instead
+// of a refusal (the voice buttons hide themselves from then on — lib/voiceStatus).
+const LIMIT_MSG: Record<VoiceScope, string> = {
+  listing: "Aha AI's voice is taking a short break. You can still chat with Aha AI — tap Chat above — or ask the host a question.",
+  home: "Aha AI's voice is taking a short break. You can still chat with Aha AI — just tap Chat above.",
 };
 
 interface VoiceCard {
@@ -170,8 +167,9 @@ function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }
       const token = (await supabase.auth.getSession()).data.session?.access_token;
       const r = await fetch("/api/voice/session", { method: "POST", headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ scope, slug, lang }) });
       const ctx = (await r.json().catch(() => ({}))) as { error?: string; agentId?: string; signedUrl?: string; maxSeconds?: number; title?: string; context?: string; prompt?: string };
-      if (r.status === 429 && ctx.error && LIMIT_MSG[ctx.error]) {
-        setProblem(LIMIT_MSG[ctx.error][scope]);
+      if (r.status === 429) {
+        markVoiceUnavailable();
+        setProblem(LIMIT_MSG[scope]);
         setStarting(false);
         return;
       }
