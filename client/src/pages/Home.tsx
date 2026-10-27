@@ -32,7 +32,7 @@ const categories = [
   { type: "stay", number: "01", name: "Stay", title: "Stay with a sense of place", label: "Homes, cabins & small hotels", image: brandAssets.categories.stay },
   { type: "eat", number: "02", name: "Eat", title: "Taste the landscape", label: "Tables, cellars & courtyards", image: brandAssets.categories.eat },
   { type: "tour", number: "03", name: "Tour", title: "Go with someone local", label: "Walks, routes & field days", image: brandAssets.categories.tour },
-  { type: "experience", number: "04", name: "Experience", title: "Make something with your hands", label: "Classes, crafts & tastings", image: brandAssets.categories.experience },
+  { type: "experience", number: "04", name: "Experience", title: "Learn from the makers", label: "Classes, crafts & tastings", image: brandAssets.categories.experience },
 ];
 
 export default function Home() {

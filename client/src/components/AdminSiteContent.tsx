@@ -28,7 +28,7 @@ const HOME_CATS = [
   { type: "stay", name: "Stay", title: "Stay with a sense of place", label: "Homes, cabins & small hotels" },
   { type: "eat", name: "Eat", title: "Taste the landscape", label: "Tables, cellars & courtyards" },
   { type: "tour", name: "Tour", title: "Go with someone local", label: "Walks, routes & field days" },
-  { type: "experience", name: "Experience", title: "Make something with your hands", label: "Classes, crafts & tastings" },
+  { type: "experience", name: "Experience", title: "Learn from the makers", label: "Classes, crafts & tastings" },
 ];
 
 const HOME_REGIONS = [
