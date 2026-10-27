@@ -273,6 +273,8 @@ export interface Listing {
   coverFocus?: string;
   /** Optional photo captions (0117), keyed by photo URL. See photoCaption(). */
   photoCaptions?: Record<string, string>;
+  /** Guest FAQ (0118): the host's approved questions and answers — see shared/listingFaq.ts. */
+  faq?: { q: string; a: string }[];
   /** Short intro/hero video (stay/tour/experience): an uploaded MP4/WebM public
    * URL, or a YouTube/Vimeo link. Detected + rendered by client/src/lib/video.ts. */
   videoUrl?: string;

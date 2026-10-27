@@ -12,6 +12,7 @@
  * brand's non-negotiable rules forbid fabricating any of that, so the
  * quick-facts row and "what's included" list carry the weight instead.
  */
+import { ListingFaq } from "@/components/ListingFaq";
 import { photoCaption } from "@shared/listings";
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, ArrowLeft, Backpack, Ban, Check, Clock, Gauge, Info, MapPin, Share2, Bookmark, Sparkles, Users, X } from "lucide-react";
@@ -295,6 +296,8 @@ export function TourDetail({ listing }: { listing: Listing }) {
               </div>
             </div>
           )}
+
+          <ListingFaq items={listing.faq} className="mt-10 scroll-mt-24" />
 
           <div className="mt-10 border-t border-basalt/10 pt-8">
             <p className="eyebrow">Starting point</p>

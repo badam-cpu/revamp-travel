@@ -25,7 +25,7 @@ import { PriceLog } from "@/components/PriceLog";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, CalendarCheck, CalendarClock, CalendarDays, Check, ChevronDown, ChevronLeft, ExternalLink, MoreHorizontal, PauseCircle, PlayCircle, Copy, CreditCard, FileText, Footprints, Gift, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, PanelLeftClose, PanelLeftOpen, Pencil, Plug, Plus, QrCode, RefreshCw, Route, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, MessageCircleQuestion, CalendarCheck, CalendarClock, CalendarDays, Check, ChevronDown, ChevronLeft, ExternalLink, MoreHorizontal, PauseCircle, PlayCircle, Copy, CreditCard, FileText, Footprints, Gift, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, PanelLeftClose, PanelLeftOpen, Pencil, Plug, Plus, QrCode, RefreshCw, Route, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
 import { Inbox } from "@/components/Inbox";
 import { PartnerHub } from "@/components/PartnerHub";
 import { OperatorIntegrations } from "@/components/OperatorIntegrations";
@@ -75,6 +75,7 @@ import { OperatorBookingsTimeline } from "@/components/OperatorBookingsTimeline"
 import { OperatorMultiCalendar } from "@/components/OperatorMultiCalendar";
 import { ListingAvailabilityDialog, quickAvailability, type AvailabilityMode } from "@/components/ListingAvailabilityDialog";
 import { TourEditor } from "@/components/TourEditor";
+import { ListingFaqEditor } from "@/components/ListingFaqEditor";
 import { autoTourAfterSave, fetchToursFor, OPEN_TOUR_EVENT, TOUR_CHANGED_EVENT } from "@/lib/tours";
 import type { ListingTour } from "@shared/tours";
 import { suspensionBlocked } from "@/components/SuspensionNotice";
@@ -1912,6 +1913,7 @@ function OperatorListingRow({ listing, onEdit, tour = null, onTourChanged }: { l
   const [open, setOpen] = useState(false);
   const [dialog, setDialog] = useState<AvailabilityMode | null>(null);
   const [tourOpen, setTourOpen] = useState(false);
+  const [faqOpen, setFaqOpen] = useState(false);
   const isStay = listing.type === "stay";
   // "Check tour" in the post-save toast opens this row's tour editor.
   useEffect(() => {
@@ -1988,6 +1990,9 @@ function OperatorListingRow({ listing, onEdit, tour = null, onTourChanged }: { l
                 <Footprints className="mr-2 h-3.5 w-3.5" /> Virtual tour{tour ? (tour.status === "live" ? " · live" : " · to check") : ""}
               </DropdownMenuItem>
             )}
+            <DropdownMenuItem onSelect={() => setFaqOpen(true)}>
+              <MessageCircleQuestion className="mr-2 h-3.5 w-3.5" /> Guest FAQ{listing.faq?.length ? ` · ${listing.faq.length}` : ""}
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => setDialog("suspend")} disabled={!active}>
               <PauseCircle className="mr-2 h-3.5 w-3.5" /> {paused ? "Change suspension" : "Suspend bookings"}
@@ -2012,6 +2017,7 @@ function OperatorListingRow({ listing, onEdit, tour = null, onTourChanged }: { l
         </DropdownMenu>
         <ListingAvailabilityDialog key={dialog ?? "closed"} listing={listing} mode={dialog} onClose={() => setDialog(null)} />
         {isStay && <TourEditor listing={{ id: listing.id, title: listing.title }} open={tourOpen} onClose={() => setTourOpen(false)} onChanged={onTourChanged} />}
+        <ListingFaqEditor listing={listing} open={faqOpen} onClose={() => setFaqOpen(false)} />
       </div>
       {listing.status === "draft" && listing.reviewNote && (
         <p className="mx-4 mb-3 max-w-xl border-l-2 border-destructive/40 pl-2 text-xs leading-5 text-basalt/70">

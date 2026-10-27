@@ -245,3 +245,51 @@ Return ONLY JSON: {"subject": "...", "body": "...", "textBody": "..."} — body 
     return {};
   }
 }
+
+export interface AhaFaqInput {
+  listingType: AhaListingType;
+  facts: string[]; // "Label: value" lines, all taken from the listing itself
+  existing: string[]; // questions the host already has — don't repeat them
+}
+
+/**
+ * Draft guest FAQ entries (0118) from the listing's own data — the questions
+ * guests usually ask before booking, answered ONLY from the facts given. A
+ * question the facts can't answer is left out, never guessed. The host edits and
+ * approves every item before anything is shown.
+ */
+export async function generateListingFaq(input: AhaFaqInput): Promise<{ q: string; a: string }[]> {
+  const anthropic = getClient();
+  if (!anthropic) return [];
+  const system = `You draft the "Questions guests ask" section for a listing on Revamp Vacations, a travel marketplace in Armenia.
+Rules:
+- Write 5 to 8 questions a guest typically asks BEFORE booking this kind of listing (${input.listingType}): getting there, parking, check-in / meeting point, what's included, who it suits (kids, pets, accessibility), rules, cancellation, what to bring.
+- Answer ONLY from the listing facts provided. If the facts don't answer a question, leave that question out — never guess, never add amenities, times, distances, prices or promises that aren't in the facts.
+- Never mention reviews, ratings, awards, "best", or contact details (phone, email, WhatsApp, Telegram) — guests contact the host through Revamp.
+- Don't quote prices (they change by date).
+- English. Questions short and natural, as a guest would ask. Answers 1–3 friendly, plain sentences, written as the host ("we", "our").
+- Don't repeat questions the host already has.
+Return ONLY JSON: {"items": [{"q": "...", "a": "..."}]}`;
+  const msg = [
+    "Listing facts:",
+    ...input.facts.map((f) => `- ${f}`),
+    input.existing.length ? `\nThe host already has these questions:\n${input.existing.map((q) => `- ${q}`).join("\n")}` : "",
+  ].join("\n");
+  try {
+    const response = await anthropic.messages.create({
+      model: process.env.SUPPORT_MODEL || "claude-haiku-4-5",
+      max_tokens: 1800,
+      system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }] as unknown as Anthropic.MessageCreateParams["system"],
+      messages: [{ role: "user", content: msg }],
+    });
+    const raw = response.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("\n");
+    const parsed = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)) as { items?: unknown };
+    return Array.isArray(parsed.items) ? (parsed.items as { q: string; a: string }[]) : [];
+  } catch (err) {
+    console.error("[aha-faq]", err);
+    return [];
+  }
+}

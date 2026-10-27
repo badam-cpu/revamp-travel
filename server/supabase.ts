@@ -11,6 +11,7 @@
  * server at all — the client talks to Supabase directly under RLS (see
  * client/src/contexts/ListingsContext.tsx).
  */
+import { cleanFaq } from "../shared/listingFaq.js";
 import type { PublicEvent } from "../shared/eventsPage.js";
 import { createClient } from "@supabase/supabase-js";
 import type { Listing, ListingType, OfferType, Furnished, SaleStatus, RoomBed, RoomType } from "../shared/listings.js";
@@ -62,6 +63,7 @@ interface CatalogRow {
   gallery: string[];
   /** 0117 — absent on older databases. */
   photo_captions?: Record<string, string> | null;
+  faq?: unknown; // 0118
   short_description: string;
   long_description: string;
   price_cents: number;
@@ -123,6 +125,7 @@ function mapCatalogRow(row: CatalogRow): PublicListing {
     image: row.image,
     gallery: row.gallery,
     photoCaptions: row.photo_captions && typeof row.photo_captions === "object" ? row.photo_captions : undefined,
+    faq: cleanFaq(row.faq),
     shortDescription: row.short_description,
     longDescription: row.long_description,
     price,

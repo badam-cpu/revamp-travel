@@ -344,6 +344,30 @@ export async function ahaListingCopy(input: AhaCopyParams): Promise<{ text?: str
   });
 }
 
+/** Aha drafts guest FAQ entries (0118) from one of the caller's listings — drafts only, nothing is saved. */
+export async function ahaListingFaq(listingId: string): Promise<{ items: { q: string; a: string }[] }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<{ items: { q: string; a: string }[] }>("/api/aha-listing-faq", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ listingId }),
+  });
+}
+
+/** Save a listing's approved guest FAQ (0118). Returns the cleaned items as stored. */
+export async function saveListingFaq(listingId: string, items: { q: string; a: string }[]): Promise<{ items: { q: string; a: string }[] }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<{ items: { q: string; a: string }[] }>("/api/listing-faq/save", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ listingId, items }),
+  });
+}
+
 /** Operator/admin approves a request-to-book slot → guest gets a pay link. */
 export async function approveBooking(bookingId: string): Promise<{ ok: boolean }> {
   const { data } = await supabase.auth.getSession();

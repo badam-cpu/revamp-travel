@@ -12,6 +12,7 @@
  * TourCard.tsx, TourDetail.tsx, ListingPage.tsx, Home.tsx) keeps working
  * without changes.
  */
+import { cleanFaq } from "@shared/listingFaq";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { Listing, ListingInput, ListingType, OfferType, Furnished, SaleStatus, RoomTypeInput } from "@shared/listings";
 import type { SessionSchedule } from "@shared/sessions";
@@ -161,6 +162,8 @@ interface ListingRow {
   cover_focus: string | null;
   /** 0117 — absent on older databases (select("*") just omits it). */
   photo_captions?: Record<string, string> | null;
+  /** 0118 — absent before that migration (rows come from select("*")). */
+  faq?: unknown;
   video_url: string | null;
   // revampstay offers (0091) — absent (undefined) on a client that selects "*"
   // before the migration runs; mapListingRow defaults every one of them.
@@ -267,6 +270,7 @@ function mapListingRow(row: ListingRow): LiveListing {
     multiRoom: row.multi_room === true,
     coverFocus: row.cover_focus ?? undefined,
     photoCaptions: row.photo_captions && typeof row.photo_captions === "object" ? row.photo_captions : undefined,
+    faq: cleanFaq(row.faq),
     videoUrl: row.video_url ?? undefined,
     // revampstay offers (0091): all null-safe — undefined pre-migration, which
     // listingOffers() reads as ["nightly"], so revampvacations is unchanged.

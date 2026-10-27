@@ -37,7 +37,8 @@ import { trackListing } from "@/lib/track";
 import { OperatorBrand } from "@/components/OperatorBrand";
 import { ExternalReviews } from "@/components/ExternalReviews";
 import { describeCancellationPolicy, nightlyPriceRange } from "@shared/bookings";
-import { buildBreadcrumbJsonLd, buildListingJsonLd } from "@shared/seo";
+import { buildBreadcrumbJsonLd, buildFaqJsonLd, buildListingJsonLd } from "@shared/seo";
+import { ListingFaq } from "@/components/ListingFaq";
 import { shareCurrentPage } from "@/lib/share";
 import { VirtualTour } from "@/components/VirtualTour";
 import { fetchTour } from "@/lib/tours";
@@ -183,6 +184,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
             { name: typeLabels[listing.type], path: listing.type === "stay" ? "/explore/stay" : listing.type === "eat" ? "/explore/eat" : listing.type === "place" ? "/explore/place" : listing.type === "experience" ? "/explore/experience" : "/explore/tour" },
             { name: listing.title, path: `/listing/${listing.slug}` },
           ]),
+          ...(listing.faq?.length ? [buildFaqJsonLd(listing.faq)] : []),
         ]
       : undefined,
   });
@@ -559,6 +561,8 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
                 </div>
               </div>
             )}
+
+            <ListingFaq items={listing.faq} className="scroll-mt-24 border-t border-basalt/10 py-10" />
 
             {!isCurated && (
               <div className="border-t border-basalt/10 py-10">

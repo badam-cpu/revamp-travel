@@ -65,6 +65,8 @@ function detail(l: PublicListing) {
     facts: Array.isArray(l.facts) && l.facts.length ? l.facts : undefined,
     maxGuests: l.maxGuests,
     branches: l.branches?.map((b) => ({ label: b.label, address: b.address })),
+    // The host's approved answers to common guest questions (0118) — answer from these.
+    faq: l.faq?.length ? l.faq : undefined,
     // The listing's own photos (up to 6) with the host's captions where set.
     photos: listingPhotos(l)
       .slice(0, 6)
@@ -220,7 +222,7 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
     "get_listing",
     {
       title: "Get a Revamp listing",
-      description: "Fetch full details for one listing by its slug (from search_listings): description, amenities, highlights, facts, capacity, the page link, and the listing's own photos (with captions) — use these photos when showing it.",
+      description: "Fetch full details for one listing by its slug (from search_listings): description, amenities, highlights, facts, capacity, the host's answers to common guest questions (faq — use them to answer questions about this listing), the page link, and the listing's own photos (with captions) — use these photos when showing it.",
       annotations: READ_ONLY,
       inputSchema: { slug: z.string().describe("The listing slug, e.g. 'forest-house-dilijan'.") },
     },

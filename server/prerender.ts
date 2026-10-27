@@ -945,6 +945,10 @@ function renderListingDetail(listing: PublicListing, catalog: PublicListing[], o
   const whatToBringHtml = listing.whatToBring?.length ? `<h2>What to bring</h2><ul>${listing.whatToBring.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
   const notSuitableForHtml = listing.notSuitableFor?.length ? `<h2>Not suitable for</h2><ul>${listing.notSuitableFor.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
   const importantInfoHtml = listing.importantInfo ? `<h2>Good to know</h2><p>${escapeHtml(listing.importantInfo)}</p>` : "";
+  // Host's approved guest FAQ (0118) — visible text + FAQPage JSON-LD below.
+  const faqHtml = listing.faq?.length
+    ? `<h2>Questions guests ask</h2><dl>${listing.faq.map((f) => `<dt>${escapeHtml(f.q)}</dt><dd>${escapeHtml(f.a)}</dd>`).join("")}</dl>`
+    : "";
   // Chains: list every branch (locations) for crawlers/AI.
   const branchesHtml = listing.branches?.length
     ? `<h2>Locations</h2><ul>${listing.branches
@@ -990,6 +994,7 @@ ${notIncludedHtml}
 ${whatToBringHtml}
 ${notSuitableForHtml}
 ${importantInfoHtml}
+${faqHtml}
 ${branchesHtml}
 ${tagsHtml}
 <a href="${origin}/explore">Back to Explore</a>
@@ -1012,6 +1017,7 @@ ${
         { name: typeLabels[listing.type], path: categoryPath },
         { name: listing.title, path: canonicalPath },
       ]),
+      ...(listing.faq?.length ? [buildFaqJsonLd(listing.faq)] : []),
     ],
     bodyHtml,
   });

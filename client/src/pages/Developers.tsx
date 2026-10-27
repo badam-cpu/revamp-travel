@@ -42,7 +42,7 @@ const REFERENCE = [
   {
     name: "get_listing",
     inputs: "slug.",
-    returns: "Everything from search plus long description, amenities, highlights, facts, maximum guests and branches.",
+    returns: "Everything from search plus long description, amenities, highlights, facts, maximum guests, branches, the listing's own photos with captions, and the host's answers to common guest questions (faq).",
     errors: "“No published listing with that slug.”",
   },
   {
