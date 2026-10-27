@@ -45,7 +45,7 @@ export function AhaVoiceSearchButton({ className }: { className?: string }) {
           className={cn("inline-flex min-h-11 items-center gap-2 rounded-full border border-basalt/15 bg-paper/90 px-4 py-2 text-sm font-semibold text-basalt backdrop-blur transition-colors hover:border-apricot hover:text-apricot", className)}
         >
           <Mic className="h-4 w-4 text-apricot" /> <span className="sm:hidden">Search by voice with Aha AI</span>
-          <span className="hidden sm:inline">Or tell Aha, our AI assistant, what you're looking for</span>
+          <span className="hidden sm:inline">Or tell Aha AI what you're looking for</span>
         </button>
       )}
     </VoicePanel>

@@ -63,6 +63,10 @@ export default function Home() {
     const t = setInterval(() => setHeroIdx((i) => (i + 1) % heroSlides.length), 6000);
     return () => clearInterval(t);
   }, [heroSlides.length, reducedMotion, heroPaused]);
+  // Hero headline (admin-editable in Site content) says plainly what Revamp is
+  // ("explore" is set in brand orange);
+  // the slogan moves in its own band below the search.
+  const heroHeadline = settings.heroHeadline?.trim() || "Places to stay, eat and explore across Armenia";
   const heroSubcopy =
     settings.heroSubcopy ||
     "Exceptional stays, Armenian tables, and local routes—carefully gathered for travelers who want to feel the country, not just pass through it.";
@@ -136,37 +140,16 @@ export default function Home() {
               className={`absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-[1200ms] ${i === heroIdx ? "opacity-100" : "opacity-0"}`}
             />
           ))}
-          <div className="hero-image-overlay absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.97)_0%,rgba(255,255,255,0.86)_34%,rgba(255,255,255,0.12)_64%,rgba(33,33,33,0.18)_100%)]" />
-          <div className="container relative z-10 flex min-h-[540px] flex-col justify-center pb-32 pt-14 sm:min-h-[600px] lg:pb-20">
-            <div className="max-w-[720px]">
-              <div className="hero-enter flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.22em] text-basalt/70"><span className="h-px w-10 bg-apricot" /> Curated across Armenia</div>
-              {/* The slogan is a fixed brand asset (never admin-editable). The
-                  brand's "re." mark sits behind "Repeat." — logo and slogan
-                  read as one lockup, and "Experience." stays clean orange. */}
-              <div className="hero-enter relative mt-6">
-                {/* Decorative mark lives outside the <h1> so the heading reads
-                    exactly "Stay. Experience. Repeat." to crawlers and screen
-                    readers. Same font-size as the h1 so its em offsets line up
-                    with the "Repeat." line. */}
-                <span aria-hidden className="pointer-events-none absolute bottom-0 left-0 select-none font-display text-[4rem] leading-[0.86] sm:text-[5.6rem] lg:text-[6.5rem]">
-                  <span className="absolute -bottom-[0.26em] -left-[0.32em] text-[2.6em] font-bold leading-none tracking-[-0.12em] text-apricot/[0.2]"><ReMark className="relative -top-[0.085em]" /></span>
-                </span>
-                <h1 className="relative font-display text-[4rem] leading-[0.86] tracking-[-0.055em] text-basalt sm:text-[5.6rem] lg:text-[6.5rem]">
-                  Stay.
-                  <br />
-                  <span className="text-apricot">Experience.</span>
-                  <br />
-                  Repeat.
-                </h1>
-              </div>
-              <p className="hero-enter mt-6 max-w-lg text-base leading-7 text-basalt/70 sm:text-lg">{heroSubcopy}</p>
-              <Link href="/explore" className="hero-enter group mt-7 inline-flex items-center gap-3 text-xs font-bold uppercase tracking-[0.17em] text-basalt hover:text-apricot focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-apricot">
-                Browse all of Armenia
-                <span className="grid h-9 w-9 place-items-center rounded-full border border-basalt/25 transition-colors group-hover:border-apricot group-hover:bg-apricot group-hover:text-white"><ArrowRight className="h-4 w-4" /></span>
-              </Link>
+          {/* Photo first: a soft charcoal fade (from the bottom and the left) keeps
+              the white headline readable without washing out the picture. */}
+          <div className="hero-image-overlay absolute inset-0 bg-[linear-gradient(180deg,rgba(33,33,33,0.18)_0%,rgba(33,33,33,0.06)_38%,rgba(33,33,33,0.58)_100%),linear-gradient(90deg,rgba(33,33,33,0.32)_0%,rgba(33,33,33,0)_55%)]" />
+          <div className="container relative z-10 flex min-h-[500px] flex-col justify-end pb-24 pt-14 sm:min-h-[580px] lg:pb-28">
+            <div className="max-w-[760px] text-white [text-shadow:0_2px_18px_rgba(15,15,15,0.35)]">
+              <div className="hero-enter flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.22em] text-white"><span className="h-px w-10 bg-apricot" /> Curated across Armenia</div>
+              <h1 className="hero-enter mt-4 max-w-[16ch] font-display text-[2.6rem] leading-[0.98] tracking-[-0.045em] sm:text-[3.6rem] lg:text-[4.4rem]">{heroHeadline.split(/(explore)/i).map((part, i) => (/^explore$/i.test(part) ? <span key={i} className="text-apricot">{part}</span> : part))}</h1>
             </div>
             {(heroCaption || heroSlides.length > 1) && (
-              <div className="absolute bottom-14 right-4 flex items-end gap-4 text-right text-white sm:right-8 lg:bottom-24">
+              <div className="absolute right-4 top-4 flex items-end gap-4 text-right text-white sm:bottom-14 sm:right-8 sm:top-auto lg:bottom-24">
                 {heroCaption && (
                   <div key={heroSlides[heroIdx]} className="hero-caption hidden items-end gap-2 lg:flex">
                     <p className="font-display text-xl leading-tight [text-shadow:0_1px_12px_rgba(0,0,0,0.35)]">{heroCaption}</p>
@@ -208,7 +191,31 @@ export default function Home() {
         <div className="container relative z-20 -mt-10" data-support-yield><SearchBar mobileCollapse /></div>
         <div className="container relative z-20 mt-3 flex justify-center"><AhaVoiceSearchButton /></div>
 
-        <section className="container py-20 lg:py-28">
+        {/* The slogan's own (compact) moment below the search — a fixed brand
+            asset, never admin-editable: stacked, "Experience." in orange. The intro
+            sits right beside it. */}
+        <section className="container pt-12 lg:pt-16">
+          <div className="grid gap-6 border-b border-basalt/10 pb-12 lg:grid-cols-[auto_minmax(0,27rem)] lg:items-end lg:justify-start lg:gap-16 lg:pb-14">
+            <div>
+              <p className="font-display text-[2.9rem] leading-[0.88] tracking-[-0.055em] text-basalt sm:text-[3.6rem] lg:text-[4.1rem]">
+                Stay.
+                <br />
+                <span className="text-apricot">Experience.</span>
+                <br />
+                Repeat.
+              </p>
+            </div>
+            <div>
+              <p className="text-base leading-7 text-basalt/70">{heroSubcopy}</p>
+              <Link href="/explore" className="group mt-5 inline-flex items-center gap-3 text-xs font-bold uppercase tracking-[0.17em] text-basalt hover:text-apricot focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-apricot">
+                Browse all of Armenia
+                <span className="grid h-9 w-9 place-items-center rounded-full border border-basalt/25 transition-colors group-hover:border-apricot group-hover:bg-apricot group-hover:text-white"><ArrowRight className="h-4 w-4" /></span>
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        <section className="container pb-20 pt-14 lg:pb-28 lg:pt-16">
           <div className="grid gap-8 lg:grid-cols-[0.7fr_1.3fr] lg:items-end">
             <div><p className="eyebrow">{categoriesEyebrow}</p><h2 className="mt-3 whitespace-pre-line font-display text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl">{categoriesTitle}</h2></div>
             <p className="max-w-xl whitespace-pre-line text-base leading-7 text-basalt/58 lg:justify-self-end">{categoriesIntro}</p>
