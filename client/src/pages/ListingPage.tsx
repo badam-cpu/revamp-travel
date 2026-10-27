@@ -40,7 +40,7 @@ import { describeCancellationPolicy, nightlyPriceRange } from "@shared/bookings"
 import { buildBreadcrumbJsonLd, buildFaqJsonLd, buildListingJsonLd } from "@shared/seo";
 import { ListingFaq } from "@/components/ListingFaq";
 import { GooglePlaceFacts } from "@/components/GooglePlaceFacts";
-import { useAhaFill } from "@/lib/ahaBooking";
+import { useAhaFill, useAhaPhoto } from "@/lib/ahaBooking";
 import { shareCurrentPage } from "@/lib/share";
 import { VirtualTour } from "@/components/VirtualTour";
 import { fetchTour } from "@/lib/tours";
@@ -135,8 +135,9 @@ function HeroCarousel({ photos, video, title, onOpen, badge, coverFocus, topRigh
             <ChevronRight className="h-5 w-5" />
           </button>
           {/* Windowed dots — up to 5 around the active one. */}
-          {/* On the video slide the dots move to the top so they don't cover the video's controls. */}
-          <div className={cn("absolute left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-basalt/25 px-2.5 py-1.5 backdrop-blur-sm", onVideo ? "top-3" : "bottom-3")}>
+          {/* On the video slide the dots move to the top so they don't cover the video's controls.
+              On phones they sit bottom-left so "Show all photos" (bottom-right) never covers them. */}
+          <div className={cn("absolute flex items-center gap-1.5 rounded-full bg-basalt/25 px-2.5 py-1.5 backdrop-blur-sm", onVideo ? "left-1/2 top-3 -translate-x-1/2" : "bottom-3 left-3 sm:left-1/2 sm:-translate-x-1/2")}>
             {slides.map((_, idx) => {
               const dist = Math.abs(idx - i);
               if (total > 5 && dist > 2) return null;
@@ -152,7 +153,7 @@ function HeroCarousel({ photos, video, title, onOpen, badge, coverFocus, topRigh
             })}
           </div>
           <button type="button" onClick={() => onOpen(photoIndex(i))} hidden={onVideo} className="absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-full border border-basalt/15 bg-paper px-4 py-2 text-xs font-semibold text-basalt shadow-md transition-colors hover:border-apricot hover:text-apricot">
-            <LayoutGrid className="h-4 w-4" /> Show all {photos.length} photos
+            <LayoutGrid className="h-4 w-4" /> <span className="hidden sm:inline">Show all</span> {photos.length} photos
           </button>
         </>
       )}
@@ -265,6 +266,17 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
       return `Done — your dates and ${guests} guest${guests === 1 ? "" : "s"} are filled in, and the rooms available for them are listed on the page. Tap a room to see it and reserve.`;
     },
     isHotel,
+  );
+  // "Show me the bathroom" — Aha opens photo N (same order as the viewer below).
+  useAhaPhoto(
+    listing?.slug ?? "",
+    (index) => {
+      const photos = listing ? Array.from(new Set([listing.image, ...(listing.gallery ?? [])].filter(Boolean))) : [];
+      if (!Number.isInteger(index) || index < 0 || index >= photos.length) return `There are ${photos.length} photos — which one would you like to see?`;
+      setLightbox(index);
+      return `Photo ${index + 1} of ${photos.length} is open on the screen.`;
+    },
+    listing?.type === "stay",
   );
 
   // Virtual tour (0109) — stays only, once the operator has published it.

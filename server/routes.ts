@@ -39,7 +39,7 @@ import { syncListingSessions, reserveSeats, releaseSeats } from "./sessions.js";
 import { generateListingCopy, generateJourneyTemplate, ahaCopyConfigured } from "./ahaCopy.js";
 import { draftVerifiedFaq } from "./listingFaqAuto.js";
 import { inboxAiConfigured, suggestInboxReply } from "./inboxAi.js";
-import { voiceContext, voiceQuote } from "./voice.js";
+import { voiceContext, voiceQuote, voiceSearch, homePrompt, MAX_CALL_SECONDS } from "./voice.js";
 import { cleanFaq } from "../shared/listingFaq.js";
 import { scanTextFixes, suggestTextFix, applyTextFixes } from "./textFixes.js";
 import { generateSupportReply, type SupportTurn } from "./support.js";
@@ -3379,9 +3379,97 @@ export function registerApiRoutes(app: Express) {
     if (rateLimited(voiceHits, `ctx:${req.ip || "?"}`, 30)) return res.status(429).json({ error: "Slow down." });
     const client = publicClient();
     if (!client) return res.status(503).json({ error: "Not available right now." });
-    const ctx = await voiceContext(client, slug);
+    const ctx = await voiceContext(client, slug, supabaseAdmin());
     if (!ctx) return res.status(404).json({ error: "Listing not found." });
     res.json(ctx);
+  });
+
+  /**
+   * POST /api/voice/session — starts every Aha voice call (budget, 0121).
+   * Claims one call against the monthly + daily caps, then returns what the
+   * browser needs: a signed ElevenLabs link when ELEVENLABS_API_KEY is set (the
+   * agent then refuses calls that didn't come through here), else the public
+   * agent id; plus the listing context, or the homepage prompt.
+   */
+  const voiceSessionHits = new Map<string, number[]>();
+  app.post("/api/voice/session", async (req: Request, res: Response) => {
+    const scope = req.body?.scope === "home" ? "home" : "listing";
+    const slug = String(req.body?.slug ?? "");
+    const lang = req.body?.lang === "ru" ? "ru" : "en";
+    if (scope === "listing" && !/^[a-z0-9-]{1,200}$/i.test(slug)) return res.status(400).json({ error: "Listing not found." });
+    const agentId = process.env.ELEVENLABS_AGENT_ID || process.env.VITE_ELEVENLABS_AGENT_ID;
+    const client = publicClient();
+    if (!agentId || !client) return res.status(503).json({ error: "unavailable" });
+    if (rateLimited(voiceSessionHits, req.ip || "?", 6, 3_600_000)) return res.status(429).json({ error: "visitor_limit" });
+
+    const ctx = scope === "listing" ? await voiceContext(client, slug, supabaseAdmin()) : null;
+    if (scope === "listing" && !ctx) return res.status(404).json({ error: "Listing not found." });
+
+    const admin = supabaseAdmin();
+    if (admin) {
+      const day = new Date(Date.now() + 4 * 3_600_000).toISOString().slice(0, 10);
+      const { data, error } = await admin.rpc("claim_voice_call", {
+        p_scope: scope,
+        p_day: day,
+        p_day_limit: Number(process.env.VOICE_DAILY_CALLS) || 8,
+        p_month_limit: Number(process.env.VOICE_MONTHLY_CALLS) || 90,
+      });
+      if (error) {
+        // Before 0121 runs the function doesn't exist yet — don't take Aha offline for that.
+        if (!/claim_voice_call|PGRST202|42883/.test(`${error.code} ${error.message}`)) {
+          console.error("[voice-session] claim", error);
+          return res.status(503).json({ error: "unavailable" });
+        }
+        console.warn("[voice-session] claim_voice_call missing — run migration 0121");
+      } else if (data !== "ok") {
+        return res.status(429).json({ error: data === "month" ? "month_limit" : "day_limit" });
+      }
+    }
+
+    let signedUrl: string | undefined;
+    const key = process.env.ELEVENLABS_API_KEY;
+    if (key) {
+      try {
+        const r = await fetch(`https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(agentId)}`, { headers: { "xi-api-key": key } });
+        if (!r.ok) throw new Error(`signed url ${r.status}`);
+        signedUrl = ((await r.json()) as { signed_url?: string }).signed_url;
+      } catch (err) {
+        console.error("[voice-session] signed url", err);
+        return res.status(503).json({ error: "unavailable" });
+      }
+    }
+    res.json({
+      ...(signedUrl ? { signedUrl } : { agentId }),
+      maxSeconds: MAX_CALL_SECONDS,
+      ...(ctx ? { title: ctx.title, context: ctx.context } : { prompt: homePrompt(lang) }),
+    });
+  });
+
+  // The homepage agent's `search_places` client tool (called from the browser).
+  app.post("/api/voice/search", async (req: Request, res: Response) => {
+    if (rateLimited(voiceHits, `s:${req.ip || "?"}`, 20)) return res.status(429).json({ say: "Too many searches right now — please try again in a minute.", cards: [] });
+    const b = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+    const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 80) : undefined);
+    const num = (v: unknown) => {
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? n : undefined;
+    };
+    try {
+      res.json(
+        await voiceSearch(supabaseAdmin(), {
+          where: str(b.where),
+          type: str(b.type)?.toLowerCase(),
+          startDate: looseIsoDate(b.startDate),
+          endDate: looseIsoDate(b.endDate),
+          guests: num(b.guests),
+          maxPrice: num(b.maxPrice),
+          keywords: str(b.keywords),
+        }),
+      );
+    } catch (err) {
+      console.error("[voice-search]", err);
+      res.json({ say: "I couldn't search just now — you can use the search box on the page.", cards: [] });
+    }
   });
   // The ElevenLabs agent's `check_dates` server tool.
   // Tool parameters may arrive as JSON, form fields, plain text or query string,

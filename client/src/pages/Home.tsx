@@ -5,6 +5,7 @@ import { Link } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SearchBar } from "@/components/SearchBar";
+import { AhaVoiceSearchButton } from "@/components/AhaVoiceButton";
 import { imgAttrs } from "@/lib/responsiveImg";
 import { ListingRail } from "@/components/ListingRail";
 import { buildHomeRows } from "@/lib/homeRows";
@@ -205,6 +206,7 @@ export default function Home() {
         </section>
 
         <div className="container relative z-20 -mt-10" data-support-yield><SearchBar mobileCollapse /></div>
+        <div className="container relative z-20 mt-3 flex justify-center"><AhaVoiceSearchButton /></div>
 
         <section className="container py-20 lg:py-28">
           <div className="grid gap-8 lg:grid-cols-[0.7fr_1.3fr] lg:items-end">

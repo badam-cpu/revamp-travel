@@ -144,6 +144,20 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
   const selectedNights = isStay && selected ? nightsBetween(selected.startDate, selected.endDate) : 0;
   const belowMin = isStay && selected !== null && selectedNights < minStay;
 
+  // Arriving from Aha's voice search (?checkin&checkout&guests): start with those
+  // dates and party, like a guest's own picks (the calendar still shows what's taken).
+  useEffect(() => {
+    if (!isStay || typeof window === "undefined") return;
+    const p = new URLSearchParams(window.location.search);
+    const start = p.get("checkin");
+    const end = p.get("checkout");
+    const today = new Date(Date.now() + 4 * 3600_000).toISOString().slice(0, 10);
+    if (start && end && /^\d{4}-\d{2}-\d{2}$/.test(start) && /^\d{4}-\d{2}-\d{2}$/.test(end) && start >= today && end > start) setRange({ start, end });
+    const g = Number(p.get("guests"));
+    if (Number.isInteger(g) && g >= 1) setGuests(Math.min(g, maxGuests));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listing.id]);
+
   // Aha Voice Assistant can fill this panel ("let's book the 20th to the 22nd for
   // two") with the same checks a guest's own clicks get — never books by itself.
   useAhaFill(

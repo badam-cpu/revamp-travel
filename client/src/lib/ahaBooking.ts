@@ -7,6 +7,10 @@
  * A window event keeps the call UI and the booking panels decoupled: whichever
  * panel is on the page for that listing (BookingPanel, or the hotel flow in
  * ListingPage) registers a handler with `useAhaFill`.
+ *
+ * The same bridge carries `show_photo` ("show me the bathroom"): the agent picks
+ * photo N from the numbered list in its context and the page opens it
+ * (`useAhaPhoto` — stays: the full-screen viewer; tours: the main image).
  */
 import { useEffect, useRef } from "react";
 
@@ -54,6 +58,56 @@ export function useAhaFill(slug: string, handler: (fill: AhaFill) => string, ena
     window.addEventListener(EVENT, on);
     return () => window.removeEventListener(EVENT, on);
   }, [slug, enabled]);
+}
+
+const PHOTO_EVENT = "aha:show-photo";
+type PhotoDetail = { slug: string; index: number; respond: (say: string) => void };
+
+/** Ask the page to show photo `index` (0-based); resolves with what Aha should say. */
+export function requestAhaPhoto(slug: string, index: number): Promise<string> {
+  return new Promise((resolve) => {
+    let done = false;
+    const respond = (say: string) => {
+      if (done) return;
+      done = true;
+      resolve(say);
+    };
+    window.dispatchEvent(new CustomEvent<PhotoDetail>(PHOTO_EVENT, { detail: { slug, index, respond } }));
+    setTimeout(() => respond("I can't open photos on this page — the photos are at the top."), 1500);
+  });
+}
+
+/** Register the page's photo viewer for this listing. */
+export function useAhaPhoto(slug: string, handler: (index: number) => string, enabled = true) {
+  const ref = useRef(handler);
+  ref.current = handler;
+  useEffect(() => {
+    if (!enabled) return;
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<PhotoDetail>).detail;
+      if (!d || d.slug !== slug) return;
+      try {
+        d.respond(ref.current(d.index));
+      } catch (err) {
+        console.error("[aha-photo]", err);
+        d.respond("I couldn't open that photo — the photos are at the top of the page.");
+      }
+    };
+    window.addEventListener(PHOTO_EVENT, on);
+    return () => window.removeEventListener(PHOTO_EVENT, on);
+  }, [slug, enabled]);
+}
+
+/** A date from a voice tool as YYYY-MM-DD ("2026-11-20", "2026-11-20T00:00", "20.11.2026"), else undefined. */
+export function isoDay(v: unknown): string | undefined {
+  if (typeof v !== "string") return undefined;
+  const t = v.trim();
+  const pad = (n: string) => n.padStart(2, "0");
+  let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
+  m = t.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/);
+  if (m) return `${m[3]}-${pad(m[2])}-${pad(m[1])}`;
+  return undefined;
 }
 
 /** "08:00", "8", "8am", "10:30 pm" → minutes after midnight, or null. */

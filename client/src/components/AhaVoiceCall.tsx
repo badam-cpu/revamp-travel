@@ -2,12 +2,15 @@
  * Aha Voice Assistant — the call itself (lazy-loaded by AhaVoiceButton so the
  * ElevenLabs/WebRTC code never weighs on the listing page until someone taps it).
  *
- * Starts a voice session (over WebSocket) with the Revamp agent on ElevenLabs (VITE_ELEVENLABS_AGENT_ID,
- * a public agent id) and hands it the listing's own details + FAQ as
- * `listing_context` (GET /api/voice/context). For dates the agent calls our
- * `check_dates` tool (POST /api/voice/quote). English or Russian, chosen before
- * the call. Nothing is booked or paid here; the guest books on the page.
- * Errors stay calm — details go to the console only.
+ * Every call starts at POST /api/voice/session, which counts it against the
+ * monthly/daily budget (0121) and returns a signed ElevenLabs link (or the
+ * public agent id) plus, on a listing, the listing's own details + FAQ +
+ * numbered photos as `listing_context`, or on the homepage the search prompt.
+ * Listing: the agent checks dates (`check_dates` → /api/voice/quote), fills the
+ * booking box (`fill_booking`) and opens photos (`show_photo`). Homepage: it
+ * searches (`search_places` → /api/voice/search) and the results show as cards
+ * here. Calls end after the server's maxSeconds. English or Russian. Nothing is
+ * booked or paid here. Errors stay calm — details go to the console only.
  */
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
@@ -15,25 +18,67 @@ import { Loader2, Mic, MicOff, PhoneOff } from "lucide-react";
 import { ConversationProvider, useConversation } from "@elevenlabs/react";
 import { Button } from "@/components/ui/button";
 import { trackEvent } from "@/lib/analytics";
-import { requestAhaFill } from "@/lib/ahaBooking";
+import { isoDay, requestAhaFill, requestAhaPhoto } from "@/lib/ahaBooking";
+import { imgAttrs } from "@/lib/responsiveImg";
 import { cn } from "@/lib/utils";
 
 const AGENT_ID = import.meta.env.VITE_ELEVENLABS_AGENT_ID as string | undefined;
 
 type Lang = "en" | "ru";
+export type VoiceScope = "listing" | "home";
 // Short and title-free: listing titles are written for search results, not speech.
-const FIRST: Record<Lang, string> = {
-  en: "Hi, I'm Aha, Revamp Vacations' voice AI assistant. How can I help you today?",
-  ru: "Здравствуйте! Я Аха, голосовой ИИ-помощник Revamp Vacations. Чем могу помочь?",
+const FIRST: Record<VoiceScope, Record<Lang, string>> = {
+  listing: {
+    en: "Hi, I'm Aha, Revamp Vacations' voice AI assistant. How can I help you today?",
+    ru: "Здравствуйте! Я Аха, голосовой ИИ-помощник Revamp Vacations. Чем могу помочь?",
+  },
+  home: {
+    en: "Hi, I'm Aha, Revamp Vacations' voice AI assistant. Where would you like to go, and when?",
+    ru: "Здравствуйте! Я Аха, голосовой ИИ-помощник Revamp Vacations. Куда и когда вы хотели бы поехать?",
+  },
 };
+/** What the budget refusals mean for the visitor (POST /api/voice/session → 429). */
+const LIMIT_MSG: Record<string, Record<VoiceScope, string>> = {
+  day_limit: {
+    listing: "Aha has taken all the calls it can for today. Please ask the host in writing, or try again tomorrow.",
+    home: "Aha has taken all the calls it can for today. Please use the search box above, or try again tomorrow.",
+  },
+  month_limit: {
+    listing: "Aha isn't taking calls right now. Please ask the host in writing.",
+    home: "Aha isn't taking calls right now. Please use the search box above.",
+  },
+  visitor_limit: {
+    listing: "You've started a few calls in a row — please wait a little before trying again.",
+    home: "You've started a few calls in a row — please wait a little before trying again.",
+  },
+};
+
+interface VoiceCard {
+  slug: string;
+  type: string;
+  title: string;
+  city: string;
+  image: string;
+  price: string;
+  total: number | null;
+  nights: number | null;
+  available: boolean | null;
+}
+interface SearchResult {
+  cards: VoiceCard[];
+  query: { type: string; startDate: string | null; endDate: string | null; guests: number | null };
+}
 const armeniaToday = () => new Date(Date.now() + 4 * 3600_000).toISOString().slice(0, 10);
 
 // ?voiceDebug=1 shows the technical reason in the window (for us, not guests).
 const DEBUG = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("voiceDebug");
 
-type CallProps = { slug: string; title: string; onEnd: () => void; compact?: boolean; onFilled?: () => void };
+type CallProps = { scope?: VoiceScope; slug?: string; onEnd: () => void; compact?: boolean; onFilled?: () => void };
 
-function Call({ slug, onEnd, compact = false, onFilled }: CallProps) {
+function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }: CallProps) {
+  const [results, setResults] = useState<SearchResult | null>(null);
+  const [timedOut, setTimedOut] = useState(false);
+  const maxSeconds = useRef(240);
   const [lang, setLang] = useState<Lang>("en");
   const [starting, setStarting] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -55,6 +100,7 @@ function Call({ slug, onEnd, compact = false, onFilled }: CallProps) {
   const convo = useConversation({
     onConnect: () => {
       connected.current = true;
+      setTimedOut(false);
       note(`connected (${session.current?.transport})`);
     },
     onError: (message: unknown, err?: unknown) => {
@@ -108,21 +154,28 @@ function Call({ slug, onEnd, compact = false, onFilled }: CallProps) {
       return;
     }
     try {
-      const r = await fetch(`/api/voice/context?slug=${encodeURIComponent(slug)}`);
-      if (!r.ok) throw new Error(`context ${r.status}`);
-      const ctx = (await r.json()) as { title: string; context: string };
+      const r = await fetch("/api/voice/session", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ scope, slug, lang }) });
+      const ctx = (await r.json().catch(() => ({}))) as { error?: string; agentId?: string; signedUrl?: string; maxSeconds?: number; title?: string; context?: string; prompt?: string };
+      if (r.status === 429 && ctx.error && LIMIT_MSG[ctx.error]) {
+        setProblem(LIMIT_MSG[ctx.error][scope]);
+        setStarting(false);
+        return;
+      }
+      if (!r.ok || (!ctx.agentId && !ctx.signedUrl)) throw new Error(`session ${r.status} ${ctx.error ?? ""}`);
+      maxSeconds.current = ctx.maxSeconds || 240;
       started.current = true;
       connected.current = false;
+      setResults(null);
       const opts = {
-        agentId: AGENT_ID,
-        // The agent's `fill_booking` client tool: fills this page's booking box
-        // (dates, guests, start time) — the guest still taps Book and pays.
+        ...(ctx.signedUrl ? { signedUrl: ctx.signedUrl } : { agentId: ctx.agentId }),
+        // The agent's client tools run here, in the page — they only fill the
+        // booking box, open a photo or show search results; the guest still books and pays.
         clientTools: {
           fill_booking: async (p: Record<string, unknown>) => {
             const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
             const say = await requestAhaFill(slug, {
-              startDate: str(p.startDate) ?? str(p.start) ?? "",
-              endDate: str(p.endDate) ?? str(p.end),
+              startDate: isoDay(p.startDate) ?? isoDay(p.start) ?? "",
+              endDate: isoDay(p.endDate) ?? isoDay(p.end),
               guests: Number(p.guests) || undefined,
               time: str(p.time),
             });
@@ -131,22 +184,55 @@ function Call({ slug, onEnd, compact = false, onFilled }: CallProps) {
             trackEvent("voice_assistant_fill", { item_id: slug, ok: say.startsWith("Done") });
             return say;
           },
+          show_photo: async (p: Record<string, unknown>) => {
+            const n = Math.round(Number(p.number ?? p.photo ?? p.index));
+            const say = await requestAhaPhoto(slug, n - 1);
+            note(`show_photo ${n} → ${say.slice(0, 50)}`);
+            if (say.startsWith("Photo")) onFilled?.();
+            trackEvent("voice_assistant_photo", { item_id: slug });
+            return say;
+          },
+          search_places: async (p: Record<string, unknown>) => {
+            try {
+              const res = await fetch("/api/voice/search", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(p) });
+              const data = (await res.json()) as SearchResult & { say: string };
+              setResults({ cards: data.cards ?? [], query: data.query });
+              note(`search_places → ${data.cards?.length ?? 0} cards`);
+              trackEvent("voice_assistant_search", { results: data.cards?.length ?? 0 });
+              return data.say;
+            } catch (err) {
+              console.error("[aha-voice] search", err);
+              return "I couldn't search just now — the search box on the page works too.";
+            }
+          },
         },
-        dynamicVariables: { listing_title: ctx.title, listing_slug: slug, listing_context: ctx.context, today: armeniaToday() },
-        overrides: { agent: { language: lang, firstMessage: FIRST[lang] } },
+        // check_dates (a webhook on the agent) reads listing_slug; every variable is always sent.
+        dynamicVariables: { listing_title: ctx.title ?? "Revamp Vacations", listing_slug: slug, listing_context: ctx.context ?? "", today: armeniaToday() },
+        overrides: { agent: { language: lang, firstMessage: FIRST[scope][lang], ...(ctx.prompt ? { prompt: { prompt: ctx.prompt } } : {}) } },
       };
       // WebSocket: with our agent, WebRTC sessions connected and were then ended by the
       // agent (2026-10-27), while the same agent works over WebSocket in both languages.
       session.current = { opts, transport: "websocket" };
-      note("starting (websocket)");
-      convo.startSession({ ...opts, connectionType: "websocket" });
-      trackEvent("voice_assistant_start", { item_id: slug, language: lang });
+      note(`starting (websocket${ctx.signedUrl ? ", signed" : ""})`);
+      convo.startSession({ ...opts, connectionType: "websocket" } as never);
+      trackEvent("voice_assistant_start", { item_id: slug || "home", language: lang, scope });
     } catch (err) {
       console.error("[aha-voice] start", err);
-      setProblem("Aha isn't available right now. Please try again later, or ask the host in writing.");
+      setProblem(scope === "home" ? "Aha isn't available right now. Please use the search box above." : "Aha isn't available right now. Please try again later, or ask the host in writing.");
       setStarting(false);
     }
   };
+
+  // Budget: hang up after the server's limit (the agent has the same max duration).
+  useEffect(() => {
+    if (!live) return;
+    const t = setTimeout(() => {
+      setTimedOut(true);
+      convo.endSession();
+    }, maxSeconds.current * 1000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live]);
 
   const status = !live ? (starting || convo.status === "connecting" ? "Connecting…" : "Ready when you are") : convo.isSpeaking ? "Aha is speaking…" : convo.isMuted ? "Microphone off" : "Listening…";
   const end = () => {
@@ -219,14 +305,47 @@ function Call({ slug, onEnd, compact = false, onFilled }: CallProps) {
         </div>
       )}
 
+      {results && <SearchCards results={results} />}
+      {timedOut && !live && <p className="text-sm leading-6 text-basalt/70">Calls with Aha are kept to {Math.round(maxSeconds.current / 60)} minutes. Tap Start talking to carry on.</p>}
       {problem && <p className="rounded-none border border-apricot/30 bg-apricot/[0.05] p-3 text-sm leading-6 text-basalt/80">{problem}</p>}
       {DEBUG && debug.length > 0 && <pre className="max-h-40 overflow-auto whitespace-pre-wrap bg-chalk p-2 text-[11px] leading-4 text-basalt/70">{debug.join("\n")}</pre>}
 
       <p className="text-xs leading-5 text-basalt/50">
-        Aha is an AI voice assistant. It answers from this listing's details, checks your dates and can fill in the booking form — you book and pay yourself on this page. Your voice is processed by our voice provider to reply.{" "}
+        {scope === "home"
+          ? "Aha is an AI voice assistant. It searches Revamp's real listings and shows them here — you choose, book and pay yourself."
+          : "Aha is an AI voice assistant. It answers from this listing's details, checks your dates, shows photos and can fill in the booking form — you book and pay yourself on this page."}{" "}
+        Calls last up to {Math.round(maxSeconds.current / 60)} minutes. Your voice is processed by our voice provider to reply.{" "}
         <Link href="/privacy" className="underline underline-offset-2">Privacy</Link>
       </p>
     </div>
+  );
+}
+
+/** Search results Aha found, as tappable cards (dates + party carried to the listing). */
+function SearchCards({ results }: { results: SearchResult }) {
+  const { cards, query } = results;
+  if (!cards.length) return <p className="text-sm leading-6 text-basalt/70">No matches yet — tell Aha what to change.</p>;
+  const params = new URLSearchParams();
+  if (query.startDate) params.set("checkin", query.startDate);
+  if (query.endDate) params.set("checkout", query.endDate);
+  if (query.guests) params.set("guests", String(query.guests));
+  const qs = params.toString();
+  return (
+    <ul className="grid gap-2" aria-label="What Aha found">
+      {cards.map((c) => (
+        <li key={c.slug}>
+          <Link href={`/listing/${c.slug}${qs ? `?${qs}` : ""}`} className="flex min-h-16 items-center gap-3 rounded-none border border-basalt/12 bg-paper p-2 transition-colors hover:border-apricot">
+            <img {...imgAttrs(c.image, "64px")} alt="" className="h-14 w-14 shrink-0 rounded-[10px] object-cover" />
+            <span className="min-w-0 flex-1">
+              <span className="line-clamp-2 text-sm font-semibold leading-5 text-basalt">{c.title}</span>
+              <span className="mt-0.5 block truncate text-xs text-basalt/60">
+                {c.city} · {c.total != null && c.nights ? `֏${c.total.toLocaleString("en-US")} for ${c.nights} night${c.nights === 1 ? "" : "s"}` : c.price}
+              </span>
+            </span>
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }
 

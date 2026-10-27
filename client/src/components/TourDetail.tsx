@@ -13,6 +13,7 @@
  * quick-facts row and "what's included" list carry the weight instead.
  */
 import { gallerySlides, infoPoints } from "@shared/listings";
+import { useAhaPhoto } from "@/lib/ahaBooking";
 import { ListingFaq } from "@/components/ListingFaq";
 import { photoCaption } from "@shared/listings";
 import { useEffect, useMemo, useState } from "react";
@@ -62,6 +63,14 @@ export function TourDetail({ listing }: { listing: Listing }) {
   // The video is one of the gallery slides, at the host's chosen position (0120).
   const slides = gallerySlides(images, listing.videoUrl, listing.videoPosition);
   const current = slides[activeImage] ?? slides[0];
+  // "Show me the route" — Aha shows photo N (numbered like `images`) as the main image.
+  useAhaPhoto(listing.slug, (index) => {
+    const at = slides.findIndex((x) => x.kind === "photo" && x.src === images[index]);
+    if (at < 0) return `There are ${images.length} photos — which one would you like to see?`;
+    setActiveImage(at);
+    document.getElementById("tour-gallery")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return `Photo ${index + 1} of ${images.length} is showing at the top of the page.`;
+  });
   const duration = factValue(listing, "Duration");
   const group = factValue(listing, "Group", "Format", "Group size");
   const level = factValue(listing, "Level", "Start");
@@ -106,7 +115,7 @@ export function TourDetail({ listing }: { listing: Listing }) {
         </div>
       </div>
 
-      <section className="container">
+      <section id="tour-gallery" className="container scroll-mt-24">
         <div className="brand-notch relative aspect-[16/9] overflow-hidden bg-basalt/5 sm:aspect-[2/1]">
           {current.kind === "video" ? (
             <div className="h-full w-full">

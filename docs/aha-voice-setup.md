@@ -34,7 +34,7 @@ How to help:
 - If asked about other places, say you can help with this listing and the guest can browse others on revampvacations.com.
 ---
 
-- **LLM:** Claude **Haiku 4.5** (fast and cheap; Sonnet if you want richer answers).
+- **LLM:** Claude **Haiku 5.5** (fast and cheap; Sonnet if you want richer answers).
 - **Voice:** a natural voice that speaks Russian too (e.g. one from the multilingual library). Model: **Flash v2.5** (low latency, supports English + Russian).
 
 ### Tools → Add tool → Webhook
@@ -66,10 +66,48 @@ How to help:
   | `time` | String | – | `Tours/experiences: the start time the guest chose, e.g. 08:00` |
 - Nothing is booked: the website only fills in the form (same checks as a guest's own clicks) and the guest taps Book.
 
+### Tools → Add tool → Client (shows photos, 2026-10-27)
+- **Name:** `show_photo`
+- **Description:** `Open one of the listing's photos on the guest's screen. Use the number from the PHOTOS list in the listing details, e.g. when the guest says "show me the bathroom".`
+- **Wait for response:** ON
+- **Parameters:** `number` · Number · required · `The photo's number from the PHOTOS list`
+
+### Tools → Add tool → Client (homepage voice search, 2026-10-27)
+- **Name:** `search_places`
+- **Description:** `Search Revamp for stays, tours or experiences. The results show as cards on the visitor's screen; say what the tool returns.`
+- **Wait for response:** ON
+- **Parameters** (all optional, each its own property):
+  | Identifier | Type | Description |
+  |---|---|---|
+  | `type` | String | `stay, tour or experience` |
+  | `where` | String | `Town or region in Armenia in English, e.g. Dilijan` |
+  | `startDate` | String | `Check-in date or activity date, YYYY-MM-DD` |
+  | `endDate` | String | `Check-out date for stays, YYYY-MM-DD` |
+  | `guests` | Number | `Number of people` |
+  | `maxPrice` | Number | `Highest price per night in Armenian drams` |
+  | `keywords` | String | `Short words like pool, wine, hiking, view` |
+- The homepage sends its own instructions (the prompt override below), so the agent's
+  main prompt stays the listing one.
+
 ### Security tab
-- **Overrides:** turn on **First message** and **Language** (the site sends the greeting and English/Russian choice).
+- **Overrides:** turn on **First message**, **Language** and **System prompt** (the site sends the greeting, the English/Russian choice and — on the homepage only — the search instructions).
 - **Allowlist / origins:** add `revampvacations.com` and `www.revampvacations.com` so the agent only works on our site.
 - **Authentication:** leave off (public agent) — or ask Claude Code to switch to signed URLs later.
+
+### Advanced tab
+- **Max conversation duration:** `240` seconds (the website also hangs up at 4 minutes).
+
+### Budget (2026-10-27 — keep voice under about $20 a month on top of the plan)
+- Every call is counted by the website first (migration `0121`, `claim_voice_call`):
+  at most **90 calls a month** and **8 a day** (Netlify env `VOICE_MONTHLY_CALLS` /
+  `VOICE_DAILY_CALLS` change them) and 6 per visitor per hour. With 4-minute calls the
+  worst case is ~360 minutes a month.
+- Optional, stronger: Agent → Security → **Enable authentication**, and put an
+  ElevenLabs API key in Netlify as `ELEVENLABS_API_KEY` (a secret). The website then
+  hands out a one-time signed link per counted call, and nobody can start a call
+  around the counter. Do both together — authentication without the key stops all calls.
+- ElevenLabs → Subscription: leave **usage-based billing** off (or set its limit) as the
+  last backstop.
 
 ### Privacy / data
 - Set **conversation retention** to a short period (e.g. 30 days) — our privacy policy says recordings are kept only for a limited period.
