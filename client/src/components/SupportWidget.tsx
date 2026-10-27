@@ -388,14 +388,17 @@ function PlanQuick({ onPlan }: { onPlan: (query: string) => void }) {
   const toggle = (v: string) => setInterests((cur) => (cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]));
   const field = "h-12 w-full rounded-xl border border-basalt/15 bg-paper px-3 text-base outline-none focus:border-apricot sm:h-10 sm:text-sm";
   return (
+    // Fields scroll; the button sits in a fixed footer (like Chat's message box),
+    // so it always has the same padding to the panel edge.
     <form
-      className="flex-1 space-y-4 overflow-y-auto p-4"
+      className="flex min-h-0 flex-1 flex-col"
       onSubmit={(e) => {
         e.preventDefault();
         const q = new URLSearchParams({ days: String(days), from, travelers: String(travelers), interests: interests.join(","), auto: "1" });
         onPlan(q.toString());
       }}
     >
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
       <p className="text-sm leading-6 text-basalt/70">Tell me a little about the trip and I'll draft a day-by-day plan with real places you can book. Or switch to Talk and just tell me.</p>
       <div className="grid grid-cols-2 gap-3">
         <label className="grid gap-1 text-xs font-semibold text-basalt/70">
@@ -425,9 +428,12 @@ function PlanQuick({ onPlan }: { onPlan: (query: string) => void }) {
           ))}
         </div>
       </fieldset>
-      <button type="submit" className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-apricot text-base font-semibold text-white hover:bg-apricot/90">
-        <Route className="h-4 w-4" /> Plan my trip
-      </button>
+      </div>
+      <div className="border-t border-basalt/10 p-3">
+        <button type="submit" className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-apricot text-base font-semibold text-white hover:bg-apricot/90">
+          <Route className="h-4 w-4" /> Plan my trip
+        </button>
+      </div>
     </form>
   );
 }
