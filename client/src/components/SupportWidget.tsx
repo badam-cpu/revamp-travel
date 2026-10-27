@@ -204,7 +204,7 @@ export function SupportWidget() {
           aria-hidden={yieldToSearch || undefined}
           tabIndex={yieldToSearch ? -1 : undefined}
           className={cn(
-            "fixed bottom-20 right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-apricot text-white shadow-[0_10px_30px_rgba(241,88,34,0.4)] transition-[transform,translate,opacity] duration-300 hover:scale-105 lg:bottom-4",
+            "fixed bottom-20 right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-apricot text-white ring-[3px] ring-white shadow-[0_10px_30px_rgba(33,33,33,0.28)] transition-[transform,translate,opacity] duration-300 hover:scale-105 lg:bottom-4",
             yieldToSearch && "pointer-events-none translate-y-3 opacity-0",
           )}
         >
