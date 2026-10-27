@@ -3349,6 +3349,27 @@ export function registerApiRoutes(app: Express) {
   });
 
   // ── Aha Voice Assistant (web) — see server/voice.ts ─────────────────────
+  /**
+   * A date as YYYY-MM-DD from whatever an agent tool sends: "2026-11-20",
+   * "2026-11-20T00:00", "20.11.2026", "20/11/2026", "November 20, 2026" — and,
+   * without a year, the next such date from today (Armenia).
+   */
+  const looseIsoDate = (v: unknown): string | undefined => {
+    if (typeof v !== "string" || !v.trim()) return undefined;
+    const t = v.trim();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) return `${m[1]}-${pad(+m[2])}-${pad(+m[3])}`;
+    m = t.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/);
+    if (m) return `${m[3]}-${pad(+m[2])}-${pad(+m[1])}`;
+    const today = new Date(Date.now() + 4 * 3600_000).toISOString().slice(0, 10);
+    const hasYear = /\b\d{4}\b/.test(t);
+    const d = new Date(`${t}${hasYear ? "" : ` ${today.slice(0, 4)}`} 12:00 UTC`);
+    if (Number.isNaN(d.getTime())) return undefined;
+    let out = d.toISOString().slice(0, 10);
+    if (!hasYear && out < today) out = `${Number(out.slice(0, 4)) + 1}${out.slice(4)}`;
+    return out;
+  };
   // Public, read-only, rate-limited (same data as the listing page / AI connector).
   const voiceHits = new Map<string, number[]>();
   app.get("/api/voice/context", async (req: Request, res: Response) => {
@@ -3365,15 +3386,17 @@ export function registerApiRoutes(app: Express) {
   app.post("/api/voice/quote", async (req: Request, res: Response) => {
     if (rateLimited(voiceHits, `q:${req.ip || "?"}`, 60)) return res.status(429).json({ say: "Too many checks right now — please try again in a minute." });
     const b = (req.body ?? {}) as Record<string, unknown>;
-    const slug = typeof b.slug === "string" ? b.slug.trim() : "";
-    const iso = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v.trim()) ? v.trim() : undefined);
-    const startDate = iso(b.startDate ?? b.start_date);
+    const slug = typeof (b.slug ?? b.listing_slug) === "string" ? String(b.slug ?? b.listing_slug).trim() : "";
+    const iso = (v: unknown) => looseIsoDate(v);
+    // Accept the usual spellings an agent tool may be set up with (start/end, check_in/check_out, …).
+    const pick = (...keys: string[]) => keys.map((k) => b[k]).find((v) => typeof v === "string" && v.trim());
+    const startDate = iso(pick("startDate", "start_date", "start", "checkIn", "check_in", "checkin", "date"));
     if (!/^[a-z0-9-]{1,200}$/i.test(slug) || !startDate) return res.json({ available: null, say: "I need the check-in date (and check-out date for stays) to check that." });
     const client = publicClient();
     if (!client) return res.json({ available: null, say: "I can't check dates right now — the calendar on the page is up to date." });
     try {
       const guests = Number(b.guests);
-      res.json(await voiceQuote(client, { slug, startDate, endDate: iso(b.endDate ?? b.end_date), guests: Number.isFinite(guests) && guests > 0 ? Math.round(guests) : undefined }));
+      res.json(await voiceQuote(client, { slug, startDate, endDate: iso(pick("endDate", "end_date", "end", "checkOut", "check_out", "checkout")), guests: Number.isFinite(guests) && guests > 0 ? Math.round(guests) : undefined }));
     } catch (err) {
       console.error("[voice-quote]", err);
       res.json({ available: null, say: "I couldn't check those dates just now — the calendar on the page is up to date." });

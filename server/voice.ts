@@ -70,7 +70,15 @@ export async function voiceQuote(
   input: { slug: string; startDate: string; endDate?: string; guests?: number },
 ): Promise<{ available: boolean | null; say: string }> {
   const q = await quoteListing(client, input, "listing");
-  if ("error" in q) return { available: null, say: q.error };
+  if ("error" in q) {
+    // Technical wording from the shared quote → something a host would say.
+    const say = /endDate|check-out/i.test(q.error)
+      ? "For a stay I need both dates — when would you check out?"
+      : /past/i.test(q.error)
+        ? "That date has already passed — which dates are you thinking of?"
+        : q.error;
+    return { available: null, say };
+  }
   const when = q.endDate ? `${q.nights} night${q.nights === 1 ? "" : "s"} from ${spoken(q.startDate)} to ${spoken(q.endDate)}` : `on ${spoken(q.startDate)}`;
   if (q.available === false) return { available: false, say: `Not available ${when}. ${q.reason ?? ""} Other dates may be free — the calendar is on the listing page.`.trim() };
   const parts = [`Available ${when} for ${q.guests} guest${q.guests === 1 ? "" : "s"}.`];
