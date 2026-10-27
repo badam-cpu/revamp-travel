@@ -17,6 +17,8 @@ export interface AdminUserRow {
   businessName: string | null;
   createdAt: string | null;
   lastSignInAt: string | null;
+  /** The last sign-in was an admin's "Log in as" (0093), not the operator — their own last sign-in is earlier. */
+  lastSignInByAdmin: boolean;
   listingCount: number;
   bookingCount: number;
 }
@@ -29,6 +31,9 @@ export interface AdminUserFilters {
   bookingId?: string;
   role?: "traveler" | "operator" | "admin" | "";
   flag?: "has_listings" | "has_bookings" | "no_activity" | "";
+  /** Last sign-in: within 7 / 30 days, none for 30+ days, or never. */
+  signIn?: "7d" | "30d" | "inactive_30d" | "never" | "";
+  sort?: "joined" | "last_sign_in" | "";
   page?: number;
   pageSize?: number;
 }
@@ -54,6 +59,22 @@ async function authIndex(admin: SupabaseClient): Promise<Map<string, AuthInfo>> 
   return map;
 }
 
+/** Latest "Log in as" start per operator (0093). Empty if the table isn't there. */
+async function latestImpersonation(admin: SupabaseClient): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const { data, error } = await admin.from("admin_impersonations").select("operator_id, started_at").order("started_at", { ascending: false }).limit(5000);
+  if (error) return out;
+  for (const r of (data ?? []) as { operator_id: string | null; started_at: string }[]) {
+    if (r.operator_id && !out.has(r.operator_id)) out.set(r.operator_id, r.started_at);
+  }
+  return out;
+}
+
+// "Log in as" signs the browser in AS the operator, which moves their auth
+// last_sign_in_at — a sign-in within this window after a "Log in as" start was the admin.
+const IMPERSONATION_WINDOW_MS = 5 * 60_000;
+const DAY_MS = 86_400_000;
+
 /** id → count, tallied from a single column projection. */
 async function tally(admin: SupabaseClient, table: string, column: string): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
@@ -78,15 +99,19 @@ export async function listAdminUsers(
     bookingTraveler = (data as { traveler_id: string | null } | null)?.traveler_id ?? "__none__";
   }
 
-  const [auth, profs, listingCounts, bookingCounts] = await Promise.all([
+  const [auth, profs, listingCounts, bookingCounts, impersonated] = await Promise.all([
     authIndex(admin),
     admin.from("profiles").select("id, role, display_name, business_name, created_at").then((r) => r.data ?? []),
     tally(admin, "listings", "operator_id"),
     tally(admin, "bookings", "traveler_id"),
+    latestImpersonation(admin),
   ]);
 
   let rows: AdminUserRow[] = (profs as { id: string; role: string; display_name: string | null; business_name: string | null; created_at: string | null }[]).map((p) => {
     const a = auth.get(p.id);
+    const lastSignInAt = a?.lastSignInAt ?? null;
+    const imp = impersonated.get(p.id);
+    const gap = lastSignInAt && imp ? Date.parse(lastSignInAt) - Date.parse(imp) : NaN;
     return {
       id: p.id,
       email: a?.email ?? null,
@@ -95,7 +120,8 @@ export async function listAdminUsers(
       displayName: p.display_name,
       businessName: p.business_name,
       createdAt: a?.createdAt ?? p.created_at,
-      lastSignInAt: a?.lastSignInAt ?? null,
+      lastSignInAt,
+      lastSignInByAdmin: gap >= 0 && gap <= IMPERSONATION_WINDOW_MS,
       listingCount: listingCounts.get(p.id) ?? 0,
       bookingCount: bookingCounts.get(p.id) ?? 0,
     };
@@ -113,7 +139,17 @@ export async function listAdminUsers(
   else if (f.flag === "has_bookings") rows = rows.filter((r) => r.bookingCount > 0);
   else if (f.flag === "no_activity") rows = rows.filter((r) => r.listingCount === 0 && r.bookingCount === 0);
 
-  rows.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+  if (f.signIn) {
+    const now = Date.now();
+    const age = (r: AdminUserRow) => (r.lastSignInAt ? now - Date.parse(r.lastSignInAt) : Infinity);
+    if (f.signIn === "7d") rows = rows.filter((r) => age(r) <= 7 * DAY_MS);
+    else if (f.signIn === "30d") rows = rows.filter((r) => age(r) <= 30 * DAY_MS);
+    else if (f.signIn === "inactive_30d") rows = rows.filter((r) => r.lastSignInAt && age(r) > 30 * DAY_MS);
+    else if (f.signIn === "never") rows = rows.filter((r) => !r.lastSignInAt);
+  }
+
+  if (f.sort === "last_sign_in") rows.sort((a, b) => (b.lastSignInAt ?? "").localeCompare(a.lastSignInAt ?? ""));
+  else rows.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
 
   const total = rows.length;
   const pageSize = Math.min(Math.max(f.pageSize ?? 25, 5), 100);

@@ -601,12 +601,13 @@ export interface AdminUserRow {
   businessName: string | null;
   createdAt: string | null;
   lastSignInAt: string | null;
+  lastSignInByAdmin?: boolean;
   listingCount: number;
   bookingCount: number;
 }
 export interface AdminUsersFilters {
   userId?: string; email?: string; phone?: string; name?: string; bookingId?: string;
-  role?: string; flag?: string; page?: number; pageSize?: number;
+  role?: string; flag?: string; signIn?: string; sort?: string; page?: number; pageSize?: number;
 }
 
 /** Admin: searchable/filterable user directory (auth + profile + activity). */

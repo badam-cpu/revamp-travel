@@ -17,9 +17,22 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { startImpersonation } from "@/lib/impersonation";
 
-const BLANK = { bookingId: "", userId: "", email: "", phone: "", name: "", role: "all", flag: "all" };
+const BLANK = { bookingId: "", userId: "", email: "", phone: "", name: "", role: "all", flag: "all", signIn: "all", sort: "joined" };
 
 const fmtDate = (s: string | null) => (s ? new Date(s).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "—");
+const fmtDateTime = (s: string) => new Date(s).toLocaleString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+
+/** "Today", "Yesterday", "5 days ago", "3 months ago" — the exact time is in the tooltip. */
+function ago(s: string): string {
+  const days = Math.floor((Date.now() - Date.parse(s)) / 86_400_000);
+  if (days <= 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 30) return `${days} days ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months} month${months === 1 ? "" : "s"} ago`;
+  const years = Math.floor(days / 365);
+  return `${years} year${years === 1 ? "" : "s"} ago`;
+}
 
 export function AdminUsers() {
   const [draft, setDraft] = useState({ ...BLANK });
@@ -58,6 +71,8 @@ export function AdminUsers() {
       name: draft.name.trim() || undefined,
       role: draft.role === "all" ? undefined : draft.role,
       flag: draft.flag === "all" ? undefined : draft.flag,
+      signIn: draft.signIn === "all" ? undefined : draft.signIn,
+      sort: draft.sort === "joined" ? undefined : draft.sort,
     };
     setPage(1);
     setApplied(f);
@@ -97,7 +112,7 @@ export function AdminUsers() {
 
   return (
     <div className="grid gap-6">
-      <PageHeader className="mb-0" title="Users" sub="Search and filter accounts, and promote or demote operators. Email and phone come from auth; listing and booking counts are live." />
+      <PageHeader className="mb-0" title="Users" sub="Search and filter accounts, and promote or demote operators. Last sign-in is when they last signed in, not every visit — staying signed in doesn't update it." />
 
       {/* Filter panel */}
       <div className="grid gap-4 border border-basalt/12 bg-paper p-5">
@@ -127,6 +142,23 @@ export function AdminUsers() {
               <SelectItem value="no_activity">No activity</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={draft.signIn} onValueChange={(v) => setField("signIn", v)}>
+            <SelectTrigger className="h-10 rounded-none" aria-label="Last sign-in"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Any last sign-in</SelectItem>
+              <SelectItem value="7d">Signed in last 7 days</SelectItem>
+              <SelectItem value="30d">Signed in last 30 days</SelectItem>
+              <SelectItem value="inactive_30d">No sign-in for 30+ days</SelectItem>
+              <SelectItem value="never">Never signed in</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={draft.sort} onValueChange={(v) => setField("sort", v)}>
+            <SelectTrigger className="h-10 rounded-none" aria-label="Sort"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="joined">Newest accounts first</SelectItem>
+              <SelectItem value="last_sign_in">Most recent sign-in first</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div className="flex items-center gap-5 border-t border-basalt/8 pt-4">
           <button type="button" onClick={reset} className="text-sm font-semibold text-red-500 hover:underline">Reset</button>
@@ -142,7 +174,7 @@ export function AdminUsers() {
         <p className="text-sm text-basalt/50">No accounts match those filters.</p>
       ) : (
         <div className="overflow-x-auto border border-basalt/12">
-          <table className="w-full min-w-[820px] text-sm">
+          <table className="w-full min-w-[940px] text-sm">
             <thead>
               <tr className="border-b border-basalt/12 bg-chalk/40 text-left text-[11px] uppercase tracking-[0.08em] text-basalt/50">
                 <th className="px-3 py-2.5 font-semibold">Account</th>
@@ -151,6 +183,7 @@ export function AdminUsers() {
                 <th className="px-3 py-2.5 text-right font-semibold">Listings</th>
                 <th className="px-3 py-2.5 text-right font-semibold">Bookings</th>
                 <th className="px-3 py-2.5 font-semibold">Joined</th>
+                <th className="px-3 py-2.5 font-semibold">Last sign-in</th>
                 <th className="px-3 py-2.5 font-semibold" />
               </tr>
             </thead>
@@ -172,6 +205,16 @@ export function AdminUsers() {
                   <td className="px-3 py-3 text-right tabular-nums text-basalt/70">{u.listingCount || "—"}</td>
                   <td className="px-3 py-3 text-right tabular-nums text-basalt/70">{u.bookingCount || "—"}</td>
                   <td className="px-3 py-3 whitespace-nowrap text-basalt/60">{fmtDate(u.createdAt)}</td>
+                  <td className="px-3 py-3 whitespace-nowrap">
+                    {u.lastSignInAt ? (
+                      <>
+                        <p className="text-basalt/80" title={fmtDateTime(u.lastSignInAt)}>{ago(u.lastSignInAt)}</p>
+                        <p className="text-xs text-basalt/45">{u.lastSignInByAdmin ? "by an admin (Log in as)" : fmtDate(u.lastSignInAt)}</p>
+                      </>
+                    ) : (
+                      <span className="text-basalt/35">Never</span>
+                    )}
+                  </td>
                   <td className="px-3 py-3 text-right">
                     {u.role === "traveler" && (
                       <Button size="sm" disabled={busyId === u.id} onClick={() => changeRole(u, "operator")} className="h-8 rounded-none bg-apricot text-white hover:bg-apricot/90">{busyId === u.id ? "…" : "Make operator"}</Button>

@@ -3585,6 +3585,8 @@ export function registerApiRoutes(app: Express) {
         bookingId: str(b.bookingId),
         role: (["traveler", "operator", "admin"].includes(String(b.role)) ? b.role : "") as "" | "traveler" | "operator" | "admin",
         flag: (["has_listings", "has_bookings", "no_activity"].includes(String(b.flag)) ? b.flag : "") as "" | "has_listings" | "has_bookings" | "no_activity",
+        signIn: (["7d", "30d", "inactive_30d", "never"].includes(String(b.signIn)) ? b.signIn : "") as "" | "7d" | "30d" | "inactive_30d" | "never",
+        sort: b.sort === "last_sign_in" ? "last_sign_in" : "joined",
         page: typeof b.page === "number" ? b.page : 1,
         pageSize: typeof b.pageSize === "number" ? b.pageSize : 25,
       });
