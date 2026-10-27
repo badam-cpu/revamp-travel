@@ -43,7 +43,8 @@ function prettyDateTime(iso: string): string {
 // Brand tokens (inline — email clients don't share the app's CSS): apricot
 // #F15822, charcoal #212121, paper #FFFFFF, chalk #F6F3EC.
 function shell(title: string, bodyHtml: string, siteUrl: string): string {
-  return `
+  // UTF-8 declared in the body too, so a raw/forwarded view never shows "â€”" for dashes.
+  return `<meta charset="utf-8">
     <div style="background:#f6f3ec;padding:24px 12px;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;">
       <div style="max-width:544px;margin:0 auto;background:#ffffff;border:1px solid #e4ded3;border-radius:16px;overflow:hidden;">
         <div style="height:4px;background:#F15822;"></div>
@@ -462,8 +463,8 @@ export function sendAhaAnswered(to: string, opts: { guestName: string; listingTi
      <p style="font-size:15px;line-height:1.6;margin:0 0 12px;padding:12px 14px;background:#f6f3ec;border-radius:8px;">${esc(clip(opts.question, 400))}</p>
      <p style="font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:#8B8478;margin:0 0 4px;">Aha replied, from your listing details</p>
      <p style="font-size:15px;line-height:1.6;margin:0 0 14px;padding:12px 14px;border:1px solid #eadfce;border-radius:8px;">${esc(clip(opts.answer, 800))}</p>
-     <p style="margin:0 0 8px;"><a href="${esc(site)}/dashboard?section=messages" style="background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Open the conversation</a></p>
-     <p style="font-size:12px;color:#8B8478;margin:8px 0 0;">You can add to it anytime. Turn Aha's answers off in Dashboard → Messages.</p>`,
+     <p style="margin:4px 0 18px;"><a href="${esc(site)}/dashboard?section=messages" style="display:inline-block;background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Open the conversation</a></p>
+     <p style="font-size:12px;color:#8B8478;margin:0;">You can add to it anytime. Turn Aha's answers off in Dashboard → Messages.</p>`,
     site,
   );
   return send(to, `Aha answered ${opts.guestName}${opts.listingTitle ? ` — ${opts.listingTitle}` : ""}`, html);
