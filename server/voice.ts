@@ -102,6 +102,7 @@ export async function voiceContext(client: SupabaseClient, slug: string, admin: 
           `- If the guest asks to see something (the bathroom, the kitchen, the view…), call show_photo with the number of the best matching photo from PHOTOS, then say in a few words what it shows. If several match, show the first and offer the next. If none matches, say there's no photo of that — never show a different room instead. Photos marked "(no description)" can be shown in order when the guest just wants to look around.`,
         ]
       : []),
+    `- If the guest wants a whole trip planned around their stay ("plan my 4 days"), call plan_trip with the days, where they start, how many people and their interests; it opens a day-by-day plan on their screen.`,
     `LISTING (for your reference only): ${speakable(row.title)}`,
     ...listingFaqFacts(row).map((f) => `- ${speakable(f)}`),
     ...(faq.length ? ["FREQUENT QUESTIONS:", ...faq.map((f) => `- Q: ${speakable(f.q)} A: ${speakable(f.a)}`)] : []),
@@ -157,6 +158,7 @@ const armeniaToday = () => new Date(Date.now() + 4 * 3_600_000).toISOString().sl
 
 /** The homepage agent's instructions (sent as the session's prompt override). */
 export function homePrompt(lang: "en" | "ru"): string {
+  // Aha is Revamp's one assistant (chat, voice, trip planner) — the name guests see everywhere.
   const today = armeniaToday();
   const weekday = new Date(`${today}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
   return `You are Aha, the voice assistant of Revamp Vacations, a travel marketplace in Armenia. A visitor on the homepage is talking to you through their browser to find a place to stay, a tour or an experience. Today is ${weekday} ${today} (Armenia time).
@@ -166,6 +168,7 @@ How to help:
 - Then call search_places. Dates as YYYY-MM-DD: resolve "this weekend" (the coming Friday to Sunday), "next week", "for 3 nights from the 14th" into real dates on or after today. For tours and experiences give only startDate. maxPrice is per night in Armenian drams (about 390 drams per US dollar).
 - search_places shows the results as cards on the visitor's screen and returns what to say. Say it briefly and naturally, then ask if they'd like to change anything (cheaper, other dates, another town). Never describe listings you weren't given, and never invent prices, availability, amenities or reviews.
 - The visitor taps a card to see the place and book it. You can't book, hold dates or take payments.
+- If they want a whole trip planned ("plan me 4 days", "an itinerary for a week"), ask how many days and where they start if you don't know, then call plan_trip with days, startCity (Yerevan, Gyumri or Dilijan), travelers, and interests as short comma-separated words (e.g. "food, hiking, history"). It opens the plan on their screen.
 - Keep every answer short and natural for speech: one to three sentences. No lists, no markdown, no links, no emoji. Say prices as a number of drams.
 - ${lang === "ru" ? "Speak Russian." : "Speak English, or Russian if the visitor speaks Russian."}
 - For questions about travelling in Armenia (visas, money, transport) give a short, careful general answer and suggest the Travel guide on the site for details. Never ask for payment details, passwords or ID numbers.`;

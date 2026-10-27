@@ -191,10 +191,10 @@ export default function Home() {
         <div className="container relative z-20 mt-3 flex justify-center"><AhaVoiceSearchButton /></div>
 
         {/* The slogan's own (compact) moment below the search — a fixed brand
-            asset, never admin-editable: stacked, "Experience." in orange. The intro
-            sits right beside it. */}
+            asset, never admin-editable: stacked, "Experience." in orange. The intro uses
+            the same columns as the "Four ways in" row, so both end on one edge. */}
         <section className="container pt-12 lg:pt-16">
-          <div className="grid gap-6 border-b border-basalt/10 pb-12 lg:grid-cols-[auto_minmax(0,27rem)] lg:items-end lg:justify-start lg:gap-16 lg:pb-14">
+          <div className="grid gap-6 border-b border-basalt/10 pb-12 lg:grid-cols-[0.7fr_1.3fr] lg:items-end lg:gap-8 lg:pb-14">
             <div>
               <p className="font-display text-[2.9rem] leading-[0.88] tracking-[-0.055em] text-basalt sm:text-[3.6rem] lg:text-[4.1rem]">
                 Stay.
@@ -204,7 +204,7 @@ export default function Home() {
                 Repeat.
               </p>
             </div>
-            <div>
+            <div className="max-w-xl lg:justify-self-end">
               <p className="text-base leading-7 text-basalt/70">{heroSubcopy}</p>
               <Link href="/explore" className="group mt-5 inline-flex items-center gap-3 text-xs font-bold uppercase tracking-[0.17em] text-basalt hover:text-apricot focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-apricot">
                 Browse all of Armenia

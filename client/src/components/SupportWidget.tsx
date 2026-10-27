@@ -1,22 +1,35 @@
 /**
- * Floating "chat with Revamp" support widget (bottom-right, site-wide). All
- * traveler messages go to a central Revamp support thread answered first by the
- * AI (POST /api/support-chat); admins take over from the /admin inbox. This is
- * deliberately NOT traveler↔operator messaging.
+ * Aha — the one guest-facing AI assistant (bottom-right, site-wide), with three
+ * ways in (user, 2026-10-27: unify the support chat, the voice assistant and
+ * the trip planner under Aha):
+ *  - Chat: messages go to a central Revamp support thread answered first by the
+ *    AI (POST /api/support-chat); admins take over from the /admin inbox. This
+ *    is deliberately NOT traveler↔operator messaging.
+ *  - Talk: the Aha voice call (AhaVoiceCall, lazy) — about the listing on a
+ *    listing page, voice search everywhere else. It lives here, outside the
+ *    routes, so a call carries on while Aha opens a listing, photo or plan.
+ *  - Plan a trip: a short form that opens /plan filled in and builds the plan.
+ * Other buttons open it in a mode with `openAha` (lib/ahaPanel.ts).
  *
  * Shown to travelers and signed-out visitors; hidden for operators/admins (they
  * have their own dashboards, and admins reply from the inbox). Messages load
  * under the traveler's own RLS (support_messages read policy scopes to their
  * thread), so a bare select returns only their conversation.
  */
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { MessageCircle, Send, X } from "lucide-react";
+import { ChevronUp, Loader2, MessageCircle, Mic, Route, Send, Sparkles, X } from "lucide-react";
+import { useListings } from "@/contexts/ListingsContext";
+import { onAhaOpen, type AhaMode } from "@/lib/ahaPanel";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { renderMarkdown } from "@shared/markdown";
 import { sendSupportMessage, submitSupportContact, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
+
+const AhaVoiceCall = lazy(() => import("@/components/AhaVoiceCall"));
+const VOICE = !!import.meta.env.VITE_ELEVENLABS_AGENT_ID;
+const PLAN_INTERESTS = ["History & monasteries", "Nature & hiking", "Food & wine", "Adventure", "Relaxation", "Photography"];
 
 interface Msg {
   id: string;
@@ -28,6 +41,12 @@ interface Msg {
 export function SupportWidget() {
   const { user, profile, loading, signInAnonymously } = useAuth();
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<AhaMode>("chat");
+  // The voice call stays mounted once started (switching tabs doesn't hang up);
+  // `compact` shrinks the panel to a bar so the page Aha just changed is visible.
+  const [talkMounted, setTalkMounted] = useState(false);
+  const [compact, setCompact] = useState(false);
+  const { pageListings } = useListings();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -67,6 +86,28 @@ export function SupportWidget() {
     };
   }, [location]);
 
+  const hidden = loading || profile?.role === "operator" || profile?.role === "admin" || location.startsWith("/trip/") || location.startsWith("/invoice/");
+  const show = (m: AhaMode) => {
+    setOpen(true);
+    setCompact(false);
+    setMode(m);
+    if (m === "talk") setTalkMounted(true);
+  };
+  // "Talk to Aha" buttons elsewhere open this panel (lib/ahaPanel.ts).
+  useEffect(() => onAhaOpen((m) => {
+    if (hidden || (m === "talk" && !VOICE)) return false;
+    show(m);
+    return true;
+  }), [hidden]);
+  // Talk is about the listing on a stay / tour / experience page, a search anywhere else.
+  const slugOnPage = location.match(/^\/listing\/([^/?#]+)/)?.[1];
+  const voiceListing = slugOnPage ? pageListings.find((l) => l.slug === slugOnPage && ["stay", "tour", "experience"].includes(l.type)) : undefined;
+  const close = () => {
+    setOpen(false);
+    setCompact(false);
+    setTalkMounted(false);
+  };
+
   // Assistant replies are short Markdown; links to Revamp pages (/listing/…,
   // /explore/…) should open in-app, not a new tab.
   const onReplyClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -76,7 +117,7 @@ export function SupportWidget() {
     if (href.startsWith("/")) {
       e.preventDefault();
       navigate(href);
-      setOpen(false);
+      close();
     }
   };
 
@@ -106,7 +147,7 @@ export function SupportWidget() {
 
   // Don't show to operators/admins.
   // Guests' private trip pages have the host's own contacts; keep the screen clear.
-  if (loading || profile?.role === "operator" || profile?.role === "admin" || location.startsWith("/trip/") || location.startsWith("/invoice/")) return null;
+  if (hidden) return null;
 
   const saveContact = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,13 +177,11 @@ export function SupportWidget() {
       const { reply } = await sendSupportMessage(body);
       setMessages((m) => [...m, { id: `ai-${Date.now()}`, sender: "ai", body: reply }]);
     } catch (err) {
+      // The technical reason goes to the console only (never shown to guests).
       console.error("[support] send failed", err);
-      // Surface the real reason (e.g. anonymous sign-ins disabled) rather than a
-      // generic message, so misconfiguration is diagnosable.
-      const detail = err instanceof ApiError || err instanceof Error ? err.message : "";
       setMessages((m) => [
         ...m,
-        { id: `err-${Date.now()}`, sender: "ai", body: detail ? `Couldn't send that: ${detail}` : "Something went wrong — please try again." },
+        { id: `err-${Date.now()}`, sender: "ai", body: err instanceof ApiError && err.message ? err.message : "That didn't send — please try again in a moment." },
       ]);
     } finally {
       setSending(false);
@@ -155,8 +194,8 @@ export function SupportWidget() {
       {!open && (
         <button
           type="button"
-          onClick={() => setOpen(true)}
-          aria-label="Chat with the Revamp AI assistant"
+          onClick={() => show(mode)}
+          aria-label="Ask Aha, Revamp's AI assistant"
           aria-hidden={yieldToSearch || undefined}
           tabIndex={yieldToSearch ? -1 : undefined}
           className={cn(
@@ -170,22 +209,67 @@ export function SupportWidget() {
 
       {/* Panel */}
       {open && (
-        <div className="fixed bottom-4 right-4 z-50 flex h-[min(560px,80vh)] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-basalt/10 bg-paper shadow-[0_24px_70px_rgba(35,35,33,0.28)]">
-          <div className="flex items-center justify-between bg-basalt px-4 py-3 text-white">
-            <div>
-              <p className="text-sm font-bold">Revamp AI assistant</p>
-              <p className="text-[11px] text-white/60">Usually replies in a moment</p>
+        // z-[110]: above the photo viewer (z-100) so Aha's controls stay reachable while it shows a photo.
+        <div className={cn("fixed bottom-4 right-4 z-[110] flex w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-basalt/10 bg-paper shadow-[0_24px_70px_rgba(35,35,33,0.28)]", compact ? "" : "h-[min(600px,82dvh)]")}>
+          <div className="flex items-center justify-between gap-2 bg-basalt px-4 py-3 text-white">
+            <div className="min-w-0">
+              <p className="flex items-center gap-1.5 text-sm font-bold"><Sparkles className="h-3.5 w-3.5 text-apricot" /> Aha</p>
+              {!compact && <p className="text-[11px] text-white/60">Revamp's AI assistant · English or Russian</p>}
             </div>
-            <button type="button" onClick={() => setOpen(false)} aria-label="Close chat" className="grid h-8 w-8 place-items-center rounded-full hover:bg-white/10">
-              <X className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              {compact && (
+                <button type="button" onClick={() => setCompact(false)} aria-label="Expand Aha" className="grid h-10 w-10 place-items-center rounded-full hover:bg-white/10">
+                  <ChevronUp className="h-4 w-4" />
+                </button>
+              )}
+              <button type="button" onClick={close} aria-label="Close Aha" className="grid h-10 w-10 place-items-center rounded-full hover:bg-white/10">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
-          {
+          {!compact && (
+            <div role="tablist" aria-label="Ways to use Aha" className="grid grid-cols-3 gap-1 border-b border-basalt/10 p-1.5">
+              {([
+                ["chat", "Chat", MessageCircle],
+                ...(VOICE ? [["talk", "Talk", Mic] as const] : []),
+                ["plan", "Plan a trip", Route],
+              ] as const).map(([m, label, Icon]) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === m}
+                  onClick={() => show(m)}
+                  className={cn("inline-flex h-10 items-center justify-center gap-1.5 rounded-xl text-sm font-semibold transition-colors", mode === m ? "bg-apricot/10 text-apricot" : "text-basalt/65 hover:bg-chalk")}
+                >
+                  <Icon className="h-4 w-4" /> {label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {talkMounted && (
+            <div hidden={mode !== "talk"} className={cn("overflow-y-auto", compact ? "p-3" : "flex-1 p-4")}>
+              <Suspense fallback={<div className="grid place-items-center py-8"><Loader2 className="h-5 w-5 animate-spin text-basalt/50" /></div>}>
+                <AhaVoiceCall
+                  scope={voiceListing ? "listing" : "home"}
+                  slug={voiceListing?.slug}
+                  onEnd={() => setTalkMounted(false)}
+                  compact={compact}
+                  onFilled={() => setCompact(true)}
+                />
+              </Suspense>
+            </div>
+          )}
+
+          {mode === "plan" && !compact && <PlanQuick onPlan={(qs) => { navigate(`/plan?${qs}`); setOpen(false); }} />}
+
+          {mode === "chat" && !compact && (
             <>
               <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
                 <div className="rounded-2xl rounded-tl-sm bg-chalk px-3.5 py-2.5 text-sm text-basalt/80">
-                  Hi{profile?.displayName && profile.displayName !== "Guest" ? ` ${profile.displayName.split(" ")[0]}` : ""}! 👋 Ask us anything about stays, tours, experiences, or booking — no account needed.
+                  Hi{profile?.displayName && profile.displayName !== "Guest" ? ` ${profile.displayName.split(" ")[0]}` : ""}! 👋 I'm Aha. Ask me anything about stays, tours, experiences or booking — no account needed.
                 </div>
                 {messages.map((m) => (
                   <div key={m.id} className={cn("flex", m.sender === "traveler" ? "justify-end" : "justify-start")}>
@@ -271,9 +355,62 @@ export function SupportWidget() {
                 </button>
               </form>
             </>
-          }
+          )}
         </div>
       )}
     </>
+  );
+}
+
+/** Plan a trip: a few choices, then /plan builds it (the planner reads these and runs). */
+function PlanQuick({ onPlan }: { onPlan: (query: string) => void }) {
+  const [days, setDays] = useState(4);
+  const [from, setFrom] = useState("Yerevan");
+  const [travelers, setTravelers] = useState(2);
+  const [interests, setInterests] = useState<string[]>(["History & monasteries", "Food & wine"]);
+  const toggle = (v: string) => setInterests((cur) => (cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]));
+  const field = "h-12 w-full rounded-xl border border-basalt/15 bg-paper px-3 text-base outline-none focus:border-apricot sm:h-10 sm:text-sm";
+  return (
+    <form
+      className="flex-1 space-y-4 overflow-y-auto p-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const q = new URLSearchParams({ days: String(days), from, travelers: String(travelers), interests: interests.join(","), auto: "1" });
+        onPlan(q.toString());
+      }}
+    >
+      <p className="text-sm leading-6 text-basalt/70">Tell me a little about the trip and I'll draft a day-by-day plan with real places you can book. Or switch to Talk and just tell me.</p>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="grid gap-1 text-xs font-semibold text-basalt/70">
+          Days
+          <input type="number" min={1} max={21} value={days} onChange={(e) => setDays(Math.min(21, Math.max(1, Number(e.target.value) || 1)))} className={field} />
+        </label>
+        <label className="grid gap-1 text-xs font-semibold text-basalt/70">
+          Travellers
+          <input type="number" min={1} max={20} value={travelers} onChange={(e) => setTravelers(Math.min(20, Math.max(1, Number(e.target.value) || 1)))} className={field} />
+        </label>
+      </div>
+      <label className="grid gap-1 text-xs font-semibold text-basalt/70">
+        Starting from
+        <select value={from} onChange={(e) => setFrom(e.target.value)} className={field}>
+          <option>Yerevan</option>
+          <option>Gyumri</option>
+          <option>Dilijan</option>
+        </select>
+      </label>
+      <fieldset>
+        <legend className="mb-2 text-xs font-semibold text-basalt/70">What you're into</legend>
+        <div className="flex flex-wrap gap-2">
+          {PLAN_INTERESTS.map((opt) => (
+            <button key={opt} type="button" aria-pressed={interests.includes(opt)} onClick={() => toggle(opt)} className={cn("min-h-10 rounded-full border px-3 text-sm", interests.includes(opt) ? "border-apricot bg-apricot/10 text-apricot" : "border-basalt/15 text-basalt/70")}>
+              {opt}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+      <button type="submit" className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-apricot text-base font-semibold text-white hover:bg-apricot/90">
+        <Route className="h-4 w-4" /> Plan my trip
+      </button>
+    </form>
   );
 }

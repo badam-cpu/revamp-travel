@@ -394,7 +394,7 @@ async function linkedUser(admin: SupabaseClient, chatId: string): Promise<{ id: 
 }
 
 const HELP_GUEST =
-  "I'm Revamp's trip helper. Tell me what you're looking for and I'll find real places on Revamp — for example:\n• <i>A cabin in Dilijan for 2, 14–16 Nov</i>\n• <i>Wine tour near Yerevan this Saturday</i>\n• <i>Do I need a visa for Armenia?</i>\n\n/trip — your upcoming booking";
+  "I'm Aha, Revamp's AI assistant. Tell me what you're looking for and I'll find real places on Revamp — for example:\n• <i>A cabin in Dilijan for 2, 14–16 Nov</i>\n• <i>Wine tour near Yerevan this Saturday</i>\n• <i>Do I need a visa for Armenia?</i>\n\n/trip — your upcoming booking";
 const HELP_HOST = `${HELP_GUEST}\n\n<b>For hosts</b>\n/today — today's check-ins, check-outs and requests\n/bookings — the next 7 days\n/summary off · /summary on — morning summary\nNew bookings and requests arrive here with buttons to act on them.`;
 
 export async function handleTelegramUpdate(admin: SupabaseClient, update: TgUpdate, deps: BotDeps): Promise<void> {

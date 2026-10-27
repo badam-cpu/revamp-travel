@@ -1,5 +1,9 @@
 # Aha Voice Assistant — ElevenLabs setup (about 15 minutes)
 
+Aha is Revamp's one AI assistant for guests (2026-10-27): the chat bubble has
+Chat · Talk · Plan a trip, and the voice can search, show photos, fill in the
+booking box and plan a whole trip.
+
 The website side is built: a **Talk to Aha** button on stay / tour / experience pages
 (`client/src/components/AhaVoiceButton.tsx`), the listing knowledge it hands to the
 agent (`GET /api/voice/context`) and a date checker the agent can call
@@ -88,6 +92,20 @@ How to help:
   | `keywords` | String | `Short words like pool, wine, hiking, view` |
 - The homepage sends its own instructions (the prompt override below), so the agent's
   main prompt stays the listing one.
+
+### Tools → Add tool → Client (plans a whole trip, 2026-10-27)
+- **Name:** `plan_trip`
+- **Description:** `Open the trip planner on the guest's screen with their trip filled in and build a day-by-day plan from Revamp's real listings.`
+- **Wait for response:** ON
+- **Parameters** (each its own property):
+  | Identifier | Type | Required | Description |
+  |---|---|---|---|
+  | `days` | Number | ✓ | `How many days the trip lasts` |
+  | `startCity` | String | – | `Where they start: Yerevan, Gyumri or Dilijan` |
+  | `travelers` | Number | – | `Number of people` |
+  | `interests` | String | – | `Short comma-separated words, e.g. food, hiking, history` |
+  | `pace` | String | – | `relaxed, balanced or packed` |
+  | `budget` | String | – | `budget, mid-range or comfort` |
 
 ### Security tab
 - **Overrides:** turn on **First message**, **Language** and **System prompt** (the site sends the greeting, the English/Russian choice and — on the homepage only — the search instructions).

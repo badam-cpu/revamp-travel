@@ -21,7 +21,7 @@ export async function llmsTxtHandler(req: Request, res: Response): Promise<void>
   const L: string[] = [];
   L.push("# Revamp Vacations");
   L.push("");
-  L.push("> Armenia's travel marketplace — curated places to stay, Armenian tables, and local tours & experiences across the country, with an AI trip planner and direct online booking (prices in Armenian dram, AMD).");
+  L.push("> Armenia's travel marketplace — curated places to stay, Armenian tables, and local tours & experiences across the country, with Aha, an AI assistant that plans trips and answers questions, and direct online booking (prices in Armenian dram, AMD).");
   L.push("");
   L.push("Revamp Vacations (legal name: Revamp Hospitality LLC) helps travelers discover and book stays, restaurants, guided tours, and hands-on experiences throughout Armenia — Yerevan, Dilijan, Lake Sevan, Tatev, and beyond. Listings are created by local operators and reviewed before they go live. Contact: hello@revampvacations.com.");
   L.push("");
@@ -32,7 +32,7 @@ export async function llmsTxtHandler(req: Request, res: Response): Promise<void>
   L.push(`- [Tours](${origin}/explore/tour): guided routes and day trips`);
   L.push(`- [Experiences](${origin}/explore/experience): classes, crafts and tastings`);
   L.push(`- [Map](${origin}/map): browse everything by location`);
-  L.push(`- [AI trip planner](${origin}/plan): generates a day-by-day Armenia itinerary from the live catalog`);
+  L.push(`- [Plan with Aha](${origin}/plan): Aha, Revamp's AI assistant, generates a day-by-day Armenia itinerary from the live catalog`);
   L.push(`- [Blog](${origin}/blog): guides and stories about traveling in Armenia`);
   L.push("");
   L.push("## For AI assistants (MCP)");

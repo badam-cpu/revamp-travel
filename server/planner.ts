@@ -54,7 +54,7 @@ function getClient(): Anthropic {
   if (!client) {
     throw new PlannerError(
       503,
-      "The AI trip planner isn't configured yet — set ANTHROPIC_API_KEY on the server (see ENVIRONMENT.md) and restart.",
+      "Aha can't plan trips right now. Please try again later.",
     );
   }
   return client;
@@ -167,12 +167,13 @@ export async function planTrip(params: PlanTripParams, listings: CatalogEntry[])
   } catch (err: unknown) {
     const anyErr = err as { status?: number; message?: string };
     if (anyErr?.status === 401 || anyErr?.status === 403) {
-      throw new PlannerError(503, "The AI trip planner's API key was rejected — check ANTHROPIC_API_KEY.");
+      console.error("[planner] Anthropic rejected ANTHROPIC_API_KEY");
+      throw new PlannerError(503, "Aha can't plan trips right now. Please try again later.");
     }
     if (anyErr?.status === 429) {
       throw new PlannerError(429, "The trip planner is getting a lot of requests right now — please try again in a moment.");
     }
-    throw new PlannerError(502, "Couldn't reach the AI trip planner. Please try again.");
+    throw new PlannerError(502, "Aha couldn't build that plan just now. Please try again.");
   }
 
   const text = response.content

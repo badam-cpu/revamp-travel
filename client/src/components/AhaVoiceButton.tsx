@@ -1,5 +1,8 @@
 /**
- * "Talk to Aha" — opens the Aha Voice Assistant (AhaVoiceCall, lazy-loaded).
+ * "Talk to Aha" — opens the Aha Voice Assistant. Normally that's the Talk tab of
+ * the Aha panel (SupportWidget, via openAha), so the call survives navigation;
+ * where that panel isn't shown (operators, admins) the button opens its own
+ * floating call panel (AhaVoiceCall, lazy-loaded) as before.
  * On listing pages (`listing`, stays/tours/experiences only) Aha answers about
  * that listing; on the homepage (`AhaVoiceSearchButton`) it searches.
  * Renders nothing until VITE_ELEVENLABS_AGENT_ID is set.
@@ -12,6 +15,7 @@ import { lazy, Suspense, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronUp, Loader2, Mic, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { openAha } from "@/lib/ahaPanel";
 
 const AhaVoiceCall = lazy(() => import("@/components/AhaVoiceCall"));
 const ENABLED = !!import.meta.env.VITE_ELEVENLABS_AGENT_ID;
@@ -61,7 +65,9 @@ function VoicePanel({ slug, subtitle, children }: { slug?: string; subtitle: str
   };
   return (
     <>
-      {children(() => setOpen(true))}
+      {children(() => {
+        if (!openAha("talk")) setOpen(true);
+      })}
       {open &&
         createPortal(
           <section

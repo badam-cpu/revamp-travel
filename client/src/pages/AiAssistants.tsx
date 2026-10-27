@@ -228,7 +228,7 @@ export default function AiAssistants() {
           <p className="mt-3 text-sm text-basalt/60">
             Prefer to plan here?{" "}
             <Link href="/plan" className="font-medium text-apricot underline-offset-4 hover:underline">
-              Try the Revamp AI trip planner →
+              Or plan it with Aha, right here on Revamp →
             </Link>
           </p>
         </section>

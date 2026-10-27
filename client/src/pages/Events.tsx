@@ -181,7 +181,7 @@ export default function Events() {
         <aside className="mt-12 max-w-4xl border border-basalt/12 bg-chalk/40 p-6">
           <h2 className="font-display text-2xl tracking-[-0.02em]">Build a trip around it</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-basalt/65">
-            Tell our AI trip planner your dates and it will plan the days around the event — with real stays, tables and tours you can book.
+            Tell Aha, our AI assistant, your dates and it will plan the days around the event — with real stays, tables and tours you can book.
           </p>
           <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold">
             <Link href="/plan" className="inline-flex items-center gap-1 text-apricot hover:underline">Plan my trip <ArrowRight className="h-4 w-4" /></Link>

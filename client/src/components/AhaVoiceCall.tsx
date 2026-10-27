@@ -9,11 +9,12 @@
  * Listing: the agent checks dates (`check_dates` → /api/voice/quote), fills the
  * booking box (`fill_booking`) and opens photos (`show_photo`). Homepage: it
  * searches (`search_places` → /api/voice/search) and the results show as cards
- * here. Calls end after the server's maxSeconds. English or Russian. Nothing is
+ * here. Anywhere, `plan_trip` opens the trip planner filled in and builds the
+ * plan (/plan reads the query). Calls end after the server's maxSeconds. English or Russian. Nothing is
  * booked or paid here. Errors stay calm — details go to the console only.
  */
 import { useEffect, useRef, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Loader2, Mic, MicOff, PhoneOff } from "lucide-react";
 import { ConversationProvider, useConversation } from "@elevenlabs/react";
 import { Button } from "@/components/ui/button";
@@ -77,6 +78,7 @@ type CallProps = { scope?: VoiceScope; slug?: string; onEnd: () => void; compact
 
 function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }: CallProps) {
   const [results, setResults] = useState<SearchResult | null>(null);
+  const [, navigate] = useLocation();
   const [timedOut, setTimedOut] = useState(false);
   const maxSeconds = useRef(240);
   const [lang, setLang] = useState<Lang>("en");
@@ -191,6 +193,21 @@ function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }
             if (say.startsWith("Photo")) onFilled?.();
             trackEvent("voice_assistant_photo", { item_id: slug });
             return say;
+          },
+          plan_trip: async (p: Record<string, unknown>) => {
+            const days = Math.min(21, Math.max(1, Math.round(Number(p.days)) || 4));
+            const q = new URLSearchParams({ days: String(days), auto: "1" });
+            const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : "");
+            if (str(p.startCity ?? p.from)) q.set("from", str(p.startCity ?? p.from));
+            if (Number(p.travelers ?? p.guests) > 0) q.set("travelers", String(Math.round(Number(p.travelers ?? p.guests))));
+            if (str(p.pace)) q.set("pace", str(p.pace).toLowerCase());
+            if (str(p.budget)) q.set("budget", str(p.budget).toLowerCase());
+            if (str(p.interests)) q.set("interests", str(p.interests));
+            navigate(`/plan?${q.toString()}`);
+            onFilled?.();
+            note(`plan_trip ${q.toString().slice(0, 60)}`);
+            trackEvent("voice_assistant_plan", { days });
+            return `I'm building your ${days}-day plan now — it will appear on the screen in a few seconds, with real places you can book. Tell me if you'd like it slower, cheaper or different.`;
           },
           search_places: async (p: Record<string, unknown>) => {
             try {

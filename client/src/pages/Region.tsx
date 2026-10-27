@@ -136,7 +136,7 @@ export default function Region({ slug }: { slug: string }) {
             <p className="mx-auto mt-3 max-w-md text-sm text-basalt/55">In the meantime, browse everything across Armenia or plan a trip with the AI planner.</p>
             <div className="mt-6 flex flex-wrap justify-center gap-3">
               <Button asChild className="rounded-none bg-apricot text-white"><Link href="/explore">Browse everything</Link></Button>
-              <Button asChild variant="outline" className="rounded-none border-basalt/20"><Link href="/plan">AI trip planner</Link></Button>
+              <Button asChild variant="outline" className="rounded-none border-basalt/20"><Link href="/plan">Plan with Aha</Link></Button>
             </div>
           </div>
         )}

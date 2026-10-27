@@ -1,7 +1,7 @@
 /** Revamp brandbook: the planner reuses the marketplace's white/orange/charcoal system — no new colors, same rounded geometry. */
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { AlertTriangle, Compass, Sparkles } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { Button } from "@/components/ui/button";
@@ -22,12 +22,13 @@ export default function Plan() {
   const [budget, setBudget] = useState<PlanTripParams["budget"]>("mid-range");
   const [interests, setInterests] = useState<string[]>(["History & monasteries", "Nature & hiking"]);
 
+  const search = useSearch();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
 
   useDocumentMeta({
-    title: "AI Trip Planner | Revamp Vacations",
+    title: "Plan your Armenia trip with Aha | Revamp Vacations",
     description: "Generate a day-by-day Armenia itinerary grounded in Revamp Vacations's live, published catalog.",
     canonicalPath: "/plan",
   });
@@ -36,29 +37,63 @@ export default function Plan() {
     setInterests((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
   };
 
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
+  const run = async (params: PlanTripParams) => {
     setLoading(true);
     setError(null);
     setItinerary(null);
     try {
-      const result = await planTrip({ days, startCity, travelers, pace, budget, interests });
-      setItinerary(result);
+      setItinerary(await planTrip(params));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong generating that plan. Please try again.");
+      if (!(err instanceof ApiError)) console.error("[plan]", err);
+      setError(err instanceof ApiError ? err.message : "Aha couldn't build that plan just now. Please try again.");
     } finally {
       setLoading(false);
     }
   };
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    run({ days, startCity, travelers, pace, budget, interests });
+  };
+
+  // Aha (voice or chat) can open this page with the trip filled in —
+  // ?days=4&from=Dilijan&travelers=2&pace=relaxed&budget=comfort&interests=food,hiking&auto=1 —
+  // and `auto` builds the plan straight away.
+  useEffect(() => {
+    const q = new URLSearchParams(search);
+    if (!q.toString()) return;
+    const n = (k: string, min: number, max: number) => {
+      const v = Math.round(Number(q.get(k)));
+      return Number.isFinite(v) && v >= min ? Math.min(v, max) : undefined;
+    };
+    const from = q.get("from") ?? "";
+    const want = (q.get("interests") ?? "").toLowerCase().split(/[,;]+/).map((w) => w.trim()).filter(Boolean);
+    const picked = INTEREST_OPTIONS.filter((opt) => want.some((w) => opt.toLowerCase().includes(w) || w.split(/\s+/).some((x) => x.length > 3 && opt.toLowerCase().includes(x))));
+    const params: PlanTripParams = {
+      days: n("days", 1, 21) ?? days,
+      startCity: ["Yerevan", "Gyumri", "Dilijan"].find((c) => c.toLowerCase() === from.toLowerCase()) ?? startCity,
+      travelers: n("travelers", 1, 20) ?? travelers,
+      pace: (["relaxed", "balanced", "packed"] as const).find((p) => p === q.get("pace")) ?? pace,
+      budget: (["budget", "mid-range", "comfort"] as const).find((b) => b === q.get("budget")) ?? budget,
+      interests: picked.length ? picked : interests,
+    };
+    setDays(params.days);
+    setStartCity(params.startCity);
+    setTravelers(params.travelers);
+    setPace(params.pace);
+    setBudget(params.budget);
+    setInterests(params.interests);
+    if (q.get("auto") === "1") run(params);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   return (
     <div className="min-h-screen bg-paper text-basalt">
       <SiteHeader />
       <main className="container py-12 lg:py-16">
-        <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-apricot"><Sparkles className="h-3.5 w-3.5" /> AI trip planner</div>
+        <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-apricot"><Sparkles className="h-3.5 w-3.5" /> Plan with Aha</div>
         <h1 className="mt-3 max-w-2xl font-display text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl">An itinerary built from this catalog.</h1>
         <p className="mt-4 max-w-xl text-base leading-7 text-basalt/60">
-          Tell it how long you have and what you're after — it drafts a day-by-day plan, naming real stays, tables, and tours from the Revamp Vacations marketplace where they fit.
+          Tell Aha, our AI assistant, how long you have and what you're after — it drafts a day-by-day plan, naming real stays, tables, and tours from the Revamp Vacations marketplace where they fit.
         </p>
         <p className="mt-3 text-sm text-basalt/60">
           Prefer ChatGPT or Claude?{" "}
