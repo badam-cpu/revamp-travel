@@ -63,8 +63,7 @@ export default function Home() {
     const t = setInterval(() => setHeroIdx((i) => (i + 1) % heroSlides.length), 6000);
     return () => clearInterval(t);
   }, [heroSlides.length, reducedMotion, heroPaused]);
-  // Hero headline (admin-editable in Site content) says plainly what Revamp is
-  // ("explore" is set in brand orange);
+  // Hero headline (admin-editable in Site content) says plainly what Revamp is;
   // the slogan moves in its own band below the search.
   const heroHeadline = settings.heroHeadline?.trim() || "Places to stay, eat and explore across Armenia";
   const heroSubcopy =
@@ -146,7 +145,7 @@ export default function Home() {
           <div className="container relative z-10 flex min-h-[500px] flex-col justify-end pb-24 pt-14 sm:min-h-[580px] lg:pb-28">
             <div className="max-w-[760px] text-white [text-shadow:0_2px_18px_rgba(15,15,15,0.35)]">
               <div className="hero-enter flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.22em] text-white"><span className="h-px w-10 bg-apricot" /> Curated across Armenia</div>
-              <h1 className="hero-enter mt-4 max-w-[16ch] font-display text-[2.6rem] leading-[0.98] tracking-[-0.045em] sm:text-[3.6rem] lg:text-[4.4rem]">{heroHeadline.split(/(explore)/i).map((part, i) => (/^explore$/i.test(part) ? <span key={i} className="text-apricot">{part}</span> : part))}</h1>
+              <h1 className="hero-enter mt-4 max-w-[16ch] font-display text-[2.6rem] leading-[0.98] tracking-[-0.045em] sm:text-[3.6rem] lg:text-[4.4rem]">{heroHeadline}</h1>
             </div>
             {(heroCaption || heroSlides.length > 1) && (
               <div className="absolute right-4 top-4 flex items-end gap-4 text-right text-white sm:bottom-14 sm:right-8 sm:top-auto lg:bottom-24">
