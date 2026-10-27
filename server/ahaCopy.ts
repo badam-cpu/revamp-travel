@@ -275,30 +275,42 @@ Return ONLY JSON: {"items": [{"q": "...", "a": "..."}]}`;
     ...input.facts.map((f) => `- ${f}`),
     input.existing.length ? `\nThe host already has these questions:\n${input.existing.map((q) => `- ${q}`).join("\n")}` : "",
   ].join("\n");
+  let response: Anthropic.Message;
   try {
-    const response = await anthropic.messages.create({
+    response = await anthropic.messages.create({
       model: process.env.SUPPORT_MODEL || "claude-haiku-4-5",
       max_tokens: 1800,
       system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }] as unknown as Anthropic.MessageCreateParams["system"],
       messages: [{ role: "user", content: msg }],
     });
-    const raw = response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("\n");
-    const parsed = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)) as { items?: unknown };
-    return Array.isArray(parsed.items) ? (parsed.items as { q: string; a: string }[]) : [];
   } catch (err) {
     console.error("[aha-faq]", err);
-    return null; // failed — not the same as "nothing to say"
+    return null; // the request failed (not billed) — retry later
+  }
+  // A reply we can't read counts as "nothing to say" (billed — so never retried in a loop).
+  const parsed = parseJsonReply(response) as { items?: unknown } | null;
+  return Array.isArray(parsed?.items) ? (parsed.items as { q: string; a: string }[]) : [];
+}
+
+/** The JSON object in a model reply, or null when there isn't a readable one. */
+function parseJsonReply(response: Anthropic.Message): unknown {
+  const raw = response.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("\n");
+  try {
+    return JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
+  } catch {
+    console.error("[aha-faq] unreadable reply");
+    return null;
   }
 }
 
 /**
  * Second pass for automatic FAQs (0118): keep only answers whose every claim is
  * stated in the listing facts. Anything the model can't tie to a fact is dropped,
- * so a published answer never says more than the listing does. null = the check
- * itself failed (nothing is published then).
+ * so a published answer never says more than the listing does. null = the request
+ * failed (retried later); an unreadable reply keeps nothing (fail closed).
  */
 export async function verifyListingFaq(facts: string[], items: { q: string; a: string }[]): Promise<{ q: string; a: string }[] | null> {
   const anthropic = getClient();
@@ -308,22 +320,19 @@ export async function verifyListingFaq(facts: string[], items: { q: string; a: s
 For each numbered question-and-answer, decide whether EVERY claim in the answer is directly stated by (or plainly follows from) the facts. Times, distances, amenities, rules, inclusions, policies and numbers must appear in the facts. General courtesy wording is fine.
 Return ONLY JSON: {"supported": [list of the numbers that pass]}`;
   const msg = `Listing facts:\n${facts.map((f) => `- ${f}`).join("\n")}\n\nFAQ:\n${items.map((it, i) => `${i + 1}. Q: ${it.q}\n   A: ${it.a}`).join("\n")}`;
+  let response: Anthropic.Message;
   try {
-    const response = await anthropic.messages.create({
+    response = await anthropic.messages.create({
       model: process.env.SUPPORT_MODEL || "claude-haiku-4-5",
       max_tokens: 300,
       system,
       messages: [{ role: "user", content: msg }],
     });
-    const raw = response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("\n");
-    const parsed = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)) as { supported?: unknown };
-    const keep = new Set((Array.isArray(parsed.supported) ? parsed.supported : []).map((n) => Number(n)));
-    return items.filter((_, i) => keep.has(i + 1));
   } catch (err) {
     console.error("[aha-faq-verify]", err);
     return null;
   }
+  const parsed = parseJsonReply(response) as { supported?: unknown } | null;
+  const keep = new Set((Array.isArray(parsed?.supported) ? parsed.supported : []).map((n) => Number(n)));
+  return items.filter((_, i) => keep.has(i + 1));
 }
