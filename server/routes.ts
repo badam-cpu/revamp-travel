@@ -9,6 +9,7 @@
  * supplied URL, which the browser can't safely do itself — CORS aside,
  * this project's SSRF guard and size/timeout caps belong on the server).
  */
+import express from "express";
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { listPublishedForPlanner, verifyUser, userClient, getListingBusyRanges, getOperatorGooglePlaceId, pingDb, publicClient } from "./supabase.js";
@@ -3383,9 +3384,23 @@ export function registerApiRoutes(app: Express) {
     res.json(ctx);
   });
   // The ElevenLabs agent's `check_dates` server tool.
-  app.post("/api/voice/quote", async (req: Request, res: Response) => {
+  // Tool parameters may arrive as JSON, form fields, plain text or query string,
+  // depending on how the agent's tool is set up — read them from all of them.
+  const voiceQuoteHandler = async (req: Request, res: Response) => {
     if (rateLimited(voiceHits, `q:${req.ip || "?"}`, 60)) return res.status(429).json({ say: "Too many checks right now — please try again in a minute." });
-    const b = (req.body ?? {}) as Record<string, unknown>;
+    let raw: unknown = req.body;
+    if (typeof raw === "string") {
+      try {
+        raw = JSON.parse(raw);
+      } catch {
+        raw = Object.fromEntries(new URLSearchParams(raw as string));
+      }
+    }
+    const body = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    // Some tools nest the parameters ({ body: {...} } / { parameters: {...} }).
+    const nested = [body.body, body.parameters, body.params].find((x) => x && typeof x === "object") as Record<string, unknown> | undefined;
+    const b = { ...(req.query as Record<string, unknown>), ...(nested ?? {}), ...body } as Record<string, unknown>;
+    console.info("[voice-quote] keys", Object.keys(b).join(","), req.get("content-type") ?? "-");
     const slug = typeof (b.slug ?? b.listing_slug) === "string" ? String(b.slug ?? b.listing_slug).trim() : "";
     const iso = (v: unknown) => looseIsoDate(v);
     // Accept the usual spellings an agent tool may be set up with (start/end, check_in/check_out, …).
@@ -3401,7 +3416,10 @@ export function registerApiRoutes(app: Express) {
       console.error("[voice-quote]", err);
       res.json({ available: null, say: "I couldn't check those dates just now — the calendar on the page is up to date." });
     }
-  });
+  };
+  const anyBody = [express.urlencoded({ extended: false }), express.text({ type: ["text/*", "application/x-www-form-urlencoded"] })];
+  app.post("/api/voice/quote", ...anyBody, voiceQuoteHandler);
+  app.get("/api/voice/quote", voiceQuoteHandler);
 
   // POST /api/admin-moderate — admin-only moderation for the unified inbox:
   // redact a message, or close/reopen a conversation (a closed conversation
