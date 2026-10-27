@@ -22,6 +22,7 @@ import { trackEvent } from "@/lib/analytics";
 import { isoDay, requestAhaFill, requestAhaPhoto } from "@/lib/ahaBooking";
 import { imgAttrs } from "@/lib/responsiveImg";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
 
 const AGENT_ID = import.meta.env.VITE_ELEVENLABS_AGENT_ID as string | undefined;
 
@@ -156,7 +157,9 @@ function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }
       return;
     }
     try {
-      const r = await fetch("/api/voice/session", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ scope, slug, lang }) });
+      // Signed in? Send the session so team test calls don't count against guests' limits.
+      const token = (await supabase.auth.getSession()).data.session?.access_token;
+      const r = await fetch("/api/voice/session", { method: "POST", headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ scope, slug, lang }) });
       const ctx = (await r.json().catch(() => ({}))) as { error?: string; agentId?: string; signedUrl?: string; maxSeconds?: number; title?: string; context?: string; prompt?: string };
       if (r.status === 429 && ctx.error && LIMIT_MSG[ctx.error]) {
         setProblem(LIMIT_MSG[ctx.error][scope]);
