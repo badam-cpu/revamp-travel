@@ -54,6 +54,8 @@ export type LiveListing = Listing & {
   sessionSchedule: SessionSchedule | null;
   /** How a slot booking is confirmed: pay now vs. provider approves first. */
   bookingMode: "instant" | "request";
+  /** 0118 — set once the host saves their own FAQ; until then Aha writes it automatically. */
+  faqHostSavedAt?: string | null;
 };
 
 interface ListingsContextType {
@@ -164,6 +166,7 @@ interface ListingRow {
   photo_captions?: Record<string, string> | null;
   /** 0118 — absent before that migration (rows come from select("*")). */
   faq?: unknown;
+  faq_host_saved_at?: string | null;
   video_url: string | null;
   // revampstay offers (0091) — absent (undefined) on a client that selects "*"
   // before the migration runs; mapListingRow defaults every one of them.
@@ -271,6 +274,7 @@ function mapListingRow(row: ListingRow): LiveListing {
     coverFocus: row.cover_focus ?? undefined,
     photoCaptions: row.photo_captions && typeof row.photo_captions === "object" ? row.photo_captions : undefined,
     faq: cleanFaq(row.faq),
+    faqHostSavedAt: row.faq_host_saved_at ?? null,
     videoUrl: row.video_url ?? undefined,
     // revampstay offers (0091): all null-safe — undefined pre-migration, which
     // listingOffers() reads as ["nightly"], so revampvacations is unchanged.

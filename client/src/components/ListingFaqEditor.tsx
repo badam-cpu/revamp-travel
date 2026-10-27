@@ -21,7 +21,7 @@ type Row = FaqItem & { key: string; suggested?: boolean };
 let nextKey = 0;
 const toRows = (items: FaqItem[], suggested = false): Row[] => items.map((it) => ({ ...it, key: `faq-${nextKey++}`, suggested }));
 
-export function ListingFaqEditor({ listing, open, onClose }: { listing: { id: string; title: string; faq?: FaqItem[] }; open: boolean; onClose: () => void }) {
+export function ListingFaqEditor({ listing, open, onClose }: { listing: { id: string; title: string; faq?: FaqItem[]; faqHostSavedAt?: string | null }; open: boolean; onClose: () => void }) {
   const { refresh } = useListings();
   const [rows, setRows] = useState<Row[]>([]);
   const [drafting, setDrafting] = useState(false);
@@ -96,6 +96,16 @@ export function ListingFaqEditor({ listing, open, onClose }: { listing: { id: st
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {!listing.faqHostSavedAt && (
+            <p className="mb-4 flex gap-2.5 border border-apricot/30 bg-apricot/[0.04] p-3 text-sm leading-6 text-basalt/75">
+              <Sparkles className="mt-1 h-4 w-4 shrink-0 text-apricot" aria-hidden />
+              <span>
+                {(listing.faq?.length ?? 0) > 0
+                  ? "Aha wrote these from your listing details and they're live on your page. It updates them when you change your listing. Edit or remove anything — once you save, they're yours and Aha won't change them."
+                  : "Aha writes this FAQ automatically from your listing details, usually within an hour of publishing or changing them. You can also write your own now."}
+              </span>
+            </p>
+          )}
           {rows.length === 0 ? (
             <div className="grid place-items-center gap-3 py-10 text-center">
               <MessageCircleQuestion className="h-8 w-8 text-apricot" aria-hidden />

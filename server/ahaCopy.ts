@@ -258,16 +258,16 @@ export interface AhaFaqInput {
  * question the facts can't answer is left out, never guessed. The host edits and
  * approves every item before anything is shown.
  */
-export async function generateListingFaq(input: AhaFaqInput): Promise<{ q: string; a: string }[]> {
+export async function generateListingFaq(input: AhaFaqInput): Promise<{ q: string; a: string }[] | null> {
   const anthropic = getClient();
-  if (!anthropic) return [];
+  if (!anthropic) return null;
   const system = `You draft the "Questions guests ask" section for a listing on Revamp Vacations, a travel marketplace in Armenia.
 Rules:
 - Write 5 to 8 questions a guest typically asks BEFORE booking this kind of listing (${input.listingType}): getting there, parking, check-in / meeting point, what's included, who it suits (kids, pets, accessibility), rules, cancellation, what to bring.
 - Answer ONLY from the listing facts provided. If the facts don't answer a question, leave that question out — never guess, never add amenities, times, distances, prices or promises that aren't in the facts.
 - Never mention reviews, ratings, awards, "best", or contact details (phone, email, WhatsApp, Telegram) — guests contact the host through Revamp.
 - Don't quote prices (they change by date).
-- English. Questions short and natural, as a guest would ask. Answers 1–3 friendly, plain sentences, written as the host ("we", "our").
+- English. Questions short and natural, as a guest would ask. Answers 1–3 friendly, plain sentences in a neutral, factual voice about the place ("The apartment has…", "The tour starts at…") — not "we"/"I".
 - Don't repeat questions the host already has.
 Return ONLY JSON: {"items": [{"q": "...", "a": "..."}]}`;
   const msg = [
@@ -290,6 +290,40 @@ Return ONLY JSON: {"items": [{"q": "...", "a": "..."}]}`;
     return Array.isArray(parsed.items) ? (parsed.items as { q: string; a: string }[]) : [];
   } catch (err) {
     console.error("[aha-faq]", err);
-    return [];
+    return null; // failed — not the same as "nothing to say"
+  }
+}
+
+/**
+ * Second pass for automatic FAQs (0118): keep only answers whose every claim is
+ * stated in the listing facts. Anything the model can't tie to a fact is dropped,
+ * so a published answer never says more than the listing does. null = the check
+ * itself failed (nothing is published then).
+ */
+export async function verifyListingFaq(facts: string[], items: { q: string; a: string }[]): Promise<{ q: string; a: string }[] | null> {
+  const anthropic = getClient();
+  if (!anthropic) return null;
+  if (!items.length) return [];
+  const system = `You check a travel listing's FAQ against the listing's facts.
+For each numbered question-and-answer, decide whether EVERY claim in the answer is directly stated by (or plainly follows from) the facts. Times, distances, amenities, rules, inclusions, policies and numbers must appear in the facts. General courtesy wording is fine.
+Return ONLY JSON: {"supported": [list of the numbers that pass]}`;
+  const msg = `Listing facts:\n${facts.map((f) => `- ${f}`).join("\n")}\n\nFAQ:\n${items.map((it, i) => `${i + 1}. Q: ${it.q}\n   A: ${it.a}`).join("\n")}`;
+  try {
+    const response = await anthropic.messages.create({
+      model: process.env.SUPPORT_MODEL || "claude-haiku-4-5",
+      max_tokens: 300,
+      system,
+      messages: [{ role: "user", content: msg }],
+    });
+    const raw = response.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("\n");
+    const parsed = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)) as { supported?: unknown };
+    const keep = new Set((Array.isArray(parsed.supported) ? parsed.supported : []).map((n) => Number(n)));
+    return items.filter((_, i) => keep.has(i + 1));
+  } catch (err) {
+    console.error("[aha-faq-verify]", err);
+    return null;
   }
 }

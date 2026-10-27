@@ -1,8 +1,9 @@
 -- 0118 — Guest FAQ per listing.
 --
--- The host's approved questions and answers ("Is there parking?", "Can we check
--- in early?"), drafted by Aha from the listing's own facts and edited/approved
--- by the operator in Dashboard → Listings ⋯ → Guest FAQ. Shown on the listing
+-- Questions and answers ("Is there parking?", "Can we check in early?") written
+-- automatically by Aha (Haiku) from the listing's own posted details — every
+-- answer checked against those facts — and editable by the operator in
+-- Dashboard → Listings ⋯ → Guest FAQ. Shown on the listing
 -- page ("Questions guests ask"), in the crawler HTML + FAQPage JSON-LD, and
 -- returned by the AI connector's get_listing. It's the shared knowledge base
 -- future AI inbox replies and the voice line will answer from.
@@ -15,6 +16,12 @@
 -- size ceiling here).
 
 alter table public.listings add column if not exists faq jsonb not null default '[]'::jsonb;
+-- Automatic FAQ: Haiku writes it from the listing's posted details (server/listingFaqAuto.ts,
+-- every 20 min via netlify/functions/faq-auto.ts) and rewrites it when those details change
+-- (faq_facts_hash = hash of the facts it last wrote from). Once the host saves their own
+-- version (faq_host_saved_at), automation never touches that listing's FAQ again.
+alter table public.listings add column if not exists faq_facts_hash text;
+alter table public.listings add column if not exists faq_host_saved_at timestamptz;
 
 do $$
 begin

@@ -35,7 +35,8 @@ import { markQrPaymentPaid } from "./qrPayments.js";
 import { reconcileUserBookings, logBookingEvent, finalizeConfirmedBooking } from "./bookings.js";
 import { startOperatorSubscription, reconcileOperatorSubscriptions, cancelOperatorSubscription, ensurePlanRegistered, type PlanRow } from "./subscriptions.js";
 import { syncListingSessions, reserveSeats, releaseSeats } from "./sessions.js";
-import { generateListingCopy, generateJourneyTemplate, generateListingFaq, ahaCopyConfigured } from "./ahaCopy.js";
+import { generateListingCopy, generateJourneyTemplate, ahaCopyConfigured } from "./ahaCopy.js";
+import { draftVerifiedFaq } from "./listingFaqAuto.js";
 import { cleanFaq } from "../shared/listingFaq.js";
 import { scanTextFixes, suggestTextFix, applyTextFixes } from "./textFixes.js";
 import { generateSupportReply, type SupportTurn } from "./support.js";
@@ -66,7 +67,7 @@ import { isCrawlerUserAgent } from "./botDetect.js";
 import { randomUUID } from "crypto";
 import { formatSlotTime, slotLocalDate } from "../shared/sessions.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, describeCancellationPolicy, isBookableType, promoDiscount, addonUnitCost, nightsBetween, maxNightlyOccupancy, listingFeeCents, type Addon, DEFAULT_CURRENCY, PLATFORM_COMMISSION_PERCENT } from "../shared/bookings.js";
+import { computeBookingAmountCents, computeBookingCharge, computeRefundCents, isBookableType, promoDiscount, addonUnitCost, nightsBetween, maxNightlyOccupancy, listingFeeCents, type Addon, DEFAULT_CURRENCY, PLATFORM_COMMISSION_PERCENT } from "../shared/bookings.js";
 import { cheapestAvailableUnit, roomUnitLabel, unitPricing } from "../shared/rooms.js";
 import type { RoomUnit } from "../shared/listings.js";
 import { overlapsSuspension } from "../shared/listings.js";
@@ -4662,9 +4663,10 @@ export function registerApiRoutes(app: Express) {
     }
   });
 
-  // POST /api/aha-listing-faq — Aha drafts guest FAQ entries (0118) for one of the
-  // caller's listings, from that listing's OWN saved data (read here, never taken
-  // from the request). Drafts only — the host edits and saves them. Owner or admin.
+  // POST /api/aha-listing-faq — Aha drafts more guest FAQ entries (0118) for one of
+  // the caller's listings, from that listing's OWN saved data (read here, never taken
+  // from the request), fact-checked like the automatic FAQ. Drafts only — the host
+  // edits and saves them. Owner or admin.
   app.post("/api/aha-listing-faq", async (req: Request, res: Response) => {
     const authHeader = req.get("authorization") || "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
@@ -4683,32 +4685,9 @@ export function registerApiRoutes(app: Express) {
     if (!row) return res.status(404).json({ error: "Listing not found." });
     if (row.operator_id !== userId && me?.role !== "admin") return res.status(403).json({ error: "That isn't your listing." });
 
-    const list = (label: string, v: unknown) => (Array.isArray(v) && v.length ? [`${label}: ${v.filter((x) => typeof x === "string").join(", ")}`] : []);
-    const text = (label: string, v: unknown, max = 1500) => (typeof v === "string" && v.trim() ? [`${label}: ${v.trim().slice(0, max)}`] : []);
-    const facts = [
-      `Type: ${row.type}${row.multi_room ? " (a hotel / guesthouse with several rooms)" : ""}`,
-      ...text("Title", row.title),
-      `Location: ${[row.neighborhood, row.city, row.region].filter(Boolean).join(", ")}, Armenia`,
-      ...text("Summary", row.short_description),
-      ...text("Description", row.long_description, 3000),
-      ...(Array.isArray(row.facts) ? (row.facts as { label?: string; value?: string }[]).filter((f) => f.label && f.value).map((f) => `${f.label}: ${f.value}`) : []),
-      ...(row.max_guests ? [`Maximum guests: ${row.max_guests}`] : []),
-      ...list("Amenities / included", row.amenities),
-      ...list("House rules", row.house_rules),
-      ...list("Itinerary / highlights", row.highlights),
-      ...list("Not included", row.not_included),
-      ...list("What to bring", row.what_to_bring),
-      ...list("Not suitable for", row.not_suitable_for),
-      ...text("Important information", row.important_info),
-      ...(row.type === "stay" || row.type === "tour" || row.type === "experience"
-        ? [`Cancellation: ${describeCancellationPolicy(row.cancellation_policy, { freeCancelDays: row.free_cancel_days ?? undefined, discountPercent: row.nonrefundable_discount_percent ?? undefined })}`]
-        : []),
-      ...(row.booking_mode === "request" ? ["Booking: the host approves each request first, then the guest pays"] : []),
-      "Payment: paid in full on Revamp by card when booking; the booking is confirmed once the payment goes through",
-    ];
     const existing = cleanFaq(row.faq).map((f) => f.q);
     try {
-      const items = cleanFaq(await generateListingFaq({ listingType: row.type, facts, existing }));
+      const items = await draftVerifiedFaq(row, existing);
       if (!items.length) return res.status(502).json({ error: "Aha couldn't draft questions this time — try again in a moment." });
       res.json({ items });
     } catch (err) {
@@ -4740,7 +4719,8 @@ export function registerApiRoutes(app: Express) {
     if (leak) {
       return res.status(400).json({ error: `Please remove contact details (phone, email, links, messenger names) from “${leak.q}”. Guests reach you through Revamp.` });
     }
-    const { error } = await admin.from("listings").update({ faq: items }).eq("id", listingId);
+    // The host's own version from now on — the automatic FAQ never touches this listing again.
+    const { error } = await admin.from("listings").update({ faq: items, faq_host_saved_at: new Date().toISOString() }).eq("id", listingId);
     if (error) {
       console.error("[listing-faq] save", error.message);
       return res.status(503).json({ error: "Guest FAQ isn't available yet. Please try again later." });
