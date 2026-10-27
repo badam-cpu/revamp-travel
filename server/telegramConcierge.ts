@@ -23,6 +23,7 @@ import { getPublishedCatalog, listPublishedForPlanner, type PublicListing } from
 import { generateSupportReply } from "./support.js";
 import { ARMENIA_REGIONS, isDiscoverable, overlapsSuspension } from "../shared/listings.js";
 import { computeBookingAmountCents, computeBookingCharge, listingFeeCents, nightsBetween, promoDiscount } from "../shared/bookings.js";
+import { quoteListing } from "./mcpQuote.js";
 
 const SITE = () => (process.env.URL || "https://revampvacations.com").replace(/\/+$/, "");
 const UTM = "utm_source=telegram&utm_medium=bot&utm_campaign=concierge";
@@ -152,8 +153,10 @@ export interface Card {
   /** Total for the dates (stays with dates, priced with checkout's helpers). */
   totalCents: number | null;
   nights: number | null;
-  /** True = checked free for the dates; null = not checked (no dates / hotel / activity). */
+  /** True = checked free for the dates; null = not checked (no dates / activity). */
   available: boolean | null;
+  /** Hotels/guesthouses with dates: the room type the total is for (cheapest free room). */
+  room?: string | null;
 }
 
 const norm = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9 ]/g, "");
@@ -212,8 +215,13 @@ export async function searchListings(admin: SupabaseClient | null, q: ConciergeI
     if (minStayOf(r.facts) > nights) continue;
     if (overlapsSuspension({ suspendedFrom: r.suspended_from, suspendedUntil: r.suspended_until } as never, start, end)) continue;
     if (r.multi_room) {
-      // Hotels sell rooms; their per-room availability is checked on the page.
-      cards.push({ listing, totalCents: null, nights, available: null });
+      // Hotels sell rooms: price them by the cheapest room free for every night
+      // (the same rule checkout assigns by — quoteListing / bestRoomFor), so a
+      // guesthouse shows a total for the dates like any other stay.
+      const q = await quoteListing(admin, { slug: listing.slug, startDate: start, endDate: end, guests }, "listing").catch(() => null);
+      if (q && !("error" in q) && q.available === false) continue;
+      const ok = q && !("error" in q) && q.available === true && q.price;
+      cards.push({ listing, totalCents: ok ? q.price!.total * 100 : null, nights, available: ok ? true : null, room: ok ? q.room ?? null : null });
     } else {
       const busy = [...(r.blocked_ranges ?? []), ...(r.manual_blocked_ranges ?? []), ...(bookedBy.get(r.id) ?? [])];
       if (busy.some((b) => start < b.end && end > b.start)) continue;

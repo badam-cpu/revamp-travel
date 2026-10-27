@@ -59,6 +59,7 @@ interface VoiceCard {
   image: string;
   price: string;
   total: number | null;
+  room?: string | null;
   nights: number | null;
   available: boolean | null;
 }
@@ -353,7 +354,8 @@ function SearchCards({ results }: { results: SearchResult }) {
             <span className="min-w-0 flex-1">
               <span className="line-clamp-2 text-sm font-semibold leading-5 text-basalt">{c.title}</span>
               <span className="mt-0.5 block truncate text-xs text-basalt/60">
-                {c.city} · {c.total != null && c.nights ? `֏${c.total.toLocaleString("en-US")} for ${c.nights} night${c.nights === 1 ? "" : "s"}` : c.price}
+                {c.city}
+                {c.room ? ` · ${c.room}` : ""} · {c.total != null && c.nights ? `֏${c.total.toLocaleString("en-US")} for ${c.nights} night${c.nights === 1 ? "" : "s"}` : c.price}
               </span>
             </span>
           </Link>

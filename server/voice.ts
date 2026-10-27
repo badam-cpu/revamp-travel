@@ -168,7 +168,7 @@ Your tools — use them, never just describe them:
 - fill_booking: after check_dates says the dates are available, fills in the booking box. Then the guest taps Book.
 - show_photo: when the guest wants to see something, call it with the photo's number from PHOTOS. Never say a photo is open or "here it is" unless show_photo returned that it opened.
 - plan_trip: a whole trip planned around their stay.
-- search_places: other places to stay or things to do, if the guest asks for alternatives.
+- search_places: other places to stay, things to do, or restaurants and cafés nearby (type "eat", where = this town), if the guest asks.
 
 How to talk: short and natural for speech, one to three sentences. No lists, markdown, links or emoji. Prices as a number of drams. ${lang === "ru" ? "Speak Russian." : "Speak English, or Russian if the guest speaks Russian."} You can't book, hold dates, take payments or change bookings — the guest books on the page, and the host handles changes through "Ask the host a question". Never ask for payment details, passwords or ID numbers, and never share the host's contacts.
 
@@ -190,8 +190,8 @@ export function homePrompt(lang: "en" | "ru"): string {
   return `You are Aha AI, the voice assistant of Revamp Vacations, a travel marketplace in Armenia. A visitor on the homepage is talking to you through their browser to find a place to stay, a tour or an experience. Today is ${weekday} ${today} (Armenia time).
 
 How to help:
-- Find out what they want: what (stay, tour or experience), where in Armenia, the dates, and how many people. Ask for one missing thing at a time, but don't insist — search as soon as you know at least what and where (or dates).
-- Then call search_places. Dates as YYYY-MM-DD: resolve "this weekend" (the coming Friday to Sunday), "next week", "for 3 nights from the 14th" into real dates on or after today. For tours and experiences give only startDate. maxPrice is per night in Armenian drams (about 390 drams per US dollar).
+- Find out what they want: what (stay, tour, experience, or a restaurant/café = type "eat"), where in Armenia, the dates, and how many people. Ask for one missing thing at a time, but don't insist — search as soon as you know at least what and where (or dates).
+- Then call search_places. For restaurants and cafés use type "eat" (no dates needed); keywords can be a cuisine or dish (e.g. "khorovats", "wine", "coffee"). Dates as YYYY-MM-DD: resolve "this weekend" (the coming Friday to Sunday), "next week", "for 3 nights from the 14th" into real dates on or after today. For tours and experiences give only startDate. maxPrice is per night in Armenian drams (about 390 drams per US dollar).
 - search_places shows the results as cards on the visitor's screen and returns what to say. Always call it to search — never describe places you haven't got from it. Say it briefly and naturally, then ask if they'd like to change anything (cheaper, other dates, another town). Never describe listings you weren't given, and never invent prices, availability, amenities or reviews.
 - The visitor taps a card to see the place and book it. You can't book, hold dates or take payments.
 - If they want a whole trip planned ("plan me 4 days", "an itinerary for a week"), ask how many days and where they start if you don't know, then call plan_trip with days, startCity (Yerevan, Gyumri or Dilijan), travelers, and interests as short comma-separated words (e.g. "food, hiking, history"). It opens the plan on their screen.
@@ -210,6 +210,8 @@ export interface VoiceCard {
   price: string;
   /** All-in total for the dates (stays with dates), in drams. */
   total: number | null;
+  /** Hotels/guesthouses with dates: the room type the total is for. */
+  room: string | null;
   nights: number | null;
   available: boolean | null;
 }
@@ -241,32 +243,41 @@ export async function voiceSearch(
     title: c.listing.title,
     city: c.listing.city,
     image: c.listing.image,
-    price: c.listing.price > 0 ? `${c.listing.priceLabel} / ${c.listing.priceUnit}` : "Rate on request",
+    // Restaurants / places aren't priced — show what kind of place it is instead.
+    price:
+      c.listing.type === "eat" || c.listing.type === "place"
+        ? c.listing.cuisine || c.listing.venueType || (c.listing.type === "eat" ? "Restaurant" : "Place to visit")
+        : c.listing.price > 0
+          ? `${c.listing.priceLabel} / ${c.listing.priceUnit}`
+          : "Rate on request",
     total: c.totalCents != null ? Math.round(c.totalCents / 100) : null,
+    room: c.room ?? null,
     nights: c.nights,
     available: c.available,
   }));
   const one = cards.length === 1;
-  const what = type === "tour" ? (one ? "tour" : "tours") : type === "experience" ? (one ? "experience" : "experiences") : one ? "place to stay" : "places to stay";
+  const WHAT: Record<string, [string, string]> = { tour: ["tour", "tours"], experience: ["experience", "experiences"], eat: ["place to eat", "places to eat"], place: ["place to visit", "places to visit"], stay: ["place to stay", "places to stay"] };
+  const what = (WHAT[type] ?? WHAT.stay)[one ? 0 : 1];
   const where = q.where ? ` in ${q.where}` : "";
   const when = q.checkIn && q.checkOut ? ` from ${spoken(q.checkIn)} to ${spoken(q.checkOut)}` : q.checkIn ? ` on ${spoken(q.checkIn)}` : "";
   const query = { type, startDate: q.checkIn, endDate: q.checkOut, guests: q.guests };
   if (!cards.length) {
     return {
-      say: `I couldn't find ${type === "tour" ? "tours" : type === "experience" ? "experiences" : "places to stay"}${where}${when} that match on Revamp right now. Would you like to try other dates, a nearby town, or fewer requirements?`,
+      say: `I couldn't find ${(WHAT[type] ?? WHAT.stay)[1]}${where}${type === "eat" || type === "place" ? "" : when} that match on Revamp right now. Would you like to try other dates, a nearby town, or fewer requirements?`,
       cards,
       query,
     };
   }
   const items = cards.map((c, i) => {
     const name = speakable(c.title);
-    const cost = c.total != null && c.nights ? `${drams(c.total)} in total for ${c.nights} night${c.nights === 1 ? "" : "s"}` : c.price === "Rate on request" ? "price on request" : `from ${speakable(c.price.replace(/ \/ .*/, ""))} per ${c.price.split(" / ")[1] ?? "night"}`;
+    if (c.type === "eat" || c.type === "place") return `${i + 1}: ${name}, ${speakable(c.price)}`;
+    const cost = c.total != null && c.nights ? `${c.room ? `the ${speakable(c.room)}, ` : ""}${drams(c.total)} in total for ${c.nights} night${c.nights === 1 ? "" : "s"}` : c.price === "Rate on request" ? "price on request" : `from ${speakable(c.price.replace(/ \/ .*/, ""))} per ${c.price.split(" / ")[1] ?? "night"}`;
     return `${i + 1}: ${name}, ${cost}`;
   });
   // Hotels' rooms are checked on their page, so only claim "available" when every card was checked.
   const checked = q.checkIn && q.checkOut && cards.every((c) => c.available === true) ? " available" : "";
   return {
-    say: `I found ${cards.length === 1 ? "one" : cards.length} ${what}${where}${checked}${when} — ${one ? "it's" : "they're"} on your screen. ${items.join(". ")}. ${one ? "Tap it" : "Tap one"} to see it and book.`,
+    say: `I found ${cards.length === 1 ? "one" : cards.length} ${what}${where}${checked}${when} — ${one ? "it's" : "they're"} on your screen. ${items.join(". ")}. ${one ? "Tap it" : "Tap one"} to see it${type === "eat" || type === "place" ? "" : " and book"}.`,
     cards,
     query,
   };

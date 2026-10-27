@@ -83,7 +83,7 @@ How to help:
 - **Parameters** (all optional, each its own property):
   | Identifier | Type | Description |
   |---|---|---|
-  | `type` | String | `stay, tour or experience` |
+  | `type` | String | `stay, tour, experience, or eat (restaurants and cafés)` |
   | `where` | String | `Town or region in Armenia in English, e.g. Dilijan` |
   | `startDate` | String | `Check-in date or activity date, YYYY-MM-DD` |
   | `endDate` | String | `Check-out date for stays, YYYY-MM-DD` |
@@ -106,6 +106,11 @@ How to help:
   | `interests` | String | – | `Short comma-separated words, e.g. food, hiking, history` |
   | `pace` | String | – | `relaxed, balanced or packed` |
   | `budget` | String | – | `budget, mid-range or comfort` |
+
+### Voice → Pronunciation dictionaries (2026-10-27)
+Upload `docs/aha-pronunciation.pls` (Yerevan, Dilijan, Tsaghkadzor, Gyumri, Sevan, Tatev,
+the regions, monasteries…). Alias rules, so they work with Flash v2.5. If a name still
+sounds wrong, add a line for it (respell it the way it should sound) and upload again.
 
 ### Security tab
 - **Overrides:** turn on **First message**, **Language** and **System prompt** (the site sends the greeting, the English/Russian choice and — on the homepage only — the search instructions).
