@@ -9,7 +9,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 
-const UPDATED = "October 26, 2026";
+const UPDATED = "October 27, 2026";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -72,6 +72,11 @@ export default function Privacy() {
           <Section title="AI assistants and our catalog connection">
             <p>AI assistants (such as ChatGPT, Claude or Meta AI) can look up Revamp's published listings through our public, read-only catalog connection (an MCP server; details at <a href="/developers" className="text-apricot hover:underline">revampvacations.com/developers</a>). It needs no account and can't book, pay or change anything.</p>
             <p>When an assistant uses it, we receive only what that request contains — for example a place, dates, number of guests or trip preferences — not your name, email or payment details. We use it only to answer that request, and we keep only counts of which tools were used and when, not what was asked. Trip-planning requests are sent to our AI provider to write the itinerary. We don't sell this information or use it for advertising or to train AI models. What the assistant itself does with your conversation is covered by that assistant's own privacy policy.</p>
+          </Section>
+
+          <Section title="Aha voice assistant">
+            <p>On listing pages you can talk to Aha, our AI voice assistant, through your browser's microphone. It only starts when you tap "Start talking" and stops when you end the call or close the window. Your voice is sent to our voice provider, ElevenLabs, which turns it into text, has our AI answer from that listing's published details, and speaks the answer back. If you ask about dates, those dates and the number of guests are checked against our calendar.</p>
+            <p>Aha can't book, pay or see your account. Recordings and transcripts of the call are kept by ElevenLabs only for the limited period set in our account, to provide and improve the service and to investigate problems; we don't sell them, use them for advertising, or connect them to your Revamp account. Don't share payment details or other sensitive information on a call.</p>
           </Section>
 
           <Section title="Cookies &amp; local storage">

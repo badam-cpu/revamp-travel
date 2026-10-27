@@ -38,6 +38,7 @@ import { syncListingSessions, reserveSeats, releaseSeats } from "./sessions.js";
 import { generateListingCopy, generateJourneyTemplate, ahaCopyConfigured } from "./ahaCopy.js";
 import { draftVerifiedFaq } from "./listingFaqAuto.js";
 import { inboxAiConfigured, suggestInboxReply } from "./inboxAi.js";
+import { voiceContext, voiceQuote } from "./voice.js";
 import { cleanFaq } from "../shared/listingFaq.js";
 import { scanTextFixes, suggestTextFix, applyTextFixes } from "./textFixes.js";
 import { generateSupportReply, type SupportTurn } from "./support.js";
@@ -3344,6 +3345,38 @@ export function registerApiRoutes(app: Express) {
     } catch (err) {
       console.error("[inbox-ai-suggest]", err);
       res.status(500).json({ error: "Aha couldn't draft a reply. Please try again." });
+    }
+  });
+
+  // ── Aha Voice Assistant (web) — see server/voice.ts ─────────────────────
+  // Public, read-only, rate-limited (same data as the listing page / AI connector).
+  const voiceHits = new Map<string, number[]>();
+  app.get("/api/voice/context", async (req: Request, res: Response) => {
+    const slug = String(req.query.slug || "");
+    if (!/^[a-z0-9-]{1,200}$/i.test(slug)) return res.status(400).json({ error: "Listing not found." });
+    if (rateLimited(voiceHits, `ctx:${req.ip || "?"}`, 30)) return res.status(429).json({ error: "Slow down." });
+    const client = publicClient();
+    if (!client) return res.status(503).json({ error: "Not available right now." });
+    const ctx = await voiceContext(client, slug);
+    if (!ctx) return res.status(404).json({ error: "Listing not found." });
+    res.json(ctx);
+  });
+  // The ElevenLabs agent's `check_dates` server tool.
+  app.post("/api/voice/quote", async (req: Request, res: Response) => {
+    if (rateLimited(voiceHits, `q:${req.ip || "?"}`, 60)) return res.status(429).json({ say: "Too many checks right now — please try again in a minute." });
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const slug = typeof b.slug === "string" ? b.slug.trim() : "";
+    const iso = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v.trim()) ? v.trim() : undefined);
+    const startDate = iso(b.startDate ?? b.start_date);
+    if (!/^[a-z0-9-]{1,200}$/i.test(slug) || !startDate) return res.json({ available: null, say: "I need the check-in date (and check-out date for stays) to check that." });
+    const client = publicClient();
+    if (!client) return res.json({ available: null, say: "I can't check dates right now — the calendar on the page is up to date." });
+    try {
+      const guests = Number(b.guests);
+      res.json(await voiceQuote(client, { slug, startDate, endDate: iso(b.endDate ?? b.end_date), guests: Number.isFinite(guests) && guests > 0 ? Math.round(guests) : undefined }));
+    } catch (err) {
+      console.error("[voice-quote]", err);
+      res.json({ available: null, say: "I couldn't check those dates just now — the calendar on the page is up to date." });
     }
   });
 

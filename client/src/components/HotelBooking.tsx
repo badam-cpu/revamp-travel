@@ -13,6 +13,7 @@ import { maxPartySize, typeFromCents } from "@shared/rooms";
 import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
 import { SuspensionNotice, suspensionBlocked } from "@/components/SuspensionNotice";
 import { AskHostButton } from "@/components/AskHostButton";
+import { AhaVoiceButton } from "@/components/AhaVoiceButton";
 import { Button } from "@/components/ui/button";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
@@ -181,6 +182,7 @@ export function HotelBookingPanel({
       <p className="mt-3 text-center text-[11px] leading-5 text-basalt/42">You won't be charged yet.</p>
       <div className="mt-4 border-t border-basalt/10 pt-4">
         <AskHostButton listing={listing} />
+        <AhaVoiceButton listing={listing} />
         <p className="mt-2 text-center text-[11px] leading-5 text-basalt/42">Have a question? Ask the host before you book.</p>
       </div>
     </div>

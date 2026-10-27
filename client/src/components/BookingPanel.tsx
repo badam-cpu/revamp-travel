@@ -21,6 +21,7 @@ import { supabase } from "@/lib/supabase";
 import type { LiveListing, BlockedRange } from "@/contexts/ListingsContext";
 import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
 import { AskHostButton } from "@/components/AskHostButton";
+import { AhaVoiceButton } from "@/components/AhaVoiceButton";
 import { SuspensionNotice, suspensionBlocked } from "@/components/SuspensionNotice";
 import { getListingSessions, groupSessionsByDate, formatSlotTime, type ListingSession } from "@/lib/sessions";
 import { scheduleHasSlots, slotLocalDate } from "@shared/sessions";
@@ -440,6 +441,7 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
       </p>
       <div className="mt-4 border-t border-basalt/10 pt-4">
         <AskHostButton listing={listing} />
+        <AhaVoiceButton listing={listing} />
         <p className="mt-2 text-center text-[11px] leading-5 text-basalt/42">Have a question? Ask the host before you book.</p>
       </div>
     </div>
