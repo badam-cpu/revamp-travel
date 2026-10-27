@@ -144,7 +144,7 @@ export default function Home() {
           <div className="hero-image-overlay absolute inset-0 bg-[linear-gradient(180deg,rgba(33,33,33,0.18)_0%,rgba(33,33,33,0.06)_38%,rgba(33,33,33,0.58)_100%),linear-gradient(90deg,rgba(33,33,33,0.32)_0%,rgba(33,33,33,0)_55%)]" />
           <div className="container relative z-10 flex min-h-[500px] flex-col justify-end pb-24 pt-14 sm:min-h-[580px] lg:pb-28">
             <div className="max-w-[760px] text-white [text-shadow:0_2px_18px_rgba(15,15,15,0.35)]">
-              <div className="hero-enter flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.22em] text-white"><span className="h-px w-10 bg-apricot" /> Curated across Armenia</div>
+              <div className="hero-enter flex items-center gap-3 text-xs font-bold uppercase tracking-[0.22em] text-white [text-shadow:0_1px_10px_rgba(15,15,15,0.7)]"><span className="h-px w-10 bg-apricot" /> Curated across Armenia</div>
               <h1 className="hero-enter mt-4 max-w-[16ch] font-display text-[2.6rem] leading-[0.98] tracking-[-0.045em] sm:text-[3.6rem] lg:text-[4.4rem]">{heroHeadline}</h1>
             </div>
             {(heroCaption || heroSlides.length > 1) && (
@@ -163,12 +163,13 @@ export default function Home() {
                         onClick={() => setHeroPaused((p) => !p)}
                         aria-label={heroPaused ? "Play slideshow" : "Pause slideshow"}
                         aria-pressed={heroPaused}
-                        className="grid h-8 w-8 place-items-center rounded-full text-white hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-white"
+                        className="grid h-10 w-10 place-items-center rounded-full text-white hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-white sm:h-8 sm:w-8"
                       >
                         {heroPaused ? <Play className="h-3.5 w-3.5 fill-current" /> : <Pause className="h-3.5 w-3.5 fill-current" />}
                       </button>
                     )}
-                    <div className="flex items-center gap-1.5 pl-1">
+                    {/* Each dot sits in a taller tap area (the dot itself stays small). */}
+                    <div className="flex items-center pl-0.5">
                       {heroSlides.map((src, i) => (
                         <button
                           key={`dot-${src}-${i}`}
@@ -176,8 +177,10 @@ export default function Home() {
                           onClick={() => { setHeroIdx(i); setHeroPaused(true); }}
                           aria-label={`Show photo ${i + 1} of ${heroSlides.length}`}
                           aria-current={i === heroIdx}
-                          className={`h-1.5 rounded-full transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${i === heroIdx ? "w-5 bg-white" : "w-1.5 bg-white/50 hover:bg-white/80"}`}
-                        />
+                          className="group/dot grid h-10 place-items-center px-[3px] focus-visible:outline-2 focus-visible:outline-white sm:h-8"
+                        >
+                          <span className={`block h-1.5 rounded-full transition-all ${i === heroIdx ? "w-5 bg-white" : "w-1.5 bg-white/50 group-hover/dot:bg-white/80"}`} />
+                        </button>
                       ))}
                     </div>
                   </div>

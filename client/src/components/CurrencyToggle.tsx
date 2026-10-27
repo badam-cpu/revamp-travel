@@ -3,8 +3,33 @@
  * CurrencyContext). Purely a display preference — prices settle in AMD; USD is
  * a converted reference.
  */
+import { Check, ChevronDown } from "lucide-react";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+
+const SIGN = { AMD: "֏", USD: "$" } as const;
+
+/** Compact header version: "֏ AMD ▾" opening AMD / USD (most visitors never change it). */
+export function CurrencyMenu() {
+  const { currency, setCurrency, switchable } = useCurrency();
+  if (!switchable) return null;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger className="inline-flex h-10 items-center gap-1 rounded-full px-3 text-sm font-semibold text-basalt/75 outline-none transition-colors hover:text-basalt focus-visible:outline-2 focus-visible:outline-apricot" aria-label={`Display currency: ${currency}`}>
+        <span aria-hidden>{SIGN[currency]}</span> {currency} <ChevronDown className="h-3.5 w-3.5" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-36">
+        {(["AMD", "USD"] as const).map((c) => (
+          <DropdownMenuItem key={c} onSelect={() => setCurrency(c)} className="flex items-center justify-between gap-3">
+            <span>{SIGN[c]} {c === "AMD" ? "Armenian dram" : "US dollar"}</span>
+            {currency === c && <Check className="h-4 w-4 text-apricot" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 export function CurrencyToggle({ className, light = false }: { className?: string; light?: boolean }) {
   const { currency, setCurrency, switchable } = useCurrency();

@@ -1,11 +1,11 @@
 /** Revamp brandbook: preserve the intact lowercase wordmark, generous clear space, and orange primary action. */
 import { useMemo } from "react";
-import { Bookmark, Compass, LogOut, Menu, Sparkles, User, X } from "lucide-react";
+import { Bookmark, LogOut, Menu, Sparkles, User, X } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { BrandMark } from "./BrandMark";
-import { CurrencyToggle } from "./CurrencyToggle";
+import { CurrencyMenu, CurrencyToggle } from "./CurrencyToggle";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -35,7 +35,7 @@ const stayLinks: NavLink[] = [
   { href: "/host", label: "List your place" },
 ];
 
-/** `minimal` drops the public browse nav + "field guide" CTA — used in the
+/** `minimal` drops the public browse nav — used in the
  * operator dashboard, which has its own sidebar and its own "Homepage" link.
  * `flush` swaps the centered container for full-width padding (matching a
  * full-bleed page like the map, so the wordmark lines up with the content).
@@ -73,7 +73,7 @@ export function SiteHeader({ minimal = false, flush = false, wide = false }: { m
     <header className="sticky top-[var(--impersonation-bar,0px)] z-50 border-b border-basalt/10 bg-paper/94 text-basalt backdrop-blur-xl">
       <div className={cn("flex h-[76px] items-center justify-between gap-5", wide ? "mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-10" : flush ? "w-full px-5 lg:px-7" : "container")}>
         <BrandMark />
-        <nav className="hidden items-center gap-6 xl:flex" aria-label="Primary navigation">
+        <nav className="hidden items-center gap-9 xl:flex 2xl:gap-11" aria-label="Primary navigation">
           {links.map((link) => (
             <Link
               key={link.href}
@@ -90,7 +90,7 @@ export function SiteHeader({ minimal = false, flush = false, wide = false }: { m
           ))}
         </nav>
         <div className="hidden shrink-0 items-center gap-1.5 xl:flex">
-          <CurrencyToggle />
+          <CurrencyMenu />
           {signedIn && (
             <Button
               asChild
@@ -127,33 +127,16 @@ export function SiteHeader({ minimal = false, flush = false, wide = false }: { m
             </>
           ) : (
             <>
-              <Button asChild variant="ghost" size="sm" className="rounded-none px-3 text-sm font-semibold text-basalt/70 hover:bg-transparent hover:text-basalt">
+              {/* One account action (2026-10-27): the sign-in page offers "Create an account". */}
+              <Button asChild size="sm" className="h-10 rounded-none bg-basalt px-5 text-sm font-semibold text-paper hover:bg-basalt/90">
                 <Link href="/login">Sign in</Link>
               </Button>
-              <Button asChild size="sm" className="rounded-none bg-basalt px-4 text-sm font-semibold text-paper hover:bg-basalt/90">
-                <Link href="/signup">Sign up</Link>
-              </Button>
             </>
-          )}
-          {!minimal && site !== "stay" && (
-            // On the home page the hero search is the one orange action, so the
-            // field-guide link steps back to an outline there.
-            <Button
-              asChild
-              className={cn(
-                "brand-notch rounded-none px-5",
-                location === "/" ? "border border-basalt/20 bg-transparent text-basalt hover:border-apricot hover:bg-transparent hover:text-apricot" : "bg-apricot text-white hover:bg-apricot/90",
-              )}
-            >
-              <Link href="/explore">
-                <Compass className="mr-2 h-4 w-4" /> Open the field guide
-              </Link>
-            </Button>
           )}
         </div>
         <Sheet>
           <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="rounded-none xl:hidden" aria-label="Open navigation">
+            <Button variant="ghost" size="icon" className="h-11 w-11 rounded-none xl:hidden" aria-label="Open navigation">
               <Menu className="h-5 w-5" />
             </Button>
           </SheetTrigger>

@@ -67,11 +67,12 @@ export function BrandMark({ light = false, compact = false }: { light?: boolean;
     );
   }
 
-  // The wordmark's box includes the "p" descender, so centring the box sets the
-  // letters ~3px high next to the nav text; the nudge lines their middle up.
+  // Centred as a box, the wordmark's baseline sits on the nav text's baseline
+  // (measured 2026-10-27: 43.9 vs 43.5 px) — no nudge; an earlier 3 px nudge
+  // lined up the middles but dropped the baseline and looked misaligned.
   return (
     <Link href="/" className="inline-flex items-center rounded-[10px] py-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-apricot" aria-label={label}>
-      <Wordmark title={null} className={cn("h-[1.55rem] translate-y-[3px]", light ? "text-white" : "text-[#F15822]")} />
+      <Wordmark title={null} className={cn("h-[1.55rem]", light ? "text-white" : "text-[#F15822]")} />
     </Link>
   );
 }
