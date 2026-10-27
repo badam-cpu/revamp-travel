@@ -49,7 +49,10 @@ export async function voiceContext(client: SupabaseClient, slug: string): Promis
   if (!row || row.is_active === false) return null;
   const faq = cleanFaq(row.faq);
   const lines = [
-    `SPEAKING NOTES: When you talk, call it "${spokenKind(row)}" — don't read the listing title aloud and don't repeat it. Say prices as a number of drams.`,
+    `RULES FOR THIS CALL (they apply in every language, Russian included):`,
+    `- Use only the facts below. Don't add adjectives, numbers or details they don't contain (a "City View" is a city view — not a "panoramic" one). If something isn't here, say you don't have that detail.`,
+    `- Suggest "Ask the host a question" at most once in the whole call, and only when the guest needs something you can't answer. Don't end every answer with it.`,
+    `- When you talk, call it "${spokenKind(row)}" — don't read the listing title aloud. Say prices as a number of drams.`,
     `LISTING (for your reference only): ${speakable(row.title)}`,
     ...listingFaqFacts(row).map((f) => `- ${speakable(f)}`),
     ...(faq.length ? ["FREQUENT QUESTIONS:", ...faq.map((f) => `- Q: ${speakable(f.q)} A: ${speakable(f.a)}`)] : []),
