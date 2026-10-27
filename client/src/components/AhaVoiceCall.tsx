@@ -328,7 +328,7 @@ function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }
 
       <p className="text-xs leading-5 text-basalt/50">
         Aha is an AI assistant. You always book yourself.{" "}
-        <Link href="/privacy" className="underline underline-offset-2">Privacy policy</Link>
+        <Link href="/privacy" className="underline underline-offset-2">Privacy Policy</Link>
       </p>
     </div>
   );
