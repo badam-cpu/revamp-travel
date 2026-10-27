@@ -2,7 +2,7 @@
  * Aha Voice Assistant — the call itself (lazy-loaded by AhaVoiceButton so the
  * ElevenLabs/WebRTC code never weighs on the listing page until someone taps it).
  *
- * Starts a voice session with the Revamp agent on ElevenLabs (VITE_ELEVENLABS_AGENT_ID,
+ * Starts a voice session (over WebSocket) with the Revamp agent on ElevenLabs (VITE_ELEVENLABS_AGENT_ID,
  * a public agent id) and hands it the listing's own details + FAQ as
  * `listing_context` (GET /api/voice/context). For dates the agent calls our
  * `check_dates` tool (POST /api/voice/quote). English or Russian, chosen before
@@ -114,9 +114,11 @@ function Call({ slug, title, onEnd }: { slug: string; title: string; onEnd: () =
         dynamicVariables: { listing_title: ctx.title, listing_slug: slug, listing_context: ctx.context, today: armeniaToday() },
         overrides: { agent: { language: lang, firstMessage: FIRST[lang](ctx.title) } },
       };
-      session.current = { opts, transport: "webrtc" };
-      note("starting (webrtc)");
-      convo.startSession({ ...opts, connectionType: "webrtc" });
+      // WebSocket: with our agent, WebRTC sessions connected and were then ended by the
+      // agent (2026-10-27), while the same agent works over WebSocket in both languages.
+      session.current = { opts, transport: "websocket" };
+      note("starting (websocket)");
+      convo.startSession({ ...opts, connectionType: "websocket" });
       trackEvent("voice_assistant_start", { item_id: slug, language: lang });
     } catch (err) {
       console.error("[aha-voice] start", err);
