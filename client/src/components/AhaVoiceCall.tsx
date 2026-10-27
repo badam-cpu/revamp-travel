@@ -77,7 +77,10 @@ type CallProps = { scope?: VoiceScope; slug?: string; onEnd: () => void; compact
 function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }: CallProps) {
   const [results, setResults] = useState<SearchResult | null>(null);
   const [, navigate] = useLocation();
-  const [timedOut, setTimedOut] = useState(false);
+  // Why the last call ended on its own: time limit, nobody talking, or the guest left the tab.
+  const [autoEnded, setAutoEnded] = useState<null | "time" | "quiet" | "away">(null);
+  const lastActivity = useRef(Date.now());
+  const speaking = useRef(false);
   const maxSeconds = useRef(240);
   const [lang, setLang] = useState<Lang>("en");
   const [starting, setStarting] = useState(false);
@@ -100,8 +103,17 @@ function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }
   const convo = useConversation({
     onConnect: () => {
       connected.current = true;
-      setTimedOut(false);
+      lastActivity.current = Date.now();
+      setAutoEnded(null);
       note(`connected (${session.current?.transport})`);
+    },
+    // Anything said by either side counts as activity (for the quiet hang-up).
+    onMessage: () => {
+      lastActivity.current = Date.now();
+    },
+    onModeChange: ({ mode }: { mode: string }) => {
+      speaking.current = mode === "speaking";
+      lastActivity.current = Date.now();
     },
     onError: (message: unknown, err?: unknown) => {
       console.error("[aha-voice] error", message, err);
@@ -240,14 +252,33 @@ function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }
     }
   };
 
-  // Budget: hang up after the server's limit (the agent has the same max duration).
+  // Aha AI hangs up by itself (budget + a call left running by mistake): after the
+  // server's time limit (the agent has the same max duration), after 45 s with
+  // nobody talking, or 30 s after the guest leaves the tab.
+  const QUIET_MS = 45_000;
+  const AWAY_MS = 30_000;
   useEffect(() => {
     if (!live) return;
-    const t = setTimeout(() => {
-      setTimedOut(true);
+    const stop = (why: "time" | "quiet" | "away") => {
+      setAutoEnded(why);
       convo.endSession();
-    }, maxSeconds.current * 1000);
-    return () => clearTimeout(t);
+    };
+    const limit = setTimeout(() => stop("time"), maxSeconds.current * 1000);
+    const quiet = setInterval(() => {
+      if (!speaking.current && Date.now() - lastActivity.current > QUIET_MS) stop("quiet");
+    }, 5000);
+    let away: ReturnType<typeof setTimeout> | undefined;
+    const onVisibility = () => {
+      clearTimeout(away);
+      if (document.visibilityState === "hidden") away = setTimeout(() => stop("away"), AWAY_MS);
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      clearTimeout(limit);
+      clearInterval(quiet);
+      clearTimeout(away);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live]);
 
@@ -324,7 +355,11 @@ function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }
       )}
 
       {results && <SearchCards results={results} />}
-      {timedOut && !live && <p className="text-sm leading-6 text-basalt/70">Calls with Aha AI are kept to {Math.round(maxSeconds.current / 60)} minutes. Tap Start talking to carry on.</p>}
+      {autoEnded && !live && (
+        <p className="text-sm leading-6 text-basalt/70">
+          {autoEnded === "time" ? `Calls with Aha AI are kept to ${Math.round(maxSeconds.current / 60)} minutes.` : autoEnded === "quiet" ? "Aha AI hung up after a quiet moment." : "Aha AI hung up while you were away."} Tap Start talking to carry on.
+        </p>
+      )}
       {problem && <p className="rounded-none border border-apricot/30 bg-apricot/[0.05] p-3 text-sm leading-6 text-basalt/80">{problem}</p>}
       {DEBUG && debug.length > 0 && <pre className="max-h-40 overflow-auto whitespace-pre-wrap bg-chalk p-2 text-[11px] leading-4 text-basalt/70">{debug.join("\n")}</pre>}
 
