@@ -300,7 +300,7 @@ ${jsonLdBlocks}
 <a href="/explore/tour">Tour</a> ·
 <a href="/explore/experience">Experience</a> ·
 <a href="/map">Map</a> ·
-<a href="/plan">Plan with Aha</a> ·
+<a href="/plan">Plan with Aha AI</a> ·
 <a href="/login">Sign in</a>
 </nav>
 ${opts.bodyHtml}
@@ -438,11 +438,11 @@ ${Array.from(byRegion.entries())
 
 function renderPlan(origin: string): string {
   const bodyHtml = `
-<h1>Plan your Armenia trip with Aha</h1>
+<h1>Plan your Armenia trip with Aha AI</h1>
 <p>Generate a day-by-day Armenia itinerary grounded in Revamp Vacations's live, published stay/eat/tour/experience catalog. Open <a href="${origin}/plan">the planner</a> to set trip length, starting city, traveler count, pace, budget, and interests.</p>`;
 
   return renderPageShell({
-    title: "Plan your Armenia trip with Aha | Revamp Vacations",
+    title: "Plan your Armenia trip with Aha AI | Revamp Vacations",
     description: "Generate a day-by-day Armenia itinerary grounded in Revamp Vacations's live, published catalog.",
     canonical: `${origin}/plan`,
     ogImage: `${origin}${OG_IMAGE}`,

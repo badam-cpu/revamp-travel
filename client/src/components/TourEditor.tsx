@@ -236,7 +236,7 @@ export function TourEditor({ listing, open, onClose, onChanged }: { listing: { i
         ) : progress ? (
           <div className="grid place-items-center gap-3 p-12 text-center">
             <Sparkles className="h-6 w-6 text-apricot" aria-hidden />
-            <p className="text-base font-semibold">Aha is sorting your photos into rooms…</p>
+            <p className="text-base font-semibold">Aha AI is sorting your photos into rooms…</p>
             <div className="h-1.5 w-64 max-w-full overflow-hidden rounded-full bg-basalt/10">
               <div className="h-full bg-apricot transition-[width] duration-500" style={{ width: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 5}%` }} />
             </div>
@@ -249,7 +249,7 @@ export function TourEditor({ listing, open, onClose, onChanged }: { listing: { i
             <Footprints className="h-7 w-7 text-apricot" aria-hidden />
             <p className="text-lg font-semibold">Turn your photos into a room-by-room tour</p>
             <p className="max-w-md text-sm leading-6 text-basalt/60">
-              Aha sorts your {src?.photos.length ?? 0} photos into rooms — living room, kitchen, bedrooms, the view — with short captions. You check it, add 360° photos if you have them, then publish.
+              Aha AI sorts your {src?.photos.length ?? 0} photos into rooms — living room, kitchen, bedrooms, the view — with short captions. You check it, add 360° photos if you have them, then publish.
             </p>
             <Button onClick={() => void build()} disabled={!src?.listingPhotos.length && !src?.roomTypes.length} className="mt-2 h-11 rounded-none bg-apricot px-5 text-white hover:bg-apricot/90">
               <Sparkles className="mr-1.5 h-4 w-4" aria-hidden /> Build my tour

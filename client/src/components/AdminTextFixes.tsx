@@ -141,7 +141,7 @@ export function AdminTextFixes() {
 
   return (
     <div>
-      <PageHeader title="Text fixes" sub="Published listings whose text breaks the card rules. Aha suggests a fit with the same facts; nothing changes until you approve." />
+      <PageHeader title="Text fixes" sub="Published listings whose text breaks the card rules. Aha AI suggests a fit with the same facts; nothing changes until you approve." />
 
       {listings === null ? (
         <p className="inline-flex items-center gap-2 text-sm text-basalt/55"><Loader2 className="h-4 w-4 animate-spin" /> Checking listings…</p>
@@ -161,7 +161,7 @@ export function AdminTextFixes() {
                   </Button>
                 ) : (
                   <Button variant="outline" size="sm" className="rounded-none" onClick={() => void suggestAll()} disabled={!visible.length}>
-                    <Sparkles className="mr-1.5 h-3.5 w-3.5 text-apricot" /> Suggest all with Aha
+                    <Sparkles className="mr-1.5 h-3.5 w-3.5 text-apricot" /> Suggest all with Aha AI
                   </Button>
                 )}
                 {confirmAll ? (
@@ -247,13 +247,13 @@ export function AdminTextFixes() {
                                 rows={p.field === "shortDescription" ? 2 : 1}
                                 value={d?.value ?? ""}
                                 onChange={(e) => setDraft(l.id, p.field, { value: e.target.value, state: "ready" })}
-                                placeholder={d?.state === "loading" ? "Aha is writing…" : "Click Suggest, or type your own"}
+                                placeholder={d?.state === "loading" ? "Aha AI is writing…" : "Click Suggest, or type your own"}
                                 disabled={d?.state === "loading" || saving}
                                 className="mt-1.5 min-h-0 resize-none rounded-none text-sm"
                               />
                               <div className="mt-1 flex items-center justify-between gap-3">
                                 <span className="text-xs text-basalt/45">
-                                  {d?.state === "failed" ? "Aha couldn't fit this one — type a version yourself." : fits(l, p.field) ? "Fits the card." : ""}
+                                  {d?.state === "failed" ? "Aha AI couldn't fit this one — type a version yourself." : fits(l, p.field) ? "Fits the card." : ""}
                                 </span>
                                 <CharCount field={p.field} value={d?.value ?? ""} listingType={l.type as ListingType} />
                               </div>

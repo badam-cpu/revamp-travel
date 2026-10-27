@@ -30,7 +30,7 @@ export function AhaVoiceButton({ listing }: { listing: { slug: string; title: st
           onClick={open}
           className="mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-none border border-basalt/20 px-4 py-2.5 text-sm font-semibold text-basalt transition-colors hover:border-apricot hover:text-apricot"
         >
-          <Mic className="h-4 w-4 text-apricot" /> Talk to Aha <span className="font-normal text-basalt/50">· voice assistant</span>
+          <Mic className="h-4 w-4 text-apricot" /> Talk to Aha AI <span className="font-normal text-basalt/50">· voice assistant</span>
         </button>
       )}
     </VoicePanel>
@@ -73,7 +73,7 @@ function VoicePanel({ slug, subtitle, children }: { slug?: string; subtitle: str
           <section
             role="dialog"
             aria-modal="false"
-            aria-label="Talk to Aha"
+            aria-label="Talk to Aha AI"
             className={cn(
               // Above the photo viewer (z-100) so Aha's controls stay reachable while it shows a photo.
               "fixed inset-x-3 bottom-[84px] z-[110] border border-basalt/12 bg-paper shadow-[0_24px_60px_-20px_rgba(33,33,33,0.45)] sm:inset-x-auto sm:bottom-6 sm:left-6 sm:w-[360px] lg:bottom-6",
@@ -82,7 +82,7 @@ function VoicePanel({ slug, subtitle, children }: { slug?: string; subtitle: str
           >
             <div className={cn("flex items-center gap-2", compact ? "mb-2" : "mb-3")}>
               <p className="min-w-0 flex-1 truncate font-display text-lg leading-tight">
-                Talk to Aha
+                Talk to Aha AI
                 {!compact && <span className="mt-0.5 block truncate text-xs font-normal text-basalt/55">{subtitle}</span>}
               </p>
               <button type="button" onClick={() => setCompact((c) => !c)} aria-label={compact ? "Expand" : "Minimise"} className="grid h-10 w-10 place-items-center rounded-full text-basalt/55 hover:bg-chalk hover:text-basalt">

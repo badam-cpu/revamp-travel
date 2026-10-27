@@ -22,7 +22,7 @@ const baseLinks: NavLink[] = [
   { href: "/explore/experience", label: "Experience" },
   { href: "/explore/place", label: "Visit" },
   { href: "/map", label: "Map" },
-  { href: "/plan", label: "Plan with Aha", accent: true },
+  { href: "/plan", label: "Plan with Aha AI", accent: true },
 ];
 
 // revampstay nav. Offer-filtered Rent/Buy pages land with the Explore work;

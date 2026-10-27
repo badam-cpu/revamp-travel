@@ -42,7 +42,7 @@ export function AhaInvite({ userId, onLearnMore }: { userId: string; onLearnMore
     setBusy(true);
     try {
       await setAiReply(userId, { auto: true, delayMinutes: 15 });
-      toast.success("Aha will answer simple guest questions after 15 minutes without a reply. You'll get a note each time.");
+      toast.success("Aha AI will answer simple guest questions after 15 minutes without a reply. You'll get a note each time.");
       done();
     } catch (e) {
       console.error(e);
@@ -59,10 +59,10 @@ export function AhaInvite({ userId, onLearnMore }: { userId: string; onLearnMore
         <X className="h-4 w-4" />
       </button>
       <p className="flex items-center gap-2 font-semibold text-basalt">
-        <Sparkles className="h-4 w-4 shrink-0 text-apricot" aria-hidden /> Let Aha answer simple guest questions while you're away
+        <Sparkles className="h-4 w-4 shrink-0 text-apricot" aria-hidden /> Let Aha AI answer simple guest questions while you're away
       </p>
       <p className="mt-1.5 max-w-2xl text-sm leading-6 text-basalt/65">
-        If a guest waits 15 minutes, Aha replies from your listing details and FAQ — parking, check-in times, what's included — in the guest's language. Bookings, payments and anything unusual stay with you, and you get a note every time. Off by default; switch it off anytime.
+        If a guest waits 15 minutes, Aha AI replies from your listing details and FAQ — parking, check-in times, what's included — in the guest's language. Bookings, payments and anything unusual stay with you, and you get a note every time. Off by default; switch it off anytime.
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Button onClick={turnOn} disabled={busy} className="h-11 rounded-full bg-apricot px-5 text-white hover:bg-apricot/90 sm:h-9">

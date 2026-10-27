@@ -37,7 +37,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   },
   {
     q: "Does Revamp Vacations have an AI trip planner?",
-    a: "Yes. Aha, Revamp's AI assistant, builds a day-by-day Armenia itinerary from the live catalog of real stays, tours, and experiences, so the suggestions are things you can actually book.",
+    a: "Yes. Aha AI, Revamp's assistant, builds a day-by-day Armenia itinerary from the live catalog of real stays, tours, and experiences, so the suggestions are things you can actually book.",
   },
   {
     q: "Where in Armenia can I book?",

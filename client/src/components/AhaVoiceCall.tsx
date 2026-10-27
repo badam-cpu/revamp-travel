@@ -31,23 +31,23 @@ export type VoiceScope = "listing" | "home";
 // Short and title-free: listing titles are written for search results, not speech.
 const FIRST: Record<VoiceScope, Record<Lang, string>> = {
   listing: {
-    en: "Hi, I'm Aha, Revamp Vacations' voice AI assistant. How can I help you today?",
-    ru: "Здравствуйте! Я Аха, голосовой ИИ-помощник Revamp Vacations. Чем могу помочь?",
+    en: "Hi, I'm Aha AI, Revamp Vacations' voice assistant. How can I help you today?",
+    ru: "Здравствуйте! Я Аха AI, голосовой помощник Revamp Vacations. Чем могу помочь?",
   },
   home: {
-    en: "Hi, I'm Aha, Revamp Vacations' voice AI assistant. Where would you like to go, and when?",
-    ru: "Здравствуйте! Я Аха, голосовой ИИ-помощник Revamp Vacations. Куда и когда вы хотели бы поехать?",
+    en: "Hi, I'm Aha AI, Revamp Vacations' voice assistant. Where would you like to go, and when?",
+    ru: "Здравствуйте! Я Аха AI, голосовой помощник Revamp Vacations. Куда и когда вы хотели бы поехать?",
   },
 };
 /** What the budget refusals mean for the visitor (POST /api/voice/session → 429). */
 const LIMIT_MSG: Record<string, Record<VoiceScope, string>> = {
   day_limit: {
-    listing: "Aha has taken all the calls it can for today. Please ask the host in writing, or try again tomorrow.",
-    home: "Aha has taken all the calls it can for today. Please use the search box above, or try again tomorrow.",
+    listing: "Aha AI has taken all the calls it can for today. Please ask the host in writing, or try again tomorrow.",
+    home: "Aha AI has taken all the calls it can for today. Please use the search box above, or try again tomorrow.",
   },
   month_limit: {
-    listing: "Aha isn't taking calls right now. Please ask the host in writing.",
-    home: "Aha isn't taking calls right now. Please use the search box above.",
+    listing: "Aha AI isn't taking calls right now. Please ask the host in writing.",
+    home: "Aha AI isn't taking calls right now. Please use the search box above.",
   },
 };
 
@@ -107,7 +107,7 @@ function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }
       if (retrying.current) return;
       note(`error: ${String(message)}`);
       if (!connected.current && session.current?.transport === "webrtc") return retryOverWebSocket();
-      fail("Aha couldn't connect just now. Please check your internet connection and try again.");
+      fail("Aha AI couldn't connect just now. Please check your internet connection and try again.");
     },
     onDisconnect: (details: unknown) => {
       const d = (details ?? {}) as { reason?: string; message?: string; closeReason?: string; closeCode?: number };
@@ -116,7 +116,7 @@ function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }
       note(`disconnected: ${d.reason ?? "?"}${d.message ? ` — ${d.message}` : ""}${d.closeCode ? ` (${d.closeCode} ${d.closeReason ?? ""})` : ""}`);
       // Never got going over WebRTC (often blocked on some networks) → try the plain web connection once.
       if (!connected.current && session.current?.transport === "webrtc" && d.reason !== "user") return retryOverWebSocket();
-      if (!connected.current && d.reason !== "user") return fail("Aha couldn't connect just now. Please try again in a moment, or ask the host in writing.");
+      if (!connected.current && d.reason !== "user") return fail("Aha AI couldn't connect just now. Please try again in a moment, or ask the host in writing.");
       setStarting(false);
     },
   });
@@ -148,7 +148,7 @@ function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }
       stream.getTracks().forEach((t) => t.stop());
     } catch (err) {
       console.error("[aha-voice] microphone", err);
-      setProblem("Aha needs your microphone. Allow microphone access for this site, then tap Start again.");
+      setProblem("Aha AI needs your microphone. Allow microphone access for this site, then tap Start again.");
       setStarting(false);
       return;
     }
@@ -234,7 +234,7 @@ function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }
       trackEvent("voice_assistant_start", { item_id: slug || "home", language: lang, scope });
     } catch (err) {
       console.error("[aha-voice] start", err);
-      setProblem(scope === "home" ? "Aha isn't available right now. Please use the search box above." : "Aha isn't available right now. Please try again later, or ask the host in writing.");
+      setProblem(scope === "home" ? "Aha AI isn't available right now. Please use the search box above." : "Aha AI isn't available right now. Please try again later, or ask the host in writing.");
       setStarting(false);
     }
   };
@@ -250,7 +250,7 @@ function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live]);
 
-  const status = !live ? (starting || convo.status === "connecting" ? "Connecting…" : "Ready when you are") : convo.isSpeaking ? "Aha is speaking…" : convo.isMuted ? "Microphone off" : "Listening…";
+  const status = !live ? (starting || convo.status === "connecting" ? "Connecting…" : "Ready when you are") : convo.isSpeaking ? "Aha AI is speaking…" : convo.isMuted ? "Microphone off" : "Listening…";
   const end = () => {
     convo.endSession();
     onEnd();
@@ -322,12 +322,12 @@ function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }
       )}
 
       {results && <SearchCards results={results} />}
-      {timedOut && !live && <p className="text-sm leading-6 text-basalt/70">Calls with Aha are kept to {Math.round(maxSeconds.current / 60)} minutes. Tap Start talking to carry on.</p>}
+      {timedOut && !live && <p className="text-sm leading-6 text-basalt/70">Calls with Aha AI are kept to {Math.round(maxSeconds.current / 60)} minutes. Tap Start talking to carry on.</p>}
       {problem && <p className="rounded-none border border-apricot/30 bg-apricot/[0.05] p-3 text-sm leading-6 text-basalt/80">{problem}</p>}
       {DEBUG && debug.length > 0 && <pre className="max-h-40 overflow-auto whitespace-pre-wrap bg-chalk p-2 text-[11px] leading-4 text-basalt/70">{debug.join("\n")}</pre>}
 
       <p className="text-xs leading-5 text-basalt/50">
-        Aha is an AI assistant. You always book yourself.{" "}
+        You always book and pay yourself.{" "}
         <Link href="/privacy" className="underline underline-offset-2">Privacy Policy</Link>
       </p>
     </div>
@@ -337,14 +337,14 @@ function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }
 /** Search results Aha found, as tappable cards (dates + party carried to the listing). */
 function SearchCards({ results }: { results: SearchResult }) {
   const { cards, query } = results;
-  if (!cards.length) return <p className="text-sm leading-6 text-basalt/70">No matches yet — tell Aha what to change.</p>;
+  if (!cards.length) return <p className="text-sm leading-6 text-basalt/70">No matches yet — tell Aha AI what to change.</p>;
   const params = new URLSearchParams();
   if (query.startDate) params.set("checkin", query.startDate);
   if (query.endDate) params.set("checkout", query.endDate);
   if (query.guests) params.set("guests", String(query.guests));
   const qs = params.toString();
   return (
-    <ul className="grid gap-2" aria-label="What Aha found">
+    <ul className="grid gap-2" aria-label="What Aha AI found">
       {cards.map((c) => (
         <li key={c.slug}>
           <Link href={`/listing/${c.slug}${qs ? `?${qs}` : ""}`} className="flex min-h-16 items-center gap-3 rounded-none border border-basalt/12 bg-paper p-2 transition-colors hover:border-apricot">

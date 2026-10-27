@@ -288,7 +288,7 @@ export default function Developers() {
           <div className="mt-10">
             <Link href="/plan">
               <Button className="rounded-none bg-basalt text-paper hover:bg-basalt/90">
-                Plan a trip with Aha on the site <ArrowRight className="ml-2 h-4 w-4" />
+                Plan a trip with Aha AI on the site <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>
           </div>

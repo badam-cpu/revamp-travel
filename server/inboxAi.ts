@@ -67,7 +67,7 @@ async function loadContext(admin: SupabaseClient, conversationId: string): Promi
   return { convo, listing: (listing as Row | null) ?? null, operatorId, hostName, booking: (booking as Row | null) ?? null, messages };
 }
 
-const SYSTEM = `You answer guest messages on behalf of a host on Revamp Vacations, a travel marketplace in Armenia. You are "Aha", Revamp's assistant.
+const SYSTEM = `You answer guest messages on behalf of a host on Revamp Vacations, a travel marketplace in Armenia. You are "Aha AI", Revamp's assistant.
 You may ONLY use the LISTING FACTS, the FAQ and the BOOKING lines you are given. Never invent amenities, times, distances, prices, availability, rules or promises.
 Hand off to the host (do not answer) when the guest:
 - asks to change, extend, shorten or cancel a booking, or about refunds, payments, invoices, discounts or special prices;
@@ -119,18 +119,18 @@ async function draft(ctx: Ctx): Promise<InboxAiResult | null> {
     const j = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)) as { reply?: unknown; handoff?: unknown };
     const reply = typeof j.reply === "string" ? j.reply.trim().slice(0, 1200) : "";
     if (reply) return { reply };
-    return { reply: null, reason: typeof j.handoff === "string" && j.handoff.trim() ? j.handoff.trim().slice(0, 200) : "Aha couldn't answer this from your listing." };
+    return { reply: null, reason: typeof j.handoff === "string" && j.handoff.trim() ? j.handoff.trim().slice(0, 200) : "Aha AI couldn't answer this from your listing." };
   } catch {
-    return { reply: null, reason: "Aha couldn't answer this from your listing." };
+    return { reply: null, reason: "Aha AI couldn't answer this from your listing." };
   }
 }
 
 /** The host's "Suggest a reply" — returns a draft (or why not); nothing is sent. */
 export async function suggestInboxReply(admin: SupabaseClient, conversationId: string): Promise<InboxAiResult> {
   const ctx = await loadContext(admin, conversationId);
-  if (!ctx) return { reply: null, reason: "Aha can't help with this conversation." };
+  if (!ctx) return { reply: null, reason: "Aha AI can't help with this conversation." };
   if (!ctx.messages.some((m) => m.role === "Guest")) return { reply: null, reason: "There's no guest message to answer yet." };
-  return (await draft(ctx)) ?? { reply: null, reason: "Aha isn't available right now. Please try again in a moment." };
+  return (await draft(ctx)) ?? { reply: null, reason: "Aha AI isn't available right now. Please try again in a moment." };
 }
 
 /**

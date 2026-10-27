@@ -3333,19 +3333,19 @@ export function registerApiRoutes(app: Express) {
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
     const userId = token ? await verifyUser(token) : null;
     if (!userId || !token) return res.status(401).json({ error: "Sign in." });
-    if (!inboxAiConfigured()) return res.status(503).json({ error: "Aha isn't available right now." });
-    if (rateLimited(inboxAiHits, userId, 20)) return res.status(429).json({ error: "You're going a bit fast — give Aha a few seconds." });
+    if (!inboxAiConfigured()) return res.status(503).json({ error: "Aha AI isn't available right now." });
+    if (rateLimited(inboxAiHits, userId, 20)) return res.status(429).json({ error: "You're going a bit fast — give Aha AI a few seconds." });
     const conversationId = typeof req.body?.conversationId === "string" ? req.body.conversationId : "";
     if (!/^[0-9a-f-]{36}$/i.test(conversationId)) return res.status(400).json({ error: "Conversation not found." });
     const admin = supabaseAdmin();
-    if (!admin) return res.status(503).json({ error: "Aha isn't available right now." });
+    if (!admin) return res.status(503).json({ error: "Aha AI isn't available right now." });
     const { data: part } = await admin.from("conversation_participants").select("role").eq("conversation_id", conversationId).eq("user_id", userId).maybeSingle();
     if (part?.role !== "operator") return res.status(403).json({ error: "Only the host of this conversation can use this." });
     try {
       res.json(await suggestInboxReply(admin, conversationId));
     } catch (err) {
       console.error("[inbox-ai-suggest]", err);
-      res.status(500).json({ error: "Aha couldn't draft a reply. Please try again." });
+      res.status(500).json({ error: "Aha AI couldn't draft a reply. Please try again." });
     }
   });
 
@@ -4705,7 +4705,7 @@ export function registerApiRoutes(app: Express) {
   app.post("/api/admin-text-fixes/suggest", async (req: Request, res: Response) => {
     const ctx = await adminOnly(req, res);
     if (!ctx) return;
-    if (!ahaCopyConfigured()) return res.status(503).json({ error: "Aha isn't available right now." });
+    if (!ahaCopyConfigured()) return res.status(503).json({ error: "Aha AI isn't available right now." });
     const parsed = textFixSuggestSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
     try {
@@ -4713,7 +4713,7 @@ export function registerApiRoutes(app: Express) {
       res.json({ suggestion });
     } catch (err) {
       console.error("[admin-text-fixes/suggest]", err);
-      res.status(500).json({ error: "Aha couldn't draft that — try again in a moment." });
+      res.status(500).json({ error: "Aha AI couldn't draft that — try again in a moment." });
     }
   });
 
@@ -4853,8 +4853,8 @@ export function registerApiRoutes(app: Express) {
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
     const userId = token ? await verifyUser(token) : null;
     if (!userId || !token) return res.status(401).json({ error: "Sign in." });
-    if (!ahaCopyConfigured()) return res.status(503).json({ error: "Aha isn't available right now." });
-    if (rateLimited(ahaCopyHits, userId, 30)) return res.status(429).json({ error: "You're going a bit fast — give Aha a few seconds." });
+    if (!ahaCopyConfigured()) return res.status(503).json({ error: "Aha AI isn't available right now." });
+    if (rateLimited(ahaCopyHits, userId, 30)) return res.status(429).json({ error: "You're going a bit fast — give Aha AI a few seconds." });
     const parsed = ahaCopySchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: issuesToMessage(parsed.error) });
 
@@ -4865,11 +4865,11 @@ export function registerApiRoutes(app: Express) {
     }
     try {
       const result = await generateListingCopy(parsed.data);
-      if (!result.text && !result.items) return res.status(502).json({ error: "Aha couldn't draft that — try again in a moment." });
+      if (!result.text && !result.items) return res.status(502).json({ error: "Aha AI couldn't draft that — try again in a moment." });
       res.json(result);
     } catch (err) {
       console.error("[aha-listing-copy]", err);
-      res.status(500).json({ error: "Aha couldn't draft that. Please try again." });
+      res.status(500).json({ error: "Aha AI couldn't draft that. Please try again." });
     }
   });
 
@@ -4882,12 +4882,12 @@ export function registerApiRoutes(app: Express) {
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
     const userId = token ? await verifyUser(token) : null;
     if (!userId || !token) return res.status(401).json({ error: "Sign in." });
-    if (!ahaCopyConfigured()) return res.status(503).json({ error: "Aha isn't available right now." });
-    if (rateLimited(ahaCopyHits, userId, 30)) return res.status(429).json({ error: "You're going a bit fast — give Aha a few seconds." });
+    if (!ahaCopyConfigured()) return res.status(503).json({ error: "Aha AI isn't available right now." });
+    if (rateLimited(ahaCopyHits, userId, 30)) return res.status(429).json({ error: "You're going a bit fast — give Aha AI a few seconds." });
     const listingId = typeof req.body?.listingId === "string" ? req.body.listingId : "";
     if (!/^[0-9a-f-]{36}$/i.test(listingId)) return res.status(400).json({ error: "Listing not found." });
     const admin = supabaseAdmin();
-    if (!admin) return res.status(503).json({ error: "Aha isn't available right now." });
+    if (!admin) return res.status(503).json({ error: "Aha AI isn't available right now." });
     const [{ data: me }, { data: row }] = await Promise.all([
       admin.from("profiles").select("role").eq("id", userId).maybeSingle(),
       admin.from("listings").select("*").eq("id", listingId).maybeSingle(),
@@ -4898,11 +4898,11 @@ export function registerApiRoutes(app: Express) {
     const existing = cleanFaq(row.faq).map((f) => f.q);
     try {
       const items = await draftVerifiedFaq(row, existing);
-      if (!items.length) return res.status(502).json({ error: "Aha couldn't draft questions this time — try again in a moment." });
+      if (!items.length) return res.status(502).json({ error: "Aha AI couldn't draft questions this time — try again in a moment." });
       res.json({ items });
     } catch (err) {
       console.error("[aha-listing-faq]", err);
-      res.status(500).json({ error: "Aha couldn't draft questions. Please try again." });
+      res.status(500).json({ error: "Aha AI couldn't draft questions. Please try again." });
     }
   });
 
@@ -5074,11 +5074,11 @@ export function registerApiRoutes(app: Express) {
     const who = await journeyCaller(req, res);
     if (!who) return;
     if (!who.isOperator) return res.status(403).json({ error: "Operators only." });
-    if (!ahaCopyConfigured()) return res.status(503).json({ error: "Aha isn't available right now." });
-    if (rateLimited(ahaCopyHits, who.userId, 30)) return res.status(429).json({ error: "You're going a bit fast — give Aha a few seconds." });
+    if (!ahaCopyConfigured()) return res.status(503).json({ error: "Aha AI isn't available right now." });
+    if (rateLimited(ahaCopyHits, who.userId, 30)) return res.status(429).json({ error: "You're going a bit fast — give Aha AI a few seconds." });
     const placeholders = PLACEHOLDERS.filter((p) => p.types.includes(parsed.data.listingType)).map((p) => p.key);
     const r = await generateJourneyTemplate({ ...parsed.data, placeholders });
-    if (!r.subject && !r.body) return res.status(502).json({ error: "Aha couldn't draft that — try again in a moment." });
+    if (!r.subject && !r.body) return res.status(502).json({ error: "Aha AI couldn't draft that — try again in a moment." });
     res.json(r);
   });
 

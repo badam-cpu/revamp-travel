@@ -195,7 +195,7 @@ export function SupportWidget() {
         <button
           type="button"
           onClick={() => show(mode)}
-          aria-label="Ask Aha, Revamp's AI assistant"
+          aria-label="Ask Aha AI, Revamp's assistant"
           aria-hidden={yieldToSearch || undefined}
           tabIndex={yieldToSearch ? -1 : undefined}
           className={cn(
@@ -213,23 +213,23 @@ export function SupportWidget() {
         <div className={cn("fixed bottom-4 right-4 z-[110] flex w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-basalt/10 bg-paper shadow-[0_24px_70px_rgba(35,35,33,0.28)]", compact ? "" : "h-[min(600px,82dvh)]")}>
           <div className="flex items-center justify-between gap-2 bg-basalt px-4 py-3 text-white">
             <div className="min-w-0">
-              <p className="flex items-center gap-1.5 text-sm font-bold"><Sparkles className="h-3.5 w-3.5 text-apricot" /> Aha</p>
+              <p className="flex items-center gap-1.5 text-sm font-bold"><Sparkles className="h-3.5 w-3.5 text-apricot" /> Aha AI</p>
               {!compact && <p className="text-[11px] text-white/60">Revamp's AI assistant · English or Russian</p>}
             </div>
             <div className="flex items-center gap-1">
               {compact && (
-                <button type="button" onClick={() => setCompact(false)} aria-label="Expand Aha" className="grid h-10 w-10 place-items-center rounded-full hover:bg-white/10">
+                <button type="button" onClick={() => setCompact(false)} aria-label="Expand Aha AI" className="grid h-10 w-10 place-items-center rounded-full hover:bg-white/10">
                   <ChevronUp className="h-4 w-4" />
                 </button>
               )}
-              <button type="button" onClick={close} aria-label="Close Aha" className="grid h-10 w-10 place-items-center rounded-full hover:bg-white/10">
+              <button type="button" onClick={close} aria-label="Close Aha AI" className="grid h-10 w-10 place-items-center rounded-full hover:bg-white/10">
                 <X className="h-4 w-4" />
               </button>
             </div>
           </div>
 
           {!compact && (
-            <div role="tablist" aria-label="Ways to use Aha" className="grid grid-cols-3 gap-1 border-b border-basalt/10 p-1.5">
+            <div role="tablist" aria-label="Ways to use Aha AI" className="grid grid-cols-3 gap-1 border-b border-basalt/10 p-1.5">
               {([
                 ["chat", "Chat", MessageCircle],
                 ...(VOICE ? [["talk", "Talk", Mic] as const] : []),
@@ -269,7 +269,7 @@ export function SupportWidget() {
             <>
               <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
                 <div className="rounded-2xl rounded-tl-sm bg-chalk px-3.5 py-2.5 text-sm text-basalt/80">
-                  Hi{profile?.displayName && profile.displayName !== "Guest" ? ` ${profile.displayName.split(" ")[0]}` : ""}! 👋 I'm Aha. Ask me anything about stays, tours, experiences or booking — no account needed.
+                  Hi{profile?.displayName && profile.displayName !== "Guest" ? ` ${profile.displayName.split(" ")[0]}` : ""}! 👋 I'm Aha AI. Ask me anything about stays, tours, experiences or booking — no account needed.
                 </div>
                 {messages.map((m) => (
                   <div key={m.id} className={cn("flex", m.sender === "traveler" ? "justify-end" : "justify-start")}>

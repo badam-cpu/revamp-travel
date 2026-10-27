@@ -51,13 +51,13 @@ export function ListingFaqEditor({ listing, open, onClose }: { listing: { id: st
       const { items } = await ahaListingFaq(listing.id);
       const have = new Set(rows.map((r) => r.q.trim().toLowerCase()));
       const fresh = items.filter((it) => !have.has(it.q.trim().toLowerCase())).slice(0, Math.max(0, FAQ_MAX_ITEMS - rows.length));
-      if (!fresh.length) toast("Aha didn't find new questions it could answer from your listing. Add more details to the listing, or write your own.");
+      if (!fresh.length) toast("Aha AI didn't find new questions it could answer from your listing. Add more details to the listing, or write your own.");
       else {
         setRows((rs) => [...rs, ...toRows(fresh, true)]);
-        toast.success(`Aha drafted ${fresh.length} question${fresh.length === 1 ? "" : "s"} — check each one before saving.`);
+        toast.success(`Aha AI drafted ${fresh.length} question${fresh.length === 1 ? "" : "s"} — check each one before saving.`);
       }
     } catch (e) {
-      toast(userMessage(e, "Aha couldn't draft questions right now. Please try again."));
+      toast(userMessage(e, "Aha AI couldn't draft questions right now. Please try again."));
     } finally {
       setDrafting(false);
     }
@@ -101,8 +101,8 @@ export function ListingFaqEditor({ listing, open, onClose }: { listing: { id: st
               <Sparkles className="mt-1 h-4 w-4 shrink-0 text-apricot" aria-hidden />
               <span>
                 {(listing.faq?.length ?? 0) > 0
-                  ? "Aha wrote these from your listing details and they're live on your page. It updates them when you change your listing. Edit or remove anything — once you save, they're yours and Aha won't change them."
-                  : "Aha writes this FAQ automatically from your listing details, usually within an hour of publishing or changing them. You can also write your own now."}
+                  ? "Aha AI wrote these from your listing details and they're live on your page. It updates them when you change your listing. Edit or remove anything — once you save, they're yours and Aha AI won't change them."
+                  : "Aha AI writes this FAQ automatically from your listing details, usually within an hour of publishing or changing them. You can also write your own now."}
               </span>
             </p>
           )}
@@ -110,10 +110,10 @@ export function ListingFaqEditor({ listing, open, onClose }: { listing: { id: st
             <div className="grid place-items-center gap-3 py-10 text-center">
               <MessageCircleQuestion className="h-8 w-8 text-apricot" aria-hidden />
               <p className="max-w-sm text-sm leading-6 text-basalt/65">
-                Let Aha draft the usual questions from what your listing already says — parking, check-in, who it suits, what's included. You check and edit each one.
+                Let Aha AI draft the usual questions from what your listing already says — parking, check-in, who it suits, what's included. You check and edit each one.
               </p>
               <Button onClick={draft} disabled={drafting} className="h-12 rounded-full bg-apricot px-6 text-base text-white hover:bg-apricot/90 sm:h-10 sm:text-sm">
-                {drafting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />} Draft with Aha
+                {drafting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />} Draft with Aha AI
               </Button>
               <button type="button" onClick={() => setRows((rs) => [...rs, ...toRows([{ q: "", a: "" }])])} className="h-10 text-sm font-semibold text-basalt/70 underline-offset-4 hover:underline">
                 or write your own
@@ -126,7 +126,7 @@ export function ListingFaqEditor({ listing, open, onClose }: { listing: { id: st
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold text-basalt/50">
                       Question {i + 1}
-                      {r.suggested && <span className="ml-2 rounded-full bg-apricot/10 px-2 py-0.5 text-[11px] text-apricot">Drafted by Aha — check it</span>}
+                      {r.suggested && <span className="ml-2 rounded-full bg-apricot/10 px-2 py-0.5 text-[11px] text-apricot">Drafted by Aha AI — check it</span>}
                     </span>
                     <span className="flex shrink-0 gap-1">
                       <button type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up" className="grid h-10 w-10 place-items-center rounded-full text-basalt/55 hover:bg-chalk disabled:opacity-30 sm:h-8 sm:w-8">
@@ -167,7 +167,7 @@ export function ListingFaqEditor({ listing, open, onClose }: { listing: { id: st
           {rows.length > 0 && (
             <div className="flex gap-2">
               <Button variant="outline" onClick={draft} disabled={drafting || full} className="h-11 flex-1 rounded-full sm:h-9 sm:flex-none">
-                {drafting ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Sparkles className="mr-1.5 h-4 w-4 text-apricot" />} More with Aha
+                {drafting ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Sparkles className="mr-1.5 h-4 w-4 text-apricot" />} More with Aha AI
               </Button>
               <Button variant="outline" onClick={() => setRows((rs) => [...rs, ...toRows([{ q: "", a: "" }])])} disabled={full} className="h-11 flex-1 rounded-full sm:h-9 sm:flex-none">
                 <Plus className="mr-1.5 h-4 w-4" /> Add question

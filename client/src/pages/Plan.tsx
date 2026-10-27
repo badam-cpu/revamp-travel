@@ -1,6 +1,8 @@
 /** Revamp brandbook: the planner reuses the marketplace's white/orange/charcoal system — no new colors, same rounded geometry. */
 import { FormEvent, useEffect, useState } from "react";
-import { AlertTriangle, Compass, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowRight, Compass, MessageCircle, Mic, Route, Sparkles } from "lucide-react";
+import { toast } from "sonner";
+import { openAha } from "@/lib/ahaPanel";
 import { Link, useSearch } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -11,6 +13,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { planTrip, ApiError, type Itinerary, type PlanTripParams } from "@/lib/api";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { cn } from "@/lib/utils";
+
+const VOICE = !!import.meta.env.VITE_ELEVENLABS_AGENT_ID;
+/** Opens the Aha AI panel; it isn't shown to signed-in operators/admins, so say so. */
+const openOrNote = (mode: "talk" | "chat") => {
+  if (!openAha(mode)) toast("Aha AI's chat and voice are for guests — sign out to try them.");
+};
 
 const INTEREST_OPTIONS = ["History & monasteries", "Nature & hiking", "Food & wine", "Adventure", "Relaxation", "Photography"];
 
@@ -28,7 +36,7 @@ export default function Plan() {
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
 
   useDocumentMeta({
-    title: "Plan your Armenia trip with Aha | Revamp Vacations",
+    title: "Plan your Armenia trip with Aha AI | Revamp Vacations",
     description: "Generate a day-by-day Armenia itinerary grounded in Revamp Vacations's live, published catalog.",
     canonicalPath: "/plan",
   });
@@ -45,7 +53,7 @@ export default function Plan() {
       setItinerary(await planTrip(params));
     } catch (err) {
       if (!(err instanceof ApiError)) console.error("[plan]", err);
-      setError(err instanceof ApiError ? err.message : "Aha couldn't build that plan just now. Please try again.");
+      setError(err instanceof ApiError ? err.message : "Aha AI couldn't build that plan just now. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -90,19 +98,37 @@ export default function Plan() {
     <div className="min-h-screen bg-paper text-basalt">
       <SiteHeader />
       <main className="container py-12 lg:py-16">
-        <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-apricot"><Sparkles className="h-3.5 w-3.5" /> Plan with Aha</div>
-        <h1 className="mt-3 max-w-2xl font-display text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl">An itinerary built from this catalog.</h1>
+        <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-apricot"><Sparkles className="h-3.5 w-3.5" /> Plan with Aha AI</div>
+        <h1 className="mt-3 max-w-2xl font-display text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl">Plan your Armenia trip with Aha AI.</h1>
         <p className="mt-4 max-w-xl text-base leading-7 text-basalt/60">
-          Tell Aha, our AI assistant, how long you have and what you're after — it drafts a day-by-day plan, naming real stays, tables, and tours from the Revamp Vacations marketplace where they fit.
-        </p>
-        <p className="mt-3 text-sm text-basalt/60">
-          Prefer ChatGPT or Claude?{" "}
-          <Link href="/ai" className="font-medium text-apricot underline-offset-4 hover:underline">
-            Use Revamp there →
-          </Link>
+          Aha AI drafts a day-by-day plan with real stays, tables and tours from Revamp that you can book. Pick the way that suits you.
         </p>
 
-        <div className="mt-10 grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
+        {/* Every way to plan with Aha AI, side by side. Talk and Chat open the Aha AI
+            panel (SupportWidget, via openAha); the form is below. */}
+        <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            { icon: Mic, title: "Talk to Aha AI", text: "Say how many days you have and what you love. Aha AI plans it and opens it here.", action: "Start talking", onClick: () => openOrNote("talk"), show: VOICE },
+            { icon: MessageCircle, title: "Chat with Aha AI", text: "Ask about places, seasons, getting around or booking, in your own words.", action: "Open chat", onClick: () => openOrNote("chat"), show: true },
+            { icon: Route, title: "Fill in a few details", text: "Days, starting town, pace, budget and interests — then one tap.", action: "Use the form", onClick: () => document.getElementById("plan-form")?.scrollIntoView({ behavior: "smooth", block: "start" }), show: true },
+            { icon: Compass, title: "In ChatGPT or Claude", text: "Connect Revamp to the assistant you already use and plan there.", action: "How it works", href: "/ai", show: true },
+          ]
+            .filter((o) => o.show)
+            .map((o) => (
+              <div key={o.title} className="flex flex-col rounded-none border border-basalt/12 bg-paper p-5">
+                <o.icon className="h-5 w-5 text-apricot" />
+                <p className="mt-3 font-semibold">{o.title}</p>
+                <p className="mt-1 flex-1 text-sm leading-6 text-basalt/60">{o.text}</p>
+                {o.href ? (
+                  <Link href={o.href} className="mt-4 inline-flex min-h-10 items-center gap-1.5 text-sm font-semibold text-apricot hover:underline">{o.action} <ArrowRight className="h-4 w-4" /></Link>
+                ) : (
+                  <button type="button" onClick={o.onClick} className="mt-4 inline-flex min-h-10 items-center gap-1.5 self-start text-sm font-semibold text-apricot hover:underline">{o.action} <ArrowRight className="h-4 w-4" /></button>
+                )}
+              </div>
+            ))}
+        </div>
+
+        <div id="plan-form" className="mt-10 grid scroll-mt-24 gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
           <form onSubmit={submit} className="border border-basalt/12 bg-chalk p-6">
             <div className="grid gap-5">
               <div className="grid gap-1.5">

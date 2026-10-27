@@ -111,7 +111,7 @@ export async function suggestTextFix(admin: SupabaseClient, listingId: string, f
       field: p.field,
       current: p.current,
       suggested,
-      problem: suggested ? listingTextProblem(p.field, suggested, { listingType: row.type }) : "Aha couldn't draft this one — type a version yourself.",
+      problem: suggested ? listingTextProblem(p.field, suggested, { listingType: row.type }) : "Aha AI couldn't draft this one — type a version yourself.",
     });
   }
   return out[0] ?? null;

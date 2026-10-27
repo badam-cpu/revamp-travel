@@ -286,9 +286,9 @@ function StepCard({
         context: listing ? { title: listing.title, city: listing.city, facts: (listing.facts ?? []).filter((f) => f.label && f.value).slice(0, 20) } : {},
       });
       setDraft((d) => ({ ...d, subject: r.subject || d.subject, body: r.body || d.body, textBody: r.textBody || d.textBody }));
-      toast.success("Aha drafted it — review, then save.");
+      toast.success("Aha AI drafted it — review, then save.");
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Aha couldn't draft that right now.");
+      toast(e instanceof Error ? e.message : "Aha AI couldn't draft that right now.");
     } finally {
       setBusy("");
     }

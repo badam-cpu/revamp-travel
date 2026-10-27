@@ -44,7 +44,7 @@ export interface AhaCopyInput {
     shortDescription?: string;
     longDescription?: string;
     highlights?: string[];
-    notes?: string; // free-text hints the operator typed for Aha
+    notes?: string; // free-text hints the operator typed for Aha AI
   };
 }
 

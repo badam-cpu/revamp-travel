@@ -43,7 +43,7 @@ export function MessageTemplatesSettings() {
     setAiSaving(true);
     try {
       await setAiReply(user.id, next);
-      toast.success(next.auto ? `Aha will answer guests after ${next.delayMinutes} minutes when your listing has the answer.` : "Aha automatic answers are off.");
+      toast.success(next.auto ? `Aha AI will answer guests after ${next.delayMinutes} minutes when your listing has the answer.` : "Aha AI automatic answers are off.");
     } catch (e) {
       console.error(e);
       toast("Couldn't save that. Please try again.");
@@ -79,13 +79,13 @@ export function MessageTemplatesSettings() {
       {/* Aha answers (0119) */}
       {ai && (
         <div className="border border-basalt/12 bg-paper p-5">
-          <h3 className="flex items-center gap-2 font-display text-xl font-normal text-basalt"><Sparkles className="h-4 w-4 text-apricot" /> Aha answers guests</h3>
+          <h3 className="flex items-center gap-2 font-display text-xl font-normal text-basalt"><Sparkles className="h-4 w-4 text-apricot" /> Aha AI answers guests</h3>
           <p className="mt-1 max-w-2xl text-sm text-basalt/55">
-            When a guest's message waits without a reply, Aha answers it — only if your listing details or Guest FAQ have the answer, in the guest's language, labelled as Aha. Booking changes, cancellations, payments, complaints and anything it isn't sure of stay with you. Each time Aha answers, you get a note on Telegram (or by email) with what was asked and said. You can always use “Suggest a reply” in the inbox.
+            When a guest's message waits without a reply, Aha AI answers it — only if your listing details or Guest FAQ have the answer, in the guest's language, labelled as Aha AI. Booking changes, cancellations, payments, complaints and anything it isn't sure of stay with you. Each time Aha AI answers, you get a note on Telegram (or by email) with what was asked and said. You can always use “Suggest a reply” in the inbox.
           </p>
           <label className="mt-4 flex min-h-11 items-center gap-3 text-sm font-semibold">
             <input type="checkbox" checked={ai.auto} disabled={aiSaving} onChange={(e) => saveAi({ ...ai, auto: e.target.checked })} className="h-5 w-5 accent-[#F15822]" />
-            Let Aha answer when I haven't replied
+            Let Aha AI answer when I haven't replied
           </label>
           <label className="mt-2 flex flex-wrap items-center gap-3 text-sm text-basalt/70">
             Answer after

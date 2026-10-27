@@ -2021,7 +2021,7 @@ function OperatorListingRow({ listing, onEdit, tour = null, onTourChanged }: { l
               </DropdownMenuItem>
             )}
             <DropdownMenuItem onSelect={() => setFaqOpen(true)}>
-              <MessageCircleQuestion className="mr-2 h-3.5 w-3.5" /> Guest FAQ{listing.faq?.length ? ` · ${listing.faq.length}${listing.faqHostSavedAt ? "" : " by Aha"}` : ""}
+              <MessageCircleQuestion className="mr-2 h-3.5 w-3.5" /> Guest FAQ{listing.faq?.length ? ` · ${listing.faq.length}${listing.faqHostSavedAt ? "" : " by Aha AI"}` : ""}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => setDialog("suspend")} disabled={!active}>

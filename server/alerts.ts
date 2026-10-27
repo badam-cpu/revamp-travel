@@ -54,9 +54,9 @@ export const CRON_REGISTRY: CronJobSpec[] = [
   // Schedule: @weekly (events-upkeep → events-sync-background "upkeep") → alert after ~8 days.
   { job: "events-upkeep", label: "Upcoming events re-check (weekly)", maxAgeMinutes: 8 * 24 * 60 },
   // Schedule: */20 * * * * (faq-auto) → alert if no success in ~3h.
-  { job: "faq-auto", label: "Automatic guest FAQ (Aha)", maxAgeMinutes: 180 },
+  { job: "faq-auto", label: "Automatic guest FAQ (Aha AI)", maxAgeMinutes: 180 },
   // Schedule: */5 * * * * (inbox-ai) → alert if no success in ~1h.
-  { job: "inbox-ai", label: "Aha automatic inbox answers", maxAgeMinutes: 60 },
+  { job: "inbox-ai", label: "Aha AI automatic inbox answers", maxAgeMinutes: 60 },
 ];
 
 /** Re-send a down-alert for the same job at most once per this window. */

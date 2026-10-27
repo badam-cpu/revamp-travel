@@ -155,10 +155,10 @@ export function Inbox({ userId, admin = false, host = false }: { userId: string;
       const r = await ahaSuggestReply(activeId);
       if (r.reply) {
         setDraft((d) => (d.trim() ? `${d}\n${r.reply}` : (r.reply as string)));
-        toast("Aha drafted a reply — check it, then send.");
-      } else toast(r.reason || "This one needs you — Aha couldn't answer it from your listing.");
+        toast("Aha AI drafted a reply — check it, then send.");
+      } else toast(r.reason || "This one needs you — Aha AI couldn't answer it from your listing.");
     } catch (e) {
-      toast(userMessage(e, "Aha couldn't draft a reply right now. Please try again."));
+      toast(userMessage(e, "Aha AI couldn't draft a reply right now. Please try again."));
     } finally {
       setSuggesting(false);
     }
@@ -284,7 +284,7 @@ export function Inbox({ userId, admin = false, host = false }: { userId: string;
                       <p className={cn("whitespace-pre-wrap [overflow-wrap:anywhere]", m.redacted && "italic opacity-70")}>{m.body}</p>
                       {m.ai && (
                         <p className={cn("mt-1 flex items-center gap-1 text-[11px] font-semibold", mine ? "text-white/80" : "text-apricot")}>
-                          <Sparkles className="h-3 w-3" aria-hidden /> Answered automatically by Aha from the listing details
+                          <Sparkles className="h-3 w-3" aria-hidden /> Answered automatically by Aha AI from the listing details
                         </p>
                       )}
                       {admin && originals.get(m.id) && (

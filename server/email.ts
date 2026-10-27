@@ -457,17 +457,17 @@ export function sendAhaAnswered(to: string, opts: { guestName: string; listingTi
   const site = SITE();
   const clip = (t: string, n: number) => (t.length > n ? `${t.slice(0, n)}…` : t);
   const html = shell(
-    `Aha answered ${esc(opts.guestName)}`,
+    `Aha AI answered ${esc(opts.guestName)}`,
     `${opts.listingTitle ? `<p style="font-size:13px;color:#6B6357;margin:0 0 8px;">Re: ${esc(opts.listingTitle)}</p>` : ""}
      <p style="font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:#8B8478;margin:0 0 4px;">The guest asked</p>
      <p style="font-size:15px;line-height:1.6;margin:0 0 12px;padding:12px 14px;background:#f6f3ec;border-radius:8px;">${esc(clip(opts.question, 400))}</p>
-     <p style="font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:#8B8478;margin:0 0 4px;">Aha replied, from your listing details</p>
+     <p style="font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:#8B8478;margin:0 0 4px;">Aha AI replied, from your listing details</p>
      <p style="font-size:15px;line-height:1.6;margin:0 0 14px;padding:12px 14px;border:1px solid #eadfce;border-radius:8px;">${esc(clip(opts.answer, 800))}</p>
      <p style="margin:4px 0 18px;"><a href="${esc(site)}/dashboard?section=messages" style="display:inline-block;background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Open the conversation</a></p>
-     <p style="font-size:12px;color:#8B8478;margin:0;">You can add to it anytime. Turn Aha's answers off in Dashboard → Messages.</p>`,
+     <p style="font-size:12px;color:#8B8478;margin:0;">You can add to it anytime. Turn Aha AI's answers off in Dashboard → Messages.</p>`,
     site,
   );
-  return send(to, `Aha answered ${opts.guestName}${opts.listingTitle ? ` — ${opts.listingTitle}` : ""}`, html);
+  return send(to, `Aha AI answered ${opts.guestName}${opts.listingTitle ? ` — ${opts.listingTitle}` : ""}`, html);
 }
 
 /** To the recipient: they've received a Revamp gift card. */
