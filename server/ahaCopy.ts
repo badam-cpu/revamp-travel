@@ -265,6 +265,7 @@ export async function generateListingFaq(input: AhaFaqInput): Promise<{ q: strin
 Rules:
 - Write 5 to 8 questions a guest typically asks BEFORE booking this kind of listing (${input.listingType}): getting there, parking, check-in / meeting point, what's included, who it suits (kids, pets, accessibility), rules, cancellation, what to bring.
 - Answer ONLY from the listing facts provided. If the facts don't answer a question, leave that question out — never guess, never add amenities, times, distances, prices or promises that aren't in the facts.
+- Include a question only when the facts give a clear, direct, useful answer. Never write non-answers such as "not specified", "not mentioned", "depends on", "check with the host", "contact the venue" — leave that question out instead. Don't ask "How do I get there?" unless the facts give directions or a meeting point; the address alone isn't directions.
 - Never mention reviews, ratings, awards, "best", or contact details (phone, email, WhatsApp, Telegram) — guests contact the host through Revamp.
 - Don't quote prices (they change by date).
 - English. Questions short and natural, as a guest would ask. Answers 1–3 friendly, plain sentences in a neutral, factual voice about the place ("The apartment has…", "The tour starts at…") — not "we"/"I".
@@ -317,7 +318,7 @@ export async function verifyListingFaq(facts: string[], items: { q: string; a: s
   if (!anthropic) return null;
   if (!items.length) return [];
   const system = `You check a travel listing's FAQ against the listing's facts.
-For each numbered question-and-answer, decide whether EVERY claim in the answer is directly stated by (or plainly follows from) the facts. Times, distances, amenities, rules, inclusions, policies and numbers must appear in the facts. General courtesy wording is fine.
+For each numbered question-and-answer, it passes only if (1) EVERY claim in the answer is directly stated by (or plainly follows from) the facts — times, distances, amenities, rules, inclusions, policies and numbers must appear in the facts; general courtesy wording is fine — AND (2) the answer actually answers the question. Fail non-answers and hedges such as "not specified", "not mentioned", "it depends", "check with the host/venue".
 Return ONLY JSON: {"supported": [list of the numbers that pass]}`;
   const msg = `Listing facts:\n${facts.map((f) => `- ${f}`).join("\n")}\n\nFAQ:\n${items.map((it, i) => `${i + 1}. Q: ${it.q}\n   A: ${it.a}`).join("\n")}`;
   let response: Anthropic.Message;

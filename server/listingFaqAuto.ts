@@ -49,7 +49,10 @@ export function listingFaqFacts(row: Row): string[] {
   ];
 }
 
-export const factsHash = (facts: string[]) => createHash("sha256").update(facts.join("\n")).digest("hex").slice(0, 32);
+// Bump when the FAQ instructions change: every automatic FAQ (never a host-saved one)
+// is then rewritten on the following runs. v2 (2026-10-27): no non-answers / hedges.
+const FAQ_PROMPT_VERSION = "v2";
+export const factsHash = (facts: string[]) => createHash("sha256").update(`${FAQ_PROMPT_VERSION}\n${facts.join("\n")}`).digest("hex").slice(0, 32);
 
 /**
  * Draft + fact-check FAQ items for a listing row. `existing` = questions to avoid
