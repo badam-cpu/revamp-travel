@@ -15,6 +15,7 @@ import { Loader2, Mic, MicOff, PhoneOff } from "lucide-react";
 import { ConversationProvider, useConversation } from "@elevenlabs/react";
 import { Button } from "@/components/ui/button";
 import { trackEvent } from "@/lib/analytics";
+import { requestAhaFill } from "@/lib/ahaBooking";
 import { cn } from "@/lib/utils";
 
 const AGENT_ID = import.meta.env.VITE_ELEVENLABS_AGENT_ID as string | undefined;
@@ -30,7 +31,9 @@ const armeniaToday = () => new Date(Date.now() + 4 * 3600_000).toISOString().sli
 // ?voiceDebug=1 shows the technical reason in the window (for us, not guests).
 const DEBUG = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("voiceDebug");
 
-function Call({ slug, title, onEnd }: { slug: string; title: string; onEnd: () => void }) {
+type CallProps = { slug: string; title: string; onEnd: () => void; compact?: boolean; onFilled?: () => void };
+
+function Call({ slug, onEnd, compact = false, onFilled }: CallProps) {
   const [lang, setLang] = useState<Lang>("en");
   const [starting, setStarting] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -112,6 +115,23 @@ function Call({ slug, title, onEnd }: { slug: string; title: string; onEnd: () =
       connected.current = false;
       const opts = {
         agentId: AGENT_ID,
+        // The agent's `fill_booking` client tool: fills this page's booking box
+        // (dates, guests, start time) — the guest still taps Book and pays.
+        clientTools: {
+          fill_booking: async (p: Record<string, unknown>) => {
+            const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+            const say = await requestAhaFill(slug, {
+              startDate: str(p.startDate) ?? str(p.start) ?? "",
+              endDate: str(p.endDate) ?? str(p.end),
+              guests: Number(p.guests) || undefined,
+              time: str(p.time),
+            });
+            note(`fill_booking → ${say.slice(0, 60)}`);
+            if (say.startsWith("Done")) onFilled?.();
+            trackEvent("voice_assistant_fill", { item_id: slug, ok: say.startsWith("Done") });
+            return say;
+          },
+        },
         dynamicVariables: { listing_title: ctx.title, listing_slug: slug, listing_context: ctx.context, today: armeniaToday() },
         overrides: { agent: { language: lang, firstMessage: FIRST[lang] } },
       };
@@ -129,6 +149,26 @@ function Call({ slug, title, onEnd }: { slug: string; title: string; onEnd: () =
   };
 
   const status = !live ? (starting || convo.status === "connecting" ? "Connecting…" : "Ready when you are") : convo.isSpeaking ? "Aha is speaking…" : convo.isMuted ? "Microphone off" : "Listening…";
+  const end = () => {
+    convo.endSession();
+    onEnd();
+  };
+
+  // Shrunk to a bar so the guest can see the page (e.g. the booking box Aha just filled).
+  if (compact && live) {
+    return (
+      <div className="flex items-center gap-2">
+        <span aria-hidden className={cn("h-2.5 w-2.5 shrink-0 rounded-full bg-apricot", !convo.isSpeaking && !convo.isMuted && "animate-pulse motion-reduce:animate-none")} />
+        <p className="min-w-0 flex-1 truncate text-sm font-semibold" aria-live="polite">{status}</p>
+        <button type="button" onClick={() => convo.setMuted(!convo.isMuted)} aria-label={convo.isMuted ? "Unmute" : "Mute"} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-basalt/15 text-basalt hover:border-apricot">
+          {convo.isMuted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+        </button>
+        <button type="button" onClick={end} aria-label="End the call" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-basalt text-white hover:bg-basalt/90">
+          <PhoneOff className="h-4 w-4" />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="grid gap-5">
@@ -173,13 +213,7 @@ function Call({ slug, title, onEnd }: { slug: string; title: string; onEnd: () =
           <Button variant="outline" onClick={() => convo.setMuted(!convo.isMuted)} className="h-12 rounded-full">
             {convo.isMuted ? <Mic className="mr-2 h-4 w-4" /> : <MicOff className="mr-2 h-4 w-4" />} {convo.isMuted ? "Unmute" : "Mute"}
           </Button>
-          <Button
-            onClick={() => {
-              convo.endSession();
-              onEnd();
-            }}
-            className="h-12 rounded-full bg-basalt text-white hover:bg-basalt/90"
-          >
+          <Button onClick={end} className="h-12 rounded-full bg-basalt text-white hover:bg-basalt/90">
             <PhoneOff className="mr-2 h-4 w-4" /> End
           </Button>
         </div>
@@ -189,14 +223,14 @@ function Call({ slug, title, onEnd }: { slug: string; title: string; onEnd: () =
       {DEBUG && debug.length > 0 && <pre className="max-h-40 overflow-auto whitespace-pre-wrap bg-chalk p-2 text-[11px] leading-4 text-basalt/70">{debug.join("\n")}</pre>}
 
       <p className="text-xs leading-5 text-basalt/50">
-        Aha is an AI voice assistant. It answers from this listing's details and can check your dates — it doesn't book or take payments; you book on this page. Your voice is processed by our voice provider to reply.{" "}
+        Aha is an AI voice assistant. It answers from this listing's details, checks your dates and can fill in the booking form — you book and pay yourself on this page. Your voice is processed by our voice provider to reply.{" "}
         <Link href="/privacy" className="underline underline-offset-2">Privacy</Link>
       </p>
     </div>
   );
 }
 
-export default function AhaVoiceCall(props: { slug: string; title: string; onEnd: () => void }) {
+export default function AhaVoiceCall(props: CallProps) {
   return (
     <ConversationProvider>
       <Call {...props} />

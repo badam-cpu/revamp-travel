@@ -53,6 +53,19 @@ How to help:
 - No auth header needed (the endpoint is public and read-only, like the listing page).
 - The response has a `say` field — the sentence to tell the guest.
 
+### Tools → Add tool → Client (fills the booking box)
+- **Name:** `fill_booking`
+- **Description:** `Fill in the booking box on the page with the guest's dates, number of guests and (tours) start time, after check_dates says they're available. The guest then taps Book to finish and pay.`
+- **Wait for response:** ON (Aha says what the page answers, e.g. "Done — check-in Nov 20, check-out Nov 22, 2 guests are filled in").
+- **Parameters** — add each as its own property:
+  | Identifier | Type | Required | Description |
+  |---|---|---|---|
+  | `startDate` | String | ✓ | `Check-in date (stays) or the activity date, YYYY-MM-DD` |
+  | `endDate` | String | ✓ | `Check-out date (YYYY-MM-DD). For tours and experiences: the same date as startDate.` |
+  | `guests` | Number | ✓ | `Number of guests` |
+  | `time` | String | – | `Tours/experiences: the start time the guest chose, e.g. 08:00` |
+- Nothing is booked: the website only fills in the form (same checks as a guest's own clicks) and the guest taps Book.
+
 ### Security tab
 - **Overrides:** turn on **First message** and **Language** (the site sends the greeting and English/Russian choice).
 - **Allowlist / origins:** add `revampvacations.com` and `www.revampvacations.com` so the agent only works on our site.

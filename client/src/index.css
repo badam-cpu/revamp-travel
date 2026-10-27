@@ -353,3 +353,12 @@
   .tour-enter-fade, .tour-enter-forward, .tour-enter-back,
   .tour-leave-fade, .tour-leave-forward, .tour-leave-back { animation: none; }
 }
+
+/* Aha Voice Assistant filled the booking box (lib/ahaBooking.ts revealBookingBox). */
+.aha-filled {
+  box-shadow: 0 0 0 3px rgba(241, 88, 34, 0.55), 0 20px 55px rgba(35, 35, 33, 0.1) !important;
+  transition: box-shadow 300ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .aha-filled { transition: none; }
+}

@@ -40,6 +40,7 @@ import { describeCancellationPolicy, nightlyPriceRange } from "@shared/bookings"
 import { buildBreadcrumbJsonLd, buildFaqJsonLd, buildListingJsonLd } from "@shared/seo";
 import { ListingFaq } from "@/components/ListingFaq";
 import { GooglePlaceFacts } from "@/components/GooglePlaceFacts";
+import { useAhaFill } from "@/lib/ahaBooking";
 import { shareCurrentPage } from "@/lib/share";
 import { VirtualTour } from "@/components/VirtualTour";
 import { fetchTour } from "@/lib/tours";
@@ -249,6 +250,22 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
   // room cards and the room dialog), and which room's dialog is open.
   const [hotelStay, setHotelStay] = useState<HotelStay>({ start: null, end: null, guests: 1 });
   const [openRoomId, setOpenRoomId] = useState<string | null>(null);
+  // Aha Voice Assistant fills the hotel's dates + party, then shows the rooms —
+  // the guest still picks a room and taps Reserve.
+  useAhaFill(
+    listing?.slug ?? "",
+    (fill) => {
+      const today = new Date(Date.now() + 4 * 3600_000).toISOString().slice(0, 10);
+      const iso = (v?: string) => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
+      if (!iso(fill.startDate) || fill.startDate < today) return "That date doesn't work — which dates would you like?";
+      if (!iso(fill.endDate) || fill.endDate! <= fill.startDate) return "For a stay I need the check-out date too — when would you leave?";
+      const guests = Math.max(1, Math.round(Number(fill.guests) || hotelStay.guests || 1));
+      setHotelStay({ start: fill.startDate, end: fill.endDate!, guests });
+      setTimeout(() => document.getElementById("rooms")?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+      return `Done — your dates and ${guests} guest${guests === 1 ? "" : "s"} are filled in, and the rooms available for them are listed on the page. Tap a room to see it and reserve.`;
+    },
+    isHotel,
+  );
 
   // Virtual tour (0109) — stays only, once the operator has published it.
   // Photos the listing no longer has are dropped (visibleRooms).

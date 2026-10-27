@@ -53,6 +53,7 @@ export async function voiceContext(client: SupabaseClient, slug: string): Promis
     `- Use only the facts below. Don't add adjectives, numbers or details they don't contain (a "City View" is a city view — not a "panoramic" one). If something isn't here, say you don't have that detail.`,
     `- Suggest "Ask the host a question" at most once in the whole call, and only when the guest needs something you can't answer. Don't end every answer with it.`,
     `- When you talk, call it "${spokenKind(row)}" — don't read the listing title aloud. Say prices as a number of drams.`,
+    `- If the guest wants to book: check the dates with check_dates first; if they're available, call fill_booking with the same dates and guests${row.type === "tour" || row.type === "experience" ? " (and the start time they chose)" : ""}. It fills in the booking box on the page. Then tell them to tap Book there to finish and pay. Never say it's booked or reserved — only the guest can book.`,
     `LISTING (for your reference only): ${speakable(row.title)}`,
     ...listingFaqFacts(row).map((f) => `- ${speakable(f)}`),
     ...(faq.length ? ["FREQUENT QUESTIONS:", ...faq.map((f) => `- Q: ${speakable(f.q)} A: ${speakable(f.a)}`)] : []),
@@ -60,7 +61,14 @@ export async function voiceContext(client: SupabaseClient, slug: string): Promis
   return { title: row.title, context: lines.join("\n").slice(0, 12000) };
 }
 
-const drams = (n: number) => `${Math.round(n).toLocaleString("en-US")} drams`;
+/**
+ * Spoken like the page shows it: the site displays prices rounded to the nearest
+ * 100 drams (CurrencyContext), so Aha says the same figure — "about" when rounded.
+ */
+const drams = (n: number) => {
+  const shown = Math.round(n / 100) * 100;
+  return `${shown === Math.round(n) ? "" : "about "}${shown.toLocaleString("en-US")} drams`;
+};
 /** "20 November" — read naturally by text-to-speech (not "2026-11-20"). */
 const spoken = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "UTC" });
 

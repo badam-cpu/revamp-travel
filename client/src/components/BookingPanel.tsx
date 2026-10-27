@@ -32,6 +32,7 @@ import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
 import { trackEvent } from "@/lib/analytics";
 import { toast } from "sonner";
+import { parseTime, revealBookingBox, useAhaFill } from "@/lib/ahaBooking";
 
 const DAY_MS = 86_400_000;
 
@@ -142,6 +143,60 @@ export function BookingPanel({ listing }: { listing: LiveListing }) {
   }, [listing.facts]);
   const selectedNights = isStay && selected ? nightsBetween(selected.startDate, selected.endDate) : 0;
   const belowMin = isStay && selected !== null && selectedNights < minStay;
+
+  // Aha Voice Assistant can fill this panel ("let's book the 20th to the 22nd for
+  // two") with the same checks a guest's own clicks get — never books by itself.
+  useAhaFill(
+    listing.slug,
+    (fill) => {
+      const today = new Date(Date.now() + 4 * 3600_000).toISOString().slice(0, 10);
+      const start = fill.startDate;
+      const want = Math.max(1, Math.round(Number(fill.guests) || guests));
+      const plural = (n: number) => `${n} guest${n === 1 ? "" : "s"}`;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(start ?? "") || start < today) return "That date doesn't work — which dates would you like?";
+      if (want > maxGuests) return `This one takes up to ${plural(maxGuests)}.`;
+      const clash = (ranges: BlockedRange[], a: string, b: string) => ranges.some((r) => r.start < b && r.end > a);
+      const unavailable = [...(listing.blockedRanges ?? []), ...(listing.manualBlockedRanges ?? []), ...booked, ...suspensionBlocked(listing)];
+
+      if (slotMode) {
+        const open = (sessionsByDate.find((g) => g.date === start)?.sessions ?? []).filter((x) => x.seatsLeft >= want);
+        if (!open.length) return `There are no times with ${want === 1 ? "a free seat" : `${want} free seats`} on ${fmtShort(start)}.`;
+        const at = parseTime(fill.time);
+        const pick = at != null ? open.find((x) => parseTime(formatSlotTime(x.startsAt)) === at) : open.length === 1 ? open[0] : undefined;
+        setSlotDate(start);
+        setDatesOpen(false);
+        setGuests(want);
+        revealBookingBox();
+        if (!pick) {
+          setSessionId(null);
+          return `I've picked ${fmtShort(start)} for ${plural(want)}. Which time would you like: ${open.map((x) => formatSlotTime(x.startsAt)).join(", ")}?`;
+        }
+        setSessionId(pick.id);
+        return `Done — ${fmtShort(start)} at ${formatSlotTime(pick.startsAt)} for ${plural(want)} is filled in. Tap ${listing.bookingMode === "request" ? "Request to book" : "Book"} when you're ready.`;
+      }
+
+      if (isStay) {
+        const end = fill.endDate;
+        if (!end || !/^\d{4}-\d{2}-\d{2}$/.test(end) || end <= start) return "For a stay I need the check-out date too — when would you leave?";
+        if (nightsBetween(start, end) < minStay) return `This place has a ${minStay}-night minimum — could you stay a little longer?`;
+        if (clash(unavailable, start, end)) return "Those dates aren't available — would you like to try others?";
+        setRange({ start, end });
+        setGuests(want);
+        setDatesOpen(false);
+        revealBookingBox();
+        return `Done — check-in ${fmtShort(start)}, check-out ${fmtShort(end)}, ${plural(want)} are filled in. Tap Book when you're ready.`;
+      }
+
+      // Tours / experiences booked by date (no time slots).
+      if (clash(unavailable, start, addDays(start, 1))) return "That date isn't available — would you like another day?";
+      setRange({ start, end: null });
+      setGuests(want);
+      setDatesOpen(false);
+      revealBookingBox();
+      return `Done — ${fmtShort(start)} for ${plural(want)} is filled in. Tap Book when you're ready.`;
+    },
+    bookable,
+  );
 
   // Collapse the calendar once a complete selection is made (stays: both dates;
   // activities: a date; slot mode keeps the calendar until a day is picked, then
