@@ -44,7 +44,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useListings, LiveListing } from "@/contexts/ListingsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import type { ListingInput, ListingType, RoomType, RoomTypeInput } from "@shared/listings";
-import { LISTING_LIMITS, LISTING_TEXT_LIMITS, STAY_SPACE_TYPES, firstListingTextProblem, listingOffers, suspensionLabel } from "@shared/listings";
+import { LISTING_LIMITS, LISTING_TEXT_LIMITS, PARKING_OPTIONS, STAY_SPACE_TYPES, firstListingTextProblem, listingOffers, suspensionLabel } from "@shared/listings";
 import { EXTRA_FEE_TYPES } from "@shared/bookings";
 import { CharCount } from "@/components/CharCount";
 import { HotelCalendarSync } from "@/components/HotelCalendarSync";
@@ -194,6 +194,7 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
     { label: "Starting point", value: get("fact_startpoint").trim() },
     { label: "Check-in", value: get("fact_checkin").trim() },
     { label: "Checkout", value: get("fact_checkout").trim() },
+    { label: "Parking", value: get("fact_parking").trim() },
     // Only store a minimum stay of 2+ nights (1 is the default no-op).
     { label: "Minimum stay", value: Number.isFinite(minStayN) && minStayN >= 2 ? `${minStayN} nights` : "" },
   ].filter((f) => f.value);
@@ -339,6 +340,29 @@ function extraFeeOptions(current?: string | null): string[] {
 }
 const SELECT_TRIGGER = "h-12 data-[size=default]:h-12 w-full rounded-none text-base";
 const NATIVE_SELECT = "h-12 w-full rounded-none border border-basalt/15 bg-paper px-3 text-base focus:border-apricot focus:outline-none";
+
+/** Parking (stored as the "Parking" fact, read at submit as `fact_parking`). Keeps an older free-text value as an option. */
+function ParkingSelect({ draft, label, help }: { draft: { facts?: { label: string; value: string }[] }; label: string; help: string }) {
+  const current = draft.facts?.find((f) => f.label.toLowerCase() === "parking")?.value ?? "";
+  const options: string[] = [...PARKING_OPTIONS];
+  if (current && !options.includes(current)) options.unshift(current);
+  return (
+    <div className="grid gap-2">
+      <Label htmlFor="fact_parking" className="text-sm font-semibold">
+        {label} <span className="font-normal text-basalt/45">(optional)</span>
+      </Label>
+      <select id="fact_parking" name="fact_parking" defaultValue={current} className={NATIVE_SELECT}>
+        <option value="">Not set</option>
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
+      <p className="text-xs text-basalt/45">{help}</p>
+    </div>
+  );
+}
 /** A lone field that should line up with one column of the two-column pairs. */
 const HALF = "sm:w-[calc(50%-0.5rem)]";
 
@@ -1070,6 +1094,7 @@ function ListingFormDialog({
                     </div>
                   </div>
                 )}
+                {draft.type === "stay" && <ParkingSelect draft={draft} label="Parking" help="Shown on your listing and used to answer guests' parking questions." />}
                 {draft.type === "stay" && <HouseRulesPicker ref={houseRulesRef} defaultValue={draft.houseRules ?? []} />}
 
                 {/* Tour & experience-only detail fields. */}
@@ -1091,6 +1116,7 @@ function ListingFormDialog({
                       <Label className="text-sm font-semibold">Starting point <span className="font-normal text-basalt/45">(where the tour begins/ends)</span></Label>
                       <Input name="fact_startpoint" placeholder="e.g. Armenian National Opera and Ballet Theatre" defaultValue={draft.facts?.find((f) => ["starting point", "meeting point", "start"].includes(f.label.toLowerCase()))?.value ?? ""} className={FIELD} />
                     </div>
+                    <ParkingSelect draft={draft} label="Parking at the starting point" help="Used to answer guests who drive to the start." />
                     <div className="grid gap-2">
                       <Label className="text-sm font-semibold">Not included <span className="font-normal text-basalt/45">(search or add your own)</span></Label>
                       <SearchableMultiSelect ref={notIncludedRef} options={NOT_INCLUDED_OPTIONS} defaultValue={draft.notIncluded ?? []} placeholder="Search what's not included" />

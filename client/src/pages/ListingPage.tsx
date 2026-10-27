@@ -39,6 +39,7 @@ import { ExternalReviews } from "@/components/ExternalReviews";
 import { describeCancellationPolicy, nightlyPriceRange } from "@shared/bookings";
 import { buildBreadcrumbJsonLd, buildFaqJsonLd, buildListingJsonLd } from "@shared/seo";
 import { ListingFaq } from "@/components/ListingFaq";
+import { GooglePlaceFacts } from "@/components/GooglePlaceFacts";
 import { shareCurrentPage } from "@/lib/share";
 import { VirtualTour } from "@/components/VirtualTour";
 import { fetchTour } from "@/lib/tours";
@@ -561,6 +562,8 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
                 </div>
               </div>
             )}
+
+            {isCurated && <GooglePlaceFacts listingId={listing.id} className="border-t border-basalt/10 py-10" />}
 
             <ListingFaq items={listing.faq} className="scroll-mt-24 border-t border-basalt/10 py-10" />
 

@@ -198,3 +198,71 @@ export async function fetchBusinessStatus(placeId: string): Promise<{ status: Bu
     return null;
   }
 }
+
+
+/**
+ * "Good to know · from Google" for restaurants and places to visit: the venue's
+ * own Google attributes (parking, accessibility, reservations, seating, kids,
+ * dogs, payment). Shown live, attributed to Google, and only cached briefly in
+ * memory — Google's terms limit storing Places content, so it is never written
+ * to our database or folded into Revamp's own FAQ.
+ */
+export interface GooglePlaceFacts {
+  items: string[];
+  url: string | null;
+}
+const factsCache = new Map<string, { data: GooglePlaceFacts | null; expires: number }>();
+const FACTS_TTL_MS = 6 * 60 * 60 * 1000;
+
+export async function fetchPlaceFacts(placeId: string): Promise<GooglePlaceFacts | null> {
+  const key = process.env.GOOGLE_PLACES_API_KEY;
+  if (!key || !placeId) return null;
+  const cached = factsCache.get(placeId);
+  if (cached && cached.expires > Date.now()) return cached.data;
+  try {
+    const res = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`, {
+      headers: {
+        "X-Goog-Api-Key": key,
+        "X-Goog-FieldMask":
+          "googleMapsUri,parkingOptions,accessibilityOptions,reservable,outdoorSeating,goodForChildren,menuForChildren,allowsDogs,goodForGroups,servesVegetarianFood,paymentOptions,restroom",
+      },
+    });
+    const j = (await res.json()) as Record<string, any>;
+    if (!res.ok) {
+      factsCache.set(placeId, { data: null, expires: Date.now() + FACTS_TTL_MS });
+      return null;
+    }
+    const p = j.parkingOptions ?? {};
+    const a = j.accessibilityOptions ?? {};
+    const pay = j.paymentOptions ?? {};
+    const items = [
+      p.freeParkingLot && "Free parking lot",
+      p.freeStreetParking && "Free street parking",
+      p.freeGarageParking && "Free garage parking",
+      p.paidParkingLot && "Paid parking lot",
+      p.paidStreetParking && "Paid street parking",
+      p.paidGarageParking && "Paid garage parking",
+      p.valetParking && "Valet parking",
+      a.wheelchairAccessibleEntrance && "Wheelchair-accessible entrance",
+      a.wheelchairAccessibleParking && "Wheelchair-accessible parking",
+      a.wheelchairAccessibleRestroom && "Wheelchair-accessible restroom",
+      j.reservable === true && "Takes reservations",
+      j.outdoorSeating === true && "Outdoor seating",
+      j.goodForChildren === true && "Good for children",
+      j.menuForChildren === true && "Kids' menu",
+      j.goodForGroups === true && "Good for groups",
+      j.servesVegetarianFood === true && "Vegetarian options",
+      j.allowsDogs === true && "Dogs allowed",
+      j.restroom === true && "Restroom",
+      pay.acceptsCreditCards === true && "Cards accepted",
+      pay.acceptsNfc === true && "Contactless payments",
+      pay.acceptsCashOnly === true && "Cash only",
+    ].filter((x): x is string => typeof x === "string");
+    const data: GooglePlaceFacts | null = items.length ? { items, url: typeof j.googleMapsUri === "string" ? j.googleMapsUri : null } : null;
+    factsCache.set(placeId, { data, expires: Date.now() + FACTS_TTL_MS });
+    return data;
+  } catch (err) {
+    console.error("[google-places] facts fetch failed", err);
+    return null;
+  }
+}

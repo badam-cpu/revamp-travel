@@ -11,13 +11,13 @@
  */
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
-import { listPublishedForPlanner, verifyUser, userClient, getListingBusyRanges, getOperatorGooglePlaceId, pingDb } from "./supabase.js";
+import { listPublishedForPlanner, verifyUser, userClient, getListingBusyRanges, getOperatorGooglePlaceId, pingDb, publicClient } from "./supabase.js";
 import { collectHealth } from "./health.js";
 import { getReferralSummary, attachReferral, listAllReferrals, markReferralPaid, setReferralConfig } from "./referrals.js";
 import { handlePublicMcp, type PublicServerOptions } from "./mcp.js";
 import { handleAdminMcp } from "./mcpAdmin.js";
 import { mcpStreamingEnabled, handlePublicMcpStreaming, handleAdminMcpStreaming } from "./mcpStreaming.js";
-import { fetchPlaceReviews, fetchPlaceDetails, placesServerKeySet } from "./googlePlaces.js";
+import { fetchPlaceReviews, fetchPlaceDetails, fetchPlaceFacts, placesServerKeySet } from "./googlePlaces.js";
 import { matchTripadvisor, tripadvisorConfigured } from "./tripadvisor.js";
 import { translateTexts } from "./translate.js";
 import { pricelabsListings, syncOperatorPrices } from "./pricelabs.js";
@@ -3674,6 +3674,23 @@ export function registerApiRoutes(app: Express) {
     if (!data) return res.json({ configured: false });
     res.setHeader("Cache-Control", "public, max-age=900");
     res.json({ configured: true, ...data });
+  });
+
+  // GET /api/google-place-facts?listingId=… — "Good to know · from Google" for a
+  // published restaurant / place to visit (its own Place ID). Live + briefly
+  // cached server-side; never stored. { configured:false } when there's nothing.
+  app.get("/api/google-place-facts", async (req: Request, res: Response) => {
+    const listingId = String(req.query.listingId || "");
+    if (!/^[0-9a-f-]{36}$/i.test(listingId)) return res.status(400).json({ error: "Bad listing id." });
+    if (rateLimited(giftLookupHits, `gf:${req.ip || "?"}`, 60)) return res.status(429).json({ error: "Slow down." });
+    const client = publicClient();
+    if (!client) return res.json({ configured: false });
+    const { data: row } = await client.from("listings").select("type, google_place_id").eq("id", listingId).eq("status", "published").maybeSingle();
+    if (!row || (row.type !== "eat" && row.type !== "place") || !row.google_place_id) return res.json({ configured: false });
+    const facts = await fetchPlaceFacts(row.google_place_id);
+    if (!facts) return res.json({ configured: false });
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.json({ configured: true, ...facts });
   });
 
   // POST /api/translate — translate up to 50 short texts to a target language

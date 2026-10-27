@@ -74,7 +74,7 @@ import { AhaAssist } from "@/components/AhaAssist";
 import type { ResolvedPlace } from "@/lib/googleMaps";
 import { useListings, LiveListing } from "@/contexts/ListingsContext";
 import type { ListingFact, ListingInput } from "@shared/listings";
-import { LISTING_LIMITS, LISTING_TEXT_LIMITS, firstListingTextProblem } from "@shared/listings";
+import { LISTING_LIMITS, LISTING_TEXT_LIMITS, PARKING_OPTIONS, firstListingTextProblem } from "@shared/listings";
 import { EXTRA_FEE_TYPES } from "@shared/bookings";
 import { CharCount } from "@/components/CharCount";
 import { ApiError, type AhaCopyContext } from "@/lib/api";
@@ -99,6 +99,7 @@ interface WizardData {
   duration: string;
   groupSize: string;
   meetingPoint: string;
+  parking: string;
   languages: string;
   minimumAge: string;
   amenities: string[];
@@ -145,6 +146,7 @@ function emptyWizardData(): WizardData {
     duration: "",
     groupSize: "",
     meetingPoint: "",
+    parking: "",
     languages: "",
     minimumAge: "",
     amenities: [],
@@ -219,6 +221,7 @@ function listingToWizardData(listing: LiveListing): WizardData {
     duration: factValue(listing, "Duration") ?? "",
     groupSize: factValue(listing, "Group size") ?? "",
     meetingPoint: factValue(listing, "Meeting point") ?? "",
+    parking: factValue(listing, "Parking") ?? "",
     languages: factValue(listing, "Languages") ?? "",
     minimumAge: factValue(listing, "Minimum age") ?? "",
     amenities: listing.amenities,
@@ -254,6 +257,7 @@ function buildFacts(data: WizardData): ListingFact[] {
     ["Duration", data.duration.trim()],
     ["Group size", data.groupSize.trim()],
     ["Meeting point", data.meetingPoint.trim()],
+    ["Parking", data.parking.trim()],
     ["Languages", data.languages.trim()],
     ["Minimum age", data.minimumAge.trim()],
   ];
@@ -782,6 +786,21 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                         />
                         <Input value={data.meetingPoint} onChange={(e) => set("meetingPoint", e.target.value)} placeholder="e.g. Republic Square, Yerevan" />
                       </div>
+                    </StepField>
+                    <StepField label="Parking at the meeting point (optional)" help="Used to answer guests who drive there.">
+                      <select
+                        value={data.parking}
+                        onChange={(e) => set("parking", e.target.value)}
+                        aria-label="Parking at the meeting point"
+                        className="h-12 w-full rounded-none border border-basalt/15 bg-paper px-3 text-base focus:border-apricot focus:outline-none sm:h-10 sm:text-sm"
+                      >
+                        <option value="">Not set</option>
+                        {[...(data.parking && !(PARKING_OPTIONS as readonly string[]).includes(data.parking) ? [data.parking] : []), ...PARKING_OPTIONS].map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </select>
                     </StepField>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <StepField label="Languages">

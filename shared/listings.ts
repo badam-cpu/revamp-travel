@@ -779,6 +779,13 @@ export const ARMENIA_REGIONS = [
  * operator/admin forms (hard max + live counter + min check on save) and for
  * Aha AI, which writes to the same ranges.
  */
+/**
+ * Parking (stays: at the property; tours/experiences: at the starting point),
+ * stored as the "Parking" fact. It's the most common guest question, so the
+ * automatic FAQ (server/listingFaqAuto.ts) can answer it from the host's own info.
+ */
+export const PARKING_OPTIONS = ["Free parking on site", "Free street parking", "Paid parking nearby", "No parking"] as const;
+
 export const LISTING_TEXT_LIMITS = {
   eyebrow: { min: 6, max: 36 },
   title: { min: 10, max: 40 },
