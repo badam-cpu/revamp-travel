@@ -37,15 +37,15 @@ export function AhaVoiceButton({ listing }: { listing: { slug: string; title: st
 export function AhaVoiceSearchButton({ className }: { className?: string }) {
   if (!ENABLED) return null;
   return (
-    <VoicePanel subtitle="Search by voice · English or Russian">
+    <VoicePanel subtitle="AI voice search · English or Russian">
       {(open) => (
         <button
           type="button"
           onClick={open}
           className={cn("inline-flex min-h-11 items-center gap-2 rounded-full border border-basalt/15 bg-paper/90 px-4 py-2 text-sm font-semibold text-basalt backdrop-blur transition-colors hover:border-apricot hover:text-apricot", className)}
         >
-          <Mic className="h-4 w-4 text-apricot" /> <span className="sm:hidden">Search by voice with Aha</span>
-          <span className="hidden sm:inline">Or just tell Aha what you're looking for</span>
+          <Mic className="h-4 w-4 text-apricot" /> <span className="sm:hidden">Search by voice with Aha AI</span>
+          <span className="hidden sm:inline">Or tell Aha, our AI assistant, what you're looking for</span>
         </button>
       )}
     </VoicePanel>
