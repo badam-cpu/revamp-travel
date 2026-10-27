@@ -46,8 +46,10 @@ How to help:
   |---|---|---|
   | `slug` | string | **Dynamic variable** → `listing_slug` |
   | `startDate` | string | LLM prompt: `Check-in date (stays) or the activity date, YYYY-MM-DD` — required |
-  | `endDate` | string | LLM prompt: `Check-out date for stays, YYYY-MM-DD; leave empty for tours and experiences` |
+  | `endDate` | string | LLM prompt, **required**: `Check-out date (YYYY-MM-DD). For stays: the departure day. For tours and experiences: the same date as startDate.` |
   | `guests` | number | LLM prompt: `Number of guests; 2 if not said` |
+- Add each one as its own **property** (+ Add property). Text in the tool's top Description box is NOT a parameter — ElevenLabs only sends real properties (that's how `endDate` went missing on 2026-10-27).
+- The website also accepts `start`/`end`, form fields and query strings, but the names above are the reference.
 - No auth header needed (the endpoint is public and read-only, like the listing page).
 - The response has a `say` field — the sentence to tell the guest.
 
