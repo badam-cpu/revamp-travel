@@ -60,6 +60,9 @@ export function SupportWidget() {
   // (marked `data-support-yield`, e.g. the home hero search), so it never sits
   // on top of the Search button.
   const [yieldToSearch, setYieldToSearch] = useState(false);
+  // Over an orange section (marked `data-bubble-contrast`) the orange bubble
+  // would disappear, so it turns charcoal there.
+  const [onOrange, setOnOrange] = useState(false);
   useEffect(() => {
     // Checked directly on scroll/resize/DOM changes (one cheap rect read; React
     // skips the update when nothing changed) rather than with an
@@ -72,12 +75,13 @@ export function SupportWidget() {
       const lg = window.innerWidth >= 1024;
       const size = 56, gap = 12;
       const bubble = { left: window.innerWidth - 16 - size - gap, right: window.innerWidth, top: window.innerHeight - (lg ? 16 : 80) - size - gap, bottom: window.innerHeight };
-      let overlaps = false;
-      document.querySelectorAll("[data-support-yield]").forEach((el) => {
-        const r = el.getBoundingClientRect();
-        if (r.height > 0 && r.left < bubble.right && r.right > bubble.left && r.top < bubble.bottom && r.bottom > bubble.top) overlaps = true;
-      });
-      setYieldToSearch(overlaps);
+      const hits = (selector: string) =>
+        Array.from(document.querySelectorAll(selector)).some((el) => {
+          const r = el.getBoundingClientRect();
+          return r.height > 0 && r.left < bubble.right && r.right > bubble.left && r.top < bubble.bottom && r.bottom > bubble.top;
+        });
+      setYieldToSearch(hits("[data-support-yield]"));
+      setOnOrange(hits("[data-bubble-contrast]"));
     };
     check();
     const mo = new MutationObserver(check);
@@ -204,11 +208,12 @@ export function SupportWidget() {
           aria-hidden={yieldToSearch || undefined}
           tabIndex={yieldToSearch ? -1 : undefined}
           className={cn(
-            "fixed bottom-20 right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-apricot text-white ring-[3px] ring-white shadow-[0_10px_30px_rgba(33,33,33,0.28)] transition-[transform,translate,opacity] duration-300 hover:scale-105 lg:bottom-4",
+            "fixed bottom-20 right-4 z-40 grid h-14 w-14 place-items-center rounded-full text-white shadow-[0_10px_30px_rgba(33,33,33,0.28)] transition-[transform,translate,opacity,background-color] duration-300 hover:scale-105 lg:bottom-4",
+            onOrange ? "bg-basalt" : "bg-apricot",
             yieldToSearch && "pointer-events-none translate-y-3 opacity-0",
           )}
         >
-          <MessageCircle className="h-6 w-6" />
+          <Sparkles className="h-6 w-6" />
         </button>
       )}
 

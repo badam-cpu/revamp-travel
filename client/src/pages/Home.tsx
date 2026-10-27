@@ -325,7 +325,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="relative overflow-hidden border-t border-basalt/10 bg-apricot text-white">
+        <section data-bubble-contrast className="relative overflow-hidden border-t border-basalt/10 bg-apricot text-white">
           <div className="pointer-events-none absolute -bottom-24 -left-10 text-[15rem] font-bold leading-none tracking-[-0.12em] text-white/10"><ReMark /></div>
           <div className="container grid gap-8 py-14 md:grid-cols-[1fr_auto] md:items-center lg:py-20">
             <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/65">A quieter kind of itinerary</p><h2 className="mt-3 max-w-3xl font-display text-5xl leading-[0.96] tracking-[-0.04em]">One room. One table. One road you’ll remember.</h2></div>
