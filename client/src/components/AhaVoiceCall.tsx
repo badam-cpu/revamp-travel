@@ -26,19 +26,61 @@ const FIRST: Record<Lang, (title: string) => string> = {
 };
 const armeniaToday = () => new Date(Date.now() + 4 * 3600_000).toISOString().slice(0, 10);
 
+// ?voiceDebug=1 shows the technical reason in the window (for us, not guests).
+const DEBUG = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("voiceDebug");
+
 function Call({ slug, title, onEnd }: { slug: string; title: string; onEnd: () => void }) {
   const [lang, setLang] = useState<Lang>("en");
   const [starting, setStarting] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [debug, setDebug] = useState<string[]>([]);
   const started = useRef(false);
+  const connected = useRef(false);
+  // Between a failed WebRTC start and the WebSocket retry, the old session's late events are ignored.
+  const retrying = useRef(false);
+  // The last session's settings, so a failed WebRTC start can be retried over WebSocket.
+  const session = useRef<{ opts: Record<string, unknown>; transport: "webrtc" | "websocket" } | null>(null);
+  const note = (line: string) => {
+    console.info("[aha-voice]", line);
+    if (DEBUG) setDebug((d) => [...d.slice(-7), line]);
+  };
+  const fail = (msg: string) => {
+    setProblem(msg);
+    setStarting(false);
+  };
   const convo = useConversation({
-    onError: (err: unknown) => {
-      console.error("[aha-voice]", err);
-      setProblem("The call dropped. Please try again in a moment.");
+    onConnect: () => {
+      connected.current = true;
+      note(`connected (${session.current?.transport})`);
+    },
+    onError: (message: unknown, err?: unknown) => {
+      console.error("[aha-voice] error", message, err);
+      if (retrying.current) return;
+      note(`error: ${String(message)}`);
+      if (!connected.current && session.current?.transport === "webrtc") return retryOverWebSocket();
+      fail("Aha couldn't connect just now. Please check your internet connection and try again.");
+    },
+    onDisconnect: (details: unknown) => {
+      const d = (details ?? {}) as { reason?: string; message?: string; closeReason?: string; closeCode?: number };
+      console.info("[aha-voice] disconnected", details);
+      if (retrying.current) return;
+      note(`disconnected: ${d.reason ?? "?"}${d.message ? ` — ${d.message}` : ""}${d.closeCode ? ` (${d.closeCode} ${d.closeReason ?? ""})` : ""}`);
+      // Never got going over WebRTC (often blocked on some networks) → try the plain web connection once.
+      if (!connected.current && session.current?.transport === "webrtc" && d.reason !== "user") return retryOverWebSocket();
+      if (!connected.current && d.reason !== "user") return fail("Aha couldn't connect just now. Please try again in a moment, or ask the host in writing.");
       setStarting(false);
     },
-    onDisconnect: () => setStarting(false),
   });
+  function retryOverWebSocket() {
+    if (!session.current) return;
+    note("retrying over websocket");
+    retrying.current = true;
+    session.current = { ...session.current, transport: "websocket" };
+    setTimeout(() => {
+      retrying.current = false;
+      convo.startSession({ ...session.current!.opts, connectionType: "websocket" } as never);
+    }, 400);
+  }
   const live = convo.status === "connected";
 
   // Hang up when the window closes.
@@ -66,12 +108,15 @@ function Call({ slug, title, onEnd }: { slug: string; title: string; onEnd: () =
       if (!r.ok) throw new Error(`context ${r.status}`);
       const ctx = (await r.json()) as { title: string; context: string };
       started.current = true;
-      convo.startSession({
+      connected.current = false;
+      const opts = {
         agentId: AGENT_ID,
-        connectionType: "webrtc",
         dynamicVariables: { listing_title: ctx.title, listing_slug: slug, listing_context: ctx.context, today: armeniaToday() },
         overrides: { agent: { language: lang, firstMessage: FIRST[lang](ctx.title) } },
-      });
+      };
+      session.current = { opts, transport: "webrtc" };
+      note("starting (webrtc)");
+      convo.startSession({ ...opts, connectionType: "webrtc" });
       trackEvent("voice_assistant_start", { item_id: slug, language: lang });
     } catch (err) {
       console.error("[aha-voice] start", err);
@@ -138,6 +183,7 @@ function Call({ slug, title, onEnd }: { slug: string; title: string; onEnd: () =
       )}
 
       {problem && <p className="rounded-none border border-apricot/30 bg-apricot/[0.05] p-3 text-sm leading-6 text-basalt/80">{problem}</p>}
+      {DEBUG && debug.length > 0 && <pre className="max-h-40 overflow-auto whitespace-pre-wrap bg-chalk p-2 text-[11px] leading-4 text-basalt/70">{debug.join("\n")}</pre>}
 
       <p className="text-xs leading-5 text-basalt/50">
         Aha is an AI voice assistant. It answers from this listing's details and can check your dates — it doesn't book or take payments; you book on this page. Your voice is processed by our voice provider to reply.{" "}
