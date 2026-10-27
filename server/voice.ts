@@ -16,15 +16,43 @@ import { quoteListing } from "./mcpQuote.js";
 
 type Row = Record<string, any>;
 
+/**
+ * Listing text written for screens, rewritten so text-to-speech says it right:
+ * "1BR" → "one-bedroom", "֏ / AMD" → "drams", "m²" → "square metres",
+ * "3:00 PM" → "3 PM", emoji bullets dropped.
+ */
+const NUM = ["zero", "one", "two", "three", "four", "five", "six"];
+// Built at runtime: the "u" flag isn't allowed in regex literals for this build target.
+const BULLETS = new RegExp("(?:🔸|🔹|🔶|🔷|•|✅|✔️?|➤|►)\\s*", "gu");
+const EMOJI = new RegExp("[\\u{1F300}-\\u{1FAFF}\\u{2600}-\\u{27BF}]", "gu");
+export function speakable(text: string): string {
+  return text
+    .replace(/\b([1-6])\s?-?BR\b/gi, (_m, n) => `${NUM[Number(n)]}-bedroom`)
+    .replace(/\bstudio apt\b/gi, "studio apartment")
+    .replace(/\bapt\.?\b/gi, "apartment")
+    .replace(/֏\s?([\d,]+)/g, "$1 drams")
+    .replace(/([\d,]+)\s?(?:AMD|֏)/g, "$1 drams")
+    .replace(/\bm²|\bsq\.?\s?m\b/g, " square metres")
+    .replace(/\b(\d{1,2}):00\s?(AM|PM)\b/gi, (_m, h, ap) => `${Number(h)} ${ap.toUpperCase()}`)
+    .replace(BULLETS, "")
+    .replace(EMOJI, "")
+    .replace(/[ \t]{2,}/g, " ");
+}
+
+/** What the agent calls the listing out loud — never the marketing title. */
+const spokenKind = (row: Row) =>
+  row.type === "tour" ? "this tour" : row.type === "experience" ? "this experience" : row.multi_room ? "this guesthouse" : "this place";
+
 export async function voiceContext(client: SupabaseClient, slug: string): Promise<{ title: string; context: string } | null> {
   const { data } = await client.from("listings").select("*").eq("slug", slug).eq("status", "published").maybeSingle();
   const row = data as Row | null;
   if (!row || row.is_active === false) return null;
   const faq = cleanFaq(row.faq);
   const lines = [
-    `LISTING: ${row.title} (slug: ${row.slug})`,
-    ...listingFaqFacts(row).map((f) => `- ${f}`),
-    ...(faq.length ? ["FREQUENT QUESTIONS:", ...faq.map((f) => `- Q: ${f.q} A: ${f.a}`)] : []),
+    `SPEAKING NOTES: When you talk, call it "${spokenKind(row)}" — don't read the listing title aloud and don't repeat it. Say prices as a number of drams.`,
+    `LISTING (for your reference only): ${speakable(row.title)}`,
+    ...listingFaqFacts(row).map((f) => `- ${speakable(f)}`),
+    ...(faq.length ? ["FREQUENT QUESTIONS:", ...faq.map((f) => `- Q: ${speakable(f.q)} A: ${speakable(f.a)}`)] : []),
   ];
   return { title: row.title, context: lines.join("\n").slice(0, 12000) };
 }
@@ -49,5 +77,5 @@ export async function voiceQuote(
   if (q.cancellation) parts.push(`${q.cancellation}.`);
   if (q.available === null && q.reason) parts.push(q.reason);
   parts.push("You can book on this page.");
-  return { available: q.available, say: parts.join(" ").replace(/\.\./g, ".") };
+  return { available: q.available, say: speakable(parts.join(" ").replace(/\.\./g, ".")) };
 }

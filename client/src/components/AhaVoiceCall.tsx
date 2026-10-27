@@ -20,9 +20,10 @@ import { cn } from "@/lib/utils";
 const AGENT_ID = import.meta.env.VITE_ELEVENLABS_AGENT_ID as string | undefined;
 
 type Lang = "en" | "ru";
-const FIRST: Record<Lang, (title: string) => string> = {
-  en: (t) => `Hi, I'm Aha, Revamp's assistant. Ask me anything about ${t} — parking, check-in, what's included, or whether your dates are free.`,
-  ru: (t) => `Здравствуйте! Я Аха, помощник Revamp. Спросите меня о «${t}» — парковка, заезд, что включено, свободны ли ваши даты.`,
+// Short and title-free: listing titles are written for search results, not speech.
+const FIRST: Record<Lang, string> = {
+  en: "Hi, I'm Aha, Revamp's assistant. What would you like to know about this place?",
+  ru: "Здравствуйте! Я Аха, помощник Revamp. Что вы хотите узнать об этом месте?",
 };
 const armeniaToday = () => new Date(Date.now() + 4 * 3600_000).toISOString().slice(0, 10);
 
@@ -112,7 +113,7 @@ function Call({ slug, title, onEnd }: { slug: string; title: string; onEnd: () =
       const opts = {
         agentId: AGENT_ID,
         dynamicVariables: { listing_title: ctx.title, listing_slug: slug, listing_context: ctx.context, today: armeniaToday() },
-        overrides: { agent: { language: lang, firstMessage: FIRST[lang](ctx.title) } },
+        overrides: { agent: { language: lang, firstMessage: FIRST[lang] } },
       };
       // WebSocket: with our agent, WebRTC sessions connected and were then ended by the
       // agent (2026-10-27), while the same agent works over WebSocket in both languages.
