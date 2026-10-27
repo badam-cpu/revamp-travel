@@ -22,8 +22,8 @@ const AGENT_ID = import.meta.env.VITE_ELEVENLABS_AGENT_ID as string | undefined;
 type Lang = "en" | "ru";
 // Short and title-free: listing titles are written for search results, not speech.
 const FIRST: Record<Lang, string> = {
-  en: "Hi, I'm Aha, Revamp's assistant. What would you like to know about this place?",
-  ru: "Здравствуйте! Я Аха, помощник Revamp. Что вы хотите узнать об этом месте?",
+  en: "Hi, I'm Aha, Revamp Vacations' voice AI assistant. How can I help you today?",
+  ru: "Здравствуйте! Я Аха, голосовой ИИ-помощник Revamp Vacations. Чем могу помочь?",
 };
 const armeniaToday = () => new Date(Date.now() + 4 * 3600_000).toISOString().slice(0, 10);
 
