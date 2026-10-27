@@ -56,9 +56,9 @@ export function SupportWidget() {
   const [savingContact, setSavingContact] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [location, navigate] = useLocation();
-  // The launcher steps aside while a page's primary search (marked
-  // `data-support-yield`, e.g. the home hero search) is on screen, so it never
-  // sits on top of the Search button.
+  // The launcher steps aside while it would overlap a page's primary search
+  // (marked `data-support-yield`, e.g. the home hero search), so it never sits
+  // on top of the Search button.
   const [yieldToSearch, setYieldToSearch] = useState(false);
   useEffect(() => {
     // Checked directly on scroll/resize/DOM changes (one cheap rect read; React
@@ -66,13 +66,18 @@ export function SupportWidget() {
     // IntersectionObserver on a fixed node: pages are lazy-loaded and can
     // re-render the marked element, which would leave an observer watching a
     // detached node.
+    // Only steps aside when it would actually sit on the search (phones) — on a
+    // wide screen the search is far from the corner, so the bubble stays.
     const check = () => {
-      let visible = false;
+      const lg = window.innerWidth >= 1024;
+      const size = 56, gap = 12;
+      const bubble = { left: window.innerWidth - 16 - size - gap, right: window.innerWidth, top: window.innerHeight - (lg ? 16 : 80) - size - gap, bottom: window.innerHeight };
+      let overlaps = false;
       document.querySelectorAll("[data-support-yield]").forEach((el) => {
         const r = el.getBoundingClientRect();
-        if (r.height > 0 && r.bottom > 0 && r.top < window.innerHeight) visible = true;
+        if (r.height > 0 && r.left < bubble.right && r.right > bubble.left && r.top < bubble.bottom && r.bottom > bubble.top) overlaps = true;
       });
-      setYieldToSearch(visible);
+      setYieldToSearch(overlaps);
     };
     check();
     const mo = new MutationObserver(check);
