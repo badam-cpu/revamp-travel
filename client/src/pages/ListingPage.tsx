@@ -25,7 +25,7 @@ import { DiscountBadge } from "@/components/DiscountBadge";
 import { houseRuleIcon } from "@/lib/houseRules";
 import { nearbySights, distanceMeters } from "@/lib/yerevanSights";
 import { findListing, typeLabels } from "@/data/listings";
-import { isCuratedType, placeCategoryLabel, placeGroupForCategory, formatStayType, hasOffer, photoCaption } from "@shared/listings";
+import { gallerySlides, isCuratedType, placeCategoryLabel, placeGroupForCategory, formatStayType, hasOffer, photoCaption } from "@shared/listings";
 import { useListings } from "@/contexts/ListingsContext";
 import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
@@ -70,18 +70,23 @@ const AMENITIES_INLINE_LIMIT = 10;
  * respects reduced motion), with arrows, windowed dots, and a "Show all photos"
  * button. Clicking a photo opens the full-screen lightbox at that index.
  */
-function HeroCarousel({ photos, title, onOpen, badge, coverFocus, topRight, captionOf }: { photos: string[]; title: string; onOpen: (i: number) => void; badge?: ReactNode; coverFocus?: string; topRight?: ReactNode; captionOf?: (url: string) => string }) {
+function HeroCarousel({ photos, video, title, onOpen, badge, coverFocus, topRight, captionOf }: { photos: string[]; video?: { url?: string; position?: number }; title: string; onOpen: (i: number) => void; badge?: ReactNode; coverFocus?: string; topRight?: ReactNode; captionOf?: (url: string) => string }) {
   const [i, setI] = useState(0);
   const [paused, setPaused] = useState(false);
-  const total = photos.length;
+  // The listing's video is one of the slides, at the host's chosen position (0120).
+  const slides = gallerySlides(photos, video?.url, video?.position);
+  const total = slides.length;
+  const onVideo = slides[i]?.kind === "video";
+  /** Lightbox index of a slide (the lightbox shows photos only). */
+  const photoIndex = (slideIdx: number) => slides.slice(0, slideIdx + 1).filter((x) => x.kind === "photo").length - 1;
 
   useEffect(() => {
-    if (total <= 1 || paused) return;
+    if (total <= 1 || paused || onVideo) return; // never slide away from a playing video
     const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     if (reduce) return;
     const t = setInterval(() => setI((c) => (c + 1) % total), 5000);
     return () => clearInterval(t);
-  }, [total, paused]);
+  }, [total, paused, onVideo]);
 
   const go = (d: number) => setI((c) => (c + d + total) % total);
 
@@ -94,21 +99,28 @@ function HeroCarousel({ photos, title, onOpen, badge, coverFocus, topRight, capt
       {/* Sliding track — one photo fully covers the frame at a time (no
           cross-fade ghosting). */}
       <div className="flex h-full transition-transform duration-500 ease-out" style={{ transform: `translateX(-${i * 100}%)` }}>
-        {photos.map((src, idx) => (
-          <button
-            key={src + idx}
-            type="button"
-            tabIndex={idx === i ? 0 : -1}
-            aria-hidden={idx !== i}
-            onClick={() => onOpen(i)}
-            className="h-full w-full shrink-0"
-          >
-            {/* Only the current photo and its neighbours are fetched (not the whole gallery). */}
-            {Math.min(Math.abs(idx - i), total - Math.abs(idx - i)) <= 1 && (
-              <img {...imgAttrs(src, "(min-width:1024px) 1100px, 100vw")} alt={captionOf?.(src) || (idx === 0 ? title : "")} loading={idx === 0 ? undefined : "lazy"} style={idx === 0 ? { objectPosition: coverFocus || undefined } : undefined} className="h-full w-full object-cover" />
-            )}
-          </button>
-        ))}
+        {slides.map((slide, idx) =>
+          slide.kind === "video" ? (
+            <div key={`video-${idx}`} aria-hidden={idx !== i} className="h-full w-full shrink-0 bg-basalt/5">
+              {/* Mounted only while it's the current slide, so it plays (muted) when shown. */}
+              {idx === i && <ListingVideo url={slide.url} poster={photos[0]} className="h-full rounded-none object-cover aspect-auto" />}
+            </div>
+          ) : (
+            <button
+              key={slide.src + idx}
+              type="button"
+              tabIndex={idx === i ? 0 : -1}
+              aria-hidden={idx !== i}
+              onClick={() => onOpen(photoIndex(i))}
+              className="h-full w-full shrink-0"
+            >
+              {/* Only the current photo and its neighbours are fetched (not the whole gallery). */}
+              {Math.min(Math.abs(idx - i), total - Math.abs(idx - i)) <= 1 && (
+                <img {...imgAttrs(slide.src, "(min-width:1024px) 1100px, 100vw")} alt={captionOf?.(slide.src) || (idx === 0 ? title : "")} loading={idx === 0 ? undefined : "lazy"} style={idx === 0 ? { objectPosition: coverFocus || undefined } : undefined} className="h-full w-full object-cover" />
+              )}
+            </button>
+          ),
+        )}
       </div>
       {badge}
       {topRight}
@@ -122,8 +134,9 @@ function HeroCarousel({ photos, title, onOpen, badge, coverFocus, topRight, capt
             <ChevronRight className="h-5 w-5" />
           </button>
           {/* Windowed dots — up to 5 around the active one. */}
-          <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-basalt/25 px-2.5 py-1.5 backdrop-blur-sm">
-            {photos.map((_, idx) => {
+          {/* On the video slide the dots move to the top so they don't cover the video's controls. */}
+          <div className={cn("absolute left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-basalt/25 px-2.5 py-1.5 backdrop-blur-sm", onVideo ? "top-3" : "bottom-3")}>
+            {slides.map((_, idx) => {
               const dist = Math.abs(idx - i);
               if (total > 5 && dist > 2) return null;
               return (
@@ -137,8 +150,8 @@ function HeroCarousel({ photos, title, onOpen, badge, coverFocus, topRight, capt
               );
             })}
           </div>
-          <button type="button" onClick={() => onOpen(i)} className="absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-full border border-basalt/15 bg-paper px-4 py-2 text-xs font-semibold text-basalt shadow-md transition-colors hover:border-apricot hover:text-apricot">
-            <LayoutGrid className="h-4 w-4" /> Show all {total} photos
+          <button type="button" onClick={() => onOpen(photoIndex(i))} hidden={onVideo} className="absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-full border border-basalt/15 bg-paper px-4 py-2 text-xs font-semibold text-basalt shadow-md transition-colors hover:border-apricot hover:text-apricot">
+            <LayoutGrid className="h-4 w-4" /> Show all {photos.length} photos
           </button>
         </>
       )}
@@ -383,6 +396,7 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
         <section className="container">
           <HeroCarousel
             photos={Array.from(new Set([listing.image, ...(listing.gallery ?? [])].filter(Boolean))) as string[]}
+            video={{ url: listing.videoUrl, position: listing.videoPosition }}
             title={listing.title}
             onOpen={setLightbox}
             coverFocus={listing.coverFocus}
@@ -454,9 +468,6 @@ export default function ListingPage({ params }: { params: { slug: string } }) {
                 <p className="text-lg font-medium leading-relaxed text-basalt sm:text-xl">{listing.shortDescription}</p>
                 {listing.longDescription && listing.longDescription.trim() !== listing.shortDescription.trim() && (
                   <ExpandableDescription text={listing.longDescription} lead={listing.shortDescription} title={listing.type === "stay" ? "About this place" : `About ${listing.title}`} className="mt-4" />
-                )}
-                {listing.videoUrl && (
-                  <ListingVideo url={listing.videoUrl} poster={listing.image} className="mt-6 aspect-video" />
                 )}
               </div>
 

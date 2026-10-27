@@ -278,6 +278,8 @@ export interface Listing {
   /** Short intro/hero video (stay/tour/experience): an uploaded MP4/WebM public
    * URL, or a YouTube/Vimeo link. Detected + rendered by client/src/lib/video.ts. */
   videoUrl?: string;
+  /** Where the video sits among the photos (0120): 1 = right after the cover; past the end = last. */
+  videoPosition?: number;
   // `type: "experience"` only (see supabase/migrations/0003_experience_listing_type.sql)
   // — optional on every other type so nothing else has to change shape.
   // Duration/group size/meeting point/languages are deliberately NOT
@@ -893,6 +895,8 @@ export interface ListingInput {
   /** Short intro/hero video (stay/tour/experience): an uploaded MP4/WebM public
    * URL, or a YouTube/Vimeo link. Detected + rendered by client/src/lib/video.ts. */
   videoUrl?: string;
+  /** Where the video sits among the photos (0120): 1 = right after the cover; past the end = last. */
+  videoPosition?: number;
   highlights?: string[];
   notIncluded?: string[];
   whatToBring?: string[];
@@ -1010,6 +1014,28 @@ export function suspensionLabel(l: AvailabilityStatus): string | null {
   if (!l.suspendedFrom) return null;
   const f = (iso: string) => new Date(iso + "T00:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
   return l.suspendedUntil ? `${f(l.suspendedFrom)} – ${f(l.suspendedUntil)}` : `from ${f(l.suspendedFrom)}, until further notice`;
+}
+
+/**
+ * A free-text note ("Good to know") as separate points: one per line, with any
+ * bullet the host typed (•, -, *, 🔸, ▪, ✔…) removed — the page draws its own.
+ * A note without line breaks is one point.
+ */
+export function infoPoints(text: string | null | undefined): string[] {
+  return (text ?? "")
+    .split(/\r?\n/)
+    .map((l) => l.replace(/^\s*(?:[•·▪▫◦‣⁃∙*+–—-]|🔸|🔹|🔶|🔷|✔️?|✅|➤|►|→)\s*/, "").trim())
+    .filter(Boolean);
+}
+
+/** Gallery slides: the photos with the listing's video placed at its position (0120). The cover stays first. */
+export type MediaSlide = { kind: "photo"; src: string } | { kind: "video"; url: string };
+export function gallerySlides(photos: string[], videoUrl?: string | null, videoPosition?: number | null): MediaSlide[] {
+  const slides: MediaSlide[] = photos.map((src) => ({ kind: "photo", src }));
+  if (!videoUrl?.trim()) return slides;
+  const at = photos.length ? Math.min(Math.max(1, videoPosition ?? 1), photos.length) : 0;
+  slides.splice(at, 0, { kind: "video", url: videoUrl.trim() });
+  return slides;
 }
 
 /** Longest photo caption an operator can write (0117). */

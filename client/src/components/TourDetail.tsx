@@ -12,10 +12,11 @@
  * brand's non-negotiable rules forbid fabricating any of that, so the
  * quick-facts row and "what's included" list carry the weight instead.
  */
+import { gallerySlides, infoPoints } from "@shared/listings";
 import { ListingFaq } from "@/components/ListingFaq";
 import { photoCaption } from "@shared/listings";
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, ArrowLeft, Backpack, Ban, Check, Clock, Gauge, Info, MapPin, Share2, Bookmark, Sparkles, Users, X } from "lucide-react";
+import { AlertCircle, ArrowLeft, Backpack, Ban, Car, Check, Clock, Gauge, Info, Languages, MapPin, Play, Share2, Bookmark, Sparkles, UserCheck, Users, X } from "lucide-react";
 import { Link } from "wouter";
 import { shareCurrentPage } from "@/lib/share";
 import { Listing } from "@/data/listings";
@@ -58,6 +59,9 @@ export function TourDetail({ listing }: { listing: Listing }) {
   }, [listing.id, live]);
 
   const images = listing.gallery.length ? listing.gallery : [listing.image];
+  // The video is one of the gallery slides, at the host's chosen position (0120).
+  const slides = gallerySlides(images, listing.videoUrl, listing.videoPosition);
+  const current = slides[activeImage] ?? slides[0];
   const duration = factValue(listing, "Duration");
   const group = factValue(listing, "Group", "Format", "Group size");
   const level = factValue(listing, "Level", "Start");
@@ -104,27 +108,38 @@ export function TourDetail({ listing }: { listing: Listing }) {
 
       <section className="container">
         <div className="brand-notch relative aspect-[16/9] overflow-hidden bg-basalt/5 sm:aspect-[2/1]">
-          <img {...imgAttrs(images[activeImage], "(min-width:1024px) 1100px, 100vw")} alt={photoCaption(listing, images[activeImage]) || `${listing.title} — photo ${activeImage + 1} of ${images.length}`} style={activeImage === 0 ? { objectPosition: listing.coverFocus || undefined } : undefined} className="h-full w-full object-cover" />
-          {images.length > 1 && (
-            <span className="absolute bottom-4 right-4 bg-basalt/70 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white backdrop-blur-sm">
-              {activeImage + 1} / {images.length}
+          {current.kind === "video" ? (
+            <div className="h-full w-full">
+              <ListingVideo url={current.url} poster={images[0]} className="h-full rounded-none object-cover aspect-auto" />
+            </div>
+          ) : (
+            <img {...imgAttrs(current.src, "(min-width:1024px) 1100px, 100vw")} alt={photoCaption(listing, current.src) || `${listing.title} — photo ${activeImage + 1} of ${slides.length}`} style={activeImage === 0 ? { objectPosition: listing.coverFocus || undefined } : undefined} className="h-full w-full object-cover" />
+          )}
+          {slides.length > 1 && current.kind === "photo" && (
+            <span className="pointer-events-none absolute bottom-4 right-4 bg-basalt/70 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white backdrop-blur-sm">
+              {activeImage + 1} / {slides.length}
             </span>
           )}
         </div>
-        {photoCaption(listing, images[activeImage]) && <p className="mt-2 text-sm leading-6 text-basalt/65">{photoCaption(listing, images[activeImage])}</p>}
-        {images.length > 1 && (
+        {current.kind === "photo" && photoCaption(listing, current.src) && <p className="mt-2 text-sm leading-6 text-basalt/65">{photoCaption(listing, current.src)}</p>}
+        {slides.length > 1 && (
           <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-            {images.map((src, i) => (
+            {slides.map((slide, i) => (
               <button
-                key={src + i}
+                key={(slide.kind === "photo" ? slide.src : slide.url) + i}
                 onClick={() => setActiveImage(i)}
-                aria-label={`Show photo ${i + 1}`}
+                aria-label={slide.kind === "video" ? "Play the video" : `Show photo ${i + 1}`}
                 className={cn(
-                  "h-16 w-24 shrink-0 overflow-hidden rounded-lg border-2 transition-colors",
+                  "relative h-16 w-24 shrink-0 overflow-hidden rounded-lg border-2 transition-colors",
                   i === activeImage ? "border-apricot" : "border-transparent opacity-70 hover:opacity-100",
                 )}
               >
-                <img {...imgAttrs(src, "96px")} alt={photoCaption(listing, src)} loading="lazy" className="h-full w-full object-cover" />
+                <img {...imgAttrs(slide.kind === "photo" ? slide.src : images[0], "96px")} alt={slide.kind === "photo" ? photoCaption(listing, slide.src) : ""} loading="lazy" className="h-full w-full object-cover" />
+                {slide.kind === "video" && (
+                  <span className="absolute inset-0 grid place-items-center bg-basalt/45 text-white">
+                    <Play className="h-5 w-5 fill-current" aria-hidden />
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -141,34 +156,36 @@ export function TourDetail({ listing }: { listing: Listing }) {
 
           {operatorId && <OperatorBrand operatorId={operatorId} className="mt-5" />}
 
-          {listing.videoUrl && (
-            <div className="mt-6">
-              <ListingVideo url={listing.videoUrl} poster={images[0]} className="aspect-video" />
-            </div>
-          )}
-
-          <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 border-y border-basalt/10 py-5">
-            {duration && (
-              <span className="inline-flex items-center gap-2 text-sm font-semibold">
-                <Clock className="h-4 w-4 text-apricot" /> {duration}
-              </span>
-            )}
-            {group && (
-              <span className="inline-flex items-center gap-2 text-sm font-semibold">
-                <Users className="h-4 w-4 text-apricot" /> {group}
-              </span>
-            )}
-            {level && (
-              <span className="inline-flex items-center gap-2 text-sm font-semibold">
-                <Gauge className="h-4 w-4 text-apricot" /> {level}
-              </span>
-            )}
-            {extraFacts.map((fact) => (
-              <span key={fact.label} className="inline-flex items-center gap-2 text-sm font-semibold">
-                <Info className="h-4 w-4 text-apricot" /> {fact.label}: {fact.value}
-              </span>
-            ))}
-          </div>
+          {(() => {
+            // At a glance: a labelled grid (like stays). Bare numbers get their unit
+            // ("6" → "6 hours", "2" → "Up to 2", "18" → "18+").
+            const bare = (v?: string) => !!v && /^\d+(?:[.,]\d+)?$/.test(v.trim());
+            const tiles: { key: string; label: string; value: string; Icon: typeof Clock; wide?: boolean }[] = [];
+            if (duration) tiles.push({ key: "duration", label: "Duration", value: bare(duration) ? `${duration.trim()} ${duration.trim() === "1" ? "hour" : "hours"}` : duration, Icon: Clock });
+            if (group) tiles.push({ key: "group", label: "Group size", value: bare(group) ? `Up to ${group.trim()}` : group, Icon: Users });
+            if (level) tiles.push({ key: "level", label: "Level", value: level, Icon: Gauge });
+            for (const f of extraFacts) {
+              const l = f.label.toLowerCase();
+              if (l === "languages") tiles.push({ key: l, label: f.label, value: f.value, Icon: Languages });
+              else if (l === "minimum age") tiles.push({ key: l, label: f.label, value: bare(f.value) ? `${f.value.trim()}+` : f.value, Icon: UserCheck });
+              else if (l === "parking") tiles.push({ key: l, label: f.label, value: f.value, Icon: Car });
+              else if (l === "meeting point" || l === "starting point") tiles.push({ key: l, label: f.label, value: f.value, Icon: MapPin, wide: true });
+              else tiles.push({ key: l, label: f.label, value: f.value, Icon: Info });
+            }
+            return tiles.length ? (
+              <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-y border-basalt/10 py-6 sm:grid-cols-4">
+                {tiles.map((t) => (
+                  <div key={t.key} className={cn("flex min-w-0 items-start gap-2.5", t.wide && "col-span-2")}>
+                    <t.Icon className="mt-0.5 h-4 w-4 shrink-0 text-apricot" strokeWidth={1.75} aria-hidden />
+                    <div className="min-w-0">
+                      <dt className="text-[10px] font-bold uppercase tracking-[0.14em] text-basalt/40">{t.label}</dt>
+                      <dd className="mt-0.5 text-sm font-semibold [overflow-wrap:anywhere]">{t.value}</dd>
+                    </div>
+                  </div>
+                ))}
+              </dl>
+            ) : null;
+          })()}
 
           {listing.tags.length > 0 && (
             <div className="mt-5 flex flex-wrap gap-2">
@@ -292,7 +309,18 @@ export function TourDetail({ listing }: { listing: Listing }) {
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-tuff" />
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-tuff">Good to know</p>
-                <p className="mt-1.5">{listing.importantInfo}</p>
+                {infoPoints(listing.importantInfo).length > 1 ? (
+                  <ul className="mt-1.5 grid gap-1.5">
+                    {infoPoints(listing.importantInfo).map((p) => (
+                      <li key={p} className="flex gap-2">
+                        <span aria-hidden className="mt-[0.6em] h-1 w-1 shrink-0 rounded-full bg-tuff" />
+                        <span>{p}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-1.5">{infoPoints(listing.importantInfo)[0] ?? listing.importantInfo}</p>
+                )}
               </div>
             </div>
           )}

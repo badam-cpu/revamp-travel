@@ -113,6 +113,7 @@ interface WizardData {
   /** The listing already had captions when loaded — so clearing them must be saved. */
   hadPhotoCaptions?: boolean;
   videoUrl: string;
+  videoPosition: number;
   prefillImageUrl?: string;
   price: number;
   priceUnit: string;
@@ -158,6 +159,7 @@ function emptyWizardData(): WizardData {
     coverFocus: "50% 50%",
     photoCaptions: {},
     videoUrl: "",
+    videoPosition: 1,
     price: 0,
     priceUnit: "person",
     cancellationPolicy: "flexible",
@@ -234,6 +236,7 @@ function listingToWizardData(listing: LiveListing): WizardData {
     photoCaptions: listing.photoCaptions ?? {},
     hadPhotoCaptions: Object.keys(listing.photoCaptions ?? {}).length > 0,
     videoUrl: listing.videoUrl ?? "",
+    videoPosition: listing.videoPosition ?? 1,
     price: listing.price,
     priceUnit: listing.priceUnit,
     cancellationPolicy: listing.cancellationPolicy ?? "flexible",
@@ -275,6 +278,7 @@ function toListingInput(data: WizardData): ListingInput {
     coordinates: data.coordinates,
     image: data.photos[0] || undefined,
     videoUrl: data.videoUrl || undefined,
+    videoPosition: data.videoUrl ? data.videoPosition : undefined,
     gallery: data.photos.length ? data.photos : undefined,
     coverFocus: data.coverFocus || undefined,
     photoCaptions: Object.keys(data.photoCaptions).length || data.hadPhotoCaptions ? data.photoCaptions : undefined,
@@ -425,7 +429,7 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
     const photos = photosRef.current?.getValue();
     if (photos) setData((d) => ({ ...d, photos, coverFocus: photosRef.current?.getCoverFocus() ?? d.coverFocus, photoCaptions: photosRef.current?.getCaptions() ?? d.photoCaptions }));
     const video = videoRef.current?.getValue();
-    if (video !== undefined) setData((d) => ({ ...d, videoUrl: video }));
+    if (video !== undefined) setData((d) => ({ ...d, videoUrl: video, videoPosition: videoRef.current?.getPosition() ?? d.videoPosition }));
   }, [currentStep]);
 
   // ── Save and continue later (0115) — new experiences only ──
@@ -471,6 +475,7 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
     coverFocus: photosRef.current?.getCoverFocus() ?? data.coverFocus,
     photoCaptions: photosRef.current?.getCaptions() ?? data.photoCaptions,
     videoUrl: videoRef.current?.getValue() ?? data.videoUrl,
+    videoPosition: videoRef.current?.getPosition() ?? data.videoPosition,
   });
   const saveProgress = async (mode: "auto" | "explicit"): Promise<boolean> => {
     if (isEdit || resuming || doneRef.current) return true;
@@ -857,7 +862,7 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                       <PhotoUploader key={hydrated ? "ready" : "loading"} ref={photosRef} captions defaultCaptions={data.photoCaptions} defaultValue={data.photos} defaultFocus={data.coverFocus} />
                     </StepField>
                     <StepField label="Intro video (optional)" help="A short clip (≤ 60s) really helps bookings — upload one, or paste a YouTube/Vimeo link.">
-                      <VideoField key={hydrated ? "v-ready" : "v-loading"} ref={videoRef} defaultValue={data.videoUrl} />
+                      <VideoField key={hydrated ? "v-ready" : "v-loading"} ref={videoRef} defaultValue={data.videoUrl} defaultPosition={data.videoPosition} />
                     </StepField>
                   </div>
 

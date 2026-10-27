@@ -167,6 +167,7 @@ interface RefLists {
   seasonalRates: import("@shared/listings").SeasonalRate[];
   coverFocus: string;
   videoUrl: string;
+  videoPosition: number;
   photoCaptions: Record<string, string>;
 }
 
@@ -218,6 +219,7 @@ function toInputPayload(draft: DraftListing, form: HTMLFormElement, lists: RefLi
     // Sent when there are captions — or when clearing ones the listing had.
     photoCaptions: Object.keys(lists.photoCaptions).length || Object.keys(draft.photoCaptions ?? {}).length ? lists.photoCaptions : undefined,
     videoUrl: lists.videoUrl || undefined,
+    videoPosition: lists.videoUrl ? lists.videoPosition : undefined,
     shortDescription: get("shortDescription").trim(),
     longDescription: get("longDescription").trim(),
     price,
@@ -517,6 +519,7 @@ function ListingFormDialog({
     seasonalRates: ratesRef.current?.getValue() ?? [],
     coverFocus: photosRef.current?.getCoverFocus() ?? "50% 50%",
     videoUrl: videoRef.current?.getValue() ?? "",
+    videoPosition: videoRef.current?.getPosition() ?? 1,
     photoCaptions: photosRef.current?.getCaptions() ?? {},
   });
 
@@ -1174,7 +1177,7 @@ function ListingFormDialog({
 
                 <div className="grid gap-2">
                   <p className="text-sm font-semibold text-basalt">Intro video <span className="font-normal text-basalt/45">(optional — a short clip really helps)</span></p>
-                  <VideoField ref={videoRef} defaultValue={draft.videoUrl} />
+                  <VideoField ref={videoRef} defaultValue={draft.videoUrl} defaultPosition={draft.videoPosition} />
                 </div>
 
                 <label className="flex items-center gap-3 border border-basalt/12 bg-chalk px-4 py-3 text-sm">

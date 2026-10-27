@@ -34,7 +34,7 @@ import { boldToHtml } from "../shared/richText.js";
 import { GIFT_CARD_AMOUNTS_CENTS, GIFT_CARD_VALID_MONTHS } from "../shared/giftcards.js";
 import { findRegionGuide, listingInRegion, type RegionGuide } from "../shared/regionGuides.js";
 import { LANDING_COPY, LANDING_PATH, TYPE_WORD, clipMeta, landingCrossLinks, landingDescription, landingItems, matchLandingPath, matchPlaceCategoryPath, placeCategoryCrossLinks, placeCategoryDescription, placeCategoryH1, placeCategoryItems, placeCategoryPath, populatedPlaceCategoryPaths, resolveLandingRegion, resolvePlaceCategoryHub, type LandingType } from "../shared/regionLanding.js";
-import { isDiscoverable, photoCaption } from "../shared/listings.js";
+import { infoPoints, isDiscoverable, photoCaption } from "../shared/listings.js";
 import { AI_APPS, AI_BENEFITS, AI_PAGE, AI_PAGE_PATH, AI_PROMPTS } from "../shared/aiPage.js";
 
 export type PageKind =
@@ -944,7 +944,10 @@ function renderListingDetail(listing: PublicListing, catalog: PublicListing[], o
   const notIncludedHtml = listing.notIncluded?.length ? `<h2>Not included</h2><ul>${listing.notIncluded.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
   const whatToBringHtml = listing.whatToBring?.length ? `<h2>What to bring</h2><ul>${listing.whatToBring.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
   const notSuitableForHtml = listing.notSuitableFor?.length ? `<h2>Not suitable for</h2><ul>${listing.notSuitableFor.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
-  const importantInfoHtml = listing.importantInfo ? `<h2>Good to know</h2><p>${escapeHtml(listing.importantInfo)}</p>` : "";
+  const infoList = infoPoints(listing.importantInfo);
+  const importantInfoHtml = infoList.length
+    ? `<h2>Good to know</h2>${infoList.length > 1 ? `<ul>${infoList.map((p) => `<li>${escapeHtml(p)}</li>`).join("")}</ul>` : `<p>${escapeHtml(infoList[0])}</p>`}`
+    : "";
   // Host's approved guest FAQ (0118) — visible text + FAQPage JSON-LD below.
   const faqHtml = listing.faq?.length
     ? `<h2>Questions guests ask</h2><dl>${listing.faq.map((f) => `<dt>${escapeHtml(f.q)}</dt><dd>${escapeHtml(f.a)}</dd>`).join("")}</dl>`

@@ -15,16 +15,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
-export type VideoFieldHandle = { getValue: () => string };
+export type VideoFieldHandle = { getValue: () => string; getPosition: () => number };
 
-export const VideoField = forwardRef<VideoFieldHandle, { defaultValue?: string }>(function VideoField({ defaultValue = "" }, ref) {
+/** Where the video shows among the photos (0120): 1 = right after the cover; 40 = at the end. */
+const POSITIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 40];
+const positionLabel = (p: number) => (p === 40 ? "At the end of the photos" : p === 1 ? "2nd — right after the cover photo" : `${p + 1}${p + 1 === 3 ? "rd" : "th"} in the gallery`);
+
+export const VideoField = forwardRef<VideoFieldHandle, { defaultValue?: string; defaultPosition?: number }>(function VideoField({ defaultValue = "", defaultPosition = 1 }, ref) {
   const { user } = useAuth();
   const [value, setValue] = useState(defaultValue.trim());
+  const [position, setPosition] = useState(POSITIONS.includes(defaultPosition) ? defaultPosition : 1);
   const [busy, setBusy] = useState(false);
   const [urlDraft, setUrlDraft] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useImperativeHandle(ref, () => ({ getValue: () => value.trim() }), [value]);
+  useImperativeHandle(ref, () => ({ getValue: () => value.trim(), getPosition: () => position }), [value, position]);
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -61,7 +66,7 @@ export const VideoField = forwardRef<VideoFieldHandle, { defaultValue?: string }
             <p className="text-sm font-semibold text-basalt">{parsed?.kind === "youtube" ? "YouTube video" : parsed?.kind === "vimeo" ? "Vimeo video" : "Uploaded video"}</p>
             <p className="truncate text-xs text-basalt/45">{value}</p>
           </div>
-          <button type="button" onClick={() => setValue("")} className="shrink-0 text-basalt/45 hover:text-basalt" aria-label="Remove video"><X className="h-4 w-4" /></button>
+          <button type="button" onClick={() => setValue("")} className="grid h-10 w-10 shrink-0 place-items-center text-basalt/45 hover:text-basalt" aria-label="Remove video"><X className="h-4 w-4" /></button>
         </div>
       ) : (
         <div className="grid gap-2">
@@ -74,6 +79,19 @@ export const VideoField = forwardRef<VideoFieldHandle, { defaultValue?: string }
             <Button type="button" variant="outline" onClick={addUrl} className="h-12 shrink-0 rounded-none border-basalt/20 px-5"><Link2 className="h-4 w-4" /></Button>
           </div>
         </div>
+      )}
+      {value && (
+        <label className="grid gap-1.5 text-sm">
+          <span className="font-semibold">Where it shows in your photos</span>
+          <select value={position} onChange={(e) => setPosition(Number(e.target.value))} className="h-12 w-full rounded-none border border-basalt/15 bg-paper px-3 text-base sm:h-10 sm:text-sm">
+            {POSITIONS.map((p) => (
+              <option key={p} value={p}>
+                {positionLabel(p)}
+              </option>
+            ))}
+          </select>
+          <span className="text-xs text-basalt/45">Your cover photo always comes first — it's what search results and shared links show.</span>
+        </label>
       )}
     </div>
   );

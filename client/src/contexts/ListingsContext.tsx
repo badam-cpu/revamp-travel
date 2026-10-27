@@ -168,6 +168,7 @@ interface ListingRow {
   faq?: unknown;
   faq_host_saved_at?: string | null;
   video_url: string | null;
+  video_position?: number | null; // 0120
   // revampstay offers (0091) — absent (undefined) on a client that selects "*"
   // before the migration runs; mapListingRow defaults every one of them.
   offer_types: OfferType[] | null;
@@ -276,6 +277,7 @@ function mapListingRow(row: ListingRow): LiveListing {
     faq: cleanFaq(row.faq),
     faqHostSavedAt: row.faq_host_saved_at ?? null,
     videoUrl: row.video_url ?? undefined,
+    videoPosition: row.video_position ?? undefined,
     // revampstay offers (0091): all null-safe — undefined pre-migration, which
     // listingOffers() reads as ["nightly"], so revampvacations is unchanged.
     offerTypes: Array.isArray(row.offer_types) && row.offer_types.length ? row.offer_types : undefined,
@@ -399,6 +401,8 @@ function toRow(input: ListingInput) {
     // ones), so saving never depends on the column existing.
     ...(input.photoCaptions !== undefined ? { photo_captions: input.photoCaptions } : {}),
     video_url: input.videoUrl?.trim() || null,
+    // 0120: only written with a video, so saving a listing without one never needs the column.
+    ...(input.videoUrl?.trim() && input.videoPosition ? { video_position: input.videoPosition } : {}),
     venue_type: input.venueType?.trim() || null,
     category: input.category?.trim() || null,
     cuisine: input.cuisine?.trim() || null,
