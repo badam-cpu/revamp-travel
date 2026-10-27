@@ -252,34 +252,60 @@ function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }
     }
   };
 
-  // Aha AI hangs up by itself (budget + a call left running by mistake): after the
-  // server's time limit (the agent has the same max duration), after 45 s with
-  // nobody talking, or 30 s after the guest leaves the tab.
-  const QUIET_MS = 45_000;
+  // Aha AI hangs up by itself (budget + a call left running by mistake): near the
+  // server's time limit (the agent has the same max duration), after 40 s with
+  // nobody talking, or 30 s after the guest leaves the tab. It first says a short,
+  // friendly goodbye (asked for with a note the guest never sees), then ends the
+  // call once it has finished speaking.
+  const QUIET_MS = 40_000;
   const AWAY_MS = 30_000;
+  const wrapping = useRef(false);
   useEffect(() => {
     if (!live) return;
-    const stop = (why: "time" | "quiet" | "away") => {
-      setAutoEnded(why);
-      convo.endSession();
+    wrapping.current = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const wrapUp = (why: "time" | "quiet" | "away") => {
+      if (wrapping.current) return;
+      wrapping.current = true;
+      const reason = why === "time" ? "the call has reached its time limit" : why === "quiet" ? "the guest has been quiet for a while" : "the guest has left the page";
+      convo.sendUserMessage(
+        `(Note from the website, not from the guest: ${reason}. Say a short, warm goodbye in the language of this call, like "Thanks for chatting! I'll hang up for now — tap Start talking any time you need me." — and nothing else.)`,
+      );
+      // End once the goodbye has been spoken (it started and stopped), or after 12 s at the most.
+      const started = Date.now();
+      let heard = false;
+      const poll = setInterval(() => {
+        if (speaking.current) heard = true;
+        if ((heard && !speaking.current) || Date.now() - started > 12_000) {
+          clearInterval(poll);
+          timers.push(setTimeout(() => {
+            setAutoEnded(why);
+            convo.endSession();
+          }, 700));
+        }
+      }, 250);
+      timers.push(poll as unknown as ReturnType<typeof setTimeout>);
     };
-    const limit = setTimeout(() => stop("time"), maxSeconds.current * 1000);
+    timers.push(setTimeout(() => wrapUp("time"), Math.max(10, maxSeconds.current - 12) * 1000));
     const quiet = setInterval(() => {
-      if (!speaking.current && Date.now() - lastActivity.current > QUIET_MS) stop("quiet");
+      if (!speaking.current && Date.now() - lastActivity.current > QUIET_MS) wrapUp("quiet");
     }, 5000);
     let away: ReturnType<typeof setTimeout> | undefined;
     const onVisibility = () => {
       clearTimeout(away);
-      if (document.visibilityState === "hidden") away = setTimeout(() => stop("away"), AWAY_MS);
+      if (document.visibilityState === "hidden") away = setTimeout(() => wrapUp("away"), AWAY_MS);
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      clearTimeout(limit);
+      timers.forEach((t) => {
+        clearTimeout(t);
+        clearInterval(t as unknown as ReturnType<typeof setInterval>);
+      });
       clearInterval(quiet);
       clearTimeout(away);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live]);
 
   const status = !live ? (starting || convo.status === "connecting" ? "Connecting…" : "Ready when you are") : convo.isSpeaking ? "Aha AI is speaking…" : convo.isMuted ? "Microphone off" : "Listening…";
