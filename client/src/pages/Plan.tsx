@@ -4,7 +4,7 @@ import { AlertTriangle, ArrowRight, ChevronDown, Compass, MessageCircle, Mic, Sp
 import { toast } from "sonner";
 import { openAha } from "@/lib/ahaPanel";
 import { useVoiceAvailable } from "@/lib/voiceStatus";
-import { Link, useSearch } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { Button } from "@/components/ui/button";
@@ -12,9 +12,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { planTrip, emailItinerary, ApiError, type Itinerary, type PlanTripParams } from "@/lib/api";
+import { planTrip, ApiError, type PlanTripParams } from "@/lib/api";
+import { readCurrentPlan, writeCurrentPlan } from "@/lib/tripPlans";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
-import { TripPlanView } from "@/components/TripPlanView";
 import { cn } from "@/lib/utils";
 
 const VOICE = !!import.meta.env.VITE_ELEVENLABS_AGENT_ID;
@@ -37,7 +37,8 @@ const EXAMPLES = [
 
 export default function Plan() {
   // The guest's own words lead (2026-10-28); the form is "Fine-tune" underneath.
-  const [request, setRequest] = useState("");
+  // Coming back from the plan page ("Edit trip details") keeps their words.
+  const [request, setRequest] = useState(() => readCurrentPlan()?.request ?? "");
   const [fineTune, setFineTune] = useState(false);
   const [days, setDays] = useState(6);
   const [startCity, setStartCity] = useState("Yerevan");
@@ -47,16 +48,10 @@ export default function Plan() {
   const [interests, setInterests] = useState<string[]>(["History & monasteries", "Nature & hiking"]);
 
   const search = useSearch();
+  const [, navigate] = useLocation();
   const voiceOk = useVoiceAvailable();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [itinerary, setItinerary] = useState<Itinerary | null>(null);
-  const [planToken, setPlanToken] = useState<string | null>(null);
-  const show = (r: { itinerary: Itinerary; token: string | null }) => {
-    setItinerary(r.itinerary);
-    setPlanToken(r.token);
-  };
-  const [planned, setPlanned] = useState<PlanTripParams | null>(null);
 
   useDocumentMeta({
     title: "Plan your Armenia trip with Aha AI | Revamp Vacations",
@@ -68,57 +63,21 @@ export default function Plan() {
     setInterests((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
   };
 
+  // The plan opens on its own page (/plan/trip, 2026-10-28), kept in the tab's
+  // session so it survives a reload or a visit to a listing and back.
   const run = async (params: PlanTripParams) => {
-    // Phones stack the plan under the form — bring it into view.
-    if (window.innerWidth < 1024) setTimeout(() => document.getElementById("plan-result")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
     setLoading(true);
     setError(null);
-    setItinerary(null);
-    setPlanned(params);
     try {
-      show(await planTrip(params));
+      const r = await planTrip(params);
+      const n = r.itinerary.days.length;
+      const meta = [`${n} day${n === 1 ? "" : "s"}`, params.travelers && `${params.travelers} traveller${params.travelers === 1 ? "" : "s"}`, params.pace, params.budget].filter(Boolean).join(" · ");
+      writeCurrentPlan({ planJson: JSON.stringify(r.itinerary), token: r.token, request: params.request, meta });
+      navigate("/plan/trip");
     } catch (err) {
       if (!(err instanceof ApiError)) console.error("[plan]", err);
       setError(err instanceof ApiError ? err.message : "Aha AI couldn't build that plan just now. Please try again.");
-    } finally {
       setLoading(false);
-    }
-  };
-  // "Change anything": send the plan on screen (without the place cards — the
-  // server rebuilds those) plus the change; the plan stays visible meanwhile.
-  const [revising, setRevising] = useState(false);
-  const revise = async (change: string): Promise<boolean> => {
-    if (!itinerary) return false;
-    setRevising(true);
-    try {
-      const plan = {
-        tripTitle: itinerary.tripTitle,
-        summary: itinerary.summary,
-        route: itinerary.route,
-        days: itinerary.days.map(({ day, title, area, base, drive, stops, tip, morning, afternoon, evening }) => (stops?.length ? { day, title, area, base, drive, stops, tip } : { day, title, morning, afternoon, evening, tip })),
-        estimatedBudget: itinerary.estimatedBudget,
-        packingTip: itinerary.packingTip,
-      };
-      show(await planTrip({ revise: { plan: JSON.stringify(plan).slice(0, 16000), change } }));
-      setPlanned((p) => (p ? { ...p, pace: undefined, budget: undefined } : p));
-      return true;
-    } catch (err) {
-      if (!(err instanceof ApiError)) console.error("[plan] revise", err);
-      toast(err instanceof ApiError ? err.message : "Aha AI couldn't update the plan just now. Please try again.");
-      return false;
-    } finally {
-      setRevising(false);
-    }
-  };
-  const sendByEmail = async (email: string): Promise<boolean> => {
-    if (!itinerary || !planToken) return false;
-    try {
-      await emailItinerary(email, itinerary, planToken);
-      return true;
-    } catch (err) {
-      if (!(err instanceof ApiError)) console.error("[plan] email", err);
-      toast(err instanceof ApiError ? err.message : "We couldn't send the email just now. Please try again.");
-      return false;
     }
   };
   const formParams = (): PlanTripParams => ({ days, startCity, travelers, pace, budget, interests });
@@ -185,8 +144,8 @@ export default function Plan() {
           Tell Aha AI about your trip in your own words. You'll get a day-by-day plan with real stays, tables and tours from Revamp that you can book.
         </p>
 
-        <div id="plan-form" className="mt-8 grid scroll-mt-24 gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
-          <form onSubmit={submit} className="border border-basalt/12 bg-chalk p-5 sm:p-6 lg:sticky lg:top-24">
+        <div id="plan-form" className="mt-8 max-w-2xl scroll-mt-24">
+          <form onSubmit={submit} className="border border-basalt/12 bg-chalk p-5 sm:p-6">
             <Label htmlFor="trip-request" className="text-base font-semibold">Tell Aha AI about your trip</Label>
             <Textarea
               id="trip-request"
@@ -280,44 +239,13 @@ export default function Plan() {
             <Button type="submit" className="mt-5 h-12 w-full rounded-none bg-apricot text-base text-white hover:bg-apricot/90" disabled={loading}>
               {loading ? "Thinking…" : <>Plan my trip <ArrowRight className="ml-2 h-4 w-4" /></>}
             </Button>
-            {loading && <p className="mt-2 text-center text-xs text-basalt/45">This can take 20–60 seconds for a longer trip.</p>}
-          </form>
-
-          <div id="plan-result" className="min-h-[320px] scroll-mt-20">
-            {!itinerary && !error && !loading && (
-              <div className="flex h-full min-h-[320px] flex-col items-center justify-center gap-3 border border-dashed border-basalt/20 bg-chalk px-6 py-16 text-center">
-                <Compass className="h-8 w-8 text-basalt/30" />
-                <p className="max-w-xs text-sm text-basalt/55">Your plan appears here — day by day, with real stays, tables and tours you can book.</p>
-              </div>
-            )}
-
-            {loading && (
-              <div className="flex h-full min-h-[320px] flex-col items-center justify-center gap-3 border border-basalt/12 bg-chalk px-6 py-16 text-center">
-                <div className="h-6 w-6 animate-spin rounded-full border-2 border-basalt/20 border-t-apricot" />
-                <p className="text-sm text-basalt/55">{planned?.request ? "Aha AI is drafting your route…" : `Drafting a ${planned?.days ?? days}-day route from ${planned?.startCity ?? startCity}…`}</p>
-              </div>
-            )}
-
+            {loading && <p className="mt-2 text-center text-xs text-basalt/45" aria-live="polite">Aha AI is drafting your route — this can take 20–60 seconds for a longer trip. Your plan opens on its own page.</p>}
             {error && !loading && (
-              <div className="flex items-start gap-3 border border-tuff/40 bg-tuff/10 p-5 text-sm text-basalt">
-                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-tuff" />
-                <div>
-                  <p className="font-semibold">Couldn't generate a plan</p>
-                  <p className="mt-1 text-basalt/70">{error}</p>
-                </div>
-              </div>
+              <p className="mt-3 flex items-start gap-2 border border-tuff/40 bg-tuff/10 p-3 text-sm text-basalt/80" role="alert">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-tuff" /> {error}
+              </p>
             )}
-
-            {itinerary && !loading && (
-              <TripPlanView
-                itinerary={itinerary}
-                meta={[`${itinerary.days.length} day${itinerary.days.length === 1 ? "" : "s"}`, planned?.travelers && `${planned.travelers} traveller${planned.travelers === 1 ? "" : "s"}`, planned?.pace, planned?.budget].filter(Boolean).join(" · ")}
-                revising={revising}
-                onRevise={revise}
-                onEmail={planToken ? sendByEmail : undefined}
-              />
-            )}
-          </div>
+          </form>
         </div>
 
         {/* The other ways to plan with Aha AI — Talk and Chat open the Aha AI panel (SupportWidget, via openAha). */}

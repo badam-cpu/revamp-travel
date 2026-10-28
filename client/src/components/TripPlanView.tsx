@@ -111,24 +111,20 @@ export function TripPlanView({
   itinerary,
   meta,
   revising,
-  onRevise,
-  onEmail,
 }: {
   itinerary: Itinerary;
   /** Small line above the title, e.g. "4 days · balanced · mid-range". */
   meta: string;
   revising: boolean;
-  /** Resolves true when the new plan is in (the box then clears). */
-  onRevise: (change: string) => Promise<boolean>;
-  /** "Email me the full itinerary" — absent when the server can't email plans. */
-  onEmail?: (email: string) => Promise<boolean>;
 }) {
+  const { format } = useCurrency();
   const places = itinerary.places ?? {};
   const [open, setOpen] = useState<Set<number>>(() => new Set([itinerary.days[0]?.day ?? 1]));
-  const [change, setChange] = useState("");
   // Stays, tours and experiences can be booked; restaurants and places to visit are only shown.
   const bookable = Object.values(places).filter((p) => p.type === "stay" || p.type === "tour" || p.type === "experience").length;
   const route = (itinerary.route ?? []).filter((t, i, a) => i === 0 || t !== a[i - 1]);
+  // The budget follows the AMD/USD switcher like the cards (older plans only have the text line).
+  const budget = itinerary.budgetPerPersonAmd ? `≈ ${format(itinerary.budgetPerPersonAmd * 100)} per person` : itinerary.estimatedBudget && itinerary.estimatedBudget !== "—" ? itinerary.estimatedBudget : null;
 
   const toggle = (d: number) => setOpen((prev) => {
     const next = new Set(prev);
@@ -138,25 +134,7 @@ export function TripPlanView({
   });
   const jumpTo = (d: number) => {
     setOpen((prev) => new Set(prev).add(d));
-    requestAnimationFrame(() => document.getElementById(`plan-day-${d}`)?.scrollIntoView({ behavior: "smooth", block: "start" }));
-  };
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    const text = change.trim();
-    if (!text || revising) return;
-    if (await onRevise(text)) setChange("");
-  };
-  const [email, setEmail] = useState("");
-  const [emailState, setEmailState] = useState<"idle" | "sending" | "sent">("idle");
-  const [sentTo, setSentTo] = useState("");
-  const sendEmail = async (e: FormEvent) => {
-    e.preventDefault();
-    const to = email.trim();
-    if (!onEmail || !to || emailState === "sending") return;
-    setEmailState("sending");
-    const ok = await onEmail(to);
-    setEmailState(ok ? "sent" : "idle");
-    if (ok) setSentTo(to);
+    setTimeout(() => document.getElementById(`plan-day-${d}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
   };
 
   return (
@@ -164,11 +142,11 @@ export function TripPlanView({
       {/* Summary */}
       <div className="border border-basalt/12 bg-paper p-5 sm:p-6">
         <p className="text-xs font-semibold text-basalt/50">{meta}</p>
-        <h2 className="mt-1.5 font-display text-2xl leading-tight tracking-[-0.02em] sm:text-3xl">{itinerary.tripTitle}</h2>
-        {itinerary.summary && <p className="mt-2 max-w-xl text-sm leading-6 text-basalt/60">{itinerary.summary}</p>}
+        <h1 className="mt-1.5 font-display text-2xl leading-tight tracking-[-0.02em] [text-wrap:balance] sm:text-3xl">{itinerary.tripTitle}</h1>
+        {itinerary.summary && <p className="mt-2 max-w-2xl text-sm leading-6 text-basalt/60">{itinerary.summary}</p>}
         <div className="mt-4 flex flex-wrap gap-2 text-xs text-basalt/70">
           {route.length > 1 && <span className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-basalt/15 px-3"><RouteIcon className="h-3.5 w-3.5 text-apricot" aria-hidden /> {route.join(" → ")}</span>}
-          {itinerary.estimatedBudget && itinerary.estimatedBudget !== "—" && <span className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-basalt/15 px-3"><Wallet className="h-3.5 w-3.5 text-apricot" aria-hidden /> {itinerary.estimatedBudget}</span>}
+          {budget && <span className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-basalt/15 px-3"><Wallet className="h-3.5 w-3.5 text-apricot" aria-hidden /> {budget}</span>}
           {bookable > 0 && <span className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-basalt/15 px-3"><Ticket className="h-3.5 w-3.5 text-apricot" aria-hidden /> {bookable} to book on Revamp</span>}
         </div>
         {itinerary.days.length > 1 && (
@@ -198,56 +176,70 @@ export function TripPlanView({
         <p className="flex gap-2 px-1 text-[13px] leading-5 text-basalt/60"><Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-apricot" aria-hidden /> {itinerary.packingTip}</p>
       )}
 
-      {/* Change anything */}
-      <form onSubmit={submit} className="border border-basalt/12 bg-chalk p-4 sm:p-5">
-        <label htmlFor="plan-change" className="flex items-center gap-1.5 text-sm font-semibold"><Sparkles className="h-4 w-4 text-apricot" aria-hidden /> Change anything</label>
-        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-          <input
-            id="plan-change"
-            value={change}
-            onChange={(e) => setChange(e.target.value)}
-            maxLength={300}
-            placeholder="Make day 3 slower, add a wine tasting, swap to a hotel…"
-            className="h-12 min-w-0 flex-1 rounded-[14px] border border-basalt/15 bg-paper px-4 text-base outline-none focus:border-apricot sm:h-11 sm:text-sm"
-          />
-          <button type="submit" disabled={revising} className="inline-flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-full bg-apricot px-5 text-sm font-semibold text-white hover:bg-apricot/90 sm:h-11">
-            {revising ? <><Loader2 className="h-4 w-4 animate-spin" /> Updating…</> : <>Update plan <ArrowRight className="h-4 w-4" /></>}
-          </button>
-        </div>
-      </form>
-
-      {/* Email me the full itinerary */}
-      {onEmail && (
-        <div className="border border-basalt/12 bg-paper p-4 sm:p-5">
-          {emailState === "sent" ? (
-            <p className="flex items-center gap-2 text-sm"><MailCheck className="h-4 w-4 shrink-0 text-apricot" aria-hidden /> Sent to <span className="font-semibold">{sentTo}</span> — check your inbox. <button type="button" onClick={() => setEmailState("idle")} className="ml-auto min-h-10 shrink-0 text-xs font-semibold text-apricot hover:underline">Send again</button></p>
-          ) : (
-            <form onSubmit={sendEmail}>
-              <label htmlFor="plan-email" className="flex items-center gap-1.5 text-sm font-semibold"><Mail className="h-4 w-4 text-apricot" aria-hidden /> Email me the full itinerary</label>
-              <p className="mt-0.5 text-xs text-basalt/50">Every day, with links to book. We won't add you to any mailing list.</p>
-              <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-                <input
-                  id="plan-email"
-                  type="email"
-                  required
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  className="h-12 min-w-0 flex-1 rounded-[14px] border border-basalt/15 bg-paper px-4 text-base outline-none focus:border-apricot sm:h-11 sm:text-sm"
-                />
-                <button type="submit" disabled={emailState === "sending" || revising} className="inline-flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-full bg-basalt px-5 text-sm font-semibold text-paper hover:bg-basalt/85 sm:h-11">
-                  {emailState === "sending" ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending…</> : "Send"}
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
-      )}
-
       <p className="px-1 text-[11px] text-basalt/40">
         Drafted by Aha AI — prices on the cards are live; timing and the budget are a starting point, not a reservation.
       </p>
+    </div>
+  );
+}
+
+const field = "h-12 w-full min-w-0 rounded-[14px] border border-basalt/15 bg-paper px-4 text-base outline-none focus:border-apricot sm:h-11 sm:text-sm";
+
+/** "Change anything": the plan goes back to Aha AI with the guest's change. */
+export function ChangePlanForm({ revising, onRevise }: { revising: boolean; onRevise: (change: string) => Promise<boolean> }) {
+  const [change, setChange] = useState("");
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    const text = change.trim();
+    if (!text || revising) return;
+    if (await onRevise(text)) setChange("");
+  };
+  return (
+    <form onSubmit={submit} className="border border-basalt/12 bg-chalk p-4">
+      <label htmlFor="plan-change" className="flex items-center gap-1.5 text-sm font-semibold"><Sparkles className="h-4 w-4 text-apricot" aria-hidden /> Change anything</label>
+      <div className="mt-2 grid gap-2">
+        <input id="plan-change" value={change} onChange={(e) => setChange(e.target.value)} maxLength={300} placeholder="Make day 3 slower, add a wine tasting…" className={field} />
+        <button type="submit" disabled={revising} className="inline-flex h-12 items-center justify-center gap-1.5 rounded-full bg-basalt px-5 text-sm font-semibold text-paper hover:bg-basalt/85 sm:h-11">
+          {revising ? <><Loader2 className="h-4 w-4 animate-spin" /> Updating…</> : <>Update plan <ArrowRight className="h-4 w-4" /></>}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** "Email me the full itinerary" (only plans the server signed can be sent). */
+export function EmailPlanForm({ onEmail, disabled, defaultEmail = "" }: { onEmail: (email: string) => Promise<boolean>; disabled?: boolean; defaultEmail?: string }) {
+  const [email, setEmail] = useState(defaultEmail);
+  const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
+  const [sentTo, setSentTo] = useState("");
+  const send = async (e: FormEvent) => {
+    e.preventDefault();
+    const to = email.trim();
+    if (!to || state === "sending") return;
+    setState("sending");
+    const ok = await onEmail(to);
+    setState(ok ? "sent" : "idle");
+    if (ok) setSentTo(to);
+  };
+  return (
+    <div className="border border-basalt/12 bg-paper p-4">
+      {state === "sent" ? (
+        <div className="text-sm">
+          <p className="flex items-start gap-2"><MailCheck className="mt-0.5 h-4 w-4 shrink-0 text-apricot" aria-hidden /> <span>Sent to <span className="font-semibold">{sentTo}</span> — check your inbox.</span></p>
+          <button type="button" onClick={() => setState("idle")} className="mt-1 min-h-10 text-xs font-semibold text-apricot hover:underline">Send again</button>
+        </div>
+      ) : (
+        <form onSubmit={send}>
+          <label htmlFor="plan-email" className="flex items-center gap-1.5 text-sm font-semibold"><Mail className="h-4 w-4 text-apricot" aria-hidden /> Email me the full itinerary</label>
+          <p className="mt-0.5 text-xs text-basalt/50">Every day, with links to book. We won't add you to any mailing list.</p>
+          <div className="mt-2 grid gap-2">
+            <input id="plan-email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" className={field} />
+            <button type="submit" disabled={state === "sending" || disabled} className="inline-flex h-12 items-center justify-center gap-1.5 rounded-full border border-basalt/25 px-5 text-sm font-semibold hover:border-basalt/50 sm:h-11">
+              {state === "sending" ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending…</> : "Send"}
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }

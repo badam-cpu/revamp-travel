@@ -769,6 +769,7 @@ export interface ItineraryEmail {
   summary: string;
   route?: string[];
   estimatedBudget: string;
+  budgetPerPersonAmd?: number;
   packingTip: string;
   days: { day: number; title: string; area?: string; base?: string; drive?: string; tip?: string; stops?: { time: string; text: string; listing?: string; move?: string }[]; morning: string; afternoon: string; evening: string }[];
   places?: Record<string, { slug: string; type: string; title: string; city: string; priceCents?: number; priceUnit: string; priceBand?: string; image?: string }>;
@@ -821,7 +822,7 @@ export function sendItinerary(to: string, it: ItineraryEmail) {
     `${it.summary ? `<p style="font-size:15px;line-height:1.6;color:#4a443c;margin:0 0 12px;">${esc(it.summary)}</p>` : ""}
      <p style="font-size:13px;line-height:1.7;color:#6B6357;margin:0 0 16px;">
        ${route.length > 1 ? `Route: ${esc(route.join(" → "))}<br />` : ""}
-       ${it.estimatedBudget && it.estimatedBudget !== "—" ? `Budget: ${esc(it.estimatedBudget)}` : ""}
+       ${it.budgetPerPersonAmd ? `Budget: about ${esc(money(it.budgetPerPersonAmd * 100, "AMD"))} per person` : it.estimatedBudget && it.estimatedBudget !== "—" ? `Budget: ${esc(it.estimatedBudget)}` : ""}
      </p>
      ${days}
      ${it.packingTip ? `<p style="border-top:1px solid #eee;margin:18px 0 0;padding-top:16px;font-size:13px;line-height:1.5;color:#6B6357;">🎒 ${esc(it.packingTip)}</p>` : ""}

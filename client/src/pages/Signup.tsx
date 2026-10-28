@@ -34,11 +34,22 @@ export default function Signup() {
     canonicalPath: "/signup",
   });
 
-  // Already signed in? Don't show the sign-up form — send them home.
+  // ?redirect=/somewhere brings them back where they started (e.g. a trip plan
+  // they're saving, 2026-10-28) — same-site paths only, like Login.
+  const [redirect] = useState(() => {
+    try {
+      const r = new URLSearchParams(window.location.search).get("redirect");
+      return r && r.startsWith("/") && !r.startsWith("//") ? r : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Already signed in? Don't show the sign-up form — send them on.
   useEffect(() => {
     if (authLoading || !signedIn) return;
-    navigate("/");
-  }, [authLoading, signedIn, navigate]);
+    navigate(redirect ?? "/");
+  }, [authLoading, signedIn, navigate, redirect]);
   // Referral capture: a ?ref= param (or a code stashed by the /r/:code link)
   // means a host invited them — pre-select the operator role and keep the code
   // for Dashboard to attach once the account exists.
@@ -77,7 +88,7 @@ export default function Signup() {
       // before assuming the person is signed in.
       const { data } = await supabase.auth.getSession();
       if (data.session) {
-        navigate(role === "operator" ? "/dashboard" : "/");
+        navigate(redirect ?? (role === "operator" ? "/dashboard" : "/"));
       } else {
         setCheckEmail(true);
       }
@@ -98,7 +109,7 @@ export default function Signup() {
             <h1 className="mt-3 font-display text-4xl tracking-[-0.03em]">Check your email.</h1>
             <p className="mt-4 text-sm leading-6 text-basalt/60">We sent a confirmation link to {email}. Follow it, then come back and sign in.</p>
             <Button asChild className="mt-7 rounded-none bg-apricot text-white">
-              <Link href="/login">Go to sign in</Link>
+              <Link href={redirect ? `/login?redirect=${encodeURIComponent(redirect)}` : "/login"}>Go to sign in</Link>
             </Button>
           </div>
         </main>
@@ -135,7 +146,7 @@ export default function Signup() {
           )}
 
           <div className="mt-8">
-            <GoogleSignInButton label="Sign up with Google" />
+            <GoogleSignInButton label="Sign up with Google" redirect={redirect} />
             <p className="mt-2 text-center text-xs text-basalt/45">Google sign-up creates a traveler account — operators, use email below.</p>
             <div className="my-5 flex items-center gap-3 text-xs uppercase tracking-[0.12em] text-basalt/40">
               <span className="h-px flex-1 bg-basalt/10" /> or <span className="h-px flex-1 bg-basalt/10" />
@@ -203,7 +214,7 @@ export default function Signup() {
 
           <p className="mt-6 text-center text-sm text-basalt/55">
             Already have an account?{" "}
-            <Link href="/login" className="font-semibold text-apricot hover:underline">
+            <Link href={redirect ? `/login?redirect=${encodeURIComponent(redirect)}` : "/login"} className="font-semibold text-apricot hover:underline">
               Sign in
             </Link>
           </p>

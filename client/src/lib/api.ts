@@ -103,6 +103,8 @@ export interface Itinerary {
   summary: string;
   route?: string[];
   days: ItineraryDay[];
+  /** Rough total per person in AMD (whole drams). */
+  budgetPerPersonAmd?: number;
   estimatedBudget: string;
   packingTip: string;
   places?: Record<string, PlannedPlace>;

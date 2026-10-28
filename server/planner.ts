@@ -88,6 +88,9 @@ export interface Itinerary {
   /** Towns in order, e.g. ["Yerevan", "Dilijan", "Yerevan"]. */
   route: string[];
   days: ItineraryDay[];
+  /** Rough total per person in AMD (whole drams) — the page shows it in the guest's currency. */
+  budgetPerPersonAmd?: number;
+  /** Plain-text budget line (kept for the MCP plan_trip tool and older readers). */
   estimatedBudget: string;
   packingTip: string;
   places: Record<string, PlannedPlace>;
@@ -205,13 +208,15 @@ Reply with ONLY a JSON object, no other text, in exactly this shape:
       "tip": "one practical tip for this day, at most 20 words"
     }
   ],
-  "estimatedBudget": "one short line in Armenian dram, e.g. \"about 160,000 ֏ per person\" (illustrative)",
+  "budgetPerPersonAmd": 160000,
   "packingTip": "one short practical packing or logistics tip, at most 20 words"
 }
 Rules:
 - 2 to 4 stops per day; "time" is "morning", "afternoon" or "evening"; at most one listing per stop, and only ids that appear in the catalog exactly.
 - Never write prices in "text" — the page shows each listing's price itself.
 - The stay you use on a day must be in that day's "base" town, and "route" must match the bases in order.
+- "budgetPerPersonAmd" is one whole number: a rough total per person in Armenian dram for the whole trip (stays, food, tours, transport) — illustrative, no text.
+- Keep each day in ONE area and make drive times real. From Yerevan: Garni/Geghard ~45 min east, Lake Sevan ~1 h and Dilijan ~1.5 h north-east, Gyumri ~2 h north-west, Areni / Vayots Dzor ~2 h south, Goris / Tatev (Syunik) ~4–5 h south. Never put the north (Sevan, Dilijan, Tavush, Lori, Gyumri) and the south (Vayots Dzor, Syunik) in the same day; a day that moves between regions is a travel day with at most one stop on the way.
 ${dayRule}`;
 }
 
@@ -247,6 +252,12 @@ function routeOf(days: ItineraryDay[], modelRoute: unknown): string[] {
   if (last) towns.push(last);
   const list = towns.length ? towns : Array.isArray(modelRoute) ? (modelRoute as unknown[]).map((t) => str(t, 40)).filter(Boolean) : [];
   return list.filter((t, i) => i === 0 || t.toLowerCase() !== list[i - 1].toLowerCase()).slice(0, 12);
+}
+
+/** A sane per-person AMD total (rounded to 1,000), or undefined. */
+function budgetOf(v: unknown): number | undefined {
+  const n = typeof v === "number" ? v : typeof v === "string" ? Number(v.replace(/[^\d.]/g, "")) : NaN;
+  return Number.isFinite(n) && n >= 5_000 && n <= 50_000_000 ? Math.round(n / 1000) * 1000 : undefined;
 }
 
 /** "3 days" / "3-day" / "3 дня" / "3 օր" in the guest's own words → 3 (null if they didn't give a number). */
@@ -306,7 +317,8 @@ function validateItinerary(value: unknown, catalog: CatalogEntry[]): Itinerary {
     tripTitle: str(v.tripTitle, 120) || "Your Armenia itinerary",
     summary: str(v.summary, 400),
     route: routeOf(days, v.route),
-    estimatedBudget: str(v.estimatedBudget, 160) || "—",
+    budgetPerPersonAmd: budgetOf(v.budgetPerPersonAmd),
+    estimatedBudget: str(v.estimatedBudget, 160) || (budgetOf(v.budgetPerPersonAmd) ? `About ֏${budgetOf(v.budgetPerPersonAmd)!.toLocaleString("en-US")} per person` : "—"),
     packingTip: str(v.packingTip, 300),
     days,
     places,

@@ -56,12 +56,14 @@ const RedeemStation = lazy(() => import("./pages/RedeemStation"));
 const TripPage = lazy(() => import("./pages/TripPage"));
 const InvoicePage = lazy(() => import("./pages/InvoicePage"));
 const Plan = lazy(() => import("./pages/Plan"));
+const TripPlan = lazy(() => import("./pages/TripPlan"));
 const Developers = lazy(() => import("./pages/Developers"));
 const AiAssistants = lazy(() => import("./pages/AiAssistants"));
 const StayHome = lazy(() => import("./pages/StayHome"));
 const PlaceCategoryLanding = lazy(() => import("./pages/PlaceCategoryLanding"));
 import { SiteProvider, useSite } from "@/contexts/SiteContext";
 import { resolvePlaceCategoryHub } from "@shared/regionLanding";
+import { PendingTripSaver } from "@/components/PendingTripSaver";
 
 /*
  * Code splitting: every page except the home page loads on demand
@@ -185,6 +187,7 @@ function Router() {
       <Route path="/explore/:category">{(params) => <Explore initialType={params.category} />}</Route>
       <Route path="/explore">{() => <Explore />}</Route>
       <Route path="/map" component={MapPage} />
+      <Route path="/plan/trip" component={TripPlan} />
       <Route path="/plan" component={Plan} />
       <Route path="/dashboard/experiences/new" component={ExperienceOnboarding} />
       <Route path="/dashboard/experiences/:id/edit">{(params) => <ExperienceOnboarding params={params} />}</Route>
@@ -240,6 +243,7 @@ function App() {
                     <ScrollToTop />
                     <AnnouncementBanner />
                     <ImpersonationBar />
+                    <PendingTripSaver />
                     <Router />
                     <Suspense fallback={null}>
                       <SupportWidget />

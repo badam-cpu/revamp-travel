@@ -32,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TripPlansList } from "@/components/TripPlansList";
 import { PasswordInput } from "@/components/PasswordInput";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSavedPlaces } from "@/contexts/SavedPlacesContext";
@@ -454,9 +455,11 @@ function SavedTab() {
 
   if (saved.length === 0) {
     return (
+      <>
+      <TripPlansList />
       <div className="border border-dashed border-basalt/20 bg-chalk px-6 py-14 text-center">
         <Bookmark className="mx-auto h-7 w-7 text-basalt/30" />
-        <h3 className="mt-4 font-display text-2xl">Nothing saved yet.</h3>
+        <h3 className="mt-4 font-display text-2xl">No saved places yet.</h3>
         <p className="mx-auto mt-2 max-w-sm text-sm text-basalt/55">
           Tap the bookmark on any stay, tour, or experience and it'll wait for you here.
         </p>
@@ -464,15 +467,19 @@ function SavedTab() {
           <Link href="/explore">Start exploring</Link>
         </Button>
       </div>
+      </>
     );
   }
 
   return (
-    <div className="grid gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
-      {saved.map((listing) => (
-        <ListingCard key={listing.id} listing={listing} />
-      ))}
-    </div>
+    <>
+      <TripPlansList />
+      <div className="grid gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
+        {saved.map((listing) => (
+          <ListingCard key={listing.id} listing={listing} />
+        ))}
+      </div>
+    </>
   );
 }
 
