@@ -1279,12 +1279,39 @@ export function registerApiRoutes(app: Express) {
     if (rateLimited(planEmailIpHits, req.ip || "unknown", 5, 60 * 60_000) || rateLimited(planEmailToHits, email.data, 3, 60 * 60_000)) {
       return res.status(429).json({ error: "We've sent a few plans already — please try again in a little while." });
     }
-    const result = await sendItinerary(email.data, req.body.itinerary);
+    // Keep a copy so the email's "Open and save this trip" can reopen it (0123).
+    // Best-effort: without it the email still goes out, just without that button.
+    let saveUrl: string | undefined;
+    const admin = supabaseAdmin();
+    if (admin) {
+      const { data, error } = await admin
+        .from("emailed_trip_plans")
+        .insert({ plan_json: JSON.stringify(req.body.itinerary), plan_token: req.body.token, request: typeof req.body?.request === "string" ? req.body.request.slice(0, 600) : null })
+        .select("id")
+        .single();
+      if (error) console.error("[plan-email] keep copy:", error.message);
+      else saveUrl = `${(process.env.URL || "https://revampvacations.com").replace(/\/+$/, "")}/plan/trip?shared=${data.id}&save=1&utm_source=email&utm_medium=itinerary`;
+    }
+    const result = await sendItinerary(email.data, req.body.itinerary, { saveUrl });
     if (!result.sent) {
       console.error("[plan-email] not sent:", result.reason);
       return res.status(502).json({ error: "We couldn't send the email just now. Please try again." });
     }
     res.json({ ok: true });
+  });
+
+  // The emailed copy behind "Open and save this trip" — by its random id only.
+  const sharedPlanHits = new Map<string, number[]>();
+  app.get("/api/plan-trip/shared/:id", async (req: Request, res: Response) => {
+    if (rateLimited(sharedPlanHits, req.ip || "unknown", 30)) return res.status(429).json({ error: "Please try again in a minute." });
+    const id = z.string().uuid().safeParse(req.params.id);
+    const admin = supabaseAdmin();
+    if (!id.success || !admin) return res.status(404).json({ error: "We couldn't find that trip plan." });
+    const { data, error } = await admin.from("emailed_trip_plans").select("plan_json, plan_token, request").eq("id", id.data).maybeSingle();
+    if (error) console.error("[plan-shared]", error.message);
+    if (!data) return res.status(404).json({ error: "We couldn't find that trip plan." });
+    res.set("Cache-Control", "private, no-store");
+    res.json({ planJson: data.plan_json, token: data.plan_token, request: data.request });
   });
 
   app.post("/api/import-listing", async (req: Request, res: Response) => {

@@ -775,7 +775,7 @@ export interface ItineraryEmail {
   places?: Record<string, { slug: string; type: string; title: string; city: string; priceCents?: number; priceUnit: string; priceBand?: string; image?: string }>;
 }
 
-export function sendItinerary(to: string, it: ItineraryEmail) {
+export function sendItinerary(to: string, it: ItineraryEmail, opts: { saveUrl?: string } = {}) {
   const site = SITE();
   const places = it.places ?? {};
   const TIME: Record<string, string> = { morning: "Morning", afternoon: "Afternoon", evening: "Evening" };
@@ -826,7 +826,14 @@ export function sendItinerary(to: string, it: ItineraryEmail) {
      </p>
      ${days}
      ${it.packingTip ? `<p style="border-top:1px solid #eee;margin:18px 0 0;padding-top:16px;font-size:13px;line-height:1.5;color:#6B6357;">🎒 ${esc(it.packingTip)}</p>` : ""}
-     <p style="margin:20px 0 6px;"><a href="${esc(site)}/plan?utm_source=email&utm_medium=itinerary" style="display:inline-block;background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Plan another trip with Aha AI</a></p>
+     ${opts.saveUrl
+       ? `<div style="margin:22px 0 6px;padding:16px 18px;background:#f6f3ec;border-radius:12px;">
+            <p style="margin:0 0 4px;font-size:15px;font-weight:700;">Keep this trip in your account</p>
+            <p style="margin:0 0 12px;font-size:13px;line-height:1.5;color:#6B6357;">Open it on Revamp, sign in or create an account, and it's saved — ready to change, reopen and book from any device.</p>
+            <a href="${esc(opts.saveUrl)}" style="display:inline-block;background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Open and save this trip</a>
+          </div>
+          <p style="margin:12px 0 0;font-size:13px;"><a href="${esc(site)}/plan?utm_source=email&utm_medium=itinerary" style="color:#F15822;font-weight:600;text-decoration:none;">Plan another trip with Aha AI →</a></p>`
+       : `<p style="margin:20px 0 6px;"><a href="${esc(site)}/plan?utm_source=email&utm_medium=itinerary" style="display:inline-block;background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Plan another trip with Aha AI</a></p>`}
      <p style="font-size:12px;color:#8B8478;margin:12px 0 0;line-height:1.6;">Drafted by Aha AI. Prices are from the listings when this was sent; timing and the budget are a starting point, not a reservation. You asked for this plan on revampvacations.com — we haven't added you to any mailing list.</p>`,
     site,
   );

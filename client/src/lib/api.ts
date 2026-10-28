@@ -119,11 +119,16 @@ export function planTrip(params: PlanTripParams): Promise<{ itinerary: Itinerary
 }
 
 /** "Email me the full itinerary" — the plan exactly as the server returned it, with its token. */
-export function emailItinerary(email: string, itinerary: Itinerary, token: string): Promise<{ ok: true }> {
+export function emailItinerary(email: string, itinerary: Itinerary, token: string, tripRequest?: string): Promise<{ ok: true }> {
   return request<{ ok: true }>("/api/plan-trip/email", {
     method: "POST",
-    body: JSON.stringify({ email, itinerary, token }),
+    body: JSON.stringify({ email, itinerary, token, request: tripRequest }),
   });
+}
+
+/** The emailed copy behind the email's "Open and save this trip" (/plan/trip?shared=…). */
+export function getSharedTripPlan(id: string): Promise<{ planJson: string; token: string | null; request: string | null }> {
+  return request(`/api/plan-trip/shared/${encodeURIComponent(id)}`, { method: "GET" });
 }
 
 export interface ListingPrefill {

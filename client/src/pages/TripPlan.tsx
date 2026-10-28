@@ -20,7 +20,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { ChangePlanForm, EmailPlanForm, TripPlanView } from "@/components/TripPlanView";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
-import { ApiError, emailItinerary, planTrip, type Itinerary } from "@/lib/api";
+import { ApiError, emailItinerary, getSharedTripPlan, planTrip, type Itinerary } from "@/lib/api";
 import { getTripPlan, parsePlan, readCurrentPlan, saveTripPlan, setPendingSave, writeCurrentPlan, type CurrentPlan } from "@/lib/tripPlans";
 import { cn } from "@/lib/utils";
 
@@ -29,10 +29,15 @@ export default function TripPlan() {
   const signedIn = !!user && !((user as { is_anonymous?: boolean }).is_anonymous === true || !user.email);
   const search = useSearch();
   const [, navigate] = useLocation();
-  const savedId = new URLSearchParams(search).get("id");
+  const q = new URLSearchParams(search);
+  const savedId = q.get("id");
+  // From the itinerary email: ?shared=<emailed copy>&save=1 opens it and goes straight to Save (0123).
+  const sharedId = q.get("shared");
+  const wantSave = q.get("save") === "1";
 
-  const [plan, setPlan] = useState<CurrentPlan | null>(() => (savedId ? null : readCurrentPlan()));
-  const [loadState, setLoadState] = useState<"ready" | "loading" | "missing" | "signin">(savedId ? "loading" : "ready");
+  const [plan, setPlan] = useState<CurrentPlan | null>(() => (savedId || sharedId ? null : readCurrentPlan()));
+  const [loadState, setLoadState] = useState<"ready" | "loading" | "missing" | "signin">(savedId || sharedId ? "loading" : "ready");
+  const [autoSave, setAutoSave] = useState(false);
   const [revising, setRevising] = useState(false);
   const [saving, setSaving] = useState(false);
   const [askSignup, setAskSignup] = useState(false);
@@ -73,6 +78,31 @@ export default function TripPlan() {
       live = false;
     };
   }, [savedId, signedIn, authLoading]);
+
+  // The emailed copy: show it, then drop the query so a reload uses the session copy.
+  useEffect(() => {
+    if (!sharedId) return;
+    let live = true;
+    getSharedTripPlan(sharedId)
+      .then((r) => {
+        if (!live) return;
+        const n = (JSON.parse(r.planJson) as Itinerary).days.length;
+        const next: CurrentPlan = { planJson: r.planJson, token: r.token, request: r.request ?? undefined, meta: `${n} day${n === 1 ? "" : "s"}` };
+        setPlan(next);
+        writeCurrentPlan(next);
+        setLoadState("ready");
+        if (wantSave) setAutoSave(true);
+        navigate("/plan/trip", { replace: true });
+      })
+      .catch((err) => {
+        if (!(err instanceof ApiError)) console.error("[trip-plan] shared", err);
+        if (live) setLoadState("missing");
+      });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharedId]);
 
   const itinerary: Itinerary | null = useMemo(() => {
     if (!plan) return null;
@@ -116,7 +146,7 @@ export default function TripPlan() {
   const sendByEmail = async (email: string): Promise<boolean> => {
     if (!plan?.token || !itinerary) return false;
     try {
-      await emailItinerary(email, itinerary, plan.token);
+      await emailItinerary(email, itinerary, plan.token, plan.request);
       return true;
     } catch (err) {
       if (!(err instanceof ApiError)) console.error("[trip-plan] email", err);
@@ -148,6 +178,15 @@ export default function TripPlan() {
       setSaving(false);
     }
   };
+
+  // "Open and save this trip" from the email: save once auth is known (signed
+  // out → the Create an account / Sign in prompt, and the plan is parked).
+  useEffect(() => {
+    if (!autoSave || authLoading || !plan) return;
+    setAutoSave(false);
+    void save();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSave, authLoading, plan]);
 
   const saved = !!plan?.id && !plan.dirty;
   const back = "/plan";
