@@ -796,7 +796,7 @@ function ListingFormDialog({
             await saveSessionSchedule(saved.id, next, schedule.mode);
           } catch (schedErr) {
             console.error("[dashboard] schedule save failed", schedErr);
-            toast.error(`${payload.title} was saved, but its class times weren't. Open ⋯ → Schedule & spots to add them.`);
+            toast.error(`${payload.title} was saved, but its start times weren't. Open ⋯ → Schedule & spots to add them.`);
           }
         }
       }
@@ -1224,7 +1224,7 @@ function ListingFormDialog({
                   <section className="grid gap-4 border border-basalt/15 bg-chalk/40 p-5" aria-labelledby="tour-schedule-title">
                     <div>
                       <h3 id="tour-schedule-title" className="font-display text-xl">Schedule &amp; spots</h3>
-                      <p className="mt-1 text-sm leading-6 text-basalt/60">Does your tour run at set times, or do guests pick a day? You can change this later from ⋯ → Schedule &amp; spots.</p>
+                      <p className="mt-1 text-sm leading-6 text-basalt/60">Does your tour start at set times, or do guests pick a day? You can change this later from ⋯ → Schedule &amp; spots.</p>
                     </div>
                     <ScheduleFields value={schedule} onChange={setSchedule} idPrefix="tour-form" />
                   </section>
@@ -2055,7 +2055,7 @@ function OperatorListingRow({ listing, onEdit, tour = null, onTourChanged }: { l
             <DropdownMenuItem onSelect={onEdit}><Pencil className="mr-2 h-3.5 w-3.5" /> Edit</DropdownMenuItem>
             {isActivity && (
               <DropdownMenuItem onSelect={() => setScheduleOpen(true)}>
-                <Clock className="mr-2 h-3.5 w-3.5" /> Schedule &amp; spots{scheduleHasSlots(listing.sessionSchedule) ? " · class times" : " · by the day"}
+                <Clock className="mr-2 h-3.5 w-3.5" /> Schedule &amp; spots{scheduleHasSlots(listing.sessionSchedule) ? " · start times" : " · by the day"}
               </DropdownMenuItem>
             )}
             <DropdownMenuItem onSelect={() => setOpen((o) => !o)}><CalendarClock className="mr-2 h-3.5 w-3.5" /> Calendar sync</DropdownMenuItem>

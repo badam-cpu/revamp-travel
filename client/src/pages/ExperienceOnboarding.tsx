@@ -332,7 +332,7 @@ const STEP_META: { title: string; subtitle: string }[] = [
   { title: "Tell your story", subtitle: "Give travelers a real sense of what makes this worth their afternoon." },
   { title: "Build the itinerary", subtitle: "The steps a guest will actually move through, in order — this becomes the Itinerary section on your listing page." },
   { title: "Group, duration & meeting details", subtitle: "How long it runs, how many people, and where to meet." },
-  { title: "Schedule & spots", subtitle: "Do guests book a class time — like a yoga class or a workshop — or just pick a day?" },
+  { title: "Schedule & spots", subtitle: "Do guests book a set start time — a class, a group run, a tasting — or just pick a day?" },
   { title: "What's included", subtitle: "Check off everything guests don't have to bring or pay extra for." },
   { title: "Good to know", subtitle: "Safety notes, age limits, accessibility, cancellation terms — anything a guest should know before booking." },
   { title: "Add a cover photo", subtitle: "One hero image is enough to start — you can always add more later." },
@@ -589,7 +589,7 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
           await saveSessionSchedule(listingId, next, data.schedule.mode);
         } catch (schedErr) {
           console.error("[experience] schedule save failed", schedErr);
-          toast.error(`${payload.title} was saved, but its class times weren't. Open ⋯ → Schedule & spots to add them.`);
+          toast.error(`${payload.title} was saved, but its start times weren't. Open ⋯ → Schedule & spots to add them.`);
         }
       };
       if (isEdit && existing) {

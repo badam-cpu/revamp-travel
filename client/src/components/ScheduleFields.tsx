@@ -5,9 +5,9 @@
  * hidden behind "Calendar sync").
  *
  *  - "A day": guests pick a date (the original day-level booking).
- *  - "A class time": weekly start times — different times on different days
+ *  - "A start time": weekly start times (a class, a group run, a tasting…) — different times on different days
  *    (one rule per row: e.g. Mon/Wed 08:00 + 19:00, Sat 10:00), spots per
- *    class, length, minimum notice, and instant book vs approve first.
+ *    session, length, minimum notice, and instant book vs approve first.
  *
  * Controlled: the caller keeps the `ScheduleValue` and saves it with
  * `saveSessionSchedule(listingId, scheduleFromValue(v), v.mode)` once the
@@ -94,7 +94,7 @@ export function ScheduleFields({ value, onChange, idPrefix }: { value: ScheduleV
         <div role="radiogroup" aria-label="How guests book" className="grid gap-2 sm:grid-cols-2">
           {([
             { k: "day", icon: CalendarDays, title: "They pick a day", blurb: "Good for private or one-off experiences — you agree the time with the guest." },
-            { k: "slots", icon: Clock, title: "They pick a class time", blurb: "You set weekly start times and spots per class. Guests choose a time; full classes close by themselves." },
+            { k: "slots", icon: Clock, title: "They pick a start time", blurb: "You set weekly start times and spots per session — a class, a group run, a tasting. Guests choose a time; full sessions close by themselves." },
           ] as const).map((o) => (
             <button
               key={o.k}
@@ -190,7 +190,7 @@ export function ScheduleFields({ value, onChange, idPrefix }: { value: ScheduleV
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <label className="grid gap-1.5 text-sm font-semibold" htmlFor={`${idPrefix}-cap`}>
-              Spots per class
+              Spots per session
               <Input id={`${idPrefix}-cap`} type="number" min={1} inputMode="numeric" value={value.capacity} onChange={(e) => set({ capacity: e.target.value })} className={field} />
             </label>
             <label className="grid gap-1.5 text-sm font-semibold" htmlFor={`${idPrefix}-dur`}>
@@ -227,7 +227,7 @@ export function ScheduleFields({ value, onChange, idPrefix }: { value: ScheduleV
           <p className="text-sm text-basalt/65" aria-live="polite">
             {schedule ? (
               <>
-                <span className="font-semibold text-basalt">{describeSchedule(schedule)}</span> · {count} class{count === 1 ? "" : "es"} open over the next 60 days
+                <span className="font-semibold text-basalt">{describeSchedule(schedule)}</span> · {count} session{count === 1 ? "" : "s"} open over the next 60 days
               </>
             ) : (
               "Pick at least one day and one start time."

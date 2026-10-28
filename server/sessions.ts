@@ -85,14 +85,14 @@ async function removeUnscheduled(admin: SupabaseClient, listingId: string, keep:
  */
 export async function setSessionOpen(admin: SupabaseClient, sessionId: string, open: boolean): Promise<{ ok: true } | { error: string; status: number }> {
   const { data: s } = await admin.from("listing_sessions").select("id, seats_taken, starts_at").eq("id", sessionId).maybeSingle();
-  if (!s) return { error: "That class wasn't found.", status: 404 };
-  if (Date.parse(s.starts_at as string) < Date.now()) return { error: "That class has already started.", status: 409 };
+  if (!s) return { error: "That session wasn't found.", status: 404 };
+  if (Date.parse(s.starts_at as string) < Date.now()) return { error: "That session has already started.", status: 409 };
   if (!open && (s.seats_taken as number) > 0) {
     const n = s.seats_taken as number;
-    return { error: `${n} guest${n === 1 ? " is" : "s are"} booked into this class. Cancel their booking${n === 1 ? "" : "s"} in Bookings first.`, status: 409 };
+    return { error: `${n} guest${n === 1 ? " is" : "s are"} booked into this session. Cancel their booking${n === 1 ? "" : "s"} in Bookings first.`, status: 409 };
   }
   const { error } = await admin.from("listing_sessions").update(open ? { status: "open" } : { status: "closed", source: "manual" }).eq("id", sessionId);
-  if (error) return { error: "Couldn't update that class. Please try again.", status: 500 };
+  if (error) return { error: "Couldn't update that session. Please try again.", status: 500 };
   return { ok: true };
 }
 

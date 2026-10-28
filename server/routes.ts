@@ -4713,11 +4713,11 @@ export function registerApiRoutes(app: Express) {
     if (!userId) return res.status(401).json({ error: "Sign in." });
     const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId : "";
     const open = req.body?.open === true;
-    if (!/^[0-9a-f-]{36}$/i.test(sessionId)) return res.status(400).json({ error: "That class wasn't found." });
+    if (!/^[0-9a-f-]{36}$/i.test(sessionId)) return res.status(400).json({ error: "That session wasn't found." });
     const admin = supabaseAdmin();
     if (!admin) return res.status(503).json({ error: "Not available right now." });
     const { data: row } = await admin.from("listing_sessions").select("listing_id, listings!inner(operator_id)").eq("id", sessionId).maybeSingle();
-    if (!row) return res.status(404).json({ error: "That class wasn't found." });
+    if (!row) return res.status(404).json({ error: "That session wasn't found." });
     const ownerId = (row as unknown as { listings: { operator_id: string } }).listings.operator_id;
     const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
     if (ownerId !== userId && me?.role !== "admin") return res.status(403).json({ error: "That's not your listing." });
@@ -4727,7 +4727,7 @@ export function registerApiRoutes(app: Express) {
       res.json({ ok: true });
     } catch (err) {
       console.error("[sessions/set-open]", err);
-      res.status(500).json({ error: "Couldn't update that class. Please try again." });
+      res.status(500).json({ error: "Couldn't update that session. Please try again." });
     }
   });
 

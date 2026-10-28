@@ -65,7 +65,7 @@ export function ScheduleDialog({ listing, open, onClose }: { listing: LiveListin
     try {
       const schedule = scheduleFromValue(value);
       const res = await saveSessionSchedule(listing.id, schedule, value.mode);
-      toast.success(schedule ? `Schedule saved — ${res.created} new class${res.created === 1 ? "" : "es"} opened.` : "Saved — guests now pick a day.");
+      toast.success(schedule ? `Schedule saved — ${res.created} new session${res.created === 1 ? "" : "s"} opened.` : "Saved — guests now pick a day.");
       await refresh();
       if (schedule) await loadClasses();
     } catch (e) {
@@ -81,10 +81,10 @@ export function ScheduleDialog({ listing, open, onClose }: { listing: LiveListin
     try {
       await setSessionOpen(c.id, c.status !== "open");
       setClasses((list) => list?.map((x) => (x.id === c.id ? { ...x, status: x.status === "open" ? "closed" : "open" } : x)) ?? null);
-      toast.success(c.status === "open" ? "Class cancelled — guests can't book it." : "Class reopened.");
+      toast.success(c.status === "open" ? "Session cancelled — guests can't book it." : "Session reopened.");
     } catch (e) {
       if (!(e instanceof ApiError)) console.error("[schedule] class", e);
-      toast(e instanceof ApiError ? e.message : "That class didn't update. Please try again.");
+      toast(e instanceof ApiError ? e.message : "That session didn't update. Please try again.");
     } finally {
       setChanging(null);
     }
@@ -117,13 +117,13 @@ export function ScheduleDialog({ listing, open, onClose }: { listing: LiveListin
         {listing.sessionSchedule && value.kind === "slots" && (
           <div className="grid gap-3 border-t border-basalt/10 pt-4">
             <div>
-              <p className="text-sm font-semibold">Upcoming classes</p>
-              <p className="text-xs leading-5 text-basalt/55">Cancel one class for a holiday or a day off — the rest of the schedule stays. A class with guests booked can't be cancelled here.</p>
+              <p className="text-sm font-semibold">Upcoming sessions</p>
+              <p className="text-xs leading-5 text-basalt/55">Cancel one session for a holiday or a day off — the rest of the schedule stays. A session with guests booked can't be cancelled here.</p>
             </div>
             {classes === null ? (
               <p className="text-sm text-basalt/50">Loading…</p>
             ) : classes.length === 0 ? (
-              <p className="text-sm text-basalt/55">No upcoming classes yet. Save the schedule to open them.</p>
+              <p className="text-sm text-basalt/55">No upcoming sessions yet. Save the schedule to open them.</p>
             ) : (
               <div className="grid gap-3">
                 {Array.from(byDay.entries()).map(([day, list]) => (
@@ -141,10 +141,10 @@ export function ScheduleDialog({ listing, open, onClose }: { listing: LiveListin
                           size="sm"
                           className="h-10 rounded-none sm:h-8"
                           disabled={changing === c.id || (c.status === "open" && c.seats_taken > 0)}
-                          title={c.status === "open" && c.seats_taken > 0 ? "Guests are booked into this class" : undefined}
+                          title={c.status === "open" && c.seats_taken > 0 ? "Guests are booked into this session" : undefined}
                           onClick={() => void toggleClass(c)}
                         >
-                          {changing === c.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : c.status === "open" ? "Cancel class" : "Reopen"}
+                          {changing === c.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : c.status === "open" ? "Cancel" : "Reopen"}
                         </Button>
                       </div>
                     ))}
