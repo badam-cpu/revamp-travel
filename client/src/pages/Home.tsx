@@ -228,9 +228,9 @@ export default function Home() {
                 <img src={category.image} alt="" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.025]" />
                 <div className="absolute inset-0 bg-gradient-to-t from-basalt/95 via-basalt/45 to-transparent" />
                 <span className="absolute left-5 top-5 grid h-9 w-9 place-items-center bg-paper text-[10px] font-bold text-basalt">{category.number}</span>
-                {/* Labels get a 2-line slot filled from the bottom (spare room sits above, over the
-                    photo), so a 1-line label lines up with 2-line ones. Titles stay natural — no gap. */}
-                <div className="absolute inset-x-0 bottom-0 p-6 text-white [text-shadow:0_2px_14px_rgba(15,15,15,0.55)]"><p className="flex min-h-[2.9em] items-end text-[10px] font-bold uppercase leading-[1.45] tracking-[0.17em]"><span><span className="text-apricot">{category.name}</span><span className="text-white/80"> · {category.label}</span></span></p><h3 className="mt-2 max-w-[260px] font-display text-4xl leading-[0.96] tracking-[-0.03em]">{category.title}</h3><MoveUpRight className="mt-5 h-5 w-5 text-apricot transition-transform group-hover:-translate-y-1 group-hover:translate-x-1" /></div>
+                {/* Two fixed lines on every card — the category name (orange) over its
+                    short label — so the labels, titles and arrows line up across the row. */}
+                <div className="absolute inset-x-0 bottom-0 p-6 text-white [text-shadow:0_2px_14px_rgba(15,15,15,0.55)]"><p className="text-[10px] font-bold uppercase leading-[1.45] tracking-[0.17em]"><span className="block text-apricot">{category.name}</span><span className="block truncate text-white/80 lg:tracking-[0.06em] xl:tracking-[0.17em]" title={category.label}>{category.label}</span></p><h3 className="mt-2 max-w-[260px] font-display text-4xl leading-[0.96] tracking-[-0.03em]">{category.title}</h3><MoveUpRight className="mt-5 h-5 w-5 text-apricot transition-transform group-hover:-translate-y-1 group-hover:translate-x-1" /></div>
               </Link>
             ))}
           </div>
