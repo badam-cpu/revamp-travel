@@ -107,6 +107,11 @@ How to help:
   | `pace` | String | – | `relaxed, balanced or packed` |
   | `budget` | String | – | `budget, mid-range or comfort` |
 
+### Tools → System tools → End call (2026-10-28)
+Turn on **End call**. Our instructions tell Aha AI to say a short goodbye and call
+`end_call` when the guest says "thanks, bye" / "that's all" — never while they still
+have a question. The page then shows "Thanks for talking with Aha AI."
+
 ### Voice → Pronunciation dictionaries (2026-10-27)
 Upload `docs/aha-pronunciation.pls` (Yerevan, Dilijan, Tsaghkadzor, Gyumri, Sevan, Tatev,
 the regions, monasteries…). Alias rules, so they work with Flash v2.5. If a name still

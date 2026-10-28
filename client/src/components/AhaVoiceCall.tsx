@@ -75,7 +75,7 @@ function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }
   const [results, setResults] = useState<SearchResult | null>(null);
   const [, navigate] = useLocation();
   // Why the last call ended on its own: time limit, nobody talking, or the guest left the tab.
-  const [autoEnded, setAutoEnded] = useState<null | "time" | "quiet" | "away">(null);
+  const [autoEnded, setAutoEnded] = useState<null | "time" | "quiet" | "away" | "bye">(null);
   const lastActivity = useRef(Date.now());
   const speaking = useRef(false);
   const maxSeconds = useRef(240);
@@ -127,6 +127,8 @@ function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }
       // Never got going over WebRTC (often blocked on some networks) → try the plain web connection once.
       if (!connected.current && session.current?.transport === "webrtc" && d.reason !== "user") return retryOverWebSocket();
       if (!connected.current && d.reason !== "user") return fail("Aha AI couldn't connect just now. Please try again in a moment, or ask the host in writing.");
+      // Aha AI said goodbye and hung up (its end_call tool) — keep the same calm note style.
+      if (d.reason === "agent") setAutoEnded((cur) => cur ?? "bye");
       setStarting(false);
     },
   });
@@ -384,7 +386,7 @@ function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }
       {results && <SearchCards results={results} />}
       {autoEnded && !live && (
         <p className="text-sm leading-6 text-basalt/70">
-          {autoEnded === "time" ? `Calls with Aha AI are kept to ${Math.round(maxSeconds.current / 60)} minutes.` : autoEnded === "quiet" ? "Aha AI hung up after a quiet moment." : "Aha AI hung up while you were away."} Tap Start talking to carry on.
+          {autoEnded === "time" ? `Calls with Aha AI are kept to ${Math.round(maxSeconds.current / 60)} minutes.` : autoEnded === "quiet" ? "Aha AI hung up after a quiet moment." : autoEnded === "bye" ? "Thanks for talking with Aha AI." : "Aha AI hung up while you were away."} Tap Start talking to carry on.
         </p>
       )}
       {problem && <p className="rounded-none border border-apricot/30 bg-apricot/[0.05] p-3 text-sm leading-6 text-basalt/80">{problem}</p>}
