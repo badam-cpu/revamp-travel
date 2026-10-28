@@ -51,12 +51,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export interface PlanTripParams {
-  days: number;
-  startCity: string;
-  travelers: number;
-  pace: "relaxed" | "balanced" | "packed";
-  budget: "budget" | "mid-range" | "comfort";
-  interests: string[];
+  /** The trip in the guest's own words (any language — the plan comes back in it). */
+  request?: string;
+  days?: number;
+  startCity?: string;
+  travelers?: number;
+  pace?: "relaxed" | "balanced" | "packed";
+  budget?: "budget" | "mid-range" | "comfort";
+  interests?: string[];
 }
 
 export interface ItineraryDay {

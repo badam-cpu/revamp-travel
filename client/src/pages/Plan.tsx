@@ -1,6 +1,6 @@
 /** Revamp brandbook: the planner reuses the marketplace's white/orange/charcoal system — no new colors, same rounded geometry. */
 import { FormEvent, useEffect, useState } from "react";
-import { AlertTriangle, ArrowRight, Compass, MessageCircle, Mic, Route, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowRight, ChevronDown, Compass, MessageCircle, Mic, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { openAha } from "@/lib/ahaPanel";
 import { useVoiceAvailable } from "@/lib/voiceStatus";
@@ -10,6 +10,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { planTrip, ApiError, type Itinerary, type PlanTripParams } from "@/lib/api";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
@@ -23,12 +24,25 @@ const openOrNote = (mode: "talk" | "chat") => {
 
 const INTEREST_OPTIONS = ["History & monasteries", "Nature & hiking", "Food & wine", "Adventure", "Relaxation", "Photography"];
 
+type Pace = NonNullable<PlanTripParams["pace"]>;
+type Budget = NonNullable<PlanTripParams["budget"]>;
+
+/** One-tap starting points for the text box. */
+const EXAMPLES = [
+  "A long weekend in Dilijan — forest walks and good food",
+  "7 days with two kids: nature, a little history, nothing rushed",
+  "5 days for wine and food lovers, comfort budget",
+];
+
 export default function Plan() {
+  // The guest's own words lead (2026-10-28); the form is "Fine-tune" underneath.
+  const [request, setRequest] = useState("");
+  const [fineTune, setFineTune] = useState(false);
   const [days, setDays] = useState(6);
   const [startCity, setStartCity] = useState("Yerevan");
   const [travelers, setTravelers] = useState(2);
-  const [pace, setPace] = useState<PlanTripParams["pace"]>("balanced");
-  const [budget, setBudget] = useState<PlanTripParams["budget"]>("mid-range");
+  const [pace, setPace] = useState<Pace>("balanced");
+  const [budget, setBudget] = useState<Budget>("mid-range");
   const [interests, setInterests] = useState<string[]>(["History & monasteries", "Nature & hiking"]);
 
   const search = useSearch();
@@ -36,10 +50,11 @@ export default function Plan() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
+  const [planned, setPlanned] = useState<PlanTripParams | null>(null);
 
   useDocumentMeta({
     title: "Plan your Armenia trip with Aha AI | Revamp Vacations",
-    description: "Generate a day-by-day Armenia itinerary grounded in Revamp Vacations's live, published catalog.",
+    description: "Describe your Armenia trip in your own words and Aha AI drafts a day-by-day itinerary with real stays, tables and tours you can book.",
     canonicalPath: "/plan",
   });
 
@@ -51,6 +66,7 @@ export default function Plan() {
     setLoading(true);
     setError(null);
     setItinerary(null);
+    setPlanned(params);
     try {
       setItinerary(await planTrip(params));
     } catch (err) {
@@ -60,17 +76,28 @@ export default function Plan() {
       setLoading(false);
     }
   };
+  const formParams = (): PlanTripParams => ({ days, startCity, travelers, pace, budget, interests });
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    run({ days, startCity, travelers, pace, budget, interests });
+    const text = request.trim();
+    // Words only → Aha AI reads everything from them; with Fine-tune open the
+    // chosen details win over the text; no words → the form as before.
+    run(text ? { request: text, ...(fineTune ? formParams() : {}) } : formParams());
   };
 
   // Aha (voice or chat) can open this page with the trip filled in —
+  // ?q=5 days of wine and hiking&auto=1, or the fields:
   // ?days=4&from=Dilijan&travelers=2&pace=relaxed&budget=comfort&interests=food,hiking&auto=1 —
   // and `auto` builds the plan straight away.
   useEffect(() => {
     const q = new URLSearchParams(search);
     if (!q.toString()) return;
+    const text = (q.get("q") ?? "").trim().slice(0, 600);
+    if (text) {
+      setRequest(text);
+      if (q.get("auto") === "1") run({ request: text });
+      return;
+    }
     const n = (k: string, min: number, max: number) => {
       const v = Math.round(Number(q.get(k)));
       return Number.isFinite(v) && v >= min ? Math.min(v, max) : undefined;
@@ -78,7 +105,7 @@ export default function Plan() {
     const from = q.get("from") ?? "";
     const want = (q.get("interests") ?? "").toLowerCase().split(/[,;]+/).map((w) => w.trim()).filter(Boolean);
     const picked = INTEREST_OPTIONS.filter((opt) => want.some((w) => opt.toLowerCase().includes(w) || w.split(/\s+/).some((x) => x.length > 3 && opt.toLowerCase().includes(x))));
-    const params: PlanTripParams = {
+    const params = {
       days: n("days", 1, 21) ?? days,
       startCity: ["Yerevan", "Gyumri", "Dilijan"].find((c) => c.toLowerCase() === from.toLowerCase()) ?? startCity,
       travelers: n("travelers", 1, 20) ?? travelers,
@@ -92,122 +119,137 @@ export default function Plan() {
     setPace(params.pace);
     setBudget(params.budget);
     setInterests(params.interests);
+    setFineTune(true);
     if (q.get("auto") === "1") run(params);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
+  const otherWays = [
+    { icon: Mic, title: "Talk to Aha AI", text: "Say it out loud — Aha AI plans it and opens it here.", action: "Start talking", onClick: () => openOrNote("talk"), show: VOICE && voiceOk },
+    { icon: MessageCircle, title: "Chat with Aha AI", text: "Ask about places, seasons, getting around or booking.", action: "Open chat", onClick: () => openOrNote("chat"), show: true },
+    { icon: Compass, title: "In ChatGPT or Claude", text: "Connect Revamp to the assistant you already use.", action: "How it works", href: "/ai", show: true },
+  ].filter((o) => o.show);
+
   return (
     <div className="min-h-screen bg-paper text-basalt">
       <SiteHeader />
-      <main className="container py-12 lg:py-16">
+      <main className="container py-10 lg:py-14">
         <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-apricot"><Sparkles className="h-3.5 w-3.5" /> Plan with Aha AI</div>
-        <h1 className="mt-3 max-w-2xl font-display text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl">Plan your Armenia trip with Aha AI.</h1>
-        <p className="mt-4 max-w-xl text-base leading-7 text-basalt/60">
-          Aha AI drafts a day-by-day plan with real stays, tables and tours from Revamp that you can book. Pick the way that suits you.
+        <h1 className="mt-3 max-w-3xl font-display text-4xl leading-[0.95] tracking-[-0.04em] [text-wrap:balance] sm:text-5xl">Plan your Armenia trip with Aha AI.</h1>
+        <p className="mt-3 max-w-xl text-base leading-7 text-basalt/60">
+          Tell Aha AI about your trip in your own words. You'll get a day-by-day plan with real stays, tables and tours from Revamp that you can book.
         </p>
 
-        {/* Every way to plan with Aha AI, side by side. Talk and Chat open the Aha AI
-            panel (SupportWidget, via openAha); the form is below. */}
-        <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            { icon: Mic, title: "Talk to Aha AI", text: "Say how many days you have and what you love. Aha AI plans it and opens it here.", action: "Start talking", onClick: () => openOrNote("talk"), show: VOICE && voiceOk },
-            { icon: MessageCircle, title: "Chat with Aha AI", text: "Ask about places, seasons, getting around or booking, in your own words.", action: "Open chat", onClick: () => openOrNote("chat"), show: true },
-            { icon: Route, title: "Fill in a few details", text: "Days, starting town, pace, budget and interests — then one tap.", action: "Use the form", onClick: () => document.getElementById("plan-form")?.scrollIntoView({ behavior: "smooth", block: "start" }), show: true },
-            { icon: Compass, title: "In ChatGPT or Claude", text: "Connect Revamp to the assistant you already use and plan there.", action: "How it works", href: "/ai", show: true },
-          ]
-            .filter((o) => o.show)
-            .map((o) => (
-              <div key={o.title} className="flex flex-col rounded-none border border-basalt/12 bg-paper p-5">
-                <o.icon className="h-5 w-5 text-apricot" />
-                <p className="mt-3 font-semibold">{o.title}</p>
-                <p className="mt-1 flex-1 text-sm leading-6 text-basalt/60">{o.text}</p>
-                {o.href ? (
-                  <Link href={o.href} className="mt-4 inline-flex min-h-10 items-center gap-1.5 text-sm font-semibold text-apricot hover:underline">{o.action} <ArrowRight className="h-4 w-4" /></Link>
-                ) : (
-                  <button type="button" onClick={o.onClick} className="mt-4 inline-flex min-h-10 items-center gap-1.5 self-start text-sm font-semibold text-apricot hover:underline">{o.action} <ArrowRight className="h-4 w-4" /></button>
-                )}
-              </div>
-            ))}
-        </div>
+        <div id="plan-form" className="mt-8 grid scroll-mt-24 gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
+          <form onSubmit={submit} className="border border-basalt/12 bg-chalk p-5 sm:p-6">
+            <Label htmlFor="trip-request" className="text-base font-semibold">Tell Aha AI about your trip</Label>
+            <Textarea
+              id="trip-request"
+              value={request}
+              onChange={(e) => setRequest(e.target.value)}
+              maxLength={600}
+              rows={5}
+              placeholder="e.g. 5 days in May with my partner. We love wine, food and easy hikes. Starting in Yerevan, mid-range budget."
+              className="mt-2 min-h-[132px] resize-none border-basalt/15 bg-paper text-base leading-6 focus-visible:border-apricot"
+            />
+            <p className="mt-1.5 text-xs text-basalt/50">Write in any language — Aha AI answers in yours.</p>
 
-        <div id="plan-form" className="mt-10 grid scroll-mt-24 gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
-          <form onSubmit={submit} className="border border-basalt/12 bg-chalk p-6">
-            <div className="grid gap-5">
-              <div className="grid gap-1.5">
-                <Label htmlFor="days">Trip length (days)</Label>
-                <Input id="days" type="number" min={1} max={21} value={days} onChange={(e) => setDays(Number(e.target.value) || 1)} required />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="startCity">Starting from</Label>
-                <Select value={startCity} onValueChange={setStartCity}>
-                  <SelectTrigger id="startCity"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Yerevan">Yerevan</SelectItem>
-                    <SelectItem value="Gyumri">Gyumri</SelectItem>
-                    <SelectItem value="Dilijan">Dilijan</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="travelers">Travelers</Label>
-                <Input id="travelers" type="number" min={1} max={20} value={travelers} onChange={(e) => setTravelers(Number(e.target.value) || 1)} required />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="pace">Pace</Label>
-                <Select value={pace} onValueChange={(v) => setPace(v as PlanTripParams["pace"])}>
-                  <SelectTrigger id="pace"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="relaxed">Relaxed</SelectItem>
-                    <SelectItem value="balanced">Balanced</SelectItem>
-                    <SelectItem value="packed">Packed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="budget">Budget level</Label>
-                <Select value={budget} onValueChange={(v) => setBudget(v as PlanTripParams["budget"])}>
-                  <SelectTrigger id="budget"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="budget">Budget</SelectItem>
-                    <SelectItem value="mid-range">Mid-range</SelectItem>
-                    <SelectItem value="comfort">Comfort</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="mb-2 block">Interests</Label>
-                <div className="flex flex-wrap gap-2">
-                  {INTEREST_OPTIONS.map((opt) => (
-                    <button
-                      type="button"
-                      key={opt}
-                      onClick={() => toggleInterest(opt)}
-                      className={cn("filter-chip", interests.includes(opt) && "active")}
-                    >
-                      {opt}
-                    </button>
-                  ))}
+            <p className="mt-4 text-xs font-semibold text-basalt/50">Or start from one of these</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {EXAMPLES.map((ex) => (
+                <button key={ex} type="button" onClick={() => setRequest(ex)} className="min-h-10 rounded-full border border-basalt/15 bg-paper px-4 py-2 text-left text-sm leading-5 text-basalt/70 transition-colors hover:border-apricot hover:text-basalt">
+                  {ex}
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              aria-expanded={fineTune}
+              aria-controls="fine-tune"
+              onClick={() => setFineTune((v) => !v)}
+              className="mt-5 flex min-h-10 w-full items-center justify-between border-t border-basalt/10 pt-4 text-sm font-semibold"
+            >
+              <span>Fine-tune <span className="font-normal text-basalt/50">· days, travellers, pace, budget</span></span>
+              <ChevronDown className={cn("h-4 w-4 text-basalt/50 transition-transform", fineTune && "rotate-180")} />
+            </button>
+
+            {fineTune && (
+              <div id="fine-tune" className="mt-3 grid gap-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="days">Days</Label>
+                    <Input id="days" type="number" min={1} max={21} value={days} onChange={(e) => setDays(Number(e.target.value) || 1)} className="h-12 rounded-none bg-paper text-base sm:h-10 sm:text-sm" />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="travelers">Travellers</Label>
+                    <Input id="travelers" type="number" min={1} max={20} value={travelers} onChange={(e) => setTravelers(Number(e.target.value) || 1)} className="h-12 rounded-none bg-paper text-base sm:h-10 sm:text-sm" />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="startCity">Starting from</Label>
+                    <Select value={startCity} onValueChange={setStartCity}>
+                      <SelectTrigger id="startCity" className="h-12 rounded-none bg-paper text-base sm:h-10 sm:text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Yerevan">Yerevan</SelectItem>
+                        <SelectItem value="Gyumri">Gyumri</SelectItem>
+                        <SelectItem value="Dilijan">Dilijan</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="pace">Pace</Label>
+                    <Select value={pace} onValueChange={(v) => setPace(v as Pace)}>
+                      <SelectTrigger id="pace" className="h-12 rounded-none bg-paper text-base sm:h-10 sm:text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="relaxed">Relaxed</SelectItem>
+                        <SelectItem value="balanced">Balanced</SelectItem>
+                        <SelectItem value="packed">Packed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-2 grid gap-1.5">
+                    <Label htmlFor="budget">Budget</Label>
+                    <Select value={budget} onValueChange={(v) => setBudget(v as Budget)}>
+                      <SelectTrigger id="budget" className="h-12 rounded-none bg-paper text-base sm:h-10 sm:text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="budget">Budget</SelectItem>
+                        <SelectItem value="mid-range">Mid-range</SelectItem>
+                        <SelectItem value="comfort">Comfort</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <Label className="mb-2 block">Interests</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {INTEREST_OPTIONS.map((opt) => (
+                      <button type="button" key={opt} onClick={() => toggleInterest(opt)} className={cn("filter-chip", interests.includes(opt) && "active")}>
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-              <Button type="submit" className="h-12 rounded-none bg-apricot text-white hover:bg-apricot/90" disabled={loading}>
-                {loading ? "Thinking…" : "Generate itinerary"}
-              </Button>
-              {loading && <p className="text-center text-xs text-basalt/45">This can take 20–60 seconds for a longer trip.</p>}
-            </div>
+            )}
+
+            <Button type="submit" className="mt-5 h-12 w-full rounded-none bg-apricot text-base text-white hover:bg-apricot/90" disabled={loading}>
+              {loading ? "Thinking…" : <>Plan my trip <ArrowRight className="ml-2 h-4 w-4" /></>}
+            </Button>
+            {loading && <p className="mt-2 text-center text-xs text-basalt/45">This can take 20–60 seconds for a longer trip.</p>}
           </form>
 
           <div className="min-h-[320px]">
             {!itinerary && !error && !loading && (
               <div className="flex h-full min-h-[320px] flex-col items-center justify-center gap-3 border border-dashed border-basalt/20 bg-chalk px-6 py-16 text-center">
                 <Compass className="h-8 w-8 text-basalt/30" />
-                <p className="max-w-xs text-sm text-basalt/55">Fill in the form and generate a plan — real stays and tours from the catalog will show up in the days.</p>
+                <p className="max-w-xs text-sm text-basalt/55">Your plan appears here — day by day, with real stays, tables and tours you can book.</p>
               </div>
             )}
 
             {loading && (
               <div className="flex h-full min-h-[320px] flex-col items-center justify-center gap-3 border border-basalt/12 bg-chalk px-6 py-16 text-center">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-basalt/20 border-t-apricot" />
-                <p className="text-sm text-basalt/55">Drafting a {days}-day route from {startCity}…</p>
+                <p className="text-sm text-basalt/55">{planned?.request ? "Aha AI is drafting your route…" : `Drafting a ${planned?.days ?? days}-day route from ${planned?.startCity ?? startCity}…`}</p>
               </div>
             )}
 
@@ -217,9 +259,6 @@ export default function Plan() {
                 <div>
                   <p className="font-semibold">Couldn't generate a plan</p>
                   <p className="mt-1 text-basalt/70">{error}</p>
-                  {error.toLowerCase().includes("anthropic_api_key") || error.toLowerCase().includes("configured") ? (
-                    <p className="mt-2 text-xs text-basalt/50">This is a server setup step, not something you can fix from the browser — see ENVIRONMENT.md.</p>
-                  ) : null}
                 </div>
               </div>
             )}
@@ -228,7 +267,7 @@ export default function Plan() {
               <div className="border border-basalt/12 bg-paper p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4 border-b border-basalt/10 pb-5">
                   <div>
-                    <p className="eyebrow">{days}-day plan · {pace} · {budget}</p>
+                    <p className="eyebrow">{itinerary.days.length}-day plan{planned?.pace ? ` · ${planned.pace} · ${planned.budget}` : ""}</p>
                     <h2 className="mt-2 font-display text-3xl tracking-[-0.03em]">{itinerary.tripTitle}</h2>
                     <p className="mt-2 max-w-lg text-sm text-basalt/60">{itinerary.summary}</p>
                   </div>
@@ -258,6 +297,27 @@ export default function Plan() {
                 <p className="mt-5 text-[11px] text-basalt/40">Generated by AI — treat prices and timing as a starting point, not a booked reservation. <Link href="/explore" className="text-apricot hover:underline">See every listing mentioned</Link>.</p>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* The other ways to plan with Aha AI — Talk and Chat open the Aha AI panel (SupportWidget, via openAha). */}
+        <div className="mt-12 border-t border-basalt/10 pt-8">
+          <p className="text-sm font-semibold">Other ways to plan</p>
+          <div className={cn("mt-4 grid gap-3", otherWays.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
+            {otherWays.map((o) => (
+              <div key={o.title} className="flex gap-3 border border-basalt/12 bg-paper p-4">
+                <o.icon className="mt-0.5 h-5 w-5 shrink-0 text-apricot" />
+                <div className="flex flex-1 flex-col">
+                  <p className="font-semibold">{o.title}</p>
+                  <p className="mt-0.5 flex-1 text-sm leading-6 text-basalt/60">{o.text}</p>
+                  {o.href ? (
+                    <Link href={o.href} className="mt-2 inline-flex min-h-10 items-center gap-1.5 self-start text-sm font-semibold text-apricot hover:underline">{o.action} <ArrowRight className="h-4 w-4" /></Link>
+                  ) : (
+                    <button type="button" onClick={o.onClick} className="mt-2 inline-flex min-h-10 items-center gap-1.5 self-start text-sm font-semibold text-apricot hover:underline">{o.action} <ArrowRight className="h-4 w-4" /></button>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </main>

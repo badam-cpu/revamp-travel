@@ -105,14 +105,19 @@ import { aiEdgeToken, recordAiPageFetch, recordMcpUse, bumpAiVisibility } from "
 import { handleResendEvent, verifySvix } from "./resendWebhook.js";
 import { aiVisitPath, isAiAssistant } from "../shared/aiAgents.js";
 
-const planTripSchema = z.object({
-  days: z.number().int().min(1).max(21),
-  startCity: z.string().trim().min(1).max(60),
-  travelers: z.number().int().min(1).max(20),
-  pace: z.enum(["relaxed", "balanced", "packed"]),
-  budget: z.enum(["budget", "mid-range", "comfort"]),
-  interests: z.array(z.string().trim().min(1).max(40)).max(8),
-});
+// Either the trip in the guest's own words (`request`), the form fields, or both
+// (the fields are then the guest's fine-tuning and win over the text).
+const planTripSchema = z
+  .object({
+    request: z.string().trim().max(600, "Please keep your trip description under 600 characters.").optional(),
+    days: z.number().int().min(1).max(21).optional(),
+    startCity: z.string().trim().min(1).max(60).optional(),
+    travelers: z.number().int().min(1).max(20).optional(),
+    pace: z.enum(["relaxed", "balanced", "packed"]).optional(),
+    budget: z.enum(["budget", "mid-range", "comfort"]).optional(),
+    interests: z.array(z.string().trim().min(1).max(40)).max(8).optional(),
+  })
+  .refine((v) => !!v.request || !!v.days, { message: "Tell Aha AI a little about your trip first." });
 
 const importListingSchema = z.object({
   url: z.string().trim().min(1).max(2000),
