@@ -156,6 +156,8 @@ ${request}
 ${settings ? `\nThe guest also set these, which win over the text where they differ: ${settings}.\n` : ""}
 Where the guest didn't say, assume: starting in Yerevan, 2 travelers, a balanced pace, mid-range budget, a good general mix of interests, and ${params.days ?? 5} days. Never plan more than ${MAX_FREE_TEXT_DAYS} days.
 
+If the guest names a trip length ("3 days", "a week", "a long weekend" = 3 days), "days" must have exactly that many entries — not one more for arrival or departure.
+
 Write every text value in the JSON in the same language the guest wrote in (English, Russian, Armenian, French…). Keep listing names exactly as they appear in the catalog.`
     : `Build a ${params.days ?? 5}-day Armenia itinerary starting from ${params.startCity ?? "Yerevan"}, for ${params.travelers ?? 2} traveler(s), at a "${params.pace ?? "balanced"}" pace and "${params.budget ?? "mid-range"}" budget level. Focus on these interests: ${params.interests?.length ? params.interests.join(", ") : "a good general mix"}.`;
 
@@ -232,6 +234,27 @@ function extractJson(text: string): unknown {
 }
 
 const TIMES: StopTime[] = ["morning", "afternoon", "evening"];
+
+/**
+ * The summary's route, built from the days themselves (live test 2026-10-28:
+ * the model's own "route" ended in Yerevan while the last night was in
+ * Dilijan). Each day's area, then the last night's town; repeats collapse.
+ * Falls back to the model's list only when no day says where it is.
+ */
+function routeOf(days: ItineraryDay[], modelRoute: unknown): string[] {
+  const towns = days.map((d) => d.area || d.base).filter((t): t is string => !!t);
+  const last = days[days.length - 1]?.base;
+  if (last) towns.push(last);
+  const list = towns.length ? towns : Array.isArray(modelRoute) ? (modelRoute as unknown[]).map((t) => str(t, 40)).filter(Boolean) : [];
+  return list.filter((t, i) => i === 0 || t.toLowerCase() !== list[i - 1].toLowerCase()).slice(0, 12);
+}
+
+/** "3 days" / "3-day" / "3 дня" / "3 օր" in the guest's own words → 3 (null if they didn't give a number). */
+export function daysNamedIn(text: string | undefined): number | null {
+  const m = (text ?? "").match(/(\d{1,2})\s*-?\s*(days?|дн|день|дня|օր)/i);
+  const n = m ? Number(m[1]) : NaN;
+  return Number.isFinite(n) && n >= 1 && n <= MAX_FREE_TEXT_DAYS ? n : null;
+}
 const str = (v: unknown, max = 400) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
 function validateItinerary(value: unknown, catalog: CatalogEntry[]): Itinerary {
@@ -282,7 +305,7 @@ function validateItinerary(value: unknown, catalog: CatalogEntry[]): Itinerary {
   return {
     tripTitle: str(v.tripTitle, 120) || "Your Armenia itinerary",
     summary: str(v.summary, 400),
-    route: Array.isArray(v.route) ? (v.route as unknown[]).map((t) => str(t, 40)).filter(Boolean).slice(0, 12) : [],
+    route: routeOf(days, v.route),
     estimatedBudget: str(v.estimatedBudget, 160) || "—",
     packingTip: str(v.packingTip, 300),
     days,
@@ -330,7 +353,17 @@ export async function planTrip(params: PlanTripParams, listings: CatalogEntry[])
     throw new PlannerError(502, "The trip planner didn't return a plan. Please try again.");
   }
 
-  return validateItinerary(extractJson(text), listings);
+  const itinerary = validateItinerary(extractJson(text), listings);
+  // Safety net for the length rule: if the guest wrote "3 days" and the model
+  // added a day anyway, keep the first 3 (a Fine-tune "days" wins over the text).
+  const named = !params.revise && !params.days ? daysNamedIn(params.request) : null;
+  if (named && itinerary.days.length > named) {
+    itinerary.days = itinerary.days.slice(0, named);
+    itinerary.route = routeOf(itinerary.days, itinerary.route);
+    const kept = new Set(itinerary.days.flatMap((d) => d.stops.map((st) => st.listing).filter(Boolean)));
+    for (const slug of Object.keys(itinerary.places)) if (!kept.has(slug)) delete itinerary.places[slug];
+  }
+  return itinerary;
 }
 
 /**
