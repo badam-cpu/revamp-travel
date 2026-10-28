@@ -1,176 +1,160 @@
 /**
- * Recurring time-slot editor for a tour/experience (Dashboard). The operator sets
- * which weekdays + times they run, capacity per session, duration, and how a
- * booking is confirmed (pay now vs. approve first). Saving generates the rolling
- * window of sessions server-side. Day-level (no schedule) stays the default —
- * this is opt-in per listing.
+ * Dashboard → Listings → ⋯ → "Schedule & spots" for a tour/experience: the same
+ * ScheduleFields as the creation steps (book a day / a class time, weekly times
+ * per day, spots, length, notice, instant vs approve) plus the upcoming classes,
+ * where the host cancels one class (a holiday, a sick day) or reopens it.
+ * Saving regenerates the next 60 days of classes server-side.
  */
-import { useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { CalendarClock, Check, Plus, X, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { useListings, type LiveListing } from "@/contexts/ListingsContext";
-import { saveSessionSchedule, ApiError } from "@/lib/api";
-import { generateSessionStarts, describeSchedule, type SessionSchedule } from "@shared/sessions";
+import { saveSessionSchedule, setSessionOpen, ApiError } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
+import { cn } from "@/lib/utils";
+import { formatSlotTime, slotLocalDate } from "@shared/sessions";
+import { ScheduleFields, scheduleFromValue, scheduleProblem, scheduleValueFrom, type ScheduleValue } from "./ScheduleFields";
 
-const WEEKDAYS = [
-  { i: 1, l: "Mon" }, { i: 2, l: "Tue" }, { i: 3, l: "Wed" }, { i: 4, l: "Thu" },
-  { i: 5, l: "Fri" }, { i: 6, l: "Sat" }, { i: 0, l: "Sun" },
-];
+interface UpcomingClass {
+  id: string;
+  starts_at: string;
+  status: "open" | "closed";
+  seats_taken: number;
+  capacity: number;
+}
 
-export function SessionScheduleEditor({ listing }: { listing: LiveListing }) {
+const dayLabel = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+
+export function ScheduleDialog({ listing, open, onClose }: { listing: LiveListing; open: boolean; onClose: () => void }) {
   const { refresh } = useListings();
-  const existing = listing.sessionSchedule;
-  const rule0 = existing?.rules?.[0];
-
-  const [enabled, setEnabled] = useState(!!existing);
-  const [days, setDays] = useState<number[]>(rule0?.days ?? [1, 2, 3, 4, 5, 6]);
-  const [times, setTimes] = useState<string[]>(rule0?.times?.length ? rule0.times : ["10:00"]);
-  const [capacity, setCapacity] = useState(String(existing?.capacity ?? 8));
-  const [durationMin, setDurationMin] = useState(String(existing?.durationMin ?? 120));
-  const [leadTimeHours, setLeadTimeHours] = useState(String(existing?.leadTimeHours ?? 12));
-  const [mode, setMode] = useState<"instant" | "request">(listing.bookingMode ?? "instant");
+  const [value, setValue] = useState<ScheduleValue>(() => scheduleValueFrom(listing.sessionSchedule, listing.bookingMode));
   const [busy, setBusy] = useState(false);
+  const [classes, setClasses] = useState<UpcomingClass[] | null>(null);
+  const [changing, setChanging] = useState<string | null>(null);
 
-  const draft = useMemo<SessionSchedule | null>(() => {
-    if (!enabled) return null;
-    const cleanTimes = Array.from(new Set(times.filter((t) => /^([01]\d|2[0-3]):[0-5]\d$/.test(t)))).sort();
-    if (days.length === 0 || cleanTimes.length === 0) return null;
-    return {
-      durationMin: Math.max(15, Math.min(1440, Number(durationMin) || 120)),
-      capacity: Math.max(1, Math.min(1000, Number(capacity) || 1)),
-      rules: [{ days: [...days].sort(), times: cleanTimes }],
-      leadTimeHours: Math.max(0, Math.min(720, Number(leadTimeHours) || 0)),
-      horizonDays: 60,
-    };
-  }, [enabled, days, times, capacity, durationMin, leadTimeHours]);
+  // Fresh values each time it opens (the listing may have changed since).
+  useEffect(() => {
+    if (open) setValue(scheduleValueFrom(listing.sessionSchedule, listing.bookingMode));
+  }, [open, listing.sessionSchedule, listing.bookingMode]);
 
-  const previewCount = useMemo(() => (draft ? generateSessionStarts(draft).length : 0), [draft]);
-
-  const toggleDay = (d: number) => setDays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]));
-  const setTime = (idx: number, v: string) => setTimes((prev) => prev.map((t, i) => (i === idx ? v : t)));
-  const addTime = () => setTimes((prev) => [...prev, "15:00"]);
-  const removeTime = (idx: number) => setTimes((prev) => prev.filter((_, i) => i !== idx));
+  const loadClasses = async () => {
+    const { data, error } = await supabase
+      .from("listing_sessions")
+      .select("id, starts_at, status, seats_taken, capacity")
+      .eq("listing_id", listing.id)
+      .gte("starts_at", new Date().toISOString())
+      .order("starts_at")
+      .limit(40);
+    if (error) console.error("[schedule] classes", error);
+    setClasses((data ?? []) as UpcomingClass[]);
+  };
+  useEffect(() => {
+    if (open && listing.sessionSchedule) void loadClasses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, listing.id, listing.sessionSchedule]);
 
   const save = async () => {
-    if (enabled && !draft) {
-      toast("Pick at least one day and one time.");
+    const problem = scheduleProblem(value);
+    if (problem) {
+      toast(problem);
       return;
     }
     setBusy(true);
     try {
-      const res = await saveSessionSchedule(listing.id, draft, mode);
-      toast.success(draft ? `Schedule saved — ${res.created} new session${res.created === 1 ? "" : "s"} opened.` : "Switched back to day-level availability.");
+      const schedule = scheduleFromValue(value);
+      const res = await saveSessionSchedule(listing.id, schedule, value.mode);
+      toast.success(schedule ? `Schedule saved — ${res.created} new class${res.created === 1 ? "" : "es"} opened.` : "Saved — guests now pick a day.");
       await refresh();
+      if (schedule) await loadClasses();
     } catch (e) {
-      toast(e instanceof ApiError || e instanceof Error ? e.message : "Couldn't save your schedule.");
+      if (!(e instanceof ApiError)) console.error("[schedule] save", e);
+      toast(e instanceof ApiError ? e.message : "Your schedule didn't save. Please try again.");
     } finally {
       setBusy(false);
     }
   };
 
+  const toggleClass = async (c: UpcomingClass) => {
+    setChanging(c.id);
+    try {
+      await setSessionOpen(c.id, c.status !== "open");
+      setClasses((list) => list?.map((x) => (x.id === c.id ? { ...x, status: x.status === "open" ? "closed" : "open" } : x)) ?? null);
+      toast.success(c.status === "open" ? "Class cancelled — guests can't book it." : "Class reopened.");
+    } catch (e) {
+      if (!(e instanceof ApiError)) console.error("[schedule] class", e);
+      toast(e instanceof ApiError ? e.message : "That class didn't update. Please try again.");
+    } finally {
+      setChanging(null);
+    }
+  };
+
+  // Group the next classes by day.
+  const byDay = new Map<string, UpcomingClass[]>();
+  for (const c of classes ?? []) {
+    const d = slotLocalDate(c.starts_at);
+    byDay.set(d, [...(byDay.get(d) ?? []), c]);
+  }
+
   return (
-    <div className="mt-3 border-t border-basalt/10 pt-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-basalt/45">
-          <CalendarClock className="h-3.5 w-3.5" /> Time slots
-        </p>
-        <label className="flex items-center gap-2 text-xs text-basalt/60">
-          <Switch checked={enabled} onCheckedChange={setEnabled} />
-          Offer fixed time slots
-        </label>
-      </div>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[92dvh] max-w-2xl overflow-y-auto rounded-none">
+        <DialogHeader>
+          <DialogTitle className="font-display text-2xl">Schedule &amp; spots</DialogTitle>
+          <DialogDescription>How guests book {listing.title}.</DialogDescription>
+        </DialogHeader>
 
-      {!enabled ? (
-        <p className="mt-2 text-xs text-basalt/45">Off — guests book this by the day. Turn on to run hourly/fixed sessions (like GetYourGuide or Fresha), each with its own capacity.</p>
-      ) : (
-        <div className="mt-3 grid gap-4">
-          {/* Days */}
-          <div>
-            <Label className="text-xs font-semibold">Days you run</Label>
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {WEEKDAYS.map((d) => (
-                <button
-                  key={d.i}
-                  type="button"
-                  onClick={() => toggleDay(d.i)}
-                  className={cn("min-h-9 rounded-none border px-3 py-1.5 text-xs font-semibold sm:min-h-0", days.includes(d.i) ? "border-apricot bg-apricot text-white" : "border-basalt/15 text-basalt/60 hover:border-basalt/30")}
-                >
-                  {d.l}
-                </button>
-              ))}
-            </div>
-          </div>
+        <ScheduleFields value={value} onChange={setValue} idPrefix={`sched-${listing.id}`} />
 
-          {/* Times */}
-          <div>
-            <Label className="text-xs font-semibold">Start times (Armenia time)</Label>
-            <div className="mt-1.5 flex flex-wrap items-center gap-2">
-              {times.map((t, i) => (
-                <span key={i} className="inline-flex items-center gap-1 border border-basalt/15">
-                  <Input type="time" value={t} onChange={(e) => setTime(i, e.target.value)} className="h-11 w-28 rounded-none border-0 text-base sm:h-8 sm:text-xs" />
-                  {times.length > 1 && (
-                    <button type="button" onClick={() => removeTime(i)} className="grid min-h-11 min-w-10 place-items-center px-1.5 text-basalt/40 hover:text-destructive sm:min-h-0 sm:min-w-0" aria-label="Remove time"><X className="h-3.5 w-3.5" /></button>
-                  )}
-                </span>
-              ))}
-              <Button type="button" variant="outline" size="sm" className="h-11 rounded-none sm:h-8" onClick={addTime}><Plus className="mr-1 h-3.5 w-3.5" /> Add time</Button>
-            </div>
-          </div>
-
-          {/* Capacity / duration / lead */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <div>
-              <Label htmlFor={`cap-${listing.id}`} className="text-xs font-semibold">Seats / session</Label>
-              <Input id={`cap-${listing.id}`} type="number" min={1} value={capacity} onChange={(e) => setCapacity(e.target.value)} className="mt-1 h-11 rounded-none text-base sm:h-9 sm:text-xs" />
-            </div>
-            <div>
-              <Label htmlFor={`dur-${listing.id}`} className="text-xs font-semibold">Duration (min)</Label>
-              <Input id={`dur-${listing.id}`} type="number" min={15} step={15} value={durationMin} onChange={(e) => setDurationMin(e.target.value)} className="mt-1 h-11 rounded-none text-base sm:h-9 sm:text-xs" />
-            </div>
-            <div>
-              <Label htmlFor={`lead-${listing.id}`} className="text-xs font-semibold">Min notice (hrs)</Label>
-              <Input id={`lead-${listing.id}`} type="number" min={0} value={leadTimeHours} onChange={(e) => setLeadTimeHours(e.target.value)} className="mt-1 h-11 rounded-none text-base sm:h-9 sm:text-xs" />
-            </div>
-          </div>
-
-          {/* Booking mode */}
-          <div>
-            <Label className="text-xs font-semibold">When a guest books</Label>
-            <div className="mt-1.5 flex flex-col gap-2 sm:flex-row">
-              {([
-                { key: "instant", title: "Instant book", blurb: "Guest pays right away." },
-                { key: "request", title: "Request to book", blurb: "You approve, then they pay. Safer if you also take bookings elsewhere." },
-              ] as const).map((m) => (
-                <button
-                  key={m.key}
-                  type="button"
-                  onClick={() => setMode(m.key)}
-                  className={cn("flex-1 rounded-none border p-3 text-left", mode === m.key ? "border-apricot bg-apricot/[0.05]" : "border-basalt/15 hover:border-basalt/30")}
-                >
-                  <span className="block text-xs font-bold">{m.title}</span>
-                  <span className="mt-0.5 block text-[11px] text-basalt/55">{m.blurb}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <p className="text-xs text-basalt/55">
-            <span className="font-semibold text-basalt">{describeSchedule(draft)}</span>
-            {previewCount > 0 && ` · ${previewCount} sessions over the next 60 days`}
-          </p>
+        <div className="flex justify-end gap-2 border-t border-basalt/10 pt-4">
+          <Button type="button" variant="ghost" className="h-11 rounded-none" onClick={onClose} disabled={busy}>Close</Button>
+          <Button type="button" className="h-11 rounded-none bg-apricot text-white hover:bg-apricot/90" onClick={save} disabled={busy}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save schedule"}
+          </Button>
         </div>
-      )}
 
-      <div className="mt-3">
-        <Button type="button" size="sm" className="h-10 rounded-none sm:h-8" disabled={busy} onClick={save}>
-          {busy ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Saving…</> : <><Check className="mr-1.5 h-3.5 w-3.5" /> Save schedule</>}
-        </Button>
-      </div>
-    </div>
+        {listing.sessionSchedule && value.kind === "slots" && (
+          <div className="grid gap-3 border-t border-basalt/10 pt-4">
+            <div>
+              <p className="text-sm font-semibold">Upcoming classes</p>
+              <p className="text-xs leading-5 text-basalt/55">Cancel one class for a holiday or a day off — the rest of the schedule stays. A class with guests booked can't be cancelled here.</p>
+            </div>
+            {classes === null ? (
+              <p className="text-sm text-basalt/50">Loading…</p>
+            ) : classes.length === 0 ? (
+              <p className="text-sm text-basalt/55">No upcoming classes yet. Save the schedule to open them.</p>
+            ) : (
+              <div className="grid gap-3">
+                {Array.from(byDay.entries()).map(([day, list]) => (
+                  <div key={day} className="grid gap-1.5">
+                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-basalt/50">{dayLabel(day)}</p>
+                    {list.map((c) => (
+                      <div key={c.id} className={cn("flex flex-wrap items-center justify-between gap-2 border px-3 py-2", c.status === "open" ? "border-basalt/12" : "border-dashed border-basalt/20 bg-chalk/60")}>
+                        <span className="text-sm">
+                          <span className={cn("font-semibold tabular-nums", c.status !== "open" && "text-basalt/45 line-through")}>{formatSlotTime(c.starts_at)}</span>
+                          <span className="ml-2 text-basalt/55">{c.status === "open" ? `${c.seats_taken} of ${c.capacity} booked` : "Cancelled"}</span>
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-10 rounded-none sm:h-8"
+                          disabled={changing === c.id || (c.status === "open" && c.seats_taken > 0)}
+                          title={c.status === "open" && c.seats_taken > 0 ? "Guests are booked into this class" : undefined}
+                          onClick={() => void toggleClass(c)}
+                        >
+                          {changing === c.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : c.status === "open" ? "Cancel class" : "Reopen"}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

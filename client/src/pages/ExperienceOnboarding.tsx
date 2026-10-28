@@ -77,11 +77,13 @@ import type { ListingFact, ListingInput } from "@shared/listings";
 import { LISTING_LIMITS, LISTING_TEXT_LIMITS, PARKING_OPTIONS, firstListingTextProblem } from "@shared/listings";
 import { EXTRA_FEE_TYPES } from "@shared/bookings";
 import { CharCount } from "@/components/CharCount";
-import { ApiError, type AhaCopyContext } from "@/lib/api";
+import { saveSessionSchedule, ApiError, type AhaCopyContext } from "@/lib/api";
 import { factValue } from "@/lib/tourFacts";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
+import { ScheduleFields, minutesFromText, scheduleFromValue, scheduleProblem, scheduleValueFrom, type ScheduleValue } from "@/components/ScheduleFields";
+import { describeSchedule, scheduleHasSlots } from "@shared/sessions";
 
 /** Written by Dashboard.tsx's "paste a link to prefill" control for the Experiences section before it navigates here — read once on mount, then cleared. */
 export const EXPERIENCE_PREFILL_STORAGE_KEY = "revamp:experienceWizardPrefill";
@@ -129,6 +131,8 @@ interface WizardData {
   discountStart: string;
   discountEnd: string;
   featured: boolean;
+  /** Schedule & spots — saved with saveSessionSchedule once the listing exists. */
+  schedule: ScheduleValue;
   status?: LiveListing["status"];
   reviewNote?: string | null;
 }
@@ -173,6 +177,7 @@ function emptyWizardData(): WizardData {
     discountStart: "",
     discountEnd: "",
     featured: false,
+    schedule: scheduleValueFrom(null, "instant"),
   };
 }
 
@@ -250,6 +255,7 @@ function listingToWizardData(listing: LiveListing): WizardData {
     discountStart: listing.discountStart ?? "",
     discountEnd: listing.discountEnd ?? "",
     featured: listing.featured ?? false,
+    schedule: scheduleValueFrom(listing.sessionSchedule, listing.bookingMode),
     status: listing.status,
     reviewNote: listing.reviewNote,
   };
@@ -326,6 +332,7 @@ const STEP_META: { title: string; subtitle: string }[] = [
   { title: "Tell your story", subtitle: "Give travelers a real sense of what makes this worth their afternoon." },
   { title: "Build the itinerary", subtitle: "The steps a guest will actually move through, in order — this becomes the Itinerary section on your listing page." },
   { title: "Group, duration & meeting details", subtitle: "How long it runs, how many people, and where to meet." },
+  { title: "Schedule & spots", subtitle: "Do guests book a class time — like a yoga class or a workshop — or just pick a day?" },
   { title: "What's included", subtitle: "Check off everything guests don't have to bring or pay extra for." },
   { title: "Good to know", subtitle: "Safety notes, age limits, accessibility, cancellation terms — anything a guest should know before booking." },
   { title: "Add a cover photo", subtitle: "One hero image is enough to start — you can always add more later." },
@@ -354,6 +361,7 @@ const STEP_VALIDATORS: ((data: WizardData) => boolean)[] = [
   (d) => d.shortDescription.trim().length > 0 && d.longDescription.trim().length > 0 && !stepTextProblem(2, d),
   (d) => d.highlights.length > 0,
   (d) => d.duration.trim().length > 0 && d.groupSize.trim().length > 0 && d.meetingPoint.trim().length > 0,
+  (d) => !scheduleProblem(d.schedule),
   () => true,
   () => true,
   () => true,
@@ -447,6 +455,7 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
         const saved = row?.type === "experience" ? (row.data as { data?: Partial<WizardData>; maxUnlocked?: number }) : null;
         if (row && saved?.data) {
           const restored = { ...emptyWizardData(), ...saved.data };
+          if (!restored.schedule) restored.schedule = emptyWizardData().schedule;
           setData(restored);
           const last = STEP_META.length - 1;
           setCurrentStep(Math.min(row.step, last));
@@ -569,11 +578,27 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
     setSubmitError(null);
     try {
       const payload = toListingInput(data);
+      // Schedule & spots references the listing, so it's saved once the row exists
+      // (new listings with class times, or any change on an edit).
+      const saveSchedule = async (listingId: string) => {
+        const next = scheduleFromValue(data.schedule);
+        const before = existing && scheduleHasSlots(existing.sessionSchedule) ? existing.sessionSchedule : null;
+        const changed = !existing ? !!next : JSON.stringify(next) !== JSON.stringify(before) || (!!next && data.schedule.mode !== (existing.bookingMode ?? "instant"));
+        if (!changed) return;
+        try {
+          await saveSessionSchedule(listingId, next, data.schedule.mode);
+        } catch (schedErr) {
+          console.error("[experience] schedule save failed", schedErr);
+          toast.error(`${payload.title} was saved, but its class times weren't. Open ⋯ → Schedule & spots to add them.`);
+        }
+      };
       if (isEdit && existing) {
         await updateListing(existing.id, payload, submitForReview);
+        await saveSchedule(existing.id);
         toast(submitForReview ? `${payload.title} submitted for review.` : `${payload.title} saved as a draft.`);
       } else {
-        await createListing(payload, submitForReview);
+        const created = await createListing(payload, submitForReview);
+        await saveSchedule(created.id);
         toast(submitForReview ? `${payload.title} submitted for review.` : `${payload.title} saved as a draft.`);
         // The listing exists now — its unfinished copy (0115) is no longer needed.
         doneRef.current = true;
@@ -818,7 +843,24 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                   </div>
 
                   {/* Step 5 — What's included */}
+                  {/* Step 5 — Schedule & spots */}
                   <div className={cn("grid gap-6", currentStep !== 5 && "hidden")}>
+                    <ScheduleFields
+                      value={data.schedule}
+                      idPrefix="exp-wizard"
+                      onChange={(v) => {
+                        // Switching to class times the first time: start from the group size and length given on the step before.
+                        if (v.kind === "slots" && data.schedule.kind === "day" && !scheduleHasSlots(existing?.sessionSchedule)) {
+                          const cap = parseInt(data.groupSize.replace(/[^0-9]/g, ""), 10);
+                          const mins = minutesFromText(data.duration);
+                          v = { ...v, capacity: cap > 0 ? String(cap) : v.capacity, durationMin: mins ? String(mins) : v.durationMin };
+                        }
+                        set("schedule", v);
+                      }}
+                    />
+                  </div>
+
+                  <div className={cn("grid gap-6", currentStep !== 6 && "hidden")}>
                     <AmenityPicker ref={amenitiesRef} type="experience" defaultValue={data.amenities} />
                     <ListEditor
                       label="Not included"
@@ -835,7 +877,7 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                   </div>
 
                   {/* Step 6 — Good to know */}
-                  <div className={cn("grid gap-6", currentStep !== 6 && "hidden")}>
+                  <div className={cn("grid gap-6", currentStep !== 7 && "hidden")}>
                     <ListEditor
                       label="Who is this not suitable for?"
                       placeholder="e.g. People with altitude sickness"
@@ -848,7 +890,7 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                   </div>
 
                   {/* Step 7 — Photos */}
-                  <div className={cn("grid gap-4", currentStep !== 7 && "hidden")}>
+                  <div className={cn("grid gap-4", currentStep !== 8 && "hidden")}>
                     {data.prefillImageUrl && (
                       <div className="flex items-start gap-3 border border-basalt/10 bg-chalk p-3">
                         <img src={data.prefillImageUrl} alt="" className="h-16 w-16 shrink-0 rounded object-cover" />
@@ -867,7 +909,7 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                   </div>
 
                   {/* Step 8 — Pricing */}
-                  <div className={cn("grid gap-4 sm:grid-cols-2", currentStep !== 8 && "hidden")}>
+                  <div className={cn("grid gap-4 sm:grid-cols-2", currentStep !== 9 && "hidden")}>
                     <StepField label={`Price in AMD (per ${data.priceUnit || "person"})`}>
                       <Input
                         type="number"
@@ -961,7 +1003,7 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                   </div>
 
                   {/* Step 9 — Review & submit */}
-                  <div className={cn("grid gap-6", currentStep !== 9 && "hidden")}>
+                  <div className={cn("grid gap-6", currentStep !== 10 && "hidden")}>
                     <div className="grid gap-3 border border-basalt/10 bg-chalk p-5 text-sm">
                       <div className="flex items-start justify-between gap-4">
                         <div>
@@ -973,6 +1015,7 @@ function ExperienceOnboardingContent({ id }: { id?: string }) {
                         </p>
                       </div>
                       <p className="text-basalt/60">{data.city && data.region ? `${data.city}, ${data.region}` : "No location yet"}</p>
+                      <p className="text-basalt/60">{data.schedule.kind === "slots" ? describeSchedule(scheduleFromValue(data.schedule)) : "Guests pick a day"}</p>
                       <p className="text-basalt/70">{data.shortDescription || "No short description yet"}</p>
                       <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs text-basalt/55 sm:grid-cols-4">
                         <span>{data.highlights.length} itinerary step{data.highlights.length === 1 ? "" : "s"}</span>

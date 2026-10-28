@@ -14,6 +14,11 @@ import { fetchMergedBusyIntervals, type IcalFeed } from "./ical.js";
  * any that don't exist yet. Idempotent: existing sessions (and their seats) are
  * left untouched — a schedule edit adds new future slots but never rewrites a
  * slot someone may have already booked. Returns how many were created.
+ *
+ * A schedule edit also removes future generated classes the new schedule no
+ * longer has (a time moved from 10:00 to 11:00 used to leave both open) — only
+ * ones nobody holds a seat in or has a booking for; a class the host cancelled
+ * by hand (source 'manual') is never touched here.
  */
 export async function syncListingSessions(admin: SupabaseClient, listingId: string): Promise<{ created: number }> {
   const { data: listing } = await admin.from("listings").select("session_schedule").eq("id", listingId).maybeSingle();
@@ -21,6 +26,7 @@ export async function syncListingSessions(admin: SupabaseClient, listingId: stri
   if (!scheduleHasSlots(schedule)) return { created: 0 };
 
   const wanted = generateSessionStarts(schedule!);
+  await removeUnscheduled(admin, listingId, new Set(wanted.map((w) => w.startsAt)));
   if (wanted.length === 0) return { created: 0 };
 
   // Which of these already exist? (Insert only the missing ones so seats/capacity
@@ -47,6 +53,47 @@ export async function syncListingSessions(admin: SupabaseClient, listingId: stri
     else console.error("[sessions] insert failed", listingId, error.message);
   }
   return { created };
+}
+
+/** Future generated classes not in `keep`, with no seats taken and no live booking → deleted. */
+async function removeUnscheduled(admin: SupabaseClient, listingId: string, keep: Set<string>): Promise<void> {
+  const { data } = await admin
+    .from("listing_sessions")
+    .select("id, starts_at, seats_taken, source")
+    .eq("listing_id", listingId)
+    .gte("starts_at", new Date().toISOString());
+  const stale = (data ?? []).filter((s) => s.source === "schedule" && (s.seats_taken as number) === 0 && !keep.has(new Date(s.starts_at as string).toISOString()));
+  if (!stale.length) return;
+  const ids = stale.map((s) => s.id as string);
+  const { data: held } = await admin
+    .from("bookings")
+    .select("session_id")
+    .in("session_id", ids)
+    .in("status", ["requested", "awaiting_payment", "pending_payment", "confirmed"]);
+  const keepIds = new Set((held ?? []).map((b) => b.session_id as string));
+  const drop = ids.filter((id) => !keepIds.has(id));
+  if (drop.length) {
+    const { error } = await admin.from("listing_sessions").delete().in("id", drop);
+    if (error) console.error("[sessions] cleanup failed", listingId, error.message);
+  }
+}
+
+/**
+ * The host cancels (or reopens) one class. A cancelled class is marked
+ * source 'manual' so neither a calendar sync nor a schedule edit reopens it.
+ * Refused while anyone holds a seat in it.
+ */
+export async function setSessionOpen(admin: SupabaseClient, sessionId: string, open: boolean): Promise<{ ok: true } | { error: string; status: number }> {
+  const { data: s } = await admin.from("listing_sessions").select("id, seats_taken, starts_at").eq("id", sessionId).maybeSingle();
+  if (!s) return { error: "That class wasn't found.", status: 404 };
+  if (Date.parse(s.starts_at as string) < Date.now()) return { error: "That class has already started.", status: 409 };
+  if (!open && (s.seats_taken as number) > 0) {
+    const n = s.seats_taken as number;
+    return { error: `${n} guest${n === 1 ? " is" : "s are"} booked into this class. Cancel their booking${n === 1 ? "" : "s"} in Bookings first.`, status: 409 };
+  }
+  const { error } = await admin.from("listing_sessions").update(open ? { status: "open" } : { status: "closed", source: "manual" }).eq("id", sessionId);
+  if (error) return { error: "Couldn't update that class. Please try again.", status: 500 };
+  return { ok: true };
 }
 
 /** Regenerate sessions for every tour/experience that has a schedule (cron). */

@@ -35,7 +35,7 @@ import { reverseDirectBookingCharge } from "./directLedger.js";
 import { markQrPaymentPaid } from "./qrPayments.js";
 import { reconcileUserBookings, logBookingEvent, finalizeConfirmedBooking } from "./bookings.js";
 import { startOperatorSubscription, reconcileOperatorSubscriptions, cancelOperatorSubscription, ensurePlanRegistered, type PlanRow } from "./subscriptions.js";
-import { syncListingSessions, reserveSeats, releaseSeats } from "./sessions.js";
+import { syncListingSessions, reserveSeats, releaseSeats, setSessionOpen } from "./sessions.js";
 import { generateListingCopy, generateJourneyTemplate, ahaCopyConfigured } from "./ahaCopy.js";
 import { draftVerifiedFaq } from "./listingFaqAuto.js";
 import { inboxAiConfigured, suggestInboxReply } from "./inboxAi.js";
@@ -4701,6 +4701,33 @@ export function registerApiRoutes(app: Express) {
     } catch (err) {
       console.error("[sessions/save-schedule]", err);
       res.status(500).json({ error: "Couldn't save your schedule." });
+    }
+  });
+
+  // POST /api/sessions/set-open — the host cancels or reopens ONE class
+  // (Schedule & spots → Upcoming classes). Owner or admin; refused while booked.
+  app.post("/api/sessions/set-open", async (req: Request, res: Response) => {
+    const authHeader = req.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+    const userId = token ? await verifyUser(token) : null;
+    if (!userId) return res.status(401).json({ error: "Sign in." });
+    const sessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId : "";
+    const open = req.body?.open === true;
+    if (!/^[0-9a-f-]{36}$/i.test(sessionId)) return res.status(400).json({ error: "That class wasn't found." });
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Not available right now." });
+    const { data: row } = await admin.from("listing_sessions").select("listing_id, listings!inner(operator_id)").eq("id", sessionId).maybeSingle();
+    if (!row) return res.status(404).json({ error: "That class wasn't found." });
+    const ownerId = (row as unknown as { listings: { operator_id: string } }).listings.operator_id;
+    const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+    if (ownerId !== userId && me?.role !== "admin") return res.status(403).json({ error: "That's not your listing." });
+    try {
+      const r = await setSessionOpen(admin, sessionId, open);
+      if ("error" in r) return res.status(r.status).json({ error: r.error });
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[sessions/set-open]", err);
+      res.status(500).json({ error: "Couldn't update that class. Please try again." });
     }
   });
 

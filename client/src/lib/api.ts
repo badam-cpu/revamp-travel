@@ -398,6 +398,18 @@ export async function declineBooking(bookingId: string): Promise<{ ok: boolean }
 
 /** Save a tour/experience's recurring time-slot schedule + booking mode, and
  *  (re)generate its sessions. Pass schedule=null to clear it (back to day-level). */
+/** Cancel (open=false) or reopen one class of a tour/experience — owner or admin. */
+export async function setSessionOpen(sessionId: string, open: boolean): Promise<{ ok: boolean }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<{ ok: boolean }>("/api/sessions/set-open", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ sessionId, open }),
+  });
+}
+
 export async function saveSessionSchedule(
   listingId: string,
   schedule: import("@shared/sessions").SessionSchedule | null,

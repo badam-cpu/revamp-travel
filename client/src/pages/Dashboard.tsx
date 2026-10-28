@@ -25,7 +25,7 @@ import { PriceLog } from "@/components/PriceLog";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, MessageCircleQuestion, CalendarCheck, CalendarClock, CalendarDays, Check, ChevronDown, ChevronLeft, ExternalLink, MoreHorizontal, PauseCircle, PlayCircle, Copy, CreditCard, FileText, Footprints, Gift, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, PanelLeftClose, PanelLeftOpen, Pencil, Plug, Plus, QrCode, RefreshCw, Route, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, BookOpen, MessageCircleQuestion, CalendarCheck, CalendarClock, CalendarDays, Clock, Check, ChevronDown, ChevronLeft, ExternalLink, MoreHorizontal, PauseCircle, PlayCircle, Copy, CreditCard, FileText, Footprints, Gift, Home, LayoutDashboard, Link2, List, MapPin, MessageSquare, PanelLeftClose, PanelLeftOpen, Pencil, Plug, Plus, QrCode, RefreshCw, Route, Settings, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
 import { Inbox } from "@/components/Inbox";
 import { PartnerHub } from "@/components/PartnerHub";
 import { OperatorIntegrations } from "@/components/OperatorIntegrations";
@@ -53,7 +53,7 @@ import { Switch } from "@/components/ui/switch";
 import { TimeSelect } from "@/components/TimeSelect";
 import { RoomTypesEditor, RoomTypesEditorHandle, validateRoomTypes } from "@/components/RoomTypesEditor";
 import { fetchRoomTypes } from "@/lib/roomTypes";
-import { ApiError, importListingPrefill, syncIcal } from "@/lib/api";
+import { ApiError, importListingPrefill, saveSessionSchedule, syncIcal } from "@/lib/api";
 import { attachReferral, getStoredReferralCode, clearStoredReferralCode } from "@/lib/referrals";
 import { cn } from "@/lib/utils";
 import { PlaceAutocomplete } from "@/components/PlaceAutocomplete";
@@ -84,7 +84,9 @@ import { PromoCodes } from "@/components/PromoCodes";
 import { OperatorReferrals } from "@/components/OperatorReferrals";
 import { OperatorPayouts } from "@/components/OperatorPayouts";
 import { OperatorSubscription } from "@/components/OperatorSubscription";
-import { SessionScheduleEditor } from "@/components/SessionScheduleEditor";
+import { ScheduleDialog } from "@/components/SessionScheduleEditor";
+import { ScheduleFields, scheduleFromValue, scheduleProblem, scheduleValueFrom, type ScheduleValue } from "@/components/ScheduleFields";
+import { scheduleHasSlots } from "@shared/sessions";
 import { OperatorAnalytics } from "@/components/OperatorAnalytics";
 import { OperatorDocuments } from "@/components/OperatorDocuments";
 import { QrManager } from "@/components/QrManager";
@@ -104,7 +106,7 @@ import { EXPERIENCE_STEP_COUNT } from "@/pages/ExperienceOnboarding";
 // `prefillImageUrl` is display-only — it's carried on the draft purely so
 // ListingFormDialog can show a reference thumbnail; toInputPayload() never
 // reads it, so it's never written to the listing itself.
-type DraftListing = Partial<LiveListing> & { type: ListingType; prefillImageUrl?: string };
+type DraftListing = Partial<LiveListing> & { type: ListingType; prefillImageUrl?: string; scheduleDraft?: ScheduleValue };
 
 function emptyDraft(type: ListingType): DraftListing {
   return {
@@ -131,6 +133,8 @@ interface ListingDraftData {
   listing: DraftListing;
   multiRoom?: boolean;
   roomTypes?: RoomTypeInput[];
+  /** Tours: the Schedule & spots choices typed so far. */
+  schedule?: ScheduleValue;
 }
 /** Resuming an unfinished listing: its draft row, the step reached and (hotels) its room types. */
 interface ListingResume {
@@ -142,7 +146,7 @@ const inArmenia = (c?: { lat: number; lng: number }) => !!c && c.lat >= 38 && c.
 function restoreListingDraft(type: ListingType, d: ListingDraftData | null | undefined): DraftListing {
   const base = emptyDraft(type);
   const l = (d?.listing ?? {}) as DraftListing;
-  return { ...base, ...l, type, coordinates: inArmenia(l.coordinates) ? l.coordinates : base.coordinates, multiRoom: !!d?.multiRoom, id: undefined, status: undefined };
+  return { ...base, ...l, type, coordinates: inArmenia(l.coordinates) ? l.coordinates : base.coordinates, multiRoom: !!d?.multiRoom, scheduleDraft: d?.schedule, id: undefined, status: undefined };
 }
 /** Room types typed into an unfinished hotel → the editor's seed shape (never saved yet, so no ids). */
 function restoreRoomTypes(inputs: RoomTypeInput[] | undefined): RoomType[] | undefined {
@@ -455,6 +459,9 @@ function ListingFormDialog({
   const [policy, setPolicy] = useState(draft?.cancellationPolicy ?? "flexible");
   // Existing room types load async; the editor (uncontrolled) mounts once they're in.
   const [roomTypes, setRoomTypes] = useState<RoomType[] | null>(null);
+  // Tours: Schedule & spots (book a day / a class time) — saved after the listing exists.
+  const initialSchedule = (): ScheduleValue => draft?.scheduleDraft ?? scheduleValueFrom(draft?.sessionSchedule, draft?.bookingMode);
+  const [schedule, setScheduleState] = useState<ScheduleValue>(initialSchedule);
   const draftId = draft?.id;
   const resumeId = resume?.rowId;
   // "Save and continue later" (0115) — NEW listings only: the form is kept in
@@ -477,6 +484,7 @@ function ListingFormDialog({
     setItinerary(draft?.highlights ?? []);
     setMultiRoom(!!draft?.multiRoom);
     setPolicy(draft?.cancellationPolicy ?? "flexible");
+    setScheduleState(initialSchedule());
     draftRowRef.current = resume?.rowId ?? null;
     dirtyRef.current = false;
     doneRef.current = false;
@@ -541,7 +549,7 @@ function ListingFormDialog({
       const payload = toInputPayload(draft, form, collectLists());
       title = payload.title;
       const typedRooms = draft.type === "stay" && multiRoom ? roomTypesRef.current?.getValue() : undefined;
-      data = { v: 1, listing: { ...(payload as unknown as DraftListing), type: draft.type, prefillImageUrl: draft.prefillImageUrl }, multiRoom: draft.type === "stay" ? multiRoom : undefined, roomTypes: typedRooms };
+      data = { v: 1, listing: { ...(payload as unknown as DraftListing), type: draft.type, prefillImageUrl: draft.prefillImageUrl }, multiRoom: draft.type === "stay" ? multiRoom : undefined, roomTypes: typedRooms, schedule: draft.type === "tour" ? schedule : undefined };
     } catch (err) {
       console.error("[listing drafts] snapshot", err);
       return false;
@@ -564,6 +572,10 @@ function ListingFormDialog({
   };
   saveProgressRef.current = saveProgress;
 
+  const setSchedule = (v: ScheduleValue) => {
+    setScheduleState(v);
+    markDirty();
+  };
   // Any edit in the form marks it unsaved and saves a few seconds later.
   const markDirty = () => {
     if (!canSaveProgress || doneRef.current) return;
@@ -643,6 +655,11 @@ function ListingFormDialog({
     if (s === 2 && draft.type === "stay" && multiRoom) {
       const roomError = validateRoomTypes(roomTypesRef.current?.getValue() ?? []);
       if (roomError) return fail(roomError);
+    }
+    // Step 5 — a tour's class times (Schedule & spots) need a day and a start time.
+    if (s === 4 && draft.type === "tour") {
+      const schedProblem = scheduleProblem(schedule);
+      if (schedProblem) return fail(schedProblem);
     }
     // Step 5 — pricing. A hotel is priced per room (step 3), so only the
     // single-unit nightly price/offers are checked here.
@@ -769,6 +786,20 @@ function ListingFormDialog({
           return;
         }
       }
+      // Tours: the schedule references the listing, so it's saved once the row exists
+      // (only when new, or when it changed on an edit).
+      if (draft.type === "tour") {
+        const next = scheduleFromValue(schedule);
+        const changed = !isEdit || JSON.stringify(next) !== JSON.stringify(scheduleHasSlots(draft.sessionSchedule) ? draft.sessionSchedule : null) || (next && schedule.mode !== (draft.bookingMode ?? "instant"));
+        if (changed && (next || isEdit)) {
+          try {
+            await saveSessionSchedule(saved.id, next, schedule.mode);
+          } catch (schedErr) {
+            console.error("[dashboard] schedule save failed", schedErr);
+            toast.error(`${payload.title} was saved, but its class times weren't. Open ⋯ → Schedule & spots to add them.`);
+          }
+        }
+      }
       toast(submitForReview ? `${payload.title} submitted for review.` : `${payload.title} saved as a draft.`);
       // The listing exists now — its unfinished copy (0115) is no longer needed.
       doneRef.current = true;
@@ -847,7 +878,7 @@ function ListingFormDialog({
               </div>
 
               <DialogPrimitive.Title asChild>
-                <h2 className="mt-6 font-display text-2xl leading-[1.02] tracking-[-0.03em] sm:text-5xl">{meta.title}</h2>
+                <h2 className="mt-6 font-display text-2xl leading-[1.02] tracking-[-0.03em] sm:text-5xl">{step === LAST_STEP && draft.type === "tour" ? "Schedule & pricing" : meta.title}</h2>
               </DialogPrimitive.Title>
               <p className="mt-3 max-w-md text-base leading-7 text-basalt/55">{meta.blurb(draft.type)}</p>
 
@@ -1187,8 +1218,17 @@ function ListingFormDialog({
                 </label>
               </div>
 
-              {/* Step 5 — pricing */}
+              {/* Step 5 — pricing (tours: Schedule & spots first) */}
               <div hidden={step !== 4} className="mt-6 sm:mt-10 grid gap-8">
+                {draft.type === "tour" && (
+                  <section className="grid gap-4 border border-basalt/15 bg-chalk/40 p-5" aria-labelledby="tour-schedule-title">
+                    <div>
+                      <h3 id="tour-schedule-title" className="font-display text-xl">Schedule &amp; spots</h3>
+                      <p className="mt-1 text-sm leading-6 text-basalt/60">Does your tour run at set times, or do guests pick a day? You can change this later from ⋯ → Schedule &amp; spots.</p>
+                    </div>
+                    <ScheduleFields value={schedule} onChange={setSchedule} idPrefix="tour-form" />
+                  </section>
+                )}
 
                 {/* revampstay — "How do you want to offer it?" (stays only).
                     Nightly is always on (the price field below); monthly and
@@ -1944,6 +1984,8 @@ function OperatorListingRow({ listing, onEdit, tour = null, onTourChanged }: { l
   const [dialog, setDialog] = useState<AvailabilityMode | null>(null);
   const [tourOpen, setTourOpen] = useState(false);
   const [faqOpen, setFaqOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const isActivity = listing.type === "tour" || listing.type === "experience";
   const isStay = listing.type === "stay";
   // "Check tour" in the post-save toast opens this row's tour editor.
   useEffect(() => {
@@ -2011,6 +2053,11 @@ function OperatorListingRow({ listing, onEdit, tour = null, onTourChanged }: { l
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onSelect={onEdit}><Pencil className="mr-2 h-3.5 w-3.5" /> Edit</DropdownMenuItem>
+            {isActivity && (
+              <DropdownMenuItem onSelect={() => setScheduleOpen(true)}>
+                <Clock className="mr-2 h-3.5 w-3.5" /> Schedule &amp; spots{scheduleHasSlots(listing.sessionSchedule) ? " · class times" : " · by the day"}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onSelect={() => setOpen((o) => !o)}><CalendarClock className="mr-2 h-3.5 w-3.5" /> Calendar sync</DropdownMenuItem>
             <DropdownMenuItem asChild>
               <a href={`/listing/${listing.slug}`} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-2 h-3.5 w-3.5" /> Open guest page</a>
@@ -2048,6 +2095,7 @@ function OperatorListingRow({ listing, onEdit, tour = null, onTourChanged }: { l
         <ListingAvailabilityDialog key={dialog ?? "closed"} listing={listing} mode={dialog} onClose={() => setDialog(null)} />
         {isStay && <TourEditor listing={{ id: listing.id, title: listing.title }} open={tourOpen} onClose={() => setTourOpen(false)} onChanged={onTourChanged} />}
         <ListingFaqEditor listing={listing} open={faqOpen} onClose={() => setFaqOpen(false)} />
+        {isActivity && <ScheduleDialog listing={listing} open={scheduleOpen} onClose={() => setScheduleOpen(false)} />}
       </div>
       {listing.status === "draft" && listing.reviewNote && (
         <p className="mx-4 mb-3 max-w-xl border-l-2 border-destructive/40 pl-2 text-xs leading-5 text-basalt/70">
@@ -2057,7 +2105,6 @@ function OperatorListingRow({ listing, onEdit, tour = null, onTourChanged }: { l
       {open && (
         <div className="border-t border-basalt/8 bg-chalk/40 px-4 pb-4">
           <AvailabilityRow listing={listing} />
-          {(listing.type === "tour" || listing.type === "experience") && <SessionScheduleEditor listing={listing} />}
         </div>
       )}
     </li>
