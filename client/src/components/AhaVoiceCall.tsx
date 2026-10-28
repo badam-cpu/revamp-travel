@@ -20,6 +20,7 @@ import { ConversationProvider, useConversation } from "@elevenlabs/react";
 import { Button } from "@/components/ui/button";
 import { trackEvent } from "@/lib/analytics";
 import { isoDay, requestAhaFill, requestAhaPhoto } from "@/lib/ahaBooking";
+import { handoffToChat, handoffToHost } from "@/lib/ahaPanel";
 import { imgAttrs } from "@/lib/responsiveImg";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
@@ -205,6 +206,22 @@ function Call({ scope = "listing", slug = "", onEnd, compact = false, onFilled }
             if (say.startsWith("Photo")) onFilled?.();
             trackEvent("voice_assistant_photo", { item_id: slug });
             return say;
+          },
+          // A real person: the listing's host ("Ask the host") or the Revamp team (Chat).
+          // Aha AI writes the question in; the guest sends it themselves.
+          handoff: async (p: Record<string, unknown>) => {
+            const question = typeof p.question === "string" && p.question.trim() ? p.question.trim().slice(0, 1000) : "";
+            const toHost = p.to === "host" && scope === "listing" && !!slug;
+            note(`handoff → ${toHost ? "host" : "team"}`);
+            trackEvent("voice_assistant_handoff", { to: toHost ? "host" : "team" });
+            if (toHost && handoffToHost(slug, question)) {
+              onFilled?.();
+              return "I've opened Ask the host with your question written in. Check it and tap Send — the host replies by email or in your messages. Say a short goodbye now and end the call.";
+            }
+            if (handoffToChat(question)) {
+              return "I've put your question in the chat. Tap Send and the Revamp team will reply there. Say a short goodbye now and end the call.";
+            }
+            return "Tell the guest they can write to the host with Ask the host a question on the listing page, or email hello@revampvacations.com.";
           },
           plan_trip: async (p: Record<string, unknown>) => {
             const days = Math.min(21, Math.max(1, Math.round(Number(p.days)) || 4));

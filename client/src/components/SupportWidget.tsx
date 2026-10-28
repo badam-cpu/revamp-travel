@@ -20,7 +20,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { ChevronUp, Loader2, MessageCircle, Mic, Route, Send, Sparkles, X } from "lucide-react";
 import { useListings } from "@/contexts/ListingsContext";
-import { onAhaOpen, type AhaMode } from "@/lib/ahaPanel";
+import { onAhaOpen, onHandoff, type AhaMode } from "@/lib/ahaPanel";
 import { useVoiceAvailable } from "@/lib/voiceStatus";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -47,6 +47,8 @@ export function SupportWidget() {
   // `compact` shrinks the panel to a bar so the page Aha just changed is visible.
   const [talkMounted, setTalkMounted] = useState(false);
   const [compact, setCompact] = useState(false);
+  // Aha AI (voice) passed the guest to the team: the question is written in the box below.
+  const [handedOff, setHandedOff] = useState(false);
   const { pageListings } = useListings();
   // No voice budget left → the Talk tab isn't offered (a call already running stays).
   const voiceOk = useVoiceAvailable();
@@ -59,6 +61,15 @@ export function SupportWidget() {
   const [contactSaved, setContactSaved] = useState(false);
   const [savingContact, setSavingContact] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // The message box grows with its text (up to max-h-28), so a question Aha AI
+  // wrote in is readable before the guest sends it.
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [input, open]);
   const [location, navigate] = useLocation();
   // The launcher steps aside while it would overlap a page's primary search
   // (marked `data-support-yield`, e.g. the home hero search), so it never sits
@@ -115,6 +126,19 @@ export function SupportWidget() {
   // Talk is about the listing on a stay / tour / experience page, a search anywhere else.
   const slugOnPage = location.match(/^\/listing\/([^/?#]+)/)?.[1];
   const voiceListing = slugOnPage ? pageListings.find((l) => l.slug === slugOnPage && ["stay", "tour", "experience"].includes(l.type)) : undefined;
+  useEffect(
+    () =>
+      onHandoff("chat", (text) => {
+        if (hidden) return false;
+        setOpen(true);
+        setCompact(false);
+        setMode("chat");
+        setInput(text);
+        setHandedOff(true);
+        return true;
+      }),
+    [hidden],
+  );
   useEffect(() => {
     if (mode === "talk" && !talkOn) setMode("chat");
   }, [mode, talkOn]);
@@ -184,6 +208,7 @@ export function SupportWidget() {
     const body = input.trim();
     if (!body || sending) return;
     setInput("");
+    setHandedOff(false);
     setLoaded(true); // active conversation — don't let the loader overwrite these
     setMessages((m) => [...m, { id: `local-${Date.now()}`, sender: "traveler", body }]);
     setSending(true);
@@ -342,6 +367,11 @@ export function SupportWidget() {
                 )
               )}
 
+              {handedOff && (
+                <p className="border-t border-basalt/10 bg-apricot/[0.06] px-4 py-2.5 text-xs leading-5 text-basalt/75">
+                  Aha AI wrote your question below. Check it and tap Send — the Revamp team will reply right here.
+                </p>
+              )}
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -350,6 +380,7 @@ export function SupportWidget() {
                 className="flex items-end gap-2 border-t border-basalt/10 p-3"
               >
                 <textarea
+                  ref={inputRef}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => {

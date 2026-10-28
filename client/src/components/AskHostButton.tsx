@@ -10,7 +10,7 @@
  * inbox; the host replies from their own inbox. A host viewing their own listing
  * doesn't see the button, and it's not shown for restaurants.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { MessageCircle, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -21,6 +21,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import type { LiveListing } from "@/contexts/ListingsContext";
 import { ensureListingInquiryThread, sendInboxMessage, ApiError } from "@/lib/api";
 import { toast } from "sonner";
+import { onHandoff } from "@/lib/ahaPanel";
 
 export function AskHostButton({ listing }: { listing: LiveListing }) {
   const { user, profile, signInAnonymously } = useAuth();
@@ -31,8 +32,22 @@ export function AskHostButton({ listing }: { listing: LiveListing }) {
   const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);
 
+  const ownListing = !!user && listing.operatorId === user.id;
+  // Aha AI (voice) can open this form with the guest's question written in —
+  // the guest checks it and taps Send themselves.
+  useEffect(
+    () =>
+      onHandoff("host", (text, slug) => {
+        if (ownListing || slug !== listing.slug) return false;
+        setBody(text);
+        setOpen(true);
+        return true;
+      }),
+    [listing.slug, ownListing],
+  );
+
   // A host can't inquire on their own listing.
-  if (user && listing.operatorId === user.id) return null;
+  if (ownListing) return null;
 
   // A guest is anyone who isn't a "real" (non-anonymous, profiled) traveler.
   const isGuest = !user || !!user.is_anonymous;
@@ -65,7 +80,8 @@ export function AskHostButton({ listing }: { listing: LiveListing }) {
         navigate(profile?.role === "operator" ? "/dashboard?view=messages" : "/account?tab=messages");
       }
     } catch (e) {
-      toast(e instanceof ApiError || e instanceof Error ? e.message : "Couldn't send your question.");
+      if (!(e instanceof ApiError)) console.error("[ask-host]", e);
+      toast(e instanceof ApiError ? e.message : "Your question didn't send — please try again in a moment.");
     } finally {
       setSending(false);
     }
@@ -82,7 +98,8 @@ export function AskHostButton({ listing }: { listing: LiveListing }) {
       </button>
 
       <Dialog open={open} onOpenChange={(o) => !o && setOpen(false)}>
-        <DialogContent className="max-w-md rounded-none">
+        {/* z-[120]: above the Aha AI panel, which can open this form. */}
+        <DialogContent className="z-[120] max-w-md rounded-none">
           <DialogHeader>
             <DialogTitle className="font-display text-2xl">Ask before you book</DialogTitle>
           </DialogHeader>

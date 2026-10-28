@@ -107,6 +107,16 @@ How to help:
   | `pace` | String | – | `relaxed, balanced or packed` |
   | `budget` | String | – | `budget, mid-range or comfort` |
 
+### Tools → Add tool → Client (hand-off to a real person, 2026-10-28)
+- **Name:** `handoff`
+- **Description:** `Pass the guest to a real person when they ask for one, or need something you can't do (booking changes, refunds, payments, special requests, complaints). Opens a form on their screen with their question written in; the guest sends it.`
+- **Wait for response:** ON
+- **Parameters:**
+  | Identifier | Type | Required | Description |
+  |---|---|---|---|
+  | `to` | String | ✓ | `host for questions about this place or the stay, team for anything about Revamp, payments or their account` |
+  | `question` | String | ✓ | `The guest's request in one or two sentences, in their words and language` |
+
 ### Tools → System tools → End call (2026-10-28)
 Turn on **End call**. Our instructions tell Aha AI to say a short goodbye and call
 `end_call` when the guest says "thanks, bye" / "that's all" — never while they still
