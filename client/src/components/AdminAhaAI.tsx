@@ -11,11 +11,12 @@
  *  - Chats are already in Admin → Support.
  */
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Bookmark, ChevronDown, Loader2, Mail, MessageSquare, Mic, Pencil, RefreshCw, Route as RouteIcon } from "lucide-react";
+import { ArrowRight, Bookmark, ChevronDown, ChevronLeft, ChevronRight, Loader2, Mail, MessageSquare, Mic, Pencil, RefreshCw, Route as RouteIcon } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { ApiError, fetchTripPlannerReport, fetchVoiceCall, fetchVoiceCalls, type TripPlannerReport, type VoiceCallDetail, type VoiceCallSummary } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+const PAGE = 20;
 const LANG: Record<string, string> = { en: "English", ru: "Russian", hy: "Armenian", other: "Other", form: "Form only" };
 const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const secs = (ms: number | null) => (ms == null ? "—" : `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)} s`);
@@ -83,6 +84,8 @@ function PlannerTab() {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<number | null>(null);
   const [filter, setFilter] = useState<"all" | "failed" | "followup">("all");
+  const [page, setPage] = useState(0);
+  useEffect(() => setPage(0), [filter, days]);
 
   const load = () => {
     setError(null);
@@ -181,7 +184,7 @@ function PlannerTab() {
           ))}
         </div>
         <div className="divide-y divide-basalt/10 border border-basalt/10 bg-paper">
-          {rows.map((p) => (
+          {rows.slice(page * PAGE, page * PAGE + PAGE).map((p) => (
             <div key={p.id}>
               <button type="button" onClick={() => setOpen(open === p.id ? null : p.id)} aria-expanded={open === p.id} className="grid w-full gap-1.5 p-3 text-left hover:bg-chalk/60 sm:grid-cols-[110px_minmax(0,1fr)_auto] sm:items-center sm:gap-4">
                 <span className="text-xs tabular-nums text-basalt/50">{when(p.at)}</span>
@@ -226,35 +229,70 @@ function PlannerTab() {
           ))}
           {!rows.length && <p className="p-4 text-sm text-basalt/50">Nothing here for this period.</p>}
         </div>
+        {rows.length > PAGE && (
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <button type="button" onClick={() => setPage((n) => n - 1)} disabled={page === 0} className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-basalt/20 px-4 text-sm font-semibold disabled:opacity-40">
+              <ChevronLeft className="h-4 w-4" /> Newer
+            </button>
+            <span className="text-sm text-basalt/55">Page {page + 1} of {Math.ceil(rows.length / PAGE)}</span>
+            <button type="button" onClick={() => setPage((n) => n + 1)} disabled={(page + 1) * PAGE >= rows.length} className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-basalt/20 px-4 text-sm font-semibold disabled:opacity-40">
+              Older <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        )}
         <p className="mt-2 text-xs text-basalt/45">Kept for 90 days. Email addresses are shown so you can follow up — use them only for that.</p>
       </div>
     </div>
   );
 }
 
+type CallFilter = "all" | "failure" | "unknown" | "handoff";
+const CALL_FILTERS: { k: CallFilter; label: string }[] = [
+  { k: "all", label: "All" },
+  { k: "failure", label: "Didn't go well" },
+  { k: "unknown", label: "Unclear" },
+  { k: "handoff", label: "Asked for a person" },
+];
+
 function VoiceTab() {
   const [calls, setCalls] = useState<VoiceCallSummary[] | null>(null);
-  const [cursor, setCursor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [more, setMore] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   const [detail, setDetail] = useState<Record<string, VoiceCallDetail | "loading" | "error">>({});
+  // Filters run on ElevenLabs' side (whole history); 20 calls a page. ElevenLabs
+  // pages by cursor, so we keep the cursor of every page we've opened for "Newer".
+  const [filter, setFilter] = useState<CallFilter>("all");
+  const [hideShort, setHideShort] = useState(false);
+  const [cursors, setCursors] = useState<(string | null)[]>([null]);
+  const [page, setPage] = useState(0);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
 
-  const load = (next?: string | null) => {
+  const load = (pageIndex: number, list: (string | null)[]) => {
     setError(null);
-    if (next) setMore(true);
-    fetchVoiceCalls(next)
+    setBusy(true);
+    setOpen(null);
+    fetchVoiceCalls(list[pageIndex], {
+      outcome: filter === "failure" || filter === "unknown" ? filter : undefined,
+      tool: filter === "handoff" ? "handoff" : undefined,
+      minSecs: hideShort ? 10 : undefined,
+    })
       .then((r) => {
-        setCalls((prev) => (next && prev ? [...prev, ...r.calls] : r.calls));
-        setCursor(r.nextCursor);
+        setCalls(r.calls);
+        setNextCursor(r.nextCursor);
+        setPage(pageIndex);
+        setCursors(list);
       })
       .catch((e) => {
         if (!(e instanceof ApiError)) console.error("[admin-aha] voice", e);
         setError(e instanceof ApiError ? e.message : "Couldn't load the call history.");
       })
-      .finally(() => setMore(false));
+      .finally(() => setBusy(false));
   };
-  useEffect(() => load(), []); // eslint-disable-line react-hooks/exhaustive-deps
+  // A new filter starts again from the newest calls.
+  useEffect(() => load(0, [null]), [filter, hideShort]); // eslint-disable-line react-hooks/exhaustive-deps
+  const older = () => nextCursor && load(page + 1, [...cursors.slice(0, page + 1), nextCursor]);
+  const newer = () => page > 0 && load(page - 1, cursors);
 
   const toggle = (id: string) => {
     setOpen(open === id ? null : id);
@@ -268,18 +306,34 @@ function VoiceTab() {
       });
   };
 
-  if (error) return <p className="border border-basalt/12 bg-chalk p-4 text-sm text-basalt/70">{error}</p>;
+  const filters = (
+    <div className="flex flex-wrap items-center gap-2">
+      {CALL_FILTERS.map((f) => (
+        <button key={f.k} type="button" onClick={() => setFilter(f.k)} className={cn("min-h-10 rounded-full border px-3.5 text-sm font-semibold", filter === f.k ? "border-basalt bg-basalt text-paper" : "border-basalt/15 text-basalt/70 hover:border-basalt/35")}>
+          {f.label}
+        </button>
+      ))}
+      <label className="ml-1 inline-flex min-h-10 cursor-pointer items-center gap-2 text-sm text-basalt/70">
+        <input type="checkbox" checked={hideShort} onChange={(e) => setHideShort(e.target.checked)} className="h-4 w-4 accent-apricot" />
+        Hide calls under 10 s
+      </label>
+      {busy && <Loader2 className="h-4 w-4 animate-spin text-basalt/40" />}
+    </div>
+  );
+
+  if (error) return <div className="grid gap-4">{filters}<p className="border border-basalt/12 bg-chalk p-4 text-sm text-basalt/70">{error}</p></div>;
   if (!calls) return <p className="flex items-center gap-2 text-sm text-basalt/55"><Loader2 className="h-4 w-4 animate-spin" /> Loading calls from ElevenLabs…</p>;
 
   const total = calls.reduce((n, c) => n + (c.durationSecs ?? 0), 0);
   const ok = calls.filter((c) => c.outcome === "success").length;
   return (
-    <div className="grid gap-6">
+    <div className={cn("grid gap-6 transition-opacity", busy && "opacity-60")}>
+      {filters}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Tile n={calls.length} label="Calls shown" />
+        <Tile n={calls.length} label="Calls on this page" />
         <Tile n={calls.length ? mmss(total / calls.length) : "—"} label="Average length" />
         <Tile n={calls.length ? `${Math.round((ok / calls.length) * 100)}%` : "—"} label="Went well" hint="ElevenLabs' own judgement" />
-        <Tile n={mmss(total)} label="Total talk time" />
+        <Tile n={mmss(total)} label="Talk time" />
       </div>
       <div className="divide-y divide-basalt/10 border border-basalt/10 bg-paper">
         {calls.map((c) => {
@@ -328,12 +382,18 @@ function VoiceTab() {
             </div>
           );
         })}
-        {!calls.length && <p className="p-4 text-sm text-basalt/50">No calls yet.</p>}
+        {!calls.length && <p className="p-4 text-sm text-basalt/50">{filter === "all" && !hideShort ? "No calls yet." : "No calls match this filter."}</p>}
       </div>
-      {cursor && (
-        <button type="button" onClick={() => load(cursor)} disabled={more} className="inline-flex min-h-10 items-center justify-center gap-1.5 justify-self-start rounded-full border border-basalt/20 px-4 text-sm font-semibold">
-          {more ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Load older calls
-        </button>
+      {(page > 0 || nextCursor) && (
+        <div className="flex items-center justify-between gap-3">
+          <button type="button" onClick={newer} disabled={page === 0 || busy} className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-basalt/20 px-4 text-sm font-semibold disabled:opacity-40">
+            <ChevronLeft className="h-4 w-4" /> Newer
+          </button>
+          <span className="text-sm text-basalt/55">Page {page + 1}</span>
+          <button type="button" onClick={older} disabled={!nextCursor || busy} className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-basalt/20 px-4 text-sm font-semibold disabled:opacity-40">
+            Older <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
       )}
       <p className="text-xs text-basalt/45">Read live from ElevenLabs — nothing is copied into Revamp. Their call-history retention settings apply.</p>
     </div>

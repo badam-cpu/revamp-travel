@@ -1301,5 +1301,17 @@ async function adminGet<T>(path: string): Promise<T> {
 }
 
 export const fetchTripPlannerReport = (days: number) => adminGet<TripPlannerReport>(`/api/admin-trip-planner?days=${days}`);
-export const fetchVoiceCalls = (cursor?: string | null) => adminGet<{ calls: VoiceCallSummary[]; nextCursor: string | null }>(`/api/admin-voice-calls${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+export interface VoiceCallFilters {
+  outcome?: "failure" | "unknown" | "success";
+  tool?: "handoff";
+  minSecs?: number;
+}
+export const fetchVoiceCalls = (cursor?: string | null, f: VoiceCallFilters = {}) => {
+  const q = new URLSearchParams();
+  if (cursor) q.set("cursor", cursor);
+  if (f.outcome) q.set("outcome", f.outcome);
+  if (f.tool) q.set("tool", f.tool);
+  if (f.minSecs) q.set("minSecs", String(f.minSecs));
+  return adminGet<{ calls: VoiceCallSummary[]; nextCursor: string | null }>(`/api/admin-voice-calls${q.toString() ? `?${q}` : ""}`);
+};
 export const fetchVoiceCall = (id: string) => adminGet<VoiceCallDetail>(`/api/admin-voice-calls/${encodeURIComponent(id)}`);

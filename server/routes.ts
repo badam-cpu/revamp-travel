@@ -1379,8 +1379,14 @@ export function registerApiRoutes(app: Express) {
     const key = process.env.ELEVENLABS_API_KEY;
     const agentId = process.env.ELEVENLABS_AGENT_ID || process.env.VITE_ELEVENLABS_AGENT_ID;
     if (!key || !agentId) return res.status(503).json({ error: "Add ELEVENLABS_API_KEY (and the agent id) in Netlify to see call history here." });
-    const q = new URLSearchParams({ agent_id: agentId, page_size: "50" });
-    if (typeof req.query.cursor === "string" && req.query.cursor) q.set("cursor", req.query.cursor);
+    // 20 a page; filters run on ElevenLabs' side so they cover the whole history.
+    const q = new URLSearchParams({ agent_id: agentId, page_size: "20" });
+    if (typeof req.query.cursor === "string" && req.query.cursor) q.set("cursor", req.query.cursor.slice(0, 500));
+    const outcome = String(req.query.outcome || "");
+    if (outcome === "failure" || outcome === "unknown" || outcome === "success") q.set("call_successful", outcome);
+    if (req.query.tool === "handoff") q.set("tool_names", "handoff");
+    const minSecs = Number(req.query.minSecs);
+    if (Number.isFinite(minSecs) && minSecs > 0) q.set("call_duration_min_secs", String(Math.min(3600, Math.round(minSecs))));
     try {
       const r = await fetch(`https://api.elevenlabs.io/v1/convai/conversations?${q}`, { headers: { "xi-api-key": key } });
       if (r.status === 401 || r.status === 403) return res.status(502).json({ error: "ElevenLabs refused the key — in ElevenLabs → API keys, give it read access to Agents (conversations), then reload." });
