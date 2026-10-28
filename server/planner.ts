@@ -325,35 +325,61 @@ function validateItinerary(value: unknown, catalog: CatalogEntry[]): Itinerary {
   };
 }
 
+const FALLBACK_MODEL = "claude-haiku-4-5";
+
 export async function planTrip(params: PlanTripParams, listings: CatalogEntry[]): Promise<Itinerary> {
   const anthropic = getClient();
-  // Default to Haiku so a full itinerary generates well within the serverless
-  // function's timeout (Sonnet + 4000 tokens overran it and returned a 504).
-  // Override with ANTHROPIC_MODEL to trade latency for richer plans post-launch.
-  const model = process.env.ANTHROPIC_MODEL || "claude-haiku-4-5";
+  // Claude Haiku 5.5 (2026-10-28): fast enough for the serverless timeout
+  // (Sonnet + 4000 tokens overran it and returned a 504), ~10x cheaper than
+  // Haiku 4.5 and better at following the plan rules. PLANNER_MODEL overrides.
+  // Haiku 4.5 is the safety net: if the primary model is rejected (unknown /
+  // unavailable model → 400/404) or declines, the same request runs on it.
+  const primary = process.env.PLANNER_MODEL || "claude-haiku-5-5";
+  const models = primary === FALLBACK_MODEL ? [primary] : [primary, FALLBACK_MODEL];
   // Cap output to what the trip length actually needs — fewer tokens = faster
   // response, which is the main lever on the timeout.
   // A free-text trip's length isn't known up front, so it gets the full budget.
   const maxTokens = params.revise || (params.request?.trim() && !params.days) ? 4000 : Math.min(4000, 900 + Math.max(1, params.days ?? 5) * 300);
+  const prompt = buildPrompt(params, listings);
 
-  let response;
-  try {
-    response = await anthropic.messages.create({
-      model,
-      max_tokens: maxTokens,
-      messages: [{ role: "user", content: buildPrompt(params, listings) }],
-    });
-  } catch (err: unknown) {
-    const anyErr = err as { status?: number; message?: string };
-    if (anyErr?.status === 401 || anyErr?.status === 403) {
-      console.error("[planner] Anthropic rejected ANTHROPIC_API_KEY");
-      throw new PlannerError(503, "Aha AI can't plan trips right now. Please try again later.");
+  let response: Anthropic.Message | undefined;
+  for (let i = 0; i < models.length; i++) {
+    const model = models[i];
+    const last = i === models.length - 1;
+    try {
+      response = await anthropic.messages.create({
+        model,
+        max_tokens: maxTokens,
+        // Haiku 5.5 thinks by default and thinking counts against max_tokens,
+        // which could cut the JSON off — the planner doesn't need it. (Haiku 4.5
+        // never thinks unless asked, so it gets no thinking field.) The installed
+        // SDK predates the field, hence the cast.
+        ...(model === FALLBACK_MODEL ? {} : ({ thinking: { type: "disabled" } } as object)),
+        messages: [{ role: "user", content: prompt }],
+      } as Anthropic.MessageCreateParamsNonStreaming);
+    } catch (err: unknown) {
+      const anyErr = err as { status?: number; message?: string };
+      if (anyErr?.status === 401 || anyErr?.status === 403) {
+        console.error("[planner] Anthropic rejected ANTHROPIC_API_KEY");
+        throw new PlannerError(503, "Aha AI can't plan trips right now. Please try again later.");
+      }
+      if (anyErr?.status === 429) {
+        throw new PlannerError(429, "The trip planner is getting a lot of requests right now — please try again in a moment.");
+      }
+      if (!last && (anyErr?.status === 400 || anyErr?.status === 404)) {
+        console.error(`[planner] ${model} rejected (${anyErr.status}): ${anyErr.message ?? ""} — retrying on ${FALLBACK_MODEL}`);
+        continue;
+      }
+      throw new PlannerError(502, "Aha AI couldn't build that plan just now. Please try again.");
     }
-    if (anyErr?.status === 429) {
-      throw new PlannerError(429, "The trip planner is getting a lot of requests right now — please try again in a moment.");
+    if ((response.stop_reason as string) === "refusal" && !last) {
+      console.error(`[planner] ${model} declined — retrying on ${FALLBACK_MODEL}`);
+      response = undefined;
+      continue;
     }
-    throw new PlannerError(502, "Aha AI couldn't build that plan just now. Please try again.");
+    break;
   }
+  if (!response) throw new PlannerError(502, "Aha AI couldn't build that plan just now. Please try again.");
 
   const text = response.content
     .filter((block): block is Anthropic.TextBlock => block.type === "text")
