@@ -116,7 +116,7 @@ export function TourDetail({ listing }: { listing: Listing }) {
       </div>
 
       <section id="tour-gallery" className="container scroll-mt-24">
-        <div className="brand-notch relative aspect-[16/9] overflow-hidden bg-basalt/5 sm:aspect-[2/1]">
+        <div className="relative aspect-[16/9] overflow-hidden rounded-[14px] bg-basalt/5 sm:aspect-[2/1]">
           {current.kind === "video" ? (
             <div className="h-full w-full">
               <ListingVideo url={current.url} poster={images[0]} className="h-full rounded-none object-cover aspect-auto" />
