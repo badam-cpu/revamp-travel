@@ -21,7 +21,9 @@ import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import type { Request, Response } from "express";
 import { getPublishedCatalog, listPublishedForPlanner, type PublicListing } from "./supabase.js";
-import { planTrip } from "./planner.js";
+import { planTrip, type PlanRunInfo } from "./planner.js";
+import { logPlanEvent } from "./planLog.js";
+import { supabaseAdmin } from "./supabaseAdmin.js";
 import { isDiscoverable, photoCaption } from "../shared/listings.js";
 import { listingPhotos, quoteListing } from "./mcpQuote.js";
 import { cardsToolMeta, registerCardsResource } from "./mcpCards.js";
@@ -304,6 +306,8 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
     async ({ days, startCity, travelers, pace, budget, interests }) => {
       try {
         const catalog = await listPublishedForPlanner();
+        const started = Date.now();
+        const info: PlanRunInfo = {};
         const itinerary = await planTrip(
           {
             days,
@@ -314,7 +318,10 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
             interests: interests ?? [],
           },
           catalog,
+          info,
         );
+        // Admin log (0124): plans made from ChatGPT / Claude via MCP.
+        void logPlanEvent(supabaseAdmin(), { kind: "plan", source: "mcp", request: `${days} days from ${startCity || "Yerevan"}${interests?.length ? ` · ${interests.join(", ")}` : ""}`, itinerary, model: info.model, retried: info.retried, durationMs: Date.now() - started, ok: true });
         return TEXT(itinerary);
       } catch (err) {
         console.error("[mcp] plan_trip", err);

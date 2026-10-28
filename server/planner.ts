@@ -359,7 +359,13 @@ function validateItinerary(value: unknown, catalog: CatalogEntry[]): Itinerary {
 
 const FALLBACK_MODEL = "claude-haiku-4-5";
 
-export async function planTrip(params: PlanTripParams, listings: CatalogEntry[]): Promise<Itinerary> {
+/** Filled in by planTrip for the admin log (server/planLog.ts). */
+export interface PlanRunInfo {
+  model?: string;
+  retried?: boolean;
+}
+
+export async function planTrip(params: PlanTripParams, listings: CatalogEntry[], info: PlanRunInfo = {}): Promise<Itinerary> {
   const anthropic = getClient();
   // Claude Haiku 5.5 (2026-10-28): fast enough for the serverless timeout
   // (Sonnet + 4000 tokens overran it and returned a 504), ~10x cheaper than
@@ -429,6 +435,7 @@ export async function planTrip(params: PlanTripParams, listings: CatalogEntry[])
       .map((block) => block.text)
       .join("\n")
       .trim();
+    info.model = used;
     return { text, stop: String(response.stop_reason), model: used };
   };
 
@@ -446,6 +453,7 @@ export async function planTrip(params: PlanTripParams, listings: CatalogEntry[])
   } catch (err) {
     if (!(err instanceof PlannerError) || err.status !== 502) throw err;
     console.error(`[planner] unusable answer (${err.message}${firstStop ? `; ${firstStop}` : ""}) — asking once more`);
+    info.retried = true;
     const second = await ask(Math.max(maxTokens, 8000));
     if (!second.text) throw new PlannerError(502, "The trip planner didn't return a plan. Please try again.");
     itinerary = validateItinerary(extractJson(second.text), listings);

@@ -76,7 +76,8 @@ import type { RoomUnit } from "../shared/listings.js";
 import { overlapsSuspension } from "../shared/listings.js";
 import { changeListingStatus, upcomingBookings } from "./listingStatus.js";
 import { eventsSyncToken } from "./events.js";
-import { planTrip, PlannerError, signItinerary, verifyItinerary } from "./planner.js";
+import { planTrip, PlannerError, signItinerary, verifyItinerary, type PlanRunInfo } from "./planner.js";
+import { logPlanEvent, plannerReport } from "./planLog.js";
 import { fetchPrefill, PrefillError } from "./urlPrefill.js";
 import { fetchMergedBlockedRanges, buildIcalFeed, type IcalFeed } from "./ical.js";
 import { SafeFetchError } from "./safeFetch.js";
@@ -116,6 +117,7 @@ const planTripSchema = z
     pace: z.enum(["relaxed", "balanced", "packed"]).optional(),
     budget: z.enum(["budget", "mid-range", "comfort"]).optional(),
     interests: z.array(z.string().trim().min(1).max(40)).max(8).optional(),
+    fromToken: z.string().max(200).optional(),
     revise: z
       .object({
         plan: z.string().max(16000),
@@ -496,6 +498,28 @@ const tripSurveyHits = new Map<string, number[]>();
 const invoiceHits = new Map<string, number[]>();
 const tourClassifyHits = new Map<string, number[]>();
 const invoiceSendHits = new Map<string, number[]>();
+/** Admin-only routes: the service-role client when the caller is an admin, else answers 401/403 and returns null. */
+async function requireAdminCaller(req: Request, res: Response) {
+  const authHeader = req.get("authorization") || "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+  const userId = token ? await verifyUser(token) : null;
+  if (!userId) {
+    res.status(401).json({ error: "Sign in." });
+    return null;
+  }
+  const admin = supabaseAdmin();
+  if (!admin) {
+    res.status(503).json({ error: "Not available right now." });
+    return null;
+  }
+  const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+  if (me?.role !== "admin") {
+    res.status(403).json({ error: "Admins only." });
+    return null;
+  }
+  return admin;
+}
+
 function rateLimited(map: Map<string, number[]>, key: string, max: number, windowMs = 60_000): boolean {
   const now = Date.now();
   const hits = (map.get(key) ?? []).filter((t) => t > now - windowMs);
@@ -1255,16 +1279,27 @@ export function registerApiRoutes(app: Express) {
     if (!parsed.success) {
       return res.status(400).json({ error: issuesToMessage(parsed.error) });
     }
+    // Admin log (0124): who asked (if signed in), what, and how it went — best-effort, never blocks the guest.
+    const authHeader = req.get("authorization") || "";
+    const userPromise = authHeader.startsWith("Bearer ") ? verifyUser(authHeader.slice("Bearer ".length)).catch(() => null) : Promise.resolve(null);
+    const started = Date.now();
+    const info: PlanRunInfo = {};
+    const kind = parsed.data.revise ? "change" : "plan";
+    const base = { kind, request: parsed.data.request ?? null, change: parsed.data.revise?.change ?? null, parentToken: typeof req.body?.fromToken === "string" ? req.body.fromToken : null } as const;
     try {
       const listings = await listPublishedForPlanner();
-      const itinerary = await planTrip(parsed.data, listings);
-      res.json({ itinerary, token: signItinerary(itinerary) });
+      const itinerary = await planTrip(parsed.data, listings, info);
+      const token = signItinerary(itinerary);
+      res.json({ itinerary, token });
+      void logPlanEvent(supabaseAdmin(), { ...base, token, itinerary, model: info.model, retried: info.retried, durationMs: Date.now() - started, ok: true, userId: await userPromise });
     } catch (err) {
+      const message = err instanceof PlannerError ? err.message : "The trip planner is temporarily unavailable. Please try again.";
+      void logPlanEvent(supabaseAdmin(), { ...base, model: info.model, retried: info.retried, durationMs: Date.now() - started, ok: false, error: message, userId: await userPromise });
       if (err instanceof PlannerError) {
         return res.status(err.status).json({ error: err.message });
       }
       console.error("plan-trip failed", err);
-      res.status(502).json({ error: "The trip planner is temporarily unavailable. Please try again." });
+      res.status(502).json({ error: message });
     }
   });
 
@@ -1293,6 +1328,16 @@ export function registerApiRoutes(app: Express) {
       else saveUrl = `${(process.env.URL || "https://revampvacations.com").replace(/\/+$/, "")}/plan/trip?shared=${data.id}&save=1&utm_source=email&utm_medium=itinerary`;
     }
     const result = await sendItinerary(email.data, req.body.itinerary, { saveUrl });
+    // Admin log (0124) — with the address, so the team can follow up.
+    const emailAuth = req.get("authorization") || "";
+    void logPlanEvent(admin, {
+      kind: "email",
+      token: req.body.token,
+      email: email.data,
+      ok: result.sent,
+      error: result.sent ? null : result.reason ?? "not sent",
+      userId: emailAuth.startsWith("Bearer ") ? await verifyUser(emailAuth.slice("Bearer ".length)).catch(() => null) : null,
+    });
     if (!result.sent) {
       console.error("[plan-email] not sent:", result.reason);
       return res.status(502).json({ error: "We couldn't send the email just now. Please try again." });
@@ -1312,6 +1357,89 @@ export function registerApiRoutes(app: Express) {
     if (!data) return res.status(404).json({ error: "We couldn't find that trip plan." });
     res.set("Cache-Control", "private, no-store");
     res.json({ planJson: data.plan_json, token: data.plan_token, request: data.request });
+  });
+
+  // Admin → Aha AI → Trip planner (0124): requests, outcomes, follow-ups.
+  app.get("/api/admin-trip-planner", async (req: Request, res: Response) => {
+    const admin = await requireAdminCaller(req, res);
+    if (!admin) return;
+    try {
+      res.json(await plannerReport(admin, Number(req.query.days) || 30));
+    } catch (err) {
+      console.error("[admin-trip-planner]", err);
+      res.status(502).json({ error: "The trip planner log isn't available yet — run migration 0124, then reload." });
+    }
+  });
+
+  // Admin → Aha AI → Voice calls: the "Talk to Aha AI" history, read live from
+  // ElevenLabs (nothing is copied into our database).
+  app.get("/api/admin-voice-calls", async (req: Request, res: Response) => {
+    const admin = await requireAdminCaller(req, res);
+    if (!admin) return;
+    const key = process.env.ELEVENLABS_API_KEY;
+    const agentId = process.env.ELEVENLABS_AGENT_ID || process.env.VITE_ELEVENLABS_AGENT_ID;
+    if (!key || !agentId) return res.status(503).json({ error: "Add ELEVENLABS_API_KEY (and the agent id) in Netlify to see call history here." });
+    const q = new URLSearchParams({ agent_id: agentId, page_size: "50" });
+    if (typeof req.query.cursor === "string" && req.query.cursor) q.set("cursor", req.query.cursor);
+    try {
+      const r = await fetch(`https://api.elevenlabs.io/v1/convai/conversations?${q}`, { headers: { "xi-api-key": key } });
+      if (r.status === 401 || r.status === 403) return res.status(502).json({ error: "ElevenLabs refused the key — in ElevenLabs → API keys, give it read access to Agents (conversations), then reload." });
+      if (!r.ok) return res.status(502).json({ error: `ElevenLabs answered ${r.status}. Try again in a minute.` });
+      const d = (await r.json()) as { conversations?: Record<string, unknown>[]; has_more?: boolean; next_cursor?: string | null };
+      res.json({
+        calls: (d.conversations ?? []).map((c) => ({
+          id: String(c.conversation_id ?? ""),
+          startedAt: typeof c.start_time_unix_secs === "number" ? new Date(c.start_time_unix_secs * 1000).toISOString() : null,
+          durationSecs: typeof c.call_duration_secs === "number" ? c.call_duration_secs : null,
+          messages: typeof c.message_count === "number" ? c.message_count : null,
+          status: typeof c.status === "string" ? c.status : null,
+          outcome: typeof c.call_successful === "string" ? c.call_successful : null,
+          title: typeof c.call_summary_title === "string" ? c.call_summary_title : null,
+          language: typeof c.main_language === "string" ? c.main_language : null,
+          tools: Array.isArray(c.tool_names) ? (c.tool_names as unknown[]).filter((t): t is string => typeof t === "string") : [],
+        })),
+        nextCursor: d.has_more ? d.next_cursor ?? null : null,
+      });
+    } catch (err) {
+      console.error("[admin-voice-calls]", err);
+      res.status(502).json({ error: "Couldn't reach ElevenLabs. Try again in a minute." });
+    }
+  });
+
+  app.get("/api/admin-voice-calls/:id", async (req: Request, res: Response) => {
+    const admin = await requireAdminCaller(req, res);
+    if (!admin) return;
+    const key = process.env.ELEVENLABS_API_KEY;
+    const id = String(req.params.id || "");
+    if (!key) return res.status(503).json({ error: "Add ELEVENLABS_API_KEY in Netlify to see call history here." });
+    if (!/^[A-Za-z0-9_-]{4,80}$/.test(id)) return res.status(400).json({ error: "Unknown call." });
+    try {
+      const r = await fetch(`https://api.elevenlabs.io/v1/convai/conversations/${encodeURIComponent(id)}`, { headers: { "xi-api-key": key } });
+      if (!r.ok) return res.status(502).json({ error: `ElevenLabs answered ${r.status}.` });
+      const d = (await r.json()) as {
+        transcript?: { role?: string; message?: string | null; time_in_call_secs?: number; tool_calls?: { tool_name?: string; params_as_json?: string }[] }[];
+        metadata?: { start_time_unix_secs?: number; call_duration_secs?: number; cost?: number | null; termination_reason?: string; conversation_initiation_source?: string };
+        analysis?: { transcript_summary?: string; call_successful?: string; call_summary_title?: string | null };
+      };
+      res.json({
+        id,
+        summary: d.analysis?.transcript_summary ?? null,
+        title: d.analysis?.call_summary_title ?? null,
+        outcome: d.analysis?.call_successful ?? null,
+        durationSecs: d.metadata?.call_duration_secs ?? null,
+        credits: d.metadata?.cost ?? null,
+        endedBecause: d.metadata?.termination_reason || null,
+        turns: (d.transcript ?? []).map((t) => ({
+          role: t.role === "agent" ? "agent" : "guest",
+          text: t.message ?? "",
+          at: t.time_in_call_secs ?? null,
+          tools: (t.tool_calls ?? []).map((c) => ({ name: c.tool_name ?? "", params: (c.params_as_json ?? "").slice(0, 400) })),
+        })),
+      });
+    } catch (err) {
+      console.error("[admin-voice-call]", err);
+      res.status(502).json({ error: "Couldn't reach ElevenLabs. Try again in a minute." });
+    }
   });
 
   app.post("/api/import-listing", async (req: Request, res: Response) => {

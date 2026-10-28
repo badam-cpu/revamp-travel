@@ -130,7 +130,7 @@ export default function TripPlan() {
         budgetPerPersonAmd: itinerary.budgetPerPersonAmd,
         packingTip: itinerary.packingTip,
       };
-      const r = await planTrip({ revise: { plan: JSON.stringify(lean).slice(0, 16000), change } });
+      const r = await planTrip({ revise: { plan: JSON.stringify(lean).slice(0, 16000), change } }, plan.token);
       const days = r.itinerary.days.length;
       update({ ...plan, planJson: JSON.stringify(r.itinerary), token: r.token, meta: `${days} day${days === 1 ? "" : "s"}`, dirty: !!plan.id });
       return true;

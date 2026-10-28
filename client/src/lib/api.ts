@@ -110,18 +110,36 @@ export interface Itinerary {
   places?: Record<string, PlannedPlace>;
 }
 
-/** The plan plus a server signature (null when emailing isn't set up) that lets it be emailed as-is. */
-export function planTrip(params: PlanTripParams): Promise<{ itinerary: Itinerary; token: string | null }> {
-  return request<{ itinerary: Itinerary; token?: string | null }>("/api/plan-trip", {
+/** A signed-in guest's token for the planner's admin log (0124) — optional, never required. */
+async function optionalAuth(): Promise<Record<string, string>> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const user = data.session?.user as { is_anonymous?: boolean; email?: string } | undefined;
+    return data.session?.access_token && user?.email && !user.is_anonymous ? { Authorization: `Bearer ${data.session.access_token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * The plan plus a server signature (null when emailing isn't set up) that lets
+ * it be emailed as-is. `fromToken` (a change's starting plan) links the change
+ * to it in the admin log.
+ */
+export async function planTrip(params: PlanTripParams, fromToken?: string | null): Promise<{ itinerary: Itinerary; token: string | null }> {
+  const d = await request<{ itinerary: Itinerary; token?: string | null }>("/api/plan-trip", {
     method: "POST",
-    body: JSON.stringify(params),
-  }).then((d) => ({ itinerary: d.itinerary, token: d.token ?? null }));
+    headers: await optionalAuth(),
+    body: JSON.stringify(fromToken ? { ...params, fromToken } : params),
+  });
+  return { itinerary: d.itinerary, token: d.token ?? null };
 }
 
 /** "Email me the full itinerary" — the plan exactly as the server returned it, with its token. */
-export function emailItinerary(email: string, itinerary: Itinerary, token: string, tripRequest?: string): Promise<{ ok: true }> {
+export async function emailItinerary(email: string, itinerary: Itinerary, token: string, tripRequest?: string): Promise<{ ok: true }> {
   return request<{ ok: true }>("/api/plan-trip/email", {
     method: "POST",
+    headers: await optionalAuth(),
     body: JSON.stringify({ email, itinerary, token, request: tripRequest }),
   });
 }
@@ -1220,3 +1238,68 @@ export async function adminReviewCredit(lotId: string, action: "approve" | "void
     body: JSON.stringify({ lotId, action, ...(note ? { note } : {}) }),
   });
 }
+
+// ── Admin → Aha AI (0124 trip planner log + ElevenLabs call history) ─────────
+
+export interface TripPlannerReport {
+  since: string;
+  totals: { plans: number; ok: number; failed: number; retried: number; changes: number; emails: number; saves: number; medianMs: number | null };
+  byDay: { day: string; plans: number; failed: number }[];
+  languages: { language: string; plans: number }[];
+  topPlaces: { slug: string; title: string; type: string; plans: number }[];
+  topAreas: { name: string; plans: number }[];
+  plans: {
+    id: number;
+    at: string;
+    source: string;
+    request: string | null;
+    language: string | null;
+    title: string | null;
+    days: number | null;
+    route: string[];
+    listings: { slug: string; title: string; type: string }[];
+    model: string | null;
+    durationMs: number | null;
+    retried: boolean;
+    ok: boolean;
+    error: string | null;
+    guest: string | null;
+    changes: { at: string; change: string | null; ok: boolean }[];
+    emails: { at: string; email: string | null; ok: boolean }[];
+    saved: boolean;
+  }[];
+}
+
+export interface VoiceCallSummary {
+  id: string;
+  startedAt: string | null;
+  durationSecs: number | null;
+  messages: number | null;
+  status: string | null;
+  outcome: string | null;
+  title: string | null;
+  language: string | null;
+  tools: string[];
+}
+
+export interface VoiceCallDetail {
+  id: string;
+  summary: string | null;
+  title: string | null;
+  outcome: string | null;
+  durationSecs: number | null;
+  credits: number | null;
+  endedBecause: string | null;
+  turns: { role: "agent" | "guest"; text: string; at: number | null; tools: { name: string; params: string }[] }[];
+}
+
+async function adminGet<T>(path: string): Promise<T> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  return request<T>(path, { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export const fetchTripPlannerReport = (days: number) => adminGet<TripPlannerReport>(`/api/admin-trip-planner?days=${days}`);
+export const fetchVoiceCalls = (cursor?: string | null) => adminGet<{ calls: VoiceCallSummary[]; nextCursor: string | null }>(`/api/admin-voice-calls${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+export const fetchVoiceCall = (id: string) => adminGet<VoiceCallDetail>(`/api/admin-voice-calls/${encodeURIComponent(id)}`);
