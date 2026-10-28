@@ -251,7 +251,18 @@ function routeOf(days: ItineraryDay[], modelRoute: unknown): string[] {
   const last = days[days.length - 1]?.base;
   if (last) towns.push(last);
   const list = towns.length ? towns : Array.isArray(modelRoute) ? (modelRoute as unknown[]).map((t) => str(t, 40)).filter(Boolean) : [];
-  return list.filter((t, i) => i === 0 || t.toLowerCase() !== list[i - 1].toLowerCase()).slice(0, 12);
+  // "Yerevan city centre" and "Yerevan" are the same stop on the route (live
+  // test 2026-10-28) — collapse neighbours where one name starts with the other,
+  // keeping the shorter name.
+  const out: string[] = [];
+  for (const t of list) {
+    const prev = out[out.length - 1];
+    const a = t.toLowerCase();
+    const b = prev?.toLowerCase();
+    if (b && (a.startsWith(b) || b.startsWith(a))) out[out.length - 1] = t.length < prev.length ? t : prev;
+    else out.push(t);
+  }
+  return out.slice(0, 12);
 }
 
 /** A sane per-person AMD total (rounded to 1,000), or undefined. */
@@ -260,10 +271,31 @@ function budgetOf(v: unknown): number | undefined {
   return Number.isFinite(n) && n >= 5_000 && n <= 50_000_000 ? Math.round(n / 1000) * 1000 : undefined;
 }
 
-/** "3 days" / "3-day" / "3 дня" / "3 օր" in the guest's own words → 3 (null if they didn't give a number). */
+// Trip lengths written in words (EN / RU / HY) — "a week", "пять дней", "երեք օր".
+const LENGTH_PHRASES: [RegExp, number][] = [
+  [/\b(two|2)\s*weeks?\b|две\s+недели|երկու\s+շաբաթ/i, 14],
+  [/\b(a|one|1)\s*-?\s*week\b|\bweek-?long\b|недел[юяи]|շաբաթ/i, 7],
+  [/\blong\s+weekend\b|длинные\s+выходные/i, 3],
+  [/\bweekend\b|выходные|уикенд|հանգստյան\s+օրեր/i, 2],
+];
+const NUMBER_WORDS: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  один: 1, одного: 1, два: 2, двух: 2, три: 3, трёх: 3, трех: 3, четыре: 4, пять: 5, шесть: 6, семь: 7, восемь: 8, девять: 9, десять: 10,
+  մեկ: 1, երկու: 2, երեք: 3, չորս: 4, հինգ: 5, վեց: 6, յոթ: 7, ութ: 8, ինը: 9, տասը: 10,
+};
+
+/**
+ * The trip length the guest named — "3 days" / "3-day" / "3 дня" / "3 օր",
+ * "three days" / "пять дней" / "երեք օր", "a week", "a long weekend" — or null.
+ * planTrip passes it to the prompt as the exact number of days (live test
+ * 2026-10-28: "a week" came back as 5 days).
+ */
 export function daysNamedIn(text: string | undefined): number | null {
-  const m = (text ?? "").match(/(\d{1,2})\s*-?\s*(days?|дн|день|дня|օր)/i);
-  const n = m ? Number(m[1]) : NaN;
+  const t = (text ?? "").toLowerCase();
+  const unit = "(?:days?|дн[ея]й?|день|дня|օր)";
+  const m = t.match(new RegExp(`(\\d{1,2})\\s*-?\\s*${unit}`, "i")) ?? t.match(new RegExp(`(?:^|[^\\p{L}])(\\p{L}+)\\s*-?\\s*${unit}`, "iu"));
+  let n = m ? (/^\d+$/.test(m[1]) ? Number(m[1]) : NUMBER_WORDS[m[1]] ?? NaN) : NaN;
+  if (!Number.isFinite(n)) n = LENGTH_PHRASES.find(([re]) => re.test(t))?.[1] ?? NaN;
   return Number.isFinite(n) && n >= 1 && n <= MAX_FREE_TEXT_DAYS ? n : null;
 }
 const str = (v: unknown, max = 400) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -339,8 +371,17 @@ export async function planTrip(params: PlanTripParams, listings: CatalogEntry[])
   // Cap output to what the trip length actually needs — fewer tokens = faster
   // response, which is the main lever on the timeout.
   // A free-text trip's length isn't known up front, so it gets the full budget.
-  const maxTokens = params.revise || (params.request?.trim() && !params.days) ? 4000 : Math.min(4000, 900 + Math.max(1, params.days ?? 5) * 300);
-  const prompt = buildPrompt(params, listings);
+  // A length the guest wrote in words goes to the prompt as the exact number of
+  // days (a Fine-tune "days" still wins).
+  const named = !params.revise && !params.days ? daysNamedIn(params.request) : null;
+  const asked: PlanTripParams = named ? { ...params, days: named } : params;
+  // Free text gets more room (other languages use more tokens per word).
+  const maxTokens = params.revise || (params.request?.trim() && !asked.days)
+    ? 4000
+    : params.request?.trim()
+      ? Math.min(8000, Math.max(4000, 900 + asked.days! * 450))
+      : Math.min(4000, 900 + Math.max(1, asked.days ?? 5) * 300);
+  const prompt = buildPrompt(asked, listings);
 
   const ask = async (maxTok: number): Promise<{ text: string; stop: string; model: string }> => {
     let response: Anthropic.Message | undefined;
@@ -411,7 +452,6 @@ export async function planTrip(params: PlanTripParams, listings: CatalogEntry[])
   }
   // Safety net for the length rule: if the guest wrote "3 days" and the model
   // added a day anyway, keep the first 3 (a Fine-tune "days" wins over the text).
-  const named = !params.revise && !params.days ? daysNamedIn(params.request) : null;
   if (named && itinerary.days.length > named) {
     itinerary.days = itinerary.days.slice(0, named);
     itinerary.route = routeOf(itinerary.days, itinerary.route);
