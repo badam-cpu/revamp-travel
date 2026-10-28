@@ -6,8 +6,13 @@
  *   - navigations are network-first, falling back to the cached shell offline
  *   - same-origin static assets use stale-while-revalidate (Vite hashes filenames,
  *     so a new deploy fetches fresh assets automatically)
+ *   - an HTML response is never stored for a non-page request (2026-10-28: a
+ *     tab from before a deploy asked for a deleted /assets/*.js, the host
+ *     answered with the app shell, and v1 cached that HTML as the script — so
+ *     the page kept breaking after every reload). v2 drops those entries.
  */
-const CACHE = "revamp-pwa-v1";
+const CACHE = "revamp-pwa-v2";
+const isHtml = (res) => (res.headers.get("content-type") || "").includes("text/html");
 const SHELL = ["/", "/favicon.ico", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
@@ -35,10 +40,11 @@ self.addEventListener("fetch", (event) => {
 
   // Static assets: serve from cache, refresh in the background.
   event.respondWith(
-    caches.match(req).then((cached) => {
+    caches.match(req).then((hit) => {
+      const cached = hit && !isHtml(hit) ? hit : undefined;
       const network = fetch(req)
         .then((res) => {
-          if (res && res.status === 200 && res.type === "basic") {
+          if (res && res.status === 200 && res.type === "basic" && !isHtml(res)) {
             const copy = res.clone();
             caches.open(CACHE).then((c) => c.put(req, copy));
           }

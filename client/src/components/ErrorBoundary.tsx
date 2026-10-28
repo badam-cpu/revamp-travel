@@ -29,6 +29,18 @@ class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, info: ErrorInfo) {
     // Developer-facing only — console, not the UI.
     console.error("[ErrorBoundary]", error, info.componentStack);
+    // A page file from before a deploy is gone: quietly reload once for the new
+    // version (same 30s guard as main.tsx's vite:preloadError handler).
+    if (/dynamically imported module|Importing a module script failed|Loading chunk|ChunkLoadError|error loading dynamically/i.test(String(error?.message ?? error))) {
+      try {
+        const last = Number(sessionStorage.getItem("revamp.chunkReload") || 0);
+        if (Date.now() - last < 30_000) return;
+        sessionStorage.setItem("revamp.chunkReload", String(Date.now()));
+      } catch {
+        /* storage blocked — still try one reload */
+      }
+      window.location.reload();
+    }
   }
 
   render() {

@@ -128,6 +128,16 @@
   status = 200
   force = true
 
+# A build file that doesn't exist (a tab from before a deploy asking for an old
+# hashed chunk) must be a real 404, not the app shell with 200 — the shell made
+# the import fail with "Failed to fetch dynamically imported module" and got
+# cached by the service worker as the script (2026-10-28). Existing files are
+# served before this rule (not forced).
+[[redirects]]
+  from = "/assets/*"
+  to = "/asset-not-found.txt"
+  status = 404
+
 # SPA fallback: client-side routing is done by wouter, so every non-file,
 # non-API path must return the app shell. Not forced, so real static assets in
 # dist/public (JS, CSS, images) are served directly before this catch-all.
