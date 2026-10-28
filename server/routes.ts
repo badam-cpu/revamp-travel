@@ -63,7 +63,7 @@ import { isInvoiceable, INVOICE_LIMITS } from "../shared/invoice.js";
 import { handleTelegramUpdate, alertOperatorTelegram } from "./telegramBot.js";
 import { splitContact, storeHeldContacts, contactFor, setConversationGuestEmail, conversationGuestEmail } from "./guestContacts.js";
 import { loadTourContext, canEditTour, classifyTourPhotos, saveTour, tourAiConfigured } from "./tours.js";
-import { sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, sendJourneyEmail, type BookingEmailInfo } from "./email.js";
+import { sendItinerary, sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, sendJourneyEmail, type BookingEmailInfo } from "./email.js";
 import { notifyBooking } from "./notify.js";
 import { telegramConfigured, telegramConnectLink, telegramBotUsername, setTelegramWebhook, sendTelegram } from "./telegram.js";
 import { isCrawlerUserAgent } from "./botDetect.js";
@@ -76,7 +76,7 @@ import type { RoomUnit } from "../shared/listings.js";
 import { overlapsSuspension } from "../shared/listings.js";
 import { changeListingStatus, upcomingBookings } from "./listingStatus.js";
 import { eventsSyncToken } from "./events.js";
-import { planTrip, PlannerError } from "./planner.js";
+import { planTrip, PlannerError, signItinerary, verifyItinerary } from "./planner.js";
 import { fetchPrefill, PrefillError } from "./urlPrefill.js";
 import { fetchMergedBlockedRanges, buildIcalFeed, type IcalFeed } from "./ical.js";
 import { SafeFetchError } from "./safeFetch.js";
@@ -116,8 +116,14 @@ const planTripSchema = z
     pace: z.enum(["relaxed", "balanced", "packed"]).optional(),
     budget: z.enum(["budget", "mid-range", "comfort"]).optional(),
     interests: z.array(z.string().trim().min(1).max(40)).max(8).optional(),
+    revise: z
+      .object({
+        plan: z.string().max(16000),
+        change: z.string().trim().min(1, "Tell Aha AI what to change.").max(300, "Please keep the change under 300 characters."),
+      })
+      .optional(),
   })
-  .refine((v) => !!v.request || !!v.days, { message: "Tell Aha AI a little about your trip first." });
+  .refine((v) => !!v.request || !!v.days || !!v.revise, { message: "Tell Aha AI a little about your trip first." });
 
 const importListingSchema = z.object({
   url: z.string().trim().min(1).max(2000),
@@ -472,6 +478,8 @@ const giftLookupHits = new Map<string, number[]>();
 const giftPurchaseHits = new Map<string, number[]>();
 // Per-IP cap for the public (unauthenticated) AI trip planner — protects the Anthropic bill.
 const planTripHits = new Map<string, number[]>();
+const planEmailIpHits = new Map<string, number[]>();
+const planEmailToHits = new Map<string, number[]>();
 // Public MCP connector: per-IP request cap, and a tighter one for plan_trip (each
 // call runs the AI planner). Best-effort per warm function, like the others.
 const mcpHits = new Map<string, number[]>();
@@ -1250,7 +1258,7 @@ export function registerApiRoutes(app: Express) {
     try {
       const listings = await listPublishedForPlanner();
       const itinerary = await planTrip(parsed.data, listings);
-      res.json({ itinerary });
+      res.json({ itinerary, token: signItinerary(itinerary) });
     } catch (err) {
       if (err instanceof PlannerError) {
         return res.status(err.status).json({ error: err.message });
@@ -1258,6 +1266,25 @@ export function registerApiRoutes(app: Express) {
       console.error("plan-trip failed", err);
       res.status(502).json({ error: "The trip planner is temporarily unavailable. Please try again." });
     }
+  });
+
+  // "Email me the full itinerary": only a plan this server signed (see
+  // planner.ts verifyItinerary), throttled per IP and per address.
+  app.post("/api/plan-trip/email", async (req: Request, res: Response) => {
+    const email = z.string().trim().toLowerCase().email().max(200).safeParse(req.body?.email);
+    if (!email.success) return res.status(400).json({ error: "That email address doesn't look right." });
+    if (!verifyItinerary(req.body?.itinerary, req.body?.token)) {
+      return res.status(400).json({ error: "This plan can't be emailed — please make a new one and try again." });
+    }
+    if (rateLimited(planEmailIpHits, req.ip || "unknown", 5, 60 * 60_000) || rateLimited(planEmailToHits, email.data, 3, 60 * 60_000)) {
+      return res.status(429).json({ error: "We've sent a few plans already — please try again in a little while." });
+    }
+    const result = await sendItinerary(email.data, req.body.itinerary);
+    if (!result.sent) {
+      console.error("[plan-email] not sent:", result.reason);
+      return res.status(502).json({ error: "We couldn't send the email just now. Please try again." });
+    }
+    res.json({ ok: true });
   });
 
   app.post("/api/import-listing", async (req: Request, res: Response) => {

@@ -762,3 +762,72 @@ export function sendCronRecovered(to: string, opts: { job: string }) {
   );
   return send(to, `✅ Cron "${opts.job}" recovered`, html);
 }
+
+/** A guest asked for their Aha AI trip plan by email (/plan → "Email me the full itinerary"). */
+export interface ItineraryEmail {
+  tripTitle: string;
+  summary: string;
+  route?: string[];
+  estimatedBudget: string;
+  packingTip: string;
+  days: { day: number; title: string; area?: string; base?: string; drive?: string; tip?: string; stops?: { time: string; text: string; listing?: string; move?: string }[]; morning: string; afternoon: string; evening: string }[];
+  places?: Record<string, { slug: string; type: string; title: string; city: string; priceCents?: number; priceUnit: string; priceBand?: string; image?: string }>;
+}
+
+export function sendItinerary(to: string, it: ItineraryEmail) {
+  const site = SITE();
+  const places = it.places ?? {};
+  const TIME: Record<string, string> = { morning: "Morning", afternoon: "Afternoon", evening: "Evening" };
+  const TYPE: Record<string, string> = { stay: "Stay", eat: "Restaurant", tour: "Tour", experience: "Experience", place: "Place to visit" };
+  const bookable = (t: string) => t === "stay" || t === "tour" || t === "experience";
+  const card = (slug: string) => {
+    const p = places[slug];
+    if (!p) return "";
+    const url = `${site}/listing/${encodeURIComponent(p.slug)}?utm_source=email&utm_medium=itinerary`;
+    const price = p.type === "eat" ? p.priceBand ?? "" : p.priceCents && p.priceCents > 0 ? `${money(Math.round(p.priceCents / 10000) * 10000, "AMD")} / ${p.priceUnit}` : "";
+    return `<a href="${esc(url)}" style="display:block;text-decoration:none;color:#212121;border:1px solid #e4ded3;border-radius:12px;padding:8px;margin:8px 0 0;">
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;"><tr>
+        ${p.image ? `<td style="width:64px;vertical-align:middle;"><img src="${esc(p.image)}" width="64" height="52" alt="" style="display:block;width:64px;height:52px;object-fit:cover;border-radius:8px;" /></td>` : ""}
+        <td style="padding:0 10px;vertical-align:middle;">
+          <div style="font-size:14px;font-weight:700;line-height:1.3;">${esc(p.title)}</div>
+          <div style="font-size:12px;color:#6B6357;margin-top:2px;">${esc(TYPE[p.type] ?? "")} · ${esc(p.city)}${price ? ` · ${esc(price)}` : ""}</div>
+        </td>
+        <td style="width:1%;white-space:nowrap;vertical-align:middle;"><span style="display:inline-block;border:1px solid ${bookable(p.type) ? "#F15822" : "#cfc8bc"};color:${bookable(p.type) ? "#F15822" : "#6B6357"};border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;">${bookable(p.type) ? "Book" : "View"}</span></td>
+      </tr></table></a>`;
+  };
+  const days = it.days
+    .map((d) => {
+      const stops = d.stops?.length ? d.stops : (["morning", "afternoon", "evening"] as const).filter((t) => d[t]).map((t) => ({ time: t, text: d[t] }) as { time: string; text: string; listing?: string; move?: string });
+      const facts = [d.drive, d.base && `sleep in ${d.base}`].filter(Boolean).join(" · ");
+      return `<div style="border-top:1px solid #eee;padding:18px 0 4px;">
+        <p style="margin:0;font-size:12px;font-weight:700;color:#F15822;letter-spacing:.08em;text-transform:uppercase;">Day ${d.day}${d.area ? ` · ${esc(d.area)}` : ""}</p>
+        <p style="margin:4px 0 2px;font-size:18px;font-weight:700;line-height:1.3;">${esc(d.title)}</p>
+        ${facts ? `<p style="margin:0 0 10px;font-size:12px;color:#8B8478;">${esc(facts)}</p>` : ""}
+        ${stops
+          .map((st) => `<div style="margin:12px 0 0;">
+            <p style="margin:0;font-size:11px;font-weight:700;color:#8B8478;letter-spacing:.1em;text-transform:uppercase;">${esc(TIME[st.time] ?? "")}</p>
+            <p style="margin:2px 0 0;font-size:15px;line-height:1.55;">${esc(st.text)}</p>
+            ${st.listing ? card(st.listing) : ""}
+            ${st.move ? `<p style="margin:6px 0 0;font-size:12px;color:#8B8478;">↓ ${esc(st.move)}</p>` : ""}
+          </div>`)
+          .join("")}
+        ${d.tip ? `<p style="margin:12px 0 0;font-size:13px;line-height:1.5;color:#6B6357;background:#f6f3ec;border-radius:8px;padding:9px 12px;">💡 ${esc(d.tip)}</p>` : ""}
+      </div>`;
+    })
+    .join("");
+  const route = (it.route ?? []).filter((t, i, a) => i === 0 || t !== a[i - 1]);
+  const html = shell(
+    it.tripTitle,
+    `${it.summary ? `<p style="font-size:15px;line-height:1.6;color:#4a443c;margin:0 0 12px;">${esc(it.summary)}</p>` : ""}
+     <p style="font-size:13px;line-height:1.7;color:#6B6357;margin:0 0 16px;">
+       ${route.length > 1 ? `Route: ${esc(route.join(" → "))}<br />` : ""}
+       ${it.estimatedBudget && it.estimatedBudget !== "—" ? `Budget: ${esc(it.estimatedBudget)}` : ""}
+     </p>
+     ${days}
+     ${it.packingTip ? `<p style="border-top:1px solid #eee;margin:18px 0 0;padding-top:16px;font-size:13px;line-height:1.5;color:#6B6357;">🎒 ${esc(it.packingTip)}</p>` : ""}
+     <p style="margin:20px 0 6px;"><a href="${esc(site)}/plan?utm_source=email&utm_medium=itinerary" style="display:inline-block;background:#F15822;color:#fff;padding:11px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Plan another trip with Aha AI</a></p>
+     <p style="font-size:12px;color:#8B8478;margin:12px 0 0;line-height:1.6;">Drafted by Aha AI. Prices are from the listings when this was sent; timing and the budget are a starting point, not a reservation. You asked for this plan on revampvacations.com — we haven't added you to any mailing list.</p>`,
+    site,
+  );
+  return send(to, `Your trip plan: ${it.tripTitle}`, html);
+}

@@ -372,6 +372,7 @@ interface ListingRow {
   venue_type: string | null;
   cuisine: string | null;
   price_band: string | null;
+  image: string | null;
 }
 
 /** A lightweight projection of the published catalog — just what planner.ts's catalogDigest() needs, not the full Listing shape. */
@@ -397,6 +398,8 @@ export async function listPublishedForPlanner(): Promise<CatalogEntry[]> {
     venueType: row.venue_type ?? undefined,
     cuisine: row.cuisine ?? undefined,
     priceBand: (row.price_band as "$" | "$$" | "$$$" | null) ?? undefined,
+    image: row.image ?? "",
+    priceCents: row.price_cents,
   }));
 }
 

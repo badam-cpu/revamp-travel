@@ -59,11 +59,39 @@ export interface PlanTripParams {
   pace?: "relaxed" | "balanced" | "packed";
   budget?: "budget" | "mid-range" | "comfort";
   interests?: string[];
+  /** "Change anything": the plan on screen (JSON, without places) + the guest's change. */
+  revise?: { plan: string; change: string };
+}
+
+export type StopTime = "morning" | "afternoon" | "evening";
+
+export interface ItineraryStop {
+  time: StopTime;
+  text: string;
+  /** Slug of a real listing — its card is in `Itinerary.places`. */
+  listing?: string;
+  move?: string;
+}
+
+export interface PlannedPlace {
+  slug: string;
+  type: "stay" | "eat" | "tour" | "experience" | "place";
+  title: string;
+  city: string;
+  priceLabel: string;
+  priceCents?: number;
+  priceUnit: string;
+  priceBand?: string;
+  image?: string;
 }
 
 export interface ItineraryDay {
   day: number;
   title: string;
+  area?: string;
+  base?: string;
+  drive?: string;
+  stops?: ItineraryStop[];
   morning: string;
   afternoon: string;
   evening: string;
@@ -73,16 +101,27 @@ export interface ItineraryDay {
 export interface Itinerary {
   tripTitle: string;
   summary: string;
+  route?: string[];
   days: ItineraryDay[];
   estimatedBudget: string;
   packingTip: string;
+  places?: Record<string, PlannedPlace>;
 }
 
-export function planTrip(params: PlanTripParams): Promise<Itinerary> {
-  return request<{ itinerary: Itinerary }>("/api/plan-trip", {
+/** The plan plus a server signature (null when emailing isn't set up) that lets it be emailed as-is. */
+export function planTrip(params: PlanTripParams): Promise<{ itinerary: Itinerary; token: string | null }> {
+  return request<{ itinerary: Itinerary; token?: string | null }>("/api/plan-trip", {
     method: "POST",
     body: JSON.stringify(params),
-  }).then((d) => d.itinerary);
+  }).then((d) => ({ itinerary: d.itinerary, token: d.token ?? null }));
+}
+
+/** "Email me the full itinerary" — the plan exactly as the server returned it, with its token. */
+export function emailItinerary(email: string, itinerary: Itinerary, token: string): Promise<{ ok: true }> {
+  return request<{ ok: true }>("/api/plan-trip/email", {
+    method: "POST",
+    body: JSON.stringify({ email, itinerary, token }),
+  });
 }
 
 export interface ListingPrefill {
