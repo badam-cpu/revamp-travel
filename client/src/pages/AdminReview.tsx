@@ -339,11 +339,11 @@ function AdminConsole() {
     <div className="min-h-screen bg-paper text-basalt">
       <SiteHeader minimal />
       <main className="container py-10 lg:py-14">
-        <div className="grid gap-8 lg:grid-cols-[210px_minmax(0,1fr)]">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[210px_minmax(0,1fr)]">
           <aside className="lg:sticky lg:top-[96px] lg:self-start">
             <p className="hidden px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-basalt/40 lg:block">Admin</p>
             <nav className="mt-0 flex gap-1 overflow-x-auto pb-1 lg:mt-3 lg:flex-col lg:overflow-visible lg:pb-0">
-              <Link href="/" className="flex items-center gap-2.5 whitespace-nowrap px-3 py-2.5 text-sm font-semibold text-basalt/60 transition-colors hover:bg-chalk hover:text-basalt">
+              <Link href="/" className="flex shrink-0 items-center gap-2.5 whitespace-nowrap px-3 py-2.5 text-sm font-semibold text-basalt/60 transition-colors hover:bg-chalk hover:text-basalt">
                 <Home className="h-4 w-4" /> Homepage
               </Link>
               {ADMIN_SECTIONS.map(({ key, label, icon: Icon }) => (
@@ -353,7 +353,7 @@ function AdminConsole() {
                   onClick={() => go(key)}
                   aria-current={section === key}
                   className={cn(
-                    "flex items-center gap-2.5 whitespace-nowrap px-3 py-2.5 text-sm font-semibold transition-colors",
+                    "flex shrink-0 items-center gap-2.5 whitespace-nowrap px-3 py-2.5 text-sm font-semibold transition-colors",
                     section === key ? "bg-basalt text-paper" : "text-basalt/60 hover:bg-chalk hover:text-basalt",
                   )}
                 >

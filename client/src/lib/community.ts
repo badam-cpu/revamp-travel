@@ -229,3 +229,80 @@ export async function adminSaveTelegramUrl(url: string | null): Promise<void> {
   const { error } = await supabase.from("community_settings").update({ telegram_url: url, updated_at: new Date().toISOString() }).eq("id", 1);
   if (error) throw error;
 }
+
+/* ── News sources (0126, admin-only) ──────────────────────────────────── */
+
+export interface NewsSourceRow {
+  id: string;
+  groupLabel: string;
+  name: string;
+  siteUrl: string;
+  feedUrl: string | null;
+  feedStatus: "unchecked" | "ok" | "none" | "error";
+  lastItemAt: string | null;
+  lastError: string | null;
+  active: boolean;
+  sort: number;
+}
+
+export async function adminListSources(): Promise<NewsSourceRow[]> {
+  const { data, error } = await supabase
+    .from("community_news_sources")
+    .select("id, group_label, name, site_url, feed_url, feed_status, last_item_at, last_error, active, sort")
+    .order("sort")
+    .order("name");
+  if (error) throw error;
+  return ((data ?? []) as { id: string; group_label: string; name: string; site_url: string; feed_url: string | null; feed_status: NewsSourceRow["feedStatus"]; last_item_at: string | null; last_error: string | null; active: boolean; sort: number }[]).map((r) => ({
+    id: r.id,
+    groupLabel: r.group_label,
+    name: r.name,
+    siteUrl: r.site_url,
+    feedUrl: r.feed_url,
+    feedStatus: r.feed_status,
+    lastItemAt: r.last_item_at,
+    lastError: r.last_error,
+    active: r.active,
+    sort: r.sort,
+  }));
+}
+
+export async function adminSaveSource(id: string | null, s: { groupLabel: string; name: string; siteUrl: string; feedUrl: string | null; active: boolean; sort?: number }): Promise<void> {
+  const row: Record<string, unknown> = { group_label: s.groupLabel.trim(), name: s.name.trim(), site_url: s.siteUrl.trim(), active: s.active };
+  // A typed feed is trusted as-is; clearing it lets the next run look for one again.
+  row.feed_url = s.feedUrl?.trim() || null;
+  row.feed_status = s.feedUrl?.trim() ? "ok" : "unchecked";
+  row.feed_checked_at = null;
+  if (s.sort !== undefined) row.sort = s.sort;
+  const { error } = id ? await supabase.from("community_news_sources").update(row).eq("id", id) : await supabase.from("community_news_sources").insert(row);
+  if (error) throw error;
+}
+
+export async function adminSetSourceActive(id: string, active: boolean): Promise<void> {
+  const { error } = await supabase.from("community_news_sources").update({ active }).eq("id", id);
+  if (error) throw error;
+}
+
+export async function adminDeleteSource(id: string): Promise<void> {
+  const { error } = await supabase.from("community_news_sources").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function adminCheckSource(id: string): Promise<{ feedUrl: string | null; status: string; note: string | null }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  const res = await fetch("/api/admin-community/check-source", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(body?.error || "Couldn't check that site right now.");
+  return body;
+}
+
+export async function getNewsWiderSearch(): Promise<boolean> {
+  const { data } = await supabase.from("community_settings").select("news_wider_search").eq("id", 1).maybeSingle();
+  return (data as { news_wider_search?: boolean } | null)?.news_wider_search ?? true;
+}
+
+export async function adminSetNewsWiderSearch(on: boolean): Promise<void> {
+  const { error } = await supabase.from("community_settings").update({ news_wider_search: on, updated_at: new Date().toISOString() }).eq("id", 1);
+  if (error) throw error;
+}

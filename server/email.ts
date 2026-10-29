@@ -866,3 +866,19 @@ export function sendCommunityWelcome(to: string, opts: { meetup?: { title: strin
   );
   return send(to, opts.meetup ? `Your seat: ${opts.meetup.title}` : "Welcome to revamp community", html);
 }
+
+/** revamp.community (0126): Aha AI found new stories for admins to check. */
+export function sendCommunityNewsAlert(to: string, opts: { count: number; titles: string[]; reviewUrl: string }) {
+  const list = opts.titles
+    .slice(0, 8)
+    .map((t) => `<li style="margin:0 0 6px;">${esc(t)}</li>`)
+    .join("");
+  const html = shell(
+    `${opts.count} new ${opts.count === 1 ? "story" : "stories"} to check`,
+    `<p style="font-size:15px;line-height:1.6;margin:0 0 12px;">Aha AI found news for revamp.community. Nothing is published until you check it.</p>
+     <ul style="font-size:14px;line-height:1.5;margin:0 0 16px;padding-left:18px;color:#3f3b36;">${list}</ul>
+     <p style="margin:0 0 8px;"><a href="${esc(opts.reviewUrl)}" style="background:#212121;color:#fff;padding:11px 20px;border-radius:999px;text-decoration:none;font-weight:700;">Review the stories</a></p>`,
+    SITE(),
+  );
+  return send(to, `${opts.count} new ${opts.count === 1 ? "story" : "stories"} for revamp.community`, html);
+}

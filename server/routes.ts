@@ -64,7 +64,7 @@ import { handleTelegramUpdate, alertOperatorTelegram } from "./telegramBot.js";
 import { splitContact, storeHeldContacts, contactFor, setConversationGuestEmail, conversationGuestEmail } from "./guestContacts.js";
 import { loadTourContext, canEditTour, classifyTourPhotos, saveTour, tourAiConfigured } from "./tours.js";
 import { sendItinerary, sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, sendJourneyEmail, sendCommunityWelcome, type BookingEmailInfo } from "./email.js";
-import { communityNewsToken } from "./communityNews.js";
+import { communityNewsToken, discoverFeed } from "./communityNews.js";
 import { formatMeetupWhen, meetupPlace } from "../shared/community.js";
 import { notifyBooking } from "./notify.js";
 import { telegramConfigured, telegramConnectLink, telegramBotUsername, setTelegramWebhook, sendTelegram } from "./telegram.js";
@@ -1621,6 +1621,24 @@ export function registerApiRoutes(app: Express) {
     } catch (e) {
       console.error("[admin-community/find-news]", e);
       res.status(502).json({ error: "Couldn't start the search. Please try again." });
+    }
+  });
+
+  // Admin → Community → Sources: find (or re-check) a source's news feed now.
+  app.post("/api/admin-community/check-source", async (req: Request, res: Response) => {
+    const admin = await requireAdminCaller(req, res);
+    if (!admin) return;
+    const id = typeof req.body?.id === "string" ? req.body.id : "";
+    const { data: src } = await admin.from("community_news_sources").select("id, site_url").eq("id", id).maybeSingle();
+    if (!src) return res.status(404).json({ error: "That source isn't there any more." });
+    try {
+      const { feedUrl, error } = await discoverFeed((src as { site_url: string }).site_url);
+      const patch = { feed_url: feedUrl, feed_status: feedUrl ? "ok" : error && !/blocks/.test(error) ? "error" : "none", feed_checked_at: new Date().toISOString(), last_error: error };
+      await admin.from("community_news_sources").update(patch).eq("id", id);
+      res.json({ feedUrl, status: patch.feed_status, note: error });
+    } catch (e) {
+      console.error("[admin-community/check-source]", e);
+      res.status(502).json({ error: "Couldn't check that site right now." });
     }
   });
 

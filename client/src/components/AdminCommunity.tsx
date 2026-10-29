@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { CalendarDays, Download, ExternalLink, Loader2, Newspaper, Plus, Search, Settings, Users } from "lucide-react";
+import { CalendarDays, Download, ExternalLink, Library, Loader2, Newspaper, Plus, RefreshCw, Search, Settings, Users } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { userMessage } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -24,14 +24,22 @@ import {
   adminSaveMeetup,
   adminSaveNews,
   adminSaveTelegramUrl,
+  adminListSources,
+  adminSaveSource,
+  adminSetSourceActive,
+  adminDeleteSource,
+  adminCheckSource,
+  adminSetNewsWiderSearch,
   getCommunityTelegramUrl,
+  getNewsWiderSearch,
+  type NewsSourceRow,
   type CommunityMemberRow,
   type MeetupInput,
   type NewsEdit,
 } from "@/lib/community";
 import { COMMUNITY_ORIGIN, HOSTS_OPTIONS, NEWS_CATEGORIES, formatMeetupWhen, formatNewsDate, meetupPlace, newsCategoryLabel, newsSlug, sourceLabel, type CommunityMeetup, type CommunityNewsItem, type NewsCategory } from "@shared/community";
 
-type Tab = "news" | "meetups" | "members" | "settings";
+type Tab = "news" | "sources" | "meetups" | "members" | "settings";
 
 const field = "h-11 w-full rounded-lg border border-basalt/20 bg-paper px-3 text-base outline-none focus:border-apricot sm:text-sm";
 const area = "w-full rounded-lg border border-basalt/20 bg-paper px-3 py-2 text-base outline-none focus:border-apricot sm:text-sm";
@@ -53,6 +61,7 @@ export function AdminCommunity() {
       <div className="mb-6 flex flex-wrap gap-2">
         {([
           { k: "news", label: "News", icon: Newspaper },
+          { k: "sources", label: "Sources", icon: Library },
           { k: "meetups", label: "Meetups", icon: CalendarDays },
           { k: "members", label: "Members", icon: Users },
           { k: "settings", label: "Settings", icon: Settings },
@@ -63,6 +72,7 @@ export function AdminCommunity() {
         ))}
       </div>
       {tab === "news" && <NewsTab />}
+      {tab === "sources" && <SourcesTab />}
       {tab === "meetups" && <MeetupsTab />}
       {tab === "members" && <MembersTab />}
       {tab === "settings" && <SettingsTab />}
@@ -133,7 +143,7 @@ function NewsTab() {
           </button>
         </div>
       </div>
-      <p className="text-sm text-basalt/70">Aha AI searches the web every Monday and Thursday and adds stories here to check. Nothing appears on the site until you publish it. Check the source before publishing.</p>
+      <p className="text-sm text-basalt/70">Every Monday and Thursday Aha AI reads your sources (see Sources) and adds stories here to check. Nothing appears on the site until you publish it. Check the source before publishing.</p>
       {adding && (
         <NewsEditor
           initial={EMPTY_EDIT}
@@ -512,9 +522,21 @@ function MembersTab() {
 function SettingsTab() {
   const [url, setUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [wider, setWider] = useState<boolean | null>(null);
   useEffect(() => {
     getCommunityTelegramUrl().then((u) => setUrl(u ?? ""));
+    getNewsWiderSearch().then(setWider).catch(() => setWider(true));
   }, []);
+  const toggleWider = async (on: boolean) => {
+    setWider(on);
+    try {
+      await adminSetNewsWiderSearch(on);
+      toast(on ? "Aha AI will also do a short wider search." : "Aha AI will use your sources only.");
+    } catch (e) {
+      setWider(!on);
+      toast(userMessage(e, "Couldn't save. Has migration 0126 been run?"));
+    }
+  };
   const save = async () => {
     const v = (url ?? "").trim();
     if (v && !/^https:\/\/(t\.me|telegram\.me)\//.test(v)) return toast("Use a Telegram invite link (https://t.me/…).");
@@ -536,6 +558,165 @@ function SettingsTab() {
         <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://t.me/+…" className={field} />
       </label>
       <button type="button" disabled={busy} onClick={save} className="min-h-10 self-start rounded-full bg-apricot hover:bg-apricot/90 px-5 text-sm font-bold text-white disabled:opacity-60">Save</button>
+      <label className="mt-6 flex items-start gap-3 rounded-xl border border-basalt/12 p-4 text-sm">
+        <input type="checkbox" checked={wider ?? true} disabled={wider === null} onChange={(e) => toggleWider(e.target.checked)} className="mt-0.5 h-5 w-5 accent-apricot" />
+        <span>
+          <span className="font-semibold">Also do a short wider search</span>
+          <span className="mt-0.5 block text-basalt/70">After reading your sources, Aha AI runs a few web searches for what they don't cover: travel to Armenia, Armenian rules and taxes, and big booking-site changes. Off = your sources only (cheaper, may miss Armenia news).</span>
+        </span>
+      </label>
+    </div>
+  );
+}
+
+/* ── Sources (0126) ───────────────────────────────────────────────────── */
+
+const EMPTY_SOURCE = { groupLabel: "", name: "", siteUrl: "", feedUrl: "", active: true };
+
+function feedLabel(s: NewsSourceRow): { text: string; tone: string } {
+  if (s.feedUrl && s.feedStatus === "ok") return { text: s.lastItemAt ? `Feed · last post ${formatNewsDate(s.lastItemAt)}` : "Feed", tone: "bg-emerald-50 text-emerald-800" };
+  if (s.feedStatus === "error") return { text: "Feed failed — searched instead", tone: "bg-amber-50 text-amber-800" };
+  if (s.feedStatus === "none") return { text: "No feed — searched instead", tone: "bg-basalt/[0.06] text-basalt/70" };
+  return { text: "Not checked yet", tone: "bg-basalt/[0.06] text-basalt/70" };
+}
+
+function SourcesTab() {
+  const [rows, setRows] = useState<NewsSourceRow[] | null>(null);
+  const [editing, setEditing] = useState<NewsSourceRow | "new" | null>(null);
+  const [checking, setChecking] = useState<string | null>(null);
+  const load = useCallback(() => {
+    adminListSources()
+      .then(setRows)
+      .catch((e) => {
+        console.error(e);
+        toast("Couldn't load the sources. Has migration 0126 been run?");
+        setRows([]);
+      });
+  }, []);
+  useEffect(load, [load]);
+
+  const check = async (s: NewsSourceRow) => {
+    setChecking(s.id);
+    try {
+      const r = await adminCheckSource(s.id);
+      toast(r.feedUrl ? "Feed found — Aha AI will read it." : r.note || "No feed on that site — Aha AI will search it instead.");
+      load();
+    } catch (e) {
+      toast(userMessage(e, "Couldn't check that site right now."));
+    } finally {
+      setChecking(null);
+    }
+  };
+  const toggle = async (s: NewsSourceRow) => {
+    try {
+      await adminSetSourceActive(s.id, !s.active);
+      load();
+    } catch (e) {
+      toast(userMessage(e, "Couldn't save."));
+    }
+  };
+
+  if (rows === null) return <div className="grid place-items-center py-16 text-basalt/50"><Loader2 className="h-5 w-5 animate-spin" /></div>;
+  const groups = Array.from(new Set(rows.map((r) => r.groupLabel || "Other")));
+  const withFeed = rows.filter((r) => r.active && r.feedUrl && r.feedStatus === "ok").length;
+  const active = rows.filter((r) => r.active).length;
+  return (
+    <div className="grid gap-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <p className="text-sm"><span className="text-lg font-extrabold">{active}</span> active source{active === 1 ? "" : "s"} · {withFeed} read by feed, the rest searched</p>
+        <button type="button" onClick={() => setEditing("new")} className="ml-auto inline-flex min-h-10 items-center gap-1.5 rounded-full bg-basalt px-4 text-sm font-semibold text-paper">
+          <Plus className="h-4 w-4" /> Add a source
+        </button>
+      </div>
+      <p className="text-sm text-basalt/70">Aha AI reads sources with a news feed directly (free, and every link is real). Sites without one, or that block automated readers, are covered by a web search limited to those sites. Pause a source to leave it out.</p>
+      {editing && <SourceEditor existing={editing === "new" ? null : editing} groups={groups} onDone={() => { setEditing(null); load(); }} />}
+      {rows.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-basalt/20 p-6 text-sm text-basalt/70">No sources yet. Add the sites you trust.</p>
+      ) : (
+        groups.map((g) => (
+          <section key={g} className="grid gap-2">
+            <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-basalt/70">{g}</h3>
+            <ul className="grid gap-2">
+              {rows.filter((r) => (r.groupLabel || "Other") === g).map((s) => {
+                const f = feedLabel(s);
+                return (
+                  <li key={s.id} className={cn("flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-basalt/12 bg-paper p-3", !s.active && "opacity-60")}>
+                    <div className="min-w-0 flex-1 basis-full sm:basis-auto">
+                      <p className="font-semibold">{s.name}</p>
+                      <a href={s.siteUrl} target="_blank" rel="noreferrer noopener" className="inline-flex max-w-full items-center gap-1 truncate text-xs text-basalt/70 hover:underline">{s.siteUrl.replace(/^https:\/\/(www\.)?/, "")} <ExternalLink className="h-3 w-3 shrink-0" /></a>
+                    </div>
+                    <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", f.tone)} title={s.lastError ?? undefined}>{s.active ? f.text : "Paused"}</span>
+                    <button type="button" onClick={() => check(s)} disabled={checking === s.id} className="inline-flex min-h-10 items-center gap-1 rounded-full border border-basalt/20 px-3 text-sm font-semibold disabled:opacity-60" aria-label={`Check ${s.name} for a feed`}>
+                      <RefreshCw className={cn("h-3.5 w-3.5", checking === s.id && "animate-spin")} /> Check
+                    </button>
+                    <button type="button" onClick={() => toggle(s)} className="min-h-10 rounded-full border border-basalt/20 px-3 text-sm font-semibold">{s.active ? "Pause" : "Resume"}</button>
+                    <button type="button" onClick={() => setEditing(s)} className="min-h-10 rounded-full border border-basalt/20 px-3 text-sm font-semibold">Edit</button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ))
+      )}
+    </div>
+  );
+}
+
+function SourceEditor({ existing, groups, onDone }: { existing: NewsSourceRow | null; groups: string[]; onDone: () => void }) {
+  const [s, setS] = useState(() => (existing ? { groupLabel: existing.groupLabel, name: existing.name, siteUrl: existing.siteUrl, feedUrl: existing.feedUrl ?? "", active: existing.active } : EMPTY_SOURCE));
+  const [busy, setBusy] = useState(false);
+  const set = <K extends keyof typeof EMPTY_SOURCE>(k: K, v: (typeof EMPTY_SOURCE)[K]) => setS((p) => ({ ...p, [k]: v }));
+  const save = async () => {
+    if (s.name.trim().length < 2) return toast("Add the source's name.");
+    if (!/^https:\/\//.test(s.siteUrl.trim())) return toast("Add the website (https://…).");
+    if (s.feedUrl.trim() && !/^https:\/\//.test(s.feedUrl.trim())) return toast("The feed link must start with https://");
+    setBusy(true);
+    try {
+      await adminSaveSource(existing?.id ?? null, { ...s, feedUrl: s.feedUrl.trim() || null, sort: existing?.sort ?? 1000 });
+      toast(s.feedUrl.trim() ? "Saved." : "Saved. Use Check to look for its news feed.");
+      onDone();
+    } catch (e) {
+      toast(userMessage(e, "Couldn't save the source."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async () => {
+    if (!existing || !window.confirm(`Remove ${existing.name}? Stories already found from it stay.`)) return;
+    try {
+      await adminDeleteSource(existing.id);
+      onDone();
+    } catch (e) {
+      toast(userMessage(e, "Couldn't remove it."));
+    }
+  };
+  return (
+    <div className="grid gap-3 rounded-xl border border-apricot/40 bg-paper p-4">
+      <p className="font-extrabold">{existing ? "Edit source" : "New source"}</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="grid gap-1 text-sm font-semibold">
+          Name
+          <input value={s.name} maxLength={120} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Skift" className={field} />
+        </label>
+        <label className="grid gap-1 text-sm font-semibold">
+          Group
+          <input value={s.groupLabel} maxLength={80} list="community-source-groups" onChange={(e) => set("groupLabel", e.target.value)} placeholder="e.g. Short-term rentals" className={field} />
+          <datalist id="community-source-groups">{groups.map((g) => <option key={g} value={g} />)}</datalist>
+        </label>
+      </div>
+      <label className="grid gap-1 text-sm font-semibold">
+        Website
+        <input type="url" value={s.siteUrl} onChange={(e) => set("siteUrl", e.target.value)} placeholder="https://…" className={field} />
+      </label>
+      <label className="grid gap-1 text-sm font-semibold">
+        News feed (RSS) <span className="font-normal text-basalt/70">optional — leave empty and use Check to find it</span>
+        <input type="url" value={s.feedUrl} onChange={(e) => set("feedUrl", e.target.value)} placeholder="https://…/feed/" className={field} />
+      </label>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" disabled={busy} onClick={save} className="min-h-10 rounded-full bg-apricot hover:bg-apricot/90 px-4 text-sm font-bold text-white disabled:opacity-60">Save</button>
+        <button type="button" onClick={onDone} className="min-h-10 rounded-full px-4 text-sm font-semibold text-basalt/70">Cancel</button>
+        {existing && <button type="button" onClick={remove} className="ml-auto min-h-10 rounded-full px-4 text-sm font-semibold text-red-700">Remove</button>}
+      </div>
     </div>
   );
 }

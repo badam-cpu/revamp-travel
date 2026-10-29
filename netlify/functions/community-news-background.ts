@@ -23,7 +23,7 @@ export default async (req: Request): Promise<void> => {
   try {
     const r = await findCommunityNews(admin);
     console.log("[community-news]", JSON.stringify(r));
-    await recordCronRun(admin, JOB, true, `found ${r.found}, checked ${r.accepted}, new drafts ${r.stored}, searches ${r.searches}`);
+    await recordCronRun(admin, JOB, true, `sources ${r.sources}, feed posts ${r.feedPosts}, found ${r.found}, checked ${r.accepted}, new drafts ${r.stored}, searches ${r.searches}`);
   } catch (e) {
     console.error("[community-news] failed", e);
     await recordCronRun(admin, JOB, false, e instanceof Error ? e.message : String(e));
