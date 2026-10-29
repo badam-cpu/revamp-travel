@@ -28,6 +28,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { emailConfigured, sendCronAlert, sendCronRecovered } from "./email.js";
+import { COMMUNITY_LIVE } from "../shared/community.js";
 
 export interface CronJobSpec {
   /** Stable key — must match the `job` passed to recordCronRun(). */
@@ -59,6 +60,9 @@ export const CRON_REGISTRY: CronJobSpec[] = [
   { job: "faq-auto", label: "Automatic guest FAQ (Aha AI)", maxAgeMinutes: 180, every: "runs every 20 minutes" },
   // Schedule: */5 * * * * (inbox-ai) → alert if no success in ~1h.
   { job: "inbox-ai", label: "Aha AI automatic inbox answers", maxAgeMinutes: 60, every: "runs every 5 minutes" },
+  // Schedule: Mon + Thu 04:00 UTC (community-news → community-news-background) → alert after ~5 days.
+  // Watched only once revamp.community is live (before that it runs by hand only).
+  ...(COMMUNITY_LIVE ? [{ job: "community-news", label: "revamp.community news finder (AI, twice a week)", maxAgeMinutes: 5 * 24 * 60, every: "runs Monday and Thursday" }] : []),
 ];
 
 /** Re-send a down-alert for the same job at most once per this window. */

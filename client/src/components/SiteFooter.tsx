@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { slugify } from "@/lib/slug";
 import { PaymentMethods } from "@/components/PaymentMethods";
 import { useSite } from "@/contexts/SiteContext";
+import { COMMUNITY_LIVE, COMMUNITY_ORIGIN } from "@shared/community";
 
 const normalizeRegion = (r: string) => r.trim().replace(/\s+(province|marz)$/i, "").trim();
 
@@ -51,6 +52,15 @@ const FOOTER_STAY_HOSTS: [string, string][] = [
   ["/map", "Open the map"],
   ["/faq", "FAQ"],
 ];
+
+/** revamp.community — the host community (shown once COMMUNITY_LIVE). */
+function CommunityLink() {
+  return (
+    <a href={COMMUNITY_ORIGIN} className="inline-flex items-center gap-1 hover:text-white">
+      Host community <ArrowUpRight className="h-3 w-3" />
+    </a>
+  );
+}
 
 /** True at/above a min-width (the footer's sections are always open there). */
 function useMinWidth(px: number): boolean {
@@ -149,10 +159,20 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
     );
   }
 
+  const hostLinks =
+    profile?.role === "operator" ? (
+      <>
+        <Link href="/dashboard" className="hover:text-white">Your dashboard</Link>
+        <Link href="/dashboard?section=referrals" className="hover:text-white">Refer &amp; Earn</Link>
+      </>
+    ) : (
+      <Link href="/host" className="hover:text-white">Become an operator</Link>
+    );
+
   return (
     <footer className="relative overflow-hidden bg-basalt text-paper">
       <div className="pointer-events-none absolute -bottom-24 right-0 text-[19rem] font-bold leading-none tracking-[-0.12em] text-white/[0.035]">{isStay ? "revampstay." : <Wordmark title={null} className="h-[0.69em]" />}</div>
-      <div className="container grid gap-x-8 gap-y-4 py-14 sm:grid-cols-2 sm:gap-y-10 lg:grid-cols-6 lg:py-16">
+      <div className={cn("container grid gap-x-8 gap-y-4 py-14 sm:grid-cols-2 sm:gap-y-10 lg:py-16", COMMUNITY_LIVE && !isStay ? "lg:grid-cols-7" : "lg:grid-cols-6")}>
         <div className="pb-6 sm:col-span-2 sm:pb-0">
           <BrandMark light />
           {isStay ? (
@@ -180,6 +200,7 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
                   <Link key={label} href={href} className="hover:text-white">{label}</Link>
                 ))}
                 {profile?.role === "operator" && <Link href="/dashboard" className="hover:text-white">Your dashboard</Link>}
+                {COMMUNITY_LIVE && <CommunityLink />}
             </FooterGroup>
             <FooterGroup title="Revamp">
                 <a href="https://revampvacations.com" className="inline-flex items-center gap-1 hover:text-white">revampvacations.com <ArrowUpRight className="h-3 w-3" /></a>
@@ -203,15 +224,14 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
                 {FOOTER_COMPANY.map(([href, label]) => (
                   <Link key={href} href={href} className="hover:text-white">{label}</Link>
                 ))}
-                {profile?.role === "operator" ? (
-                  <>
-                    <Link href="/dashboard" className="hover:text-white">Your dashboard</Link>
-                    <Link href="/dashboard?section=referrals" className="hover:text-white">Refer &amp; Earn</Link>
-                  </>
-                ) : (
-                  <Link href="/host" className="hover:text-white">Become an operator</Link>
-                )}
+                {!COMMUNITY_LIVE && hostLinks}
             </FooterGroup>
+            {COMMUNITY_LIVE && (
+              <FooterGroup title="For hosts">
+                {hostLinks}
+                <CommunityLink />
+              </FooterGroup>
+            )}
           </>
         )}
         <div className="pt-4 sm:pt-0">

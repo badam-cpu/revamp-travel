@@ -48,6 +48,7 @@ export function AdminHub() {
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${a.status === "published" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{a.status}</span>
               <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-apricot/80">{hubCategoryLabel(a.category)}</span>
               {a.pinned && <Pin className="h-3 w-3 text-basalt/40" />}
+              {a.public && <span className="rounded-full bg-basalt/[0.06] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-basalt/70">revamp.community</span>}
               <span className="min-w-0 flex-1 truncate font-semibold text-basalt">{a.title || "(untitled)"}</span>
               <button type="button" onClick={() => setEditing(a)} className="text-xs font-semibold text-basalt/60 hover:text-apricot">Edit</button>
               <button
@@ -82,6 +83,7 @@ function Editor({ existing, onDone }: { existing: HubArticle | null; onDone: () 
   const [excerpt, setExcerpt] = useState(existing?.excerpt ?? "");
   const [body, setBody] = useState(existing?.body ?? "");
   const [pinned, setPinned] = useState(existing?.pinned ?? false);
+  const [isPublic, setIsPublic] = useState(existing?.public ?? false);
   const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const publishedAt = useRef(existing?.publishedAt ?? null);
@@ -157,7 +159,7 @@ function Editor({ existing, onDone }: { existing: HubArticle | null; onDone: () 
       return;
     }
     setSaving(true);
-    const input: HubArticleInput = { category, slug: (slug.trim() || slugify(title)).trim(), title: title.trim(), excerpt: excerpt.trim(), body, status, pinned };
+    const input: HubArticleInput = { category, slug: (slug.trim() || slugify(title)).trim(), title: title.trim(), excerpt: excerpt.trim(), body, status, pinned, public: isPublic };
     try {
       if (existing) await updateHubArticle(existing.id, input, publishedAt.current);
       else await createHubArticle(input);
@@ -216,6 +218,10 @@ function Editor({ existing, onDone }: { existing: HubArticle | null; onDone: () 
         </div>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={pinned} onChange={(e) => setPinned(e.target.checked)} className="h-4 w-4 accent-apricot" /> Pin to the top
+        </label>
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} className="mt-0.5 h-4 w-4 accent-apricot" />
+          <span>Also show on revamp.community <span className="block text-xs text-basalt/55">Anyone can read it there, signed in or not. Leave off for operator-only articles.</span></span>
         </label>
         <div className="flex items-center gap-3 border-t border-basalt/10 pt-4">
           <Button onClick={() => save("published")} disabled={saving} className="rounded-none bg-apricot text-white hover:bg-apricot/90">{saving ? "Saving…" : "Publish"}</Button>

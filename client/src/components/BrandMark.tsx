@@ -10,13 +10,26 @@
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { useSite } from "@/contexts/SiteContext";
-import { ICON_RADIUS, ICON_RE_PATH, ICON_VIEWBOX, RE_PATH, RE_VIEWBOX, WORDMARK_PATH, WORDMARK_VIEWBOX } from "@shared/brandLogo";
+import { COMMUNITY_LOCKUP_VIEWBOX, COMMUNITY_PATH, ICON_RADIUS, ICON_RE_PATH, ICON_VIEWBOX, RE_PATH, RE_VIEWBOX, WORDMARK_PATH, WORDMARK_VIEWBOX } from "@shared/brandLogo";
 
 /** The `revamp.` wordmark as an SVG in `currentColor` — size it with a height class. */
 export function Wordmark({ className, title = "revamp." }: { className?: string; title?: string | null }) {
   return (
     <svg viewBox={WORDMARK_VIEWBOX} className={cn("block h-6 w-auto shrink-0", className)} fill="currentColor" role={title ? "img" : undefined} aria-label={title ?? undefined} aria-hidden={title ? undefined : true} focusable="false">
       <path d={WORDMARK_PATH} />
+    </svg>
+  );
+}
+
+/**
+ * The revamp.community lockup: the wordmark + "community" in the logo's own
+ * Circular Std Medium (outlines, same size and baseline as "vamp"), one colour.
+ */
+export function CommunityLockup({ className, title = "revamp community" }: { className?: string; title?: string | null }) {
+  return (
+    <svg viewBox={COMMUNITY_LOCKUP_VIEWBOX} className={cn("block h-8 w-auto shrink-0", className)} fill="currentColor" role={title ? "img" : undefined} aria-label={title ?? undefined} aria-hidden={title ? undefined : true} focusable="false">
+      <path d={WORDMARK_PATH} />
+      <path d={COMMUNITY_PATH} />
     </svg>
   );
 }

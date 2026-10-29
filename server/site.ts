@@ -11,15 +11,18 @@
  */
 import { visibleOnStay, visibleOnVacations, type ListingType, type OfferType } from "../shared/listings.js";
 
-export type Site = "vacations" | "stay";
+export type Site = "vacations" | "stay" | "community";
 
-/** Resolve the site from a Host header (port and case ignored). */
+/** Resolve the site from a Host header (port and case ignored). revamp.community
+ *  (2026-10-29) is the host community site — no listings; see server/communityPages.ts. */
 export function siteFromHost(host: string | undefined): Site {
   const h = (host || "").toLowerCase().replace(/:\d+$/, "");
+  if (/(^|\.)revamp\.community$/.test(h) || /(^|\.)community\.(test|localhost)$/.test(h)) return "community";
   return /(^|\.)revampstay\.(com|test|localhost)$/.test(h) ? "stay" : "vacations";
 }
 
 /** Filter a published catalog to what the given site shows. */
 export function filterForSite<T extends { type: ListingType; offerTypes?: OfferType[] | null }>(site: Site, catalog: T[]): T[] {
+  if (site === "community") return [];
   return site === "stay" ? catalog.filter(visibleOnStay) : catalog.filter(visibleOnVacations);
 }

@@ -34,6 +34,7 @@ const AUDIENCES = [
   { value: "travelers", label: "Registered travelers" },
   { value: "guests", label: "Guests (no account)" },
   { value: "contacts", label: "Imported contacts" },
+  { value: "community", label: "Host community (revamp.community)" },
 ];
 
 const TEMPLATES: { value: string; label: string; subject: string; body: string }[] = [

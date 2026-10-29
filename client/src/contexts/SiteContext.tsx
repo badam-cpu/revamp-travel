@@ -11,14 +11,15 @@
  * forgot to mount <SiteProvider> also reads "vacations". So until the
  * revampstay.com domain actually exists, behaviour is byte-identical to today.
  */
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 
-export type Site = "vacations" | "stay";
+export type Site = "vacations" | "stay" | "community";
 
 /** Per-site brand facts used by the header/footer/meta. */
 export const SITE_BRAND: Record<Site, { name: string; domain: string; crossDomain: string; crossLabel: string }> = {
   vacations: { name: "Revamp Vacations", domain: "revampvacations.com", crossDomain: "revampstay.com", crossLabel: "Staying longer, or buying? revampstay.com" },
   stay: { name: "Revamp Stay", domain: "revampstay.com", crossDomain: "revampvacations.com", crossLabel: "Here for a visit? revampvacations.com" },
+  community: { name: "revamp community", domain: "revamp.community", crossDomain: "revampvacations.com", crossLabel: "Travelling? revampvacations.com" },
 };
 
 /**
@@ -32,21 +33,33 @@ export function isStayHost(hostname?: string): boolean {
   return /(^|\.)revampstay\.(com|test|localhost)$/.test(host);
 }
 
+/** revamp.community (2026-10-29): the host community site — see pages/community. */
+export function isCommunityHost(hostname?: string): boolean {
+  const host = (hostname ?? (typeof window !== "undefined" ? window.location.hostname : "")).toLowerCase();
+  return /(^|\.)revamp\.community$/.test(host) || /(^|\.)community\.(test|localhost)$/.test(host);
+}
+
 export function detectSite(hostname?: string, search?: string): Site {
   if (isStayHost(hostname)) return "stay";
+  if (isCommunityHost(hostname)) return "community";
   // `?site=stay` forces the stay site in ANY environment — a pre-launch preview
   // tool. On a non-revampstay host the stay pages set noindex (see StayHome),
   // and the bot prerenderer/sitemap stay host-based, so this preview is never
   // crawled or indexed. Persists for the SPA session (SiteProvider reads once).
   const qs = search ?? (typeof window !== "undefined" ? window.location.search : "");
-  if (new URLSearchParams(qs).get("site") === "stay") return "stay";
+  const forced = new URLSearchParams(qs).get("site");
+  if (forced === "stay") return "stay";
+  // `?site=community` previews revamp.community the same way (pages set noindex off its host).
+  if (forced === "community") return "community";
   return "vacations";
 }
 
 const SiteContext = createContext<Site>("vacations");
 
 export function SiteProvider({ children, site }: { children: ReactNode; site?: Site }) {
-  return <SiteContext.Provider value={site ?? detectSite()}>{children}</SiteContext.Provider>;
+  // Decided once per page load, so a `?site=` preview survives in-app navigation.
+  const [detected] = useState(detectSite);
+  return <SiteContext.Provider value={site ?? detected}>{children}</SiteContext.Provider>;
 }
 
 /** The current site. Always "vacations" unless we're on a revampstay.* host. */

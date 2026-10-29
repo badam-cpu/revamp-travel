@@ -9,6 +9,7 @@
 import type { Request, Response } from "express";
 import { getPublishedCatalog, getPublishedPosts } from "./supabase.js";
 import { filterForSite, siteFromHost } from "./site.js";
+import { communitySitemapXml } from "./communityPages.js";
 import { REGION_GUIDES } from "../shared/regionGuides.js";
 import { GUIDES } from "../shared/guides.js";
 import { HOST_PAGES } from "../shared/hostLanding.js";
@@ -25,6 +26,10 @@ export async function sitemapHandler(req: Request, res: Response): Promise<void>
   // Per-site catalog (domain alias): revampvacations lists nightly stays
   // exactly as today; revampstay lists every stay. Decided by the request host.
   const site = siteFromHost(req.get("host"));
+  if (site === "community") {
+    res.type("application/xml").send(await communitySitemapXml(origin));
+    return;
+  }
   const [catalogAll, posts] = await Promise.all([getPublishedCatalog(), getPublishedPosts()]);
   const catalog = filterForSite(site, catalogAll);
 

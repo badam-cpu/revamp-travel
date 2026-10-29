@@ -19,7 +19,7 @@ import { sendTelegram, telegramConfigured, sendTelegramPhoto } from "./telegram.
 
 const RESEND_BATCH_URL = "https://api.resend.com/emails/batch";
 
-export type Audience = "everyone" | "operators" | "travelers" | "guests" | "contacts";
+export type Audience = "everyone" | "operators" | "travelers" | "guests" | "contacts" | "community";
 export interface Recipient { email: string; name?: string | null }
 
 /**
@@ -266,6 +266,12 @@ export async function resolveAudience(admin: SupabaseClient, audience: Audience)
   if (audience === "everyone" || audience === "contacts") {
     const { data: contacts } = await admin.from("email_contacts").select("email, name");
     for (const c of (contacts ?? []) as { email: string; name: string | null }[]) add(c.email, c.name);
+  }
+
+  // revamp.community members (0125) — only when chosen explicitly; never part of "everyone".
+  if (audience === "community") {
+    const { data: members } = await admin.from("community_members").select("email, name").is("unsubscribed_at", null);
+    for (const m of (members ?? []) as { email: string; name: string | null }[]) add(m.email, m.name);
   }
 
   return Array.from(out.values());

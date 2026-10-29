@@ -21,6 +21,7 @@ import type { PublicListing } from "./supabase.js";
 import { getPublishedCatalog, getPublishedPosts, getPublishedPostBySlug, getSiteFaq, getPartnerOperators, getSitePartners, getRoomTypesBySlug, getUpcomingEvents, type PublicPost } from "./supabase.js";
 import { EVENTS_PAGE_DESCRIPTION, buildEventsJsonLd, categoryLabel, eventsPageTitle, formatEventDates, groupByMonth, safeSourceUrl, sourceLabel, staysLink } from "../shared/eventsPage.js";
 import { filterForSite, siteFromHost } from "./site.js";
+import { renderCommunityForBot } from "./communityPages.js";
 import { regions, typeLabels, ARMENIA_REGIONS, formatBeds, type RoomType } from "../shared/listings.js";
 import { typeFromCents } from "../shared/rooms.js";
 import { slugify } from "../shared/slug.js";
@@ -128,6 +129,12 @@ export interface RenderResult {
 }
 
 export async function renderForBot(pathname: string, origin: string): Promise<RenderResult> {
+  // revamp.community (same deploy, domain alias) has its own pages — never the catalog.
+  try {
+    if (siteFromHost(new URL(origin).host) === "community") return renderCommunityForBot(pathname, origin);
+  } catch {
+    /* bad origin → the travel site below */
+  }
   const route = matchRoute(pathname);
   // Per-site catalog, decided by the request origin's host (both domains hit
   // this same app). revampvacations keeps today's output exactly; a stay that

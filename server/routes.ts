@@ -63,7 +63,9 @@ import { isInvoiceable, INVOICE_LIMITS } from "../shared/invoice.js";
 import { handleTelegramUpdate, alertOperatorTelegram } from "./telegramBot.js";
 import { splitContact, storeHeldContacts, contactFor, setConversationGuestEmail, conversationGuestEmail } from "./guestContacts.js";
 import { loadTourContext, canEditTour, classifyTourPhotos, saveTour, tourAiConfigured } from "./tours.js";
-import { sendItinerary, sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, sendJourneyEmail, type BookingEmailInfo } from "./email.js";
+import { sendItinerary, sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, sendJourneyEmail, sendCommunityWelcome, type BookingEmailInfo } from "./email.js";
+import { communityNewsToken } from "./communityNews.js";
+import { formatMeetupWhen, meetupPlace } from "../shared/community.js";
 import { notifyBooking } from "./notify.js";
 import { telegramConfigured, telegramConnectLink, telegramBotUsername, setTelegramWebhook, sendTelegram } from "./telegram.js";
 import { isCrawlerUserAgent } from "./botDetect.js";
@@ -236,7 +238,7 @@ const voucherStartSchema = z.object({ listingId: z.string().uuid(), faceCents: z
 const voucherRedeemSchema = z.object({ voucherId: z.string().uuid() });
 const voucherRedeemStaffSchema = z.object({ token: z.string().trim().min(8).max(64), code: z.string().trim().min(1).max(40) });
 
-const emailAudienceSchema = z.object({ audience: z.enum(["everyone", "operators", "travelers", "guests", "contacts"]) });
+const emailAudienceSchema = z.object({ audience: z.enum(["everyone", "operators", "travelers", "guests", "contacts", "community"]) });
 // Campaign visual (0107): layout + optional image (https only) and image link.
 const campaignVisualSchema = z
   .object({
@@ -248,7 +250,7 @@ const campaignVisualSchema = z
   .optional();
 
 const emailSendSchema = z.object({
-  audience: z.enum(["everyone", "operators", "travelers", "guests", "contacts"]),
+  audience: z.enum(["everyone", "operators", "travelers", "guests", "contacts", "community"]),
   subject: z.string().trim().min(1).max(200),
   body: z.string().trim().min(1).max(20000),
   channel: z.enum(["email", "telegram"]).optional().default("email"),
@@ -480,6 +482,8 @@ const giftLookupHits = new Map<string, number[]>();
 const giftPurchaseHits = new Map<string, number[]>();
 // Per-IP cap for the public (unauthenticated) AI trip planner — protects the Anthropic bill.
 const planTripHits = new Map<string, number[]>();
+const communityJoinIpHits = new Map<string, number[]>();
+const communityJoinEmailHits = new Map<string, number[]>();
 const planEmailIpHits = new Map<string, number[]>();
 const planEmailToHits = new Map<string, number[]>();
 // Public MCP connector: per-IP request cap, and a tighter one for plan_trip (each
@@ -1546,6 +1550,79 @@ export function registerApiRoutes(app: Express) {
   // (holidays + AI web search, server/events.ts) instead of waiting for the
   // weekly cron. Fire-and-forget into the background function (it can take a
   // few minutes); results appear in Admin → Events when it finishes.
+  // ── revamp.community (0125) ─────────────────────────────────────────────
+  // Join the host community (email + what they host), optionally saving a seat
+  // at a meetup. Public, rate-limited; service-role write (members are never
+  // readable by the public). Joining again is fine — it re-subscribes.
+  const communityJoinSchema = z.object({
+    email: z.string().trim().toLowerCase().email().max(200),
+    name: z.string().trim().max(120).optional(),
+    hosts: z.enum(["stays", "tours", "experiences", "not_yet"]).default("not_yet"),
+    meetupId: z.string().uuid().optional(),
+  });
+  app.post("/api/community/join", async (req: Request, res: Response) => {
+    const parsed = communityJoinSchema.safeParse(req.body ?? {});
+    if (!parsed.success) return res.status(400).json({ error: "Please check your email address." });
+    const { email, name, hosts, meetupId } = parsed.data;
+    if (rateLimited(communityJoinIpHits, req.ip || "unknown", 6) || rateLimited(communityJoinEmailHits, email, 3, 60 * 60_000)) {
+      return res.status(429).json({ error: "You're going a bit fast — try again in a minute." });
+    }
+    const admin = supabaseAdmin();
+    if (!admin) return res.status(503).json({ error: "Joining isn't available right now. Please try again later." });
+    try {
+      const { data: existing } = await admin.from("community_members").select("id").ilike("email", email).maybeSingle();
+      let memberId = (existing as { id: string } | null)?.id ?? null;
+      if (memberId) {
+        await admin.from("community_members").update({ hosts, ...(name ? { name } : {}), unsubscribed_at: null }).eq("id", memberId);
+      } else {
+        const { data: created, error } = await admin.from("community_members").insert({ email, name: name || null, hosts }).select("id").single();
+        if (error) throw error;
+        memberId = (created as { id: string }).id;
+      }
+      let meetup: { title: string; when: string; place: string } | null = null;
+      if (meetupId) {
+        const { data: m } = await admin.from("community_meetups").select("id, title, starts_at, venue, city, online, status").eq("id", meetupId).maybeSingle();
+        const row = m as { id: string; title: string; starts_at: string; venue: string; city: string; online: boolean; status: string } | null;
+        if (!row || row.status !== "published" || Date.parse(row.starts_at) < Date.now()) {
+          return res.status(409).json({ error: "That meetup isn't taking seats any more — you've still joined the community." });
+        }
+        await admin.from("community_rsvps").upsert({ meetup_id: row.id, member_id: memberId }, { onConflict: "meetup_id,member_id", ignoreDuplicates: true });
+        const w = formatMeetupWhen(row.starts_at);
+        meetup = { title: row.title, when: `${w.day}, ${w.time}`, place: meetupPlace(row) };
+      }
+      const { data: settings } = await admin.from("community_settings").select("telegram_url").eq("id", 1).maybeSingle();
+      void sendCommunityWelcome(email, { meetup, telegramUrl: (settings as { telegram_url: string | null } | null)?.telegram_url ?? null });
+      res.json({ ok: true, seat: !!meetup });
+    } catch (e) {
+      console.error("[community/join]", e);
+      res.status(500).json({ error: "We couldn't add you just now. Please try again in a moment." });
+    }
+  });
+
+  // Admin → Community → News → "Find news now": runs the paid AI web search in
+  // the background (at most once an hour; the twice-weekly cron is separate).
+  app.post("/api/admin-community/find-news", async (req: Request, res: Response) => {
+    const admin = await requireAdminCaller(req, res);
+    if (!admin) return;
+    const { data: last } = await admin.from("cron_runs").select("last_success_at").eq("job", "community-news").maybeSingle();
+    const lastAt = last?.last_success_at ? Date.parse(last.last_success_at as string) : 0;
+    if (lastAt && Date.now() - lastAt < 60 * 60_000) {
+      const mins = Math.ceil((60 * 60_000 - (Date.now() - lastAt)) / 60_000);
+      return res.status(429).json({ error: `News was searched recently — you can run it again in about ${mins} minute${mins === 1 ? "" : "s"}.` });
+    }
+    const token = await communityNewsToken();
+    const base = process.env.URL || process.env.DEPLOY_PRIME_URL;
+    if (!token || !base) return res.status(503).json({ error: "The news finder isn't configured on this server." });
+    try {
+      const r = await fetch(`${base}/.netlify/functions/community-news-background`, { method: "POST", headers: { "x-community-token": token } });
+      if (r.status >= 400) throw new Error(`background ${r.status}`);
+      res.json({ started: true });
+    } catch (e) {
+      console.error("[admin-community/find-news]", e);
+      res.status(502).json({ error: "Couldn't start the search. Please try again." });
+    }
+  });
+
   app.post("/api/admin-events/refresh", async (req: Request, res: Response) => {
     const authHeader = req.get("authorization") || "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;

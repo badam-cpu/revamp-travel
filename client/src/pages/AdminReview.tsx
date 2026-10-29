@@ -18,7 +18,7 @@ import { PriceLog } from "@/components/PriceLog";
 import { AdminEvents } from "@/components/AdminEvents";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { Activity, AlertTriangle, CalendarDays, History, TextCursorInput, BarChart3, BookOpen, Check, CreditCard, ExternalLink, FileText, Gift, Home, Landmark, LayoutDashboard, ListChecks, Mail, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, QrCode, Ticket, Timer, UserSearch, Users, Utensils, Wallet, X, Coins, Sparkles } from "lucide-react";
+import { Activity, AlertTriangle, CalendarDays, History, TextCursorInput, BarChart3, BookOpen, Check, CreditCard, ExternalLink, FileText, Gift, Home, Landmark, LayoutDashboard, ListChecks, Mail, MapPin, MessageSquare, MessagesSquare, Newspaper, Package, Palette, QrCode, Ticket, Timer, UserSearch, Users, Utensils, Wallet, X, Coins, Sparkles, UsersRound } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { formatLocation } from "@/lib/region";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -26,6 +26,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { AdminSiteContent } from "@/components/AdminSiteContent";
 import { AdminSupportInbox } from "@/components/AdminSupportInbox";
 import { AdminAhaAI } from "@/components/AdminAhaAI";
+import { AdminCommunity } from "@/components/AdminCommunity";
 import { AdminPayouts } from "@/components/AdminPayouts";
 import { AdminBlog } from "@/components/AdminBlog";
 import { AdminHub } from "@/components/AdminHub";
@@ -249,7 +250,7 @@ function StatTile({ n, label, onClick }: { n: number | string; label: string; on
   );
 }
 
-type AdminSection = "overview" | "health" | "events" | "pricelog" | "reviews" | "listings" | "textfixes" | "eateries" | "places" | "analytics" | "aha" | "vouchers" | "users" | "accounts" | "giftcards" | "credit" | "subscriptions" | "referrals" | "support" | "messages" | "response" | "email" | "documents" | "qr" | "payouts" | "blog" | "hub" | "site";
+type AdminSection = "overview" | "health" | "events" | "pricelog" | "reviews" | "listings" | "textfixes" | "eateries" | "places" | "analytics" | "aha" | "vouchers" | "users" | "accounts" | "giftcards" | "credit" | "subscriptions" | "referrals" | "support" | "messages" | "response" | "email" | "documents" | "qr" | "payouts" | "blog" | "hub" | "community" | "site";
 const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: typeof Home }[] = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
   { key: "health", label: "Health", icon: Activity },
@@ -278,6 +279,7 @@ const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: typeof Home }[] 
   { key: "documents", label: "Documents", icon: FileText },
   { key: "qr", label: "QR codes", icon: QrCode },
   { key: "hub", label: "Partner Hub", icon: BookOpen },
+  { key: "community", label: "Community", icon: UsersRound },
   { key: "site", label: "Site content", icon: Palette },
 ];
 
@@ -378,6 +380,7 @@ function AdminConsole() {
             {section === "places" && <AdminPlaces />}
             {section === "analytics" && <AdminAnalytics />}
             {section === "aha" && <AdminAhaAI onOpenSupport={() => go("support")} />}
+            {section === "community" && <AdminCommunity />}
             {section === "vouchers" && (
               <div className="grid gap-6">
                 <AdminVoucherOffers />

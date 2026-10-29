@@ -60,6 +60,7 @@ const TripPlan = lazy(() => import("./pages/TripPlan"));
 const Developers = lazy(() => import("./pages/Developers"));
 const AiAssistants = lazy(() => import("./pages/AiAssistants"));
 const StayHome = lazy(() => import("./pages/StayHome"));
+const CommunityApp = lazy(() => import("./pages/community/CommunityApp"));
 const PlaceCategoryLanding = lazy(() => import("./pages/PlaceCategoryLanding"));
 import { SiteProvider, useSite } from "@/contexts/SiteContext";
 import { resolvePlaceCategoryHub } from "@shared/regionLanding";
@@ -227,6 +228,33 @@ function Router() {
   );
 }
 
+/**
+ * revamp.community (same build, domain alias) gets its own pages and none of the
+ * travel site's chrome (banner, support chat, trip saver); everything else is
+ * the travel site exactly as before.
+ */
+function SiteBody() {
+  if (useSite() === "community") {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-paper" />}>
+        <CommunityApp />
+      </Suspense>
+    );
+  }
+  return (
+    <>
+      <AnnouncementBanner />
+      <ImpersonationBar />
+      <PendingTripSaver />
+      <Router />
+      <Suspense fallback={null}>
+        <SupportWidget />
+        <OperatorAssistantGate />
+      </Suspense>
+    </>
+  );
+}
+
 function App() {
   return (
     <ErrorBoundary>
@@ -241,14 +269,7 @@ function App() {
                     <Toaster />
                     <AnalyticsTracker />
                     <ScrollToTop />
-                    <AnnouncementBanner />
-                    <ImpersonationBar />
-                    <PendingTripSaver />
-                    <Router />
-                    <Suspense fallback={null}>
-                      <SupportWidget />
-                      <OperatorAssistantGate />
-                    </Suspense>
+                    <SiteBody />
                     <CookieConsent />
                   </TooltipProvider>
                 </CurrencyProvider>

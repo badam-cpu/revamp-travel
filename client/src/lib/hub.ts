@@ -28,6 +28,8 @@ export interface HubArticle {
   body: string;
   status: "draft" | "published";
   pinned: boolean;
+  /** Also shown on revamp.community (0125) — public, anyone can read it. */
+  public: boolean;
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -41,6 +43,7 @@ export interface HubArticleInput {
   body: string;
   status: "draft" | "published";
   pinned: boolean;
+  public?: boolean;
 }
 
 const COLS = "id, category, slug, title, excerpt, body, status, pinned, published_at, created_at, updated_at";
@@ -56,6 +59,7 @@ function mapRow(r: any): HubArticle {
     body: r.body ?? "",
     status: r.status,
     pinned: !!r.pinned,
+    public: !!r.public,
     publishedAt: r.published_at ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -77,21 +81,32 @@ export async function listHubArticles(): Promise<HubArticle[]> {
 
 /** Every article regardless of status — admin only (RLS returns [] otherwise). */
 export async function listAllHubArticles(): Promise<HubArticle[]> {
+  // `public` arrives with migration 0125 — read without it on an older database.
+  const withPublic = await supabase.from("hub_articles").select(`${COLS}, public`).order("updated_at", { ascending: false });
+  if (!withPublic.error) return (withPublic.data ?? []).map(mapRow);
   const { data, error } = await supabase.from("hub_articles").select(COLS).order("updated_at", { ascending: false });
   if (error) return [];
   return (data ?? []).map(mapRow);
 }
 
-export async function createHubArticle(input: HubArticleInput): Promise<void> {
-  const { error } = await supabase.from("hub_articles").insert(toRow(input));
+/** Retry a write without `public` when the database doesn't have it yet (pre-0125). */
+async function writeTolerant(run: (row: Record<string, unknown>) => PromiseLike<{ error: { message: string } | null }>, row: Record<string, unknown>): Promise<void> {
+  let { error } = await run(row);
+  if (error && "public" in row && /public/i.test(error.message)) {
+    const { public: _drop, ...rest } = row;
+    ({ error } = await run(rest));
+  }
   if (error) throw new Error(error.message);
+}
+
+export async function createHubArticle(input: HubArticleInput): Promise<void> {
+  await writeTolerant((row) => supabase.from("hub_articles").insert(row), toRow(input));
 }
 
 export async function updateHubArticle(id: string, input: HubArticleInput, existingPublishedAt: string | null): Promise<void> {
   const row = toRow(input);
   if (input.status === "published" && existingPublishedAt) row.published_at = existingPublishedAt;
-  const { error } = await supabase.from("hub_articles").update(row).eq("id", id);
-  if (error) throw new Error(error.message);
+  await writeTolerant((r) => supabase.from("hub_articles").update(r).eq("id", id), row);
 }
 
 export async function deleteHubArticle(id: string): Promise<void> {
@@ -108,6 +123,7 @@ function toRow(input: HubArticleInput) {
     body: input.body,
     status: input.status,
     pinned: input.pinned,
+    ...(input.public !== undefined ? { public: input.public } : {}),
     published_at: input.status === "published" ? new Date().toISOString() : null,
   } as Record<string, unknown>;
 }

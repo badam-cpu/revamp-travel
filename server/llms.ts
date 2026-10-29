@@ -9,12 +9,17 @@
 import type { Request, Response } from "express";
 import { getPublishedCatalog, getPublishedPosts } from "./supabase.js";
 import { filterForSite, siteFromHost } from "./site.js";
+import { communityLlmsTxt } from "./communityPages.js";
 
 export async function llmsTxtHandler(req: Request, res: Response): Promise<void> {
   const origin = `${req.protocol}://${req.get("host")}`;
   // Per-site catalog: revampvacations lists nightly stays (today's behaviour),
   // revampstay lists every stay. Decided by the request host (domain alias).
   const site = siteFromHost(req.get("host"));
+  if (site === "community") {
+    res.type("text/plain; charset=utf-8").send(await communityLlmsTxt(origin));
+    return;
+  }
   const [catalogAll, posts] = await Promise.all([getPublishedCatalog(), getPublishedPosts().catch(() => [])]);
   const catalog = filterForSite(site, catalogAll);
 
