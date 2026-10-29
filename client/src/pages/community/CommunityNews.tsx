@@ -55,7 +55,7 @@ export function LeadNewsCard({ item }: { item: CommunityNewsItem }) {
       </h3>
       <p className="text-[17px] leading-relaxed text-paper/80">{item.summary}</p>
       {item.forYou && (
-        <div className="rounded-[18px] bg-white/[0.07] px-5 py-4">
+        <div className="rounded-[18px] border border-white/15 px-5 py-4">
           <p className="text-sm font-extrabold text-apricot">What it means for you</p>
           <p className="mt-1 text-base leading-relaxed">{item.forYou}</p>
         </div>
@@ -142,13 +142,13 @@ export default function CommunityNews() {
       </div>
       <NewsFilter value={category} onChange={setCategory} />
       {failed ? (
-        <p className="rounded-2xl bg-[#FDF1EB] p-6 text-base">The news didn't load. Please refresh the page in a moment.</p>
+        <p className="rounded-2xl bg-apricot-soft p-6 text-base">The news didn't load. Please refresh the page in a moment.</p>
       ) : items === null ? (
         <div className="space-y-4" aria-busy="true">
           {[0, 1, 2].map((i) => <div key={i} className="h-28 animate-pulse rounded-2xl bg-basalt/[0.05]" />)}
         </div>
       ) : items.length === 0 ? (
-        <p className="rounded-2xl bg-[#FDF1EB] p-6 text-base">No stories here yet. New ones are added every week.</p>
+        <p className="rounded-2xl bg-apricot-soft p-6 text-base">No stories here yet. New ones are added every week.</p>
       ) : (
         <div className="grid gap-x-10 lg:grid-cols-2">
           {items.map((n) => <NewsRow key={n.id} item={n} />)}
@@ -216,7 +216,7 @@ export function CommunityNewsArticle() {
           <h1 className="font-display text-[2rem] font-extrabold leading-tight tracking-tight sm:text-[2.6rem]">{item.title}</h1>
           <p className="text-lg leading-relaxed text-basalt/85">{item.summary}</p>
           {item.forYou && (
-            <div className="rounded-[20px] bg-[#FDF1EB] px-5 py-4">
+            <div className="rounded-[20px] bg-apricot-soft px-5 py-4">
               <p className="text-sm font-extrabold">What it means for you</p>
               <p className="mt-1 text-base leading-relaxed">{item.forYou}</p>
             </div>

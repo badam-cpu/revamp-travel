@@ -139,7 +139,7 @@ export default function CommunityHome() {
       </section>
 
       {/* What you'll find */}
-      <section className="bg-[#FDF1EB]">
+      <section className="bg-apricot-soft">
         <div className="mx-auto flex max-w-[1240px] flex-col gap-10 px-4 py-16 sm:px-6 sm:py-20">
           <div className="flex max-w-2xl flex-col gap-3">
             <h2 className={h2}>What you'll find here</h2>
@@ -183,7 +183,7 @@ export default function CommunityHome() {
             <div className="h-80 animate-pulse rounded-[28px] bg-basalt/[0.04]" />
           </div>
         ) : news.length === 0 ? (
-          <p className="rounded-[24px] bg-[#FDF1EB] p-6 text-base">The first stories are being checked by our team. New ones are added every week.</p>
+          <p className="rounded-[24px] bg-apricot-soft p-6 text-base">The first stories are being checked by our team. New ones are added every week.</p>
         ) : (
           <div className="grid gap-6 lg:grid-cols-2">
             <LeadNewsCard item={news[0]} />
@@ -266,14 +266,14 @@ export default function CommunityHome() {
               </div>
             );
           })}
-          <a href={`${VACATIONS_ORIGIN}/host`} className="flex items-center justify-between gap-3 rounded-[20px] bg-[#FDF1EB] p-5 text-[17px] font-extrabold hover:bg-[#fbe4d8]">
+          <a href={`${VACATIONS_ORIGIN}/host`} className="flex items-center justify-between gap-3 rounded-[20px] bg-apricot-soft p-5 text-[17px] font-extrabold hover:bg-apricot/15">
             See how hosting on Revamp works <ArrowRight className="h-5 w-5" />
           </a>
         </div>
       </section>
 
       {/* Standards */}
-      <section className="bg-[#FDF1EB]">
+      <section className="bg-apricot-soft">
         <div className="mx-auto flex max-w-[1240px] flex-col gap-10 px-4 py-16 sm:px-6 sm:py-20 lg:flex-row">
           <div className="flex flex-col gap-3 lg:w-[38%]">
             <h2 className={h2}>What we ask of every member</h2>
@@ -396,6 +396,10 @@ function JoinBand({ meetups, seatFor, onSeatFor, telegramUrl }: { meetups: Commu
             </label>
           )}
           {error && <p className="rounded-xl bg-white/10 px-4 py-3 text-[15px]" role="alert">{error}</p>}
+          <p className="text-sm leading-relaxed text-paper/70">
+            We only use your email for community emails, and you can unsubscribe any time.{" "}
+            <a href={`${VACATIONS_ORIGIN}/privacy#community`} className="font-semibold text-paper underline underline-offset-2">Privacy policy</a>
+          </p>
           <button type="submit" disabled={busy || !email.trim()} className="mt-1 inline-flex h-[52px] items-center justify-center rounded-full bg-apricot hover:bg-apricot/90 px-7 text-[17px] font-bold text-white disabled:opacity-60 sm:self-start">
             {busy ? "Joining…" : seatFor ? "Join and save my seat" : "Join the community"}
           </button>

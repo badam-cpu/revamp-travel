@@ -15,8 +15,8 @@ import { communityNoindex } from "./communityNav";
 const GUIDE_LOOK: Record<string, { icon: LucideIcon; tile: string; ink: string }> = {
   listing_quality: { icon: Camera, tile: "bg-apricot", ink: "text-paper" },
   reviews: { icon: Star, tile: "bg-basalt", ink: "text-apricot" },
-  hosting_standards: { icon: ShieldCheck, tile: "bg-[#FDF1EB]", ink: "text-basalt" },
-  local_news: { icon: FileText, tile: "bg-[#FDF1EB]", ink: "text-basalt" },
+  hosting_standards: { icon: ShieldCheck, tile: "bg-apricot-soft", ink: "text-basalt" },
+  local_news: { icon: FileText, tile: "bg-apricot-soft", ink: "text-basalt" },
 };
 
 export function GuideCard({ guide }: { guide: Guide }) {
@@ -58,13 +58,13 @@ export default function CommunityGuides() {
         <p className="max-w-2xl text-lg leading-relaxed text-basalt/75">Short, practical articles from the Revamp team on what works for hosts.</p>
       </div>
       {failed ? (
-        <p className="rounded-2xl bg-[#FDF1EB] p-6">The guides didn't load. Please refresh the page in a moment.</p>
+        <p className="rounded-2xl bg-apricot-soft p-6">The guides didn't load. Please refresh the page in a moment.</p>
       ) : guides === null ? (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true">
           {[0, 1, 2].map((i) => <div key={i} className="h-72 animate-pulse rounded-[24px] bg-basalt/[0.05]" />)}
         </div>
       ) : guides.length === 0 ? (
-        <p className="rounded-2xl bg-[#FDF1EB] p-6">The first guides are on their way.</p>
+        <p className="rounded-2xl bg-apricot-soft p-6">The first guides are on their way.</p>
       ) : (
         <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
           {guides.map((g) => <GuideCard key={g.slug} guide={g} />)}
@@ -113,7 +113,7 @@ export function CommunityGuide() {
           <p className="text-sm font-bold text-apricot">{GUIDE_CATEGORY_LABELS[guide.category] ?? "Guide"}</p>
           <h1 className="mt-3 font-display text-[2rem] font-extrabold leading-tight tracking-tight sm:text-[2.6rem]">{guide.title}</h1>
           <div className="prose-blog mt-6 text-[1.05rem] leading-8 text-basalt/85" dangerouslySetInnerHTML={{ __html: renderMarkdown(guide.body) }} />
-          <div className="mt-10 rounded-[20px] bg-[#FDF1EB] p-5">
+          <div className="mt-10 rounded-[20px] bg-apricot-soft p-5">
             <p className="font-extrabold">Host on Revamp</p>
             <p className="mt-1 text-[15px] leading-relaxed text-basalt/80">List your stay, tour or experience and get bookings from travellers to Armenia.</p>
             <a href={`${VACATIONS_ORIGIN}/host`} className="mt-3 inline-flex h-11 items-center rounded-full bg-basalt px-5 text-[15px] font-bold text-paper">See how it works</a>

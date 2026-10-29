@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch, useLocation } from "wouter";
-import { Suspense, lazy, useEffect } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { DEFAULT_TITLE, initAnalytics, isPrivatePath, setInternalTraffic, trackPageView } from "./lib/analytics";
 import { storeReferralCode } from "./lib/referrals";
 import { isTeamDevice } from "./lib/track";
@@ -62,7 +62,7 @@ const AiAssistants = lazy(() => import("./pages/AiAssistants"));
 const StayHome = lazy(() => import("./pages/StayHome"));
 const CommunityApp = lazy(() => import("./pages/community/CommunityApp"));
 const PlaceCategoryLanding = lazy(() => import("./pages/PlaceCategoryLanding"));
-import { SiteProvider, useSite } from "@/contexts/SiteContext";
+import { SiteProvider, detectSite, useSite } from "@/contexts/SiteContext";
 import { resolvePlaceCategoryHub } from "@shared/regionLanding";
 import { PendingTripSaver } from "@/components/PendingTripSaver";
 
@@ -228,19 +228,8 @@ function Router() {
   );
 }
 
-/**
- * revamp.community (same build, domain alias) gets its own pages and none of the
- * travel site's chrome (banner, support chat, trip saver); everything else is
- * the travel site exactly as before.
- */
+/** The travel site's chrome around its routes (revamp.community renders CommunityApp instead — see App). */
 function SiteBody() {
-  if (useSite() === "community") {
-    return (
-      <Suspense fallback={<div className="min-h-screen bg-paper" />}>
-        <CommunityApp />
-      </Suspense>
-    );
-  }
   return (
     <>
       <AnnouncementBanner />
@@ -256,6 +245,30 @@ function SiteBody() {
 }
 
 function App() {
+  // revamp.community renders only its own pages, so it skips the travel site's
+  // data providers (listings catalog, saved places, site settings, currency).
+  const [site] = useState(detectSite);
+  if (site === "community") {
+    return (
+      <ErrorBoundary>
+        <ThemeProvider defaultTheme="light">
+          <AuthProvider>
+            <SiteProvider site="community">
+              <TooltipProvider>
+                <Toaster />
+                <AnalyticsTracker />
+                <ScrollToTop />
+                <Suspense fallback={<div className="min-h-screen bg-paper" />}>
+                  <CommunityApp />
+                </Suspense>
+                <CookieConsent />
+              </TooltipProvider>
+            </SiteProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </ErrorBoundary>
+    );
+  }
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">

@@ -81,17 +81,17 @@ function CommunityFooter() {
           <CommunityLockup title="revamp community" className="h-7 text-paper" />
           <p className="mt-5 max-w-sm text-sm leading-6 text-paper/65">{COMMUNITY_DESCRIPTION}</p>
         </div>
-        <nav aria-label="Community" className="flex flex-col gap-1 text-sm">
+        <nav aria-label="Community" className="flex flex-col items-start text-sm">
           <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-apricot">Community</p>
-          <Link href="/news" className="py-1.5 text-paper/75 hover:text-white">News for hosts</Link>
-          <Link href="/guides" className="py-1.5 text-paper/75 hover:text-white">Guides</Link>
-          <a href="mailto:hello@revampvacations.com" className="py-1.5 text-paper/75 hover:text-white">hello@revampvacations.com</a>
+          <Link href="/news" className="inline-flex min-h-11 items-center text-paper/75 hover:text-white">News for hosts</Link>
+          <Link href="/guides" className="inline-flex min-h-11 items-center text-paper/75 hover:text-white">Guides</Link>
+          <a href="mailto:hello@revampvacations.com" className="inline-flex min-h-11 items-center text-paper/75 hover:text-white">hello@revampvacations.com</a>
         </nav>
-        <nav aria-label="Revamp" className="flex flex-col gap-1 text-sm">
+        <nav aria-label="Revamp" className="flex flex-col items-start text-sm">
           <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-apricot">Revamp</p>
-          <a href={`${VACATIONS_ORIGIN}/host`} className="inline-flex items-center gap-1 py-1.5 text-paper/75 hover:text-white">Host on Revamp <ArrowUpRight className="h-3 w-3" /></a>
-          <a href={VACATIONS_ORIGIN} className="inline-flex items-center gap-1 py-1.5 text-paper/75 hover:text-white">revampvacations.com <ArrowUpRight className="h-3 w-3" /></a>
-          <a href={`${VACATIONS_ORIGIN}/privacy`} className="inline-flex items-center gap-1 py-1.5 text-paper/75 hover:text-white">Privacy <ArrowUpRight className="h-3 w-3" /></a>
+          <a href={`${VACATIONS_ORIGIN}/host`} className="inline-flex items-center gap-1 min-h-11 text-paper/75 hover:text-white">Host on Revamp <ArrowUpRight className="h-3 w-3" /></a>
+          <a href={VACATIONS_ORIGIN} className="inline-flex items-center gap-1 min-h-11 text-paper/75 hover:text-white">revampvacations.com <ArrowUpRight className="h-3 w-3" /></a>
+          <a href={`${VACATIONS_ORIGIN}/privacy#community`} className="inline-flex items-center gap-1 min-h-11 text-paper/75 hover:text-white">Privacy policy <ArrowUpRight className="h-3 w-3" /></a>
         </nav>
       </div>
       <div className="border-t border-white/10">
@@ -99,6 +99,14 @@ function CommunityFooter() {
       </div>
     </footer>
   );
+}
+
+/** Legal pages live on revampvacations.com (the cookie banner links to /privacy). */
+function ToVacations({ path }: { path: string }) {
+  useEffect(() => {
+    window.location.replace(`${VACATIONS_ORIGIN}${path}`);
+  }, [path]);
+  return <div className="min-h-[60vh]" />;
 }
 
 function CommunityNotFound() {
@@ -114,9 +122,12 @@ function CommunityNotFound() {
 
 export default function CommunityApp() {
   return (
-    <div className="flex min-h-screen flex-col bg-paper font-sans text-basalt">
+    <div className="community-site flex min-h-screen flex-col bg-paper font-sans text-basalt">
+      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-3 focus:z-50 focus:rounded-full focus:bg-basalt focus:px-5 focus:py-3 focus:text-[15px] focus:font-bold focus:text-paper">
+        Skip to content
+      </a>
       <CommunityHeader />
-      <main className="flex-1">
+      <main id="main" className="flex-1 scroll-mt-20">
         <Suspense fallback={<div className="min-h-[60vh]" />}>
           <Switch>
             <Route path="/" component={CommunityHome} />
@@ -124,6 +135,8 @@ export default function CommunityApp() {
             <Route path="/news/:slug" component={CommunityNewsArticle} />
             <Route path="/guides" component={CommunityGuides} />
             <Route path="/guides/:slug" component={CommunityGuide} />
+            <Route path="/privacy">{() => <ToVacations path="/privacy#community" />}</Route>
+            <Route path="/terms">{() => <ToVacations path="/terms" />}</Route>
             <Route component={CommunityNotFound} />
           </Switch>
         </Suspense>

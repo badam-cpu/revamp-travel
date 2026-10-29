@@ -844,7 +844,7 @@ export function sendItinerary(to: string, it: ItineraryEmail, opts: { saveUrl?: 
  * revamp.community (0125): someone joined the host community, optionally
  * saving a seat at a meetup. One short confirmation, sent once per join.
  */
-export function sendCommunityWelcome(to: string, opts: { meetup?: { title: string; when: string; place: string } | null; telegramUrl?: string | null }) {
+export function sendCommunityWelcome(to: string, opts: { meetup?: { title: string; when: string; place: string } | null; telegramUrl?: string | null; unsubscribeUrl?: string | null }) {
   const community = "https://revamp.community";
   const seat = opts.meetup
     ? `<div style="background:#FDF1EB;border-radius:12px;padding:16px 18px;margin:0 0 16px;">
@@ -860,7 +860,8 @@ export function sendCommunityWelcome(to: string, opts: { meetup?: { title: strin
     opts.meetup ? "See you at the meetup" : "Welcome to revamp community",
     `${seat}<p style="font-size:15px;line-height:1.6;margin:0 0 10px;">Thanks for joining. We'll email you meetup invitations and new guides for hosts — a few times a month at most.</p>
      ${telegram}
-     <p style="margin:0 0 8px;"><a href="${community}/news" style="background:#212121;color:#fff;padding:11px 20px;border-radius:999px;text-decoration:none;font-weight:700;">Read this week's news</a></p>`,
+     <p style="margin:0 0 8px;"><a href="${community}/news" style="background:#212121;color:#fff;padding:11px 20px;border-radius:999px;text-decoration:none;font-weight:700;">Read this week's news</a></p>
+     ${opts.unsubscribeUrl ? `<p style="font-size:12px;line-height:1.6;margin:18px 0 0;color:#8B8478;">Don't want community emails? <a href="${esc(opts.unsubscribeUrl)}" style="color:#8B8478;">Unsubscribe</a>.</p>` : ""}`,
     community,
   );
   return send(to, opts.meetup ? `Your seat: ${opts.meetup.title}` : "Welcome to revamp community", html);

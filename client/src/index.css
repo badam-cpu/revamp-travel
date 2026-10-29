@@ -12,6 +12,8 @@
   --font-display: "Circular Std", "Manrope", "Noto Sans Armenian", ui-sans-serif, system-ui, sans-serif;
   --color-paper: oklch(1 0 0);
   --color-chalk: oklch(0.975 0 0);
+  /* Soft orange ground (cards/bands on revamp.community, email stat cards). */
+  --color-apricot-soft: #FDF1EB;
   --color-basalt: #212121;
   --color-apricot: #F15822;
   --color-tuff: oklch(0.76 0.14 38);
@@ -361,4 +363,10 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .aha-filled { transition: none; }
+}
+
+/* revamp.community: a clear focus ring on every control (the global outline is 50% and faint). */
+.community-site :focus-visible {
+  outline: 2px solid var(--color-apricot);
+  outline-offset: 3px;
 }

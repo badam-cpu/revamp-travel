@@ -9,11 +9,11 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 
-const UPDATED = "October 27, 2026";
+const UPDATED = "October 29, 2026";
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, id, children }: { title: string; id?: string; children: React.ReactNode }) {
   return (
-    <section className="mt-10">
+    <section id={id} className="mt-10 scroll-mt-24">
       <h2 className="font-display text-2xl tracking-[-0.02em] text-basalt">{title}</h2>
       <div className="mt-3 space-y-3 text-[15px] leading-7 text-basalt/70">{children}</div>
     </section>
@@ -77,6 +77,11 @@ export default function Privacy() {
           <Section title="Aha AI voice assistant">
             <p>On listing pages you can talk to Aha AI, our AI voice assistant, through your browser's microphone. It only starts when you tap "Start talking" and stops when you end the call or close the window. Your voice is sent to our voice provider, ElevenLabs, which turns it into text, has our AI answer from that listing's published details, and speaks the answer back. If you ask about dates, those dates and the number of guests are checked against our calendar.</p>
             <p>Aha AI can't book, pay or see your account. Recordings and transcripts of the call are kept by ElevenLabs only for the limited period set in our account, to provide and improve the service and to investigate problems; we don't sell them, use them for advertising, or connect them to your Revamp account. Don't share payment details or other sensitive information on a call.</p>
+          </Section>
+
+          <Section title="revamp.community" id="community">
+            <p>revamp.community is our community site for people who host stays, tours and experiences. If you join it, we collect your email address, your name if you give it, what you host, and any meetups you save a seat at. We use them only to send you community emails (meetup invitations, new guides and news for hosts) and to organise the meetups you sign up for. We send these emails through Resend, our email provider. We don't sell this information or share it with hosts or other members.</p>
+            <p>Every community email has an unsubscribe link, and you can ask us to delete your details at any time using the contact details below. We keep them until you unsubscribe or ask us to delete them. The news on the site is found and summarised by our AI from public sources and checked by our team before it's published; it uses no personal information.</p>
           </Section>
 
           <Section title="Cookies &amp; local storage">

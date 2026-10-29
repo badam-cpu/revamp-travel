@@ -50,7 +50,7 @@ import { reconcilePurchaserVouchers, redeemVoucher, redeemVoucherByCode } from "
 import { voucherPriceCents, isAllowedVoucherAmount } from "../shared/vouchers.js";
 import { resolvePromo } from "./promo.js";
 import { promoDiscountCents } from "../shared/promo.js";
-import { resolveAudience, sendCampaign, marketingConfigured, verifyUnsub, generateEmailBody, emailGenConfigured, parseContactsCsv, importContacts, sendTelegramCampaign, resolveTelegramRecipients, telegramBroadcastConfigured, campaignSender } from "./marketing.js";
+import { resolveAudience, sendCampaign, marketingConfigured, verifyUnsub, unsubToken, generateEmailBody, emailGenConfigured, parseContactsCsv, importContacts, sendTelegramCampaign, resolveTelegramRecipients, telegramBroadcastConfigured, campaignSender } from "./marketing.js";
 import { listAdminUsers } from "./adminUsers.js";
 import { endImpersonation, startImpersonation } from "./impersonation.js";
 import { listManagedVenues, venueSummary } from "./restaurant.js";
@@ -1591,7 +1591,8 @@ export function registerApiRoutes(app: Express) {
         meetup = { title: row.title, when: `${w.day}, ${w.time}`, place: meetupPlace(row) };
       }
       const { data: settings } = await admin.from("community_settings").select("telegram_url").eq("id", 1).maybeSingle();
-      void sendCommunityWelcome(email, { meetup, telegramUrl: (settings as { telegram_url: string | null } | null)?.telegram_url ?? null });
+      const unsubscribeUrl = `${(process.env.URL || "https://revampvacations.com").replace(/\/+$/, "")}/api/email/unsubscribe?e=${encodeURIComponent(email)}&t=${unsubToken(email)}`;
+      void sendCommunityWelcome(email, { meetup, telegramUrl: (settings as { telegram_url: string | null } | null)?.telegram_url ?? null, unsubscribeUrl });
       res.json({ ok: true, seat: !!meetup });
     } catch (e) {
       console.error("[community/join]", e);
@@ -4786,6 +4787,8 @@ export function registerApiRoutes(app: Express) {
     const admin = supabaseAdmin();
     if (!admin) return res.status(503).send(page("We couldn't process that right now — please try again later."));
     await admin.from("email_optouts").upsert({ email }, { onConflict: "email" });
+    // revamp.community (0125): show it on Admin → Community → Members too (no-op if not a member).
+    await admin.from("community_members").update({ unsubscribed_at: new Date().toISOString() }).ilike("email", email).is("unsubscribed_at", null).then(() => undefined, () => undefined);
     res.send(page("You've been unsubscribed. You won't receive marketing emails from Revamp anymore."));
   });
 
