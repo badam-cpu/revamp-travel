@@ -172,7 +172,7 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
   return (
     <footer className="relative overflow-hidden bg-basalt text-paper">
       <div className="pointer-events-none absolute -bottom-24 right-0 text-[19rem] font-bold leading-none tracking-[-0.12em] text-white/[0.035]">{isStay ? "revampstay." : <Wordmark title={null} className="h-[0.69em]" />}</div>
-      <div className={cn("container grid gap-x-8 gap-y-4 py-14 sm:grid-cols-2 sm:gap-y-10 lg:py-16", COMMUNITY_LIVE && !isStay ? "lg:grid-cols-6 xl:grid-cols-7" : "lg:grid-cols-6")}>
+      <div className={cn("container grid gap-x-8 gap-y-4 py-14 sm:grid-cols-2 sm:gap-y-10 lg:py-16", COMMUNITY_LIVE && !isStay ? "lg:grid-cols-6 xl:grid-cols-[repeat(6,minmax(0,1fr))_minmax(0,1.6fr)]" : "lg:grid-cols-6")}>
         <div className="pb-6 sm:col-span-2 sm:pb-0">
           <BrandMark light />
           {isStay ? (
@@ -237,10 +237,10 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
         <div className="pt-4 sm:pt-0">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-apricot">Keep close</p>
           <div className="mt-5 flex flex-col gap-3 text-sm text-paper/70">
-            <a href="mailto:hello@revampvacations.com" className="inline-flex items-center gap-2 hover:text-white"><Mail className="h-4 w-4" /> hello@revampvacations.com</a>
-            <a href="https://www.instagram.com/revamphomes_yerevan/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 hover:text-white"><Instagram className="h-4 w-4" /> Field notes <ArrowUpRight className="h-3 w-3" /></a>
+            <a href="mailto:hello@revampvacations.com" className="inline-flex items-center gap-2 whitespace-nowrap hover:text-white"><Mail className="h-4 w-4 shrink-0" /> hello@revampvacations.com</a>
+            <a href="https://www.instagram.com/revamphomes_yerevan/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 whitespace-nowrap hover:text-white"><Instagram className="h-4 w-4 shrink-0" /> Field notes <ArrowUpRight className="h-3 w-3 shrink-0" /></a>
             {telegramUrl && (
-              <a href={telegramUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 hover:text-white"><Send className="h-4 w-4" /> Plan on Telegram <ArrowUpRight className="h-3 w-3" /></a>
+              <a href={telegramUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 whitespace-nowrap hover:text-white"><Send className="h-4 w-4 shrink-0" /> Plan on Telegram <ArrowUpRight className="h-3 w-3 shrink-0" /></a>
             )}
           </div>
         </div>
