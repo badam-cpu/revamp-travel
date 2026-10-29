@@ -400,7 +400,7 @@ function JoinBand({ meetups, seatFor, onSeatFor, telegramUrl }: { meetups: Commu
             We only use your email for community emails, and you can unsubscribe any time.{" "}
             <a href={`${VACATIONS_ORIGIN}/privacy#community`} className="font-semibold text-paper underline underline-offset-2">Privacy policy</a>
           </p>
-          <button type="submit" disabled={busy || !email.trim()} className="mt-1 inline-flex h-[52px] items-center justify-center rounded-full bg-apricot hover:bg-apricot/90 px-7 text-[17px] font-bold text-white disabled:opacity-60 sm:self-start">
+          <button type="submit" disabled={busy} aria-busy={busy} className="mt-1 inline-flex h-[52px] items-center justify-center rounded-full bg-apricot hover:bg-apricot/90 px-7 text-[17px] font-bold text-white disabled:cursor-wait sm:self-start">
             {busy ? "Joining…" : seatFor ? "Join and save my seat" : "Join the community"}
           </button>
         </form>
