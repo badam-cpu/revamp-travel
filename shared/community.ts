@@ -42,6 +42,8 @@ export interface CommunityNewsItem {
   keyPoints: string[];
   sourceUrl: string;
   sourceName: string;
+  /** Free-to-read reports of the same story the digest was also written from (paywalled original, 0128). */
+  extraSources: { url: string; name: string }[];
   storyDate: string | null;
   /** When Aha AI last checked the text against the article (0127). */
   verifiedAt: string | null;
@@ -59,6 +61,8 @@ export interface NewsChecks {
   removed?: string[];
   /** Claims whose quoted evidence wasn't found word for word in the article. */
   unconfirmed?: string[];
+  /** How the sources were used, e.g. "X's article is only partly free to read — also written from Y." */
+  note?: string;
   /** Set when the article couldn't be read or checked; the text was left as it was. */
   failed?: string;
   checkedAt?: string;
@@ -96,6 +100,7 @@ export function mapNewsRow(r: any): CommunityNewsItem {
     keyPoints: Array.isArray(r.key_points) ? r.key_points.filter((x: unknown) => typeof x === "string" && x.trim()) : [],
     sourceUrl: r.source_url,
     sourceName: r.source_name ?? "",
+    extraSources: Array.isArray(r.extra_sources) ? r.extra_sources.filter((x: any) => x && typeof x.url === "string" && /^https:\/\//.test(x.url)).map((x: any) => ({ url: x.url, name: typeof x.name === "string" && x.name ? x.name : x.url })) : [],
     storyDate: r.story_date ?? null,
     verifiedAt: r.verified_at ?? null,
     checks: r.checks && typeof r.checks === "object" ? r.checks : {},
@@ -122,7 +127,7 @@ export function mapGuideRow(r: any): CommunityGuide {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-export const NEWS_COLS = "id, slug, category, title, summary, for_you, key_points, source_url, source_name, story_date, verified_at, checks, status, origin, published_at, created_at";
+export const NEWS_COLS = "id, slug, category, title, summary, for_you, key_points, source_url, source_name, extra_sources, story_date, verified_at, checks, status, origin, published_at, created_at";
 export const MEETUP_COLS = "id, title, description, starts_at, venue, city, online, status";
 export const GUIDE_COLS = "slug, category, title, excerpt, body, published_at";
 

@@ -116,13 +116,15 @@ function CheckSummary({ item }: { item: CommunityNewsItem }) {
     return <p className="text-sm text-basalt/70">Not checked against the article yet. Use "Write detailed version" to have Aha AI rewrite and check it.</p>;
   }
   const notes = [...(c.unconfirmed ?? []).map((x) => ({ kind: "Couldn't find the article's wording for", text: x })), ...(c.corrected ?? []).map((x) => ({ kind: "Corrected", text: x })), ...(c.removed ?? []).map((x) => ({ kind: "Removed", text: x }))];
+  const warn = !!c.unconfirmed?.length || /no free report/.test(c.note ?? "");
   const parts = [`${c.confirmed ?? 0} detail${c.confirmed === 1 ? "" : "s"} confirmed`, c.corrected?.length ? `${c.corrected.length} corrected` : "", c.removed?.length ? `${c.removed.length} removed` : "", c.unconfirmed?.length ? `${c.unconfirmed.length} to check yourself` : ""].filter(Boolean);
   return (
     <details className="rounded-lg bg-basalt/[0.04] px-3 py-2 text-sm">
-      <summary className={cn("flex min-h-8 cursor-pointer list-none items-center gap-1.5 font-semibold", c.unconfirmed?.length ? "text-apricot" : "text-basalt")}>
-        {c.unconfirmed?.length ? <AlertTriangle className="h-4 w-4 shrink-0" /> : <ShieldCheck className="h-4 w-4 shrink-0" />}
+      <summary className={cn("flex min-h-8 cursor-pointer list-none items-center gap-1.5 font-semibold", warn ? "text-apricot" : "text-basalt")}>
+        {warn ? <AlertTriangle className="h-4 w-4 shrink-0" /> : <ShieldCheck className="h-4 w-4 shrink-0" />}
         Checked against the article: {parts.join(" · ")}
       </summary>
+      {c.note && <p className="mt-2 text-basalt/80">{c.note}</p>}
       {notes.length > 0 ? (
         <ul className="mt-2 grid gap-1.5 pb-1 text-basalt/80">
           {notes.map((n, i) => (
@@ -130,7 +132,7 @@ function CheckSummary({ item }: { item: CommunityNewsItem }) {
           ))}
         </ul>
       ) : (
-        <p className="mt-1 pb-1 text-basalt/70">Every detail matched the article's own words.</p>
+        <p className="mt-1 pb-1 text-basalt/70">Every detail matched the source's own words.</p>
       )}
     </details>
   );
@@ -281,6 +283,19 @@ function NewsItemRow({ item, onChanged }: { item: CommunityNewsItem; onChanged: 
       <a href={item.sourceUrl} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 text-sm font-semibold text-basalt underline-offset-2 hover:underline">
         {sourceLabel(item)} <ExternalLink className="h-3.5 w-3.5" />
       </a>
+      {item.extraSources.length > 0 && (
+        <p className="text-sm text-basalt/70">
+          Also written from:{" "}
+          {item.extraSources.map((x, i) => (
+            <span key={x.url}>
+              {i > 0 && ", "}
+              <a href={x.url} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 font-semibold text-basalt underline-offset-2 hover:underline">
+                {x.name} <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </span>
+          ))}
+        </p>
+      )}
       {item.status !== "rejected" && <CheckSummary item={item} />}
       <div className="mt-1 flex flex-wrap gap-2">
         {item.status !== "published" && (

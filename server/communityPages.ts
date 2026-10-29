@@ -138,7 +138,7 @@ function renderNewsArticle(origin: string, n: CommunityNewsItem): string {
     canonical: `${origin}/news/${n.slug}`,
     origin,
     type: "article",
-    body: `<article><p>${esc(newsCategoryLabel(n.category))} · ${esc(formatNewsDate(n.storyDate ?? n.publishedAt))}</p><h1>${esc(n.title)}</h1><p>${esc(n.summary)}</p>${n.keyPoints.length ? `<h2>The details</h2><ul>${n.keyPoints.map((k) => `<li>${esc(k)}</li>`).join("")}</ul>` : ""}${n.forYou ? `<h2>What it means for you</h2><p>${esc(n.forYou)}</p>` : ""}<p>Source: <a href="${esc(n.sourceUrl)}" rel="nofollow noopener">${esc(sourceLabel(n))}</a></p><p>${n.verifiedAt ? "Written by Aha AI from the source article, with each detail checked against it, then reviewed by the Revamp team." : "Summarised by Aha AI, checked by the Revamp team."}</p></article><p><a href="/news">All news</a></p>`,
+    body: `<article><p>${esc(newsCategoryLabel(n.category))} · ${esc(formatNewsDate(n.storyDate ?? n.publishedAt))}</p><h1>${esc(n.title)}</h1><p>${esc(n.summary)}</p>${n.keyPoints.length ? `<h2>The details</h2><ul>${n.keyPoints.map((k) => `<li>${esc(k)}</li>`).join("")}</ul>` : ""}${n.forYou ? `<h2>What it means for you</h2><p>${esc(n.forYou)}</p>` : ""}<p>Source: <a href="${esc(n.sourceUrl)}" rel="nofollow noopener">${esc(sourceLabel(n))}</a></p>${n.extraSources.length ? `<p>Also reported by: ${n.extraSources.map((x) => `<a href="${esc(x.url)}" rel="nofollow noopener">${esc(x.name)}</a>`).join(", ")}</p>` : ""}<p>${n.verifiedAt ? "Written by Aha AI from the source article, with each detail checked against it, then reviewed by the Revamp team." : "Summarised by Aha AI, checked by the Revamp team."}</p></article><p><a href="/news">All news</a></p>`,
     jsonLd: [
       {
         "@context": "https://schema.org",
@@ -147,7 +147,7 @@ function renderNewsArticle(origin: string, n: CommunityNewsItem): string {
         description: n.summary,
         ...(date ? { datePublished: date } : {}),
         url: `${origin}/news/${n.slug}`,
-        isBasedOn: n.sourceUrl,
+        isBasedOn: n.extraSources.length ? [n.sourceUrl, ...n.extraSources.map((x) => x.url)] : n.sourceUrl,
         publisher: { "@type": "Organization", name: "Revamp Hospitality LLC", url: VACATIONS_ORIGIN },
       },
     ],

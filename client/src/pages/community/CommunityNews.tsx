@@ -188,7 +188,7 @@ export function CommunityNewsArticle() {
     canonicalPath: `/news/${slug}`,
     noindex: communityNoindex() || item === null,
     jsonLd: item
-      ? { "@context": "https://schema.org", "@type": "NewsArticle", headline: item.title, description: item.summary, ...(item.storyDate ? { datePublished: item.storyDate } : {}), isBasedOn: item.sourceUrl, publisher: { "@type": "Organization", name: "Revamp Hospitality LLC" } }
+      ? { "@context": "https://schema.org", "@type": "NewsArticle", headline: item.title, description: item.summary, ...(item.storyDate ? { datePublished: item.storyDate } : {}), isBasedOn: item.extraSources.length ? [item.sourceUrl, ...item.extraSources.map((x) => x.url)] : item.sourceUrl, publisher: { "@type": "Organization", name: "Revamp Hospitality LLC" } }
       : undefined,
   });
 
@@ -236,8 +236,23 @@ export function CommunityNewsArticle() {
             </div>
           )}
           <p className="text-[15px]"><SourceLink item={item} /></p>
+          {item.extraSources.length > 0 && (
+            <p className="-mt-3 text-[15px] text-basalt/70">
+              Also reported by:{" "}
+              {item.extraSources.map((x, i) => (
+                <span key={x.url}>
+                  {i > 0 && ", "}
+                  <a href={x.url} target="_blank" rel="nofollow noopener noreferrer" className="inline-flex items-center gap-0.5 font-semibold text-basalt underline-offset-2 hover:underline">
+                    {x.name} <ArrowUpRight className="h-3 w-3" />
+                  </a>
+                </span>
+              ))}
+            </p>
+          )}
           <p className="border-t border-basalt/10 pt-4 text-sm text-basalt/70">
-            {item.verifiedAt
+            {item.verifiedAt && item.extraSources.length
+              ? "Written by Aha AI from the reports linked above, with each detail checked against them, then reviewed by the Revamp team. For the full story, read the source."
+              : item.verifiedAt
               ? "Written by Aha AI from the source article, with each detail checked against it, then reviewed by the Revamp team. For the full story, read the source."
               : "Summarised by Aha AI and checked by the Revamp team. For the full story, read the source."}
           </p>
