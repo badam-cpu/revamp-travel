@@ -46,6 +46,14 @@
   status = 301
   force = true
 
+# revamp.community (host community, same build — useSite() === "community"):
+# the apex is canonical; www forwards to it so search engines see one address.
+[[redirects]]
+  from = "https://www.revamp.community/*"
+  to = "https://revamp.community/:splat"
+  status = 301
+  force = true
+
 # revampstay.com is a domain alias serving the stay-focused site (useSite()
 # branches on hostname; same build, see REVAMPSTAY-ARCHITECTURE.md). It is NOT
 # redirected — it serves its own site. (The pre-launch 301 blocks that pointed

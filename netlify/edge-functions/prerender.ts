@@ -92,6 +92,12 @@ export default async (request: Request, context?: { ip?: string }): Promise<Resp
   const url = new URL(request.url);
   const path = url.pathname;
 
+  // www.revamp.community → revamp.community for everyone, crawlers included
+  // (this edge function runs before netlify.toml's redirect would).
+  if (url.hostname === "www.revamp.community") {
+    return Response.redirect(`https://revamp.community${path}${url.search}`, 301);
+  }
+
   // These are handled elsewhere (their own function routes / SPA) — never prerender them.
   if (path.startsWith("/api/")) return;
   if (path === "/robots.txt" || path === "/sitemap.xml") return;
