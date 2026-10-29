@@ -47,7 +47,7 @@ export function LeadNewsCard({ item }: { item: CommunityNewsItem }) {
   return (
     <article className="flex flex-col gap-4 rounded-[28px] bg-basalt p-6 text-paper sm:p-9">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-bold">
-        <span className="rounded-full bg-apricot px-3 py-1.5 text-basalt">{newsCategoryLabel(item.category)}</span>
+        <span className="rounded-full bg-apricot px-3 py-1.5 text-white">{newsCategoryLabel(item.category)}</span>
         <span className="text-paper/65">{formatNewsDate(item.storyDate ?? item.publishedAt)}</span>
       </div>
       <h3 className="font-display text-[1.65rem] font-extrabold leading-tight sm:text-[2rem]">

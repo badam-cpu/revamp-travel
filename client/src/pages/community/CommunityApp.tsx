@@ -47,7 +47,7 @@ function CommunityHeader() {
     <header className="sticky top-0 z-40 border-b border-basalt/10 bg-paper/95 backdrop-blur">
       <div className="mx-auto flex max-w-[1240px] items-center gap-6 px-4 py-3 sm:px-6">
         <Link href="/" className="rounded-md text-apricot focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-apricot" aria-label="revamp community home">
-          <CommunityLockup title={null} className="h-7 sm:h-9" />
+          <CommunityLockup title={null} className="h-6 sm:h-7" />
         </Link>
         <nav aria-label="Main" className="ml-4 hidden flex-1 items-center gap-7 md:flex">
           {items}
@@ -78,7 +78,7 @@ function CommunityFooter() {
     <footer className="bg-basalt text-paper">
       <div className="mx-auto grid max-w-[1240px] gap-8 px-4 py-12 sm:px-6 md:grid-cols-[1.4fr_1fr_1fr]">
         <div>
-          <CommunityLockup title="revamp community" className="h-8 text-paper" />
+          <CommunityLockup title="revamp community" className="h-7 text-paper" />
           <p className="mt-5 max-w-sm text-sm leading-6 text-paper/65">{COMMUNITY_DESCRIPTION}</p>
         </div>
         <nav aria-label="Community" className="flex flex-col gap-1 text-sm">

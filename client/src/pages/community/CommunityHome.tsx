@@ -121,7 +121,7 @@ export default function CommunityHome() {
                   <br />
                   {meetupPlace(next)}
                 </p>
-                <button type="button" onClick={() => saveSeat(next.id)} className="mt-1 inline-flex h-11 items-center self-start rounded-full bg-apricot px-5 text-[15px] font-bold text-basalt">
+                <button type="button" onClick={() => saveSeat(next.id)} className="mt-1 inline-flex h-11 items-center self-start rounded-full bg-apricot hover:bg-apricot/90 px-5 text-[15px] font-bold text-white">
                   Save my seat
                 </button>
               </>
@@ -129,7 +129,7 @@ export default function CommunityHome() {
               <>
                 <p className="text-2xl font-extrabold leading-tight">The next date is coming soon</p>
                 <p className="text-base text-basalt/80">Join and we'll email you the invitation first.</p>
-                <button type="button" onClick={() => goTo("join")} className="mt-1 inline-flex h-11 items-center self-start rounded-full bg-apricot px-5 text-[15px] font-bold text-basalt">
+                <button type="button" onClick={() => goTo("join")} className="mt-1 inline-flex h-11 items-center self-start rounded-full bg-apricot hover:bg-apricot/90 px-5 text-[15px] font-bold text-white">
                   Tell me first
                 </button>
               </>
@@ -240,7 +240,7 @@ export default function CommunityHome() {
               <div className="rounded-[24px] bg-white/[0.07] p-6">
                 <p className="text-xl font-extrabold">The next date is announced soon.</p>
                 <p className="mt-2 text-[15px] text-paper/75">Join the community and the invitation comes to your inbox first.</p>
-                <button type="button" onClick={() => goTo("join")} className="mt-4 inline-flex h-11 items-center rounded-full bg-apricot px-5 text-[15px] font-bold text-basalt">Join the community</button>
+                <button type="button" onClick={() => goTo("join")} className="mt-4 inline-flex h-11 items-center rounded-full bg-apricot hover:bg-apricot/90 px-5 text-[15px] font-bold text-white">Join the community</button>
               </div>
             )}
           </div>
@@ -365,7 +365,7 @@ function JoinBand({ meetups, seatFor, onSeatFor, telegramUrl }: { meetups: Commu
         <div className="flex flex-1 flex-col gap-3 rounded-[24px] bg-white/[0.07] p-6" role="status">
           <p className="text-2xl font-extrabold">{done.seat ? "Your seat is saved." : "You're in."}</p>
           <p className="text-base leading-relaxed text-paper/80">We've sent a confirmation to {email.trim()}. If it isn't there in a few minutes, check Spam or Promotions.</p>
-          <Link href="/news" className="mt-2 inline-flex h-11 items-center self-start rounded-full bg-apricot px-5 text-[15px] font-bold text-basalt">Read this week's news</Link>
+          <Link href="/news" className="mt-2 inline-flex h-11 items-center self-start rounded-full bg-apricot hover:bg-apricot/90 px-5 text-[15px] font-bold text-white">Read this week's news</Link>
         </div>
       ) : (
         <form onSubmit={submit} className="flex flex-1 flex-col gap-4" noValidate={false}>
@@ -396,7 +396,7 @@ function JoinBand({ meetups, seatFor, onSeatFor, telegramUrl }: { meetups: Commu
             </label>
           )}
           {error && <p className="rounded-xl bg-white/10 px-4 py-3 text-[15px]" role="alert">{error}</p>}
-          <button type="submit" disabled={busy || !email.trim()} className="mt-1 inline-flex h-[52px] items-center justify-center rounded-full bg-apricot px-7 text-[17px] font-bold text-basalt disabled:opacity-60 sm:self-start">
+          <button type="submit" disabled={busy || !email.trim()} className="mt-1 inline-flex h-[52px] items-center justify-center rounded-full bg-apricot hover:bg-apricot/90 px-7 text-[17px] font-bold text-white disabled:opacity-60 sm:self-start">
             {busy ? "Joining…" : seatFor ? "Join and save my seat" : "Join the community"}
           </button>
         </form>

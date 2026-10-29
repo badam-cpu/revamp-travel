@@ -202,7 +202,7 @@ function NewsItemRow({ item, onChanged }: { item: CommunityNewsItem; onChanged: 
       </a>
       <div className="mt-1 flex flex-wrap gap-2">
         {item.status !== "published" && (
-          <button type="button" onClick={() => save(toEdit(item), "published").catch((e) => toast(userMessage(e, "Couldn't publish.")))} className="min-h-10 rounded-full bg-apricot px-4 text-sm font-bold text-basalt">
+          <button type="button" onClick={() => save(toEdit(item), "published").catch((e) => toast(userMessage(e, "Couldn't publish.")))} className="min-h-10 rounded-full bg-apricot hover:bg-apricot/90 px-4 text-sm font-bold text-white">
             Publish
           </button>
         )}
@@ -296,7 +296,7 @@ function NewsEditor({ initial, title, onCancel, actions }: { initial: NewsEdit; 
       </div>
       <div className="flex flex-wrap gap-2">
         {actions.map((a) => (
-          <button key={a.label} type="button" disabled={busy} onClick={() => go(a.run)} className={cn("min-h-10 rounded-full px-4 text-sm font-bold disabled:opacity-60", a.quiet ? "border border-basalt/20" : "bg-apricot text-basalt")}>
+          <button key={a.label} type="button" disabled={busy} onClick={() => go(a.run)} className={cn("min-h-10 rounded-full px-4 text-sm font-bold disabled:opacity-60", a.quiet ? "border border-basalt/20" : "bg-apricot hover:bg-apricot/90 text-white")}>
             {a.label}
           </button>
         ))}
@@ -436,7 +436,7 @@ function MeetupEditor({ existing, onDone }: { existing: CommunityMeetup | null; 
       </div>
       <p className="text-xs text-basalt/70">People who save a seat get a confirmation email. The online link isn't stored here; send it to them from Campaigns → Host community.</p>
       <div className="flex flex-wrap gap-2">
-        <button type="button" disabled={busy} onClick={save} className="min-h-10 rounded-full bg-apricot px-4 text-sm font-bold text-basalt disabled:opacity-60">Save</button>
+        <button type="button" disabled={busy} onClick={save} className="min-h-10 rounded-full bg-apricot hover:bg-apricot/90 px-4 text-sm font-bold text-white disabled:opacity-60">Save</button>
         <button type="button" onClick={onDone} className="min-h-10 rounded-full px-4 text-sm font-semibold text-basalt/70">Cancel</button>
         {existing && <button type="button" onClick={remove} className="ml-auto min-h-10 rounded-full px-4 text-sm font-semibold text-red-700">Delete</button>}
       </div>
@@ -535,7 +535,7 @@ function SettingsTab() {
         Hosts' Telegram group <span className="font-normal text-basalt/70">Invite link. Shown on the site and in the welcome email. Leave empty to hide it.</span>
         <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://t.me/+…" className={field} />
       </label>
-      <button type="button" disabled={busy} onClick={save} className="min-h-10 self-start rounded-full bg-apricot px-5 text-sm font-bold text-basalt disabled:opacity-60">Save</button>
+      <button type="button" disabled={busy} onClick={save} className="min-h-10 self-start rounded-full bg-apricot hover:bg-apricot/90 px-5 text-sm font-bold text-white disabled:opacity-60">Save</button>
     </div>
   );
 }
