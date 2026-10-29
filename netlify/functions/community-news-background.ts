@@ -4,9 +4,12 @@
  * an admin to review (server/communityNews.ts). Invoked twice a week by
  * community-news.ts and by admins via POST /api/admin-community/find-news —
  * both send the derived token; anything else is ignored. Records a heartbeat.
+ * With `x-community-mode: rewrite` and a JSON body {ids} it instead rewrites
+ * those stories from their articles (Admin → "Write detailed version") — no
+ * search, no heartbeat.
  */
 import { supabaseAdmin, adminConfigured } from "../../server/supabaseAdmin.js";
-import { communityNewsToken, findCommunityNews } from "../../server/communityNews.js";
+import { communityNewsToken, findCommunityNews, rewriteStories } from "../../server/communityNews.js";
 import { recordCronRun, checkAndAlertStaleCrons } from "../../server/alerts.js";
 
 const JOB = "community-news";
@@ -20,10 +23,20 @@ export default async (req: Request): Promise<void> => {
   if (!adminConfigured()) return;
   const admin = supabaseAdmin();
   if (!admin) return;
+  if (req.headers.get("x-community-mode") === "rewrite") {
+    try {
+      const body = (await req.json().catch(() => ({}))) as { ids?: unknown };
+      const ids = Array.isArray(body.ids) ? body.ids.filter((x): x is string => typeof x === "string") : [];
+      if (ids.length) console.log("[community-news] rewrite", JSON.stringify(await rewriteStories(admin, ids)));
+    } catch (e) {
+      console.error("[community-news] rewrite failed", e);
+    }
+    return;
+  }
   try {
     const r = await findCommunityNews(admin);
     console.log("[community-news]", JSON.stringify(r));
-    await recordCronRun(admin, JOB, true, `sources ${r.sources}, feed posts ${r.feedPosts}, found ${r.found}, checked ${r.accepted}, new drafts ${r.stored}, searches ${r.searches}`);
+    await recordCronRun(admin, JOB, true, `sources ${r.sources}, feed posts ${r.feedPosts}, found ${r.found}, checked ${r.accepted}, left out ${r.skipped}, new drafts ${r.stored}, searches ${r.searches}`);
   } catch (e) {
     console.error("[community-news] failed", e);
     await recordCronRun(admin, JOB, false, e instanceof Error ? e.message : String(e));

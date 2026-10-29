@@ -482,6 +482,7 @@ const giftLookupHits = new Map<string, number[]>();
 const giftPurchaseHits = new Map<string, number[]>();
 // Per-IP cap for the public (unauthenticated) AI trip planner — protects the Anthropic bill.
 const planTripHits = new Map<string, number[]>();
+const communityRewriteHits = new Map<string, number[]>();
 const communityJoinIpHits = new Map<string, number[]>();
 const communityJoinEmailHits = new Map<string, number[]>();
 const planEmailIpHits = new Map<string, number[]>();
@@ -1621,6 +1622,32 @@ export function registerApiRoutes(app: Express) {
     } catch (e) {
       console.error("[admin-community/find-news]", e);
       res.status(502).json({ error: "Couldn't start the search. Please try again." });
+    }
+  });
+
+  // Admin → Community → News → "Write detailed version": Aha AI rewrites the
+  // given stories from their articles and checks them (background function;
+  // each goes back to "To check"). Paid model calls, so rate-limited.
+  app.post("/api/admin-community/rewrite", async (req: Request, res: Response) => {
+    const admin = await requireAdminCaller(req, res);
+    if (!admin) return;
+    const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).filter((x: unknown): x is string => typeof x === "string" && /^[0-9a-f-]{36}$/i.test(x)).slice(0, 20);
+    if (!ids.length) return res.status(400).json({ error: "Choose a story to rewrite." });
+    if (rateLimited(communityRewriteHits, "all", 30, 60 * 60_000)) return res.status(429).json({ error: "That's a lot of rewrites for one hour — please try again a bit later." });
+    const token = await communityNewsToken();
+    const base = process.env.URL || process.env.DEPLOY_PRIME_URL;
+    if (!token || !base) return res.status(503).json({ error: "The news writer isn't configured on this server." });
+    try {
+      const r = await fetch(`${base}/.netlify/functions/community-news-background`, {
+        method: "POST",
+        headers: { "x-community-token": token, "x-community-mode": "rewrite", "content-type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      if (r.status >= 400) throw new Error(`background ${r.status}`);
+      res.json({ started: true });
+    } catch (e) {
+      console.error("[admin-community/rewrite]", e);
+      res.status(502).json({ error: "Couldn't start the rewrite. Please try again." });
     }
   });
 

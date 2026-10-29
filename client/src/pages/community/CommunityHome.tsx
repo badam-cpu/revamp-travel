@@ -173,7 +173,7 @@ export default function CommunityHome() {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex max-w-2xl flex-col gap-3">
             <h2 className={h2}>News &amp; updates</h2>
-            <p className={lede}>What changed this week in travel, short-term rentals and the booking sites, and what it means for you.</p>
+            <p className={lede}>What changed this week in travel, short-term rentals and on the OTAs, and what it means for you.</p>
           </div>
           <NewsFilter value={newsCat} onChange={setNewsCat} />
         </div>

@@ -23,7 +23,7 @@ export type NewsCategory = "travel" | "rentals" | "booking_sites" | "rules";
 export const NEWS_CATEGORIES: { key: NewsCategory; label: string; searchHint: string }[] = [
   { key: "travel", label: "Travel to Armenia", searchHint: "tourism to Armenia: flights to Yerevan, visas and entry rules, visitor numbers, big events, roads and border crossings" },
   { key: "rentals", label: "Short-term rentals", searchHint: "the short-term rental and holiday-home industry: guest trends, pricing, hosting practice, regulation in other countries that hosts follow" },
-  { key: "booking_sites", label: "Booking sites", searchHint: "changes on Airbnb, Booking.com, Expedia/Vrbo, GetYourGuide, Viator, Tripadvisor that affect hosts and tour operators: fees, policies, search ranking, payouts, new features" },
+  { key: "booking_sites", label: "OTA news", searchHint: "changes on Airbnb, Booking.com, Expedia/Vrbo, GetYourGuide, Viator, Tripadvisor that affect hosts and tour operators: fees, policies, search ranking, payouts, new features" },
   { key: "rules", label: "Rules & taxes", searchHint: "rules, registration, licensing and tax for tourism, rentals and guest houses in Armenia" },
 ];
 
@@ -38,13 +38,30 @@ export interface CommunityNewsItem {
   title: string;
   summary: string;
   forYou: string;
+  /** 3–6 specific facts from the article (0127). */
+  keyPoints: string[];
   sourceUrl: string;
   sourceName: string;
   storyDate: string | null;
+  /** When Aha AI last checked the text against the article (0127). */
+  verifiedAt: string | null;
+  checks: NewsChecks;
   status: "draft" | "published" | "rejected";
   origin: "ai" | "admin";
   publishedAt: string | null;
   createdAt: string;
+}
+
+/** What the check against the article found (community_news.checks, admin-facing). */
+export interface NewsChecks {
+  confirmed?: number;
+  corrected?: string[];
+  removed?: string[];
+  /** Claims whose quoted evidence wasn't found word for word in the article. */
+  unconfirmed?: string[];
+  /** Set when the article couldn't be read or checked; the text was left as it was. */
+  failed?: string;
+  checkedAt?: string;
 }
 
 export interface CommunityMeetup {
@@ -76,9 +93,12 @@ export function mapNewsRow(r: any): CommunityNewsItem {
     title: r.title,
     summary: r.summary ?? "",
     forYou: r.for_you ?? "",
+    keyPoints: Array.isArray(r.key_points) ? r.key_points.filter((x: unknown) => typeof x === "string" && x.trim()) : [],
     sourceUrl: r.source_url,
     sourceName: r.source_name ?? "",
     storyDate: r.story_date ?? null,
+    verifiedAt: r.verified_at ?? null,
+    checks: r.checks && typeof r.checks === "object" ? r.checks : {},
     status: r.status,
     origin: r.origin ?? "ai",
     publishedAt: r.published_at ?? null,
@@ -102,7 +122,7 @@ export function mapGuideRow(r: any): CommunityGuide {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-export const NEWS_COLS = "id, slug, category, title, summary, for_you, source_url, source_name, story_date, status, origin, published_at, created_at";
+export const NEWS_COLS = "id, slug, category, title, summary, for_you, key_points, source_url, source_name, story_date, verified_at, checks, status, origin, published_at, created_at";
 export const MEETUP_COLS = "id, title, description, starts_at, venue, city, online, status";
 export const GUIDE_COLS = "slug, category, title, excerpt, body, published_at";
 
@@ -152,7 +172,7 @@ export const COMMUNITY_DESCRIPTION =
   "News for hosts, practical guides, meetups in Yerevan and a place to ask other hosts. For people who host stays, tours and experiences in Armenia.";
 
 export const COMMUNITY_OFFERS: { key: string; title: string; body: string; href: string; cta: string }[] = [
-  { key: "news", title: "News for hosts", body: "What changed in travel, rentals and on the booking sites, in plain words, with what it means for you.", href: "/news", cta: "Read the news" },
+  { key: "news", title: "News for hosts", body: "What changed in travel, rentals and on the OTAs, in plain words, with what it means for you.", href: "/news", cta: "Read the news" },
   { key: "guides", title: "Guides", body: "Short, practical articles: photos that get clicked, answering reviews, hosting standards.", href: "/guides", cta: "Read the guides" },
   { key: "meetups", title: "Meetups", body: "Evenings in Yerevan, and online, to compare notes on pricing, seasons and guests.", href: "/#meetups", cta: "See the dates" },
   { key: "refer", title: "Refer a host", body: "Know someone who hosts? When they get their first confirmed booking on Revamp, you get ֏15,000 in credit.", href: `${VACATIONS_ORIGIN}/dashboard?section=referrals`, cta: "Get my referral link" },

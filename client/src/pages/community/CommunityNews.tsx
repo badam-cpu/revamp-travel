@@ -1,8 +1,9 @@
 /**
  * revamp.community → News & updates: the list (/news, category filter) and one
- * story (/news/:slug). Stories are found by Aha AI with web search, then
- * checked and published by an admin (server/communityNews.ts) — each links its
- * source and carries a "What it means for you" line.
+ * story (/news/:slug). Stories are found by Aha AI from the admin's sources,
+ * written from the article and checked against it, then reviewed and
+ * published by an admin (server/communityNews.ts) — each links its source and
+ * carries key points and a "What it means for you" line.
  */
 import { useEffect, useState } from "react";
 import { Link, useParams } from "wouter";
@@ -98,7 +99,7 @@ export default function CommunityNews() {
 
   useDocumentMeta({
     title: "News for hosts in Armenia — revamp community",
-    description: "Travel to Armenia, short-term rentals, booking-site changes, rules and taxes — what changed and what it means for hosts.",
+    description: "Travel to Armenia, short-term rentals, OTA news, rules and taxes — what changed and what it means for hosts.",
     canonicalPath: "/news",
     noindex: communityNoindex(),
   });
@@ -138,7 +139,7 @@ export default function CommunityNews() {
     <section className="mx-auto flex max-w-[1240px] flex-col gap-8 px-4 py-12 sm:px-6 sm:py-16">
       <div className="flex flex-col gap-3">
         <h1 className="font-display text-4xl font-extrabold tracking-tight sm:text-5xl">News &amp; updates</h1>
-        <p className="max-w-2xl text-lg leading-relaxed text-basalt/75">What changed in travel, short-term rentals and on the booking sites, and what it means for you. Every story links its source.</p>
+        <p className="max-w-2xl text-lg leading-relaxed text-basalt/75">What changed in travel, short-term rentals and on the OTAs (Airbnb, Booking.com and others), and what it means for you. Every story links its source.</p>
       </div>
       <NewsFilter value={category} onChange={setCategory} />
       {failed ? (
@@ -215,6 +216,19 @@ export function CommunityNewsArticle() {
           </p>
           <h1 className="font-display text-[2rem] font-extrabold leading-tight tracking-tight sm:text-[2.6rem]">{item.title}</h1>
           <p className="text-lg leading-relaxed text-basalt/85">{item.summary}</p>
+          {item.keyPoints.length > 0 && (
+            <div>
+              <h2 className="text-lg font-extrabold">The details</h2>
+              <ul className="mt-2 space-y-2">
+                {item.keyPoints.map((k, i) => (
+                  <li key={i} className="flex gap-3 text-base leading-relaxed text-basalt/85">
+                    <span aria-hidden="true" className="mt-[0.6em] h-1.5 w-1.5 shrink-0 rounded-full bg-apricot" />
+                    <span>{k}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {item.forYou && (
             <div className="rounded-[20px] bg-apricot-soft px-5 py-4">
               <p className="text-sm font-extrabold">What it means for you</p>
@@ -222,7 +236,11 @@ export function CommunityNewsArticle() {
             </div>
           )}
           <p className="text-[15px]"><SourceLink item={item} /></p>
-          <p className="border-t border-basalt/10 pt-4 text-sm text-basalt/70">Summarised by Aha AI and checked by the Revamp team. For the full story, read the source.</p>
+          <p className="border-t border-basalt/10 pt-4 text-sm text-basalt/70">
+            {item.verifiedAt
+              ? "Written by Aha AI from the source article, with each detail checked against it, then reviewed by the Revamp team. For the full story, read the source."
+              : "Summarised by Aha AI and checked by the Revamp team. For the full story, read the source."}
+          </p>
         </article>
       )}
     </section>

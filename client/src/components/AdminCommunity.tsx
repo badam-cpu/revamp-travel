@@ -2,6 +2,9 @@
  * Admin → Community (revamp.community, migration 0125):
  *  - News: stories Aha AI found (drafts) to check, edit and publish or reject;
  *    "Find news now" runs the AI web search (also runs Mon + Thu by itself).
+ *    Each AI story is written from its article and checked against it (0127);
+ *    the row shows what that check found. "Write detailed version" rewrites
+ *    older or edited stories the same way (they go back to "To check").
  *  - Meetups: add / edit / cancel, with saved seats.
  *  - Members: who joined (email, what they host, seats), CSV download.
  *  - Settings: the hosts' Telegram group link.
@@ -9,7 +12,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { CalendarDays, Download, ExternalLink, Library, Loader2, Newspaper, Plus, RefreshCw, Search, Settings, Users } from "lucide-react";
+import { AlertTriangle, CalendarDays, Download, ExternalLink, Library, Loader2, Newspaper, Plus, RefreshCw, Search, Settings, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { userMessage } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -18,6 +21,7 @@ import {
   adminDeleteMeetup,
   adminDeleteNews,
   adminFindNews,
+  adminRewriteNews,
   adminListMeetups,
   adminListMembers,
   adminListNews,
@@ -82,13 +86,61 @@ export function AdminCommunity() {
 
 /* ── News ─────────────────────────────────────────────────────────────── */
 
-const EMPTY_EDIT: NewsEdit = { category: "booking_sites", title: "", summary: "", forYou: "", sourceUrl: "", sourceName: "", storyDate: null };
-const toEdit = (n: CommunityNewsItem): NewsEdit => ({ category: n.category, title: n.title, summary: n.summary, forYou: n.forYou, sourceUrl: n.sourceUrl, sourceName: n.sourceName, storyDate: n.storyDate });
+const EMPTY_EDIT: NewsEdit = { category: "booking_sites", title: "", summary: "", forYou: "", keyPoints: [], sourceUrl: "", sourceName: "", storyDate: null };
+const toEdit = (n: CommunityNewsItem): NewsEdit => ({ category: n.category, title: n.title, summary: n.summary, forYou: n.forYou, keyPoints: n.keyPoints, sourceUrl: n.sourceUrl, sourceName: n.sourceName, storyDate: n.storyDate });
+
+/** Start "Write detailed version" for some stories, with the toast either way. */
+async function startRewrite(ids: string[], wasPublished: boolean): Promise<boolean> {
+  if (wasPublished && !window.confirm("The new version goes to 'To check', so this story is off revamp.community until you publish it again. Continue?")) return false;
+  try {
+    await adminRewriteNews(ids);
+    toast(`Aha AI is reading ${ids.length === 1 ? "the article" : "the articles"} and checking each detail. Refresh 'To check' in a minute or two.`);
+    return true;
+  } catch (e) {
+    toast(userMessage(e, "Couldn't start the rewrite."));
+    return false;
+  }
+}
+
+/** What the check against the article found — shown on each story for the reviewing admin. */
+function CheckSummary({ item }: { item: CommunityNewsItem }) {
+  const c = item.checks;
+  if (c.failed) {
+    return (
+      <p className="flex items-start gap-1.5 rounded-lg bg-apricot-soft px-3 py-2 text-sm">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-apricot" /> {c.failed} The story is unchanged.
+      </p>
+    );
+  }
+  if (!item.verifiedAt) {
+    return <p className="text-sm text-basalt/70">Not checked against the article yet. Use "Write detailed version" to have Aha AI rewrite and check it.</p>;
+  }
+  const notes = [...(c.unconfirmed ?? []).map((x) => ({ kind: "Couldn't find the article's wording for", text: x })), ...(c.corrected ?? []).map((x) => ({ kind: "Corrected", text: x })), ...(c.removed ?? []).map((x) => ({ kind: "Removed", text: x }))];
+  const parts = [`${c.confirmed ?? 0} detail${c.confirmed === 1 ? "" : "s"} confirmed`, c.corrected?.length ? `${c.corrected.length} corrected` : "", c.removed?.length ? `${c.removed.length} removed` : "", c.unconfirmed?.length ? `${c.unconfirmed.length} to check yourself` : ""].filter(Boolean);
+  return (
+    <details className="rounded-lg bg-basalt/[0.04] px-3 py-2 text-sm">
+      <summary className={cn("flex min-h-8 cursor-pointer list-none items-center gap-1.5 font-semibold", c.unconfirmed?.length ? "text-apricot" : "text-basalt")}>
+        {c.unconfirmed?.length ? <AlertTriangle className="h-4 w-4 shrink-0" /> : <ShieldCheck className="h-4 w-4 shrink-0" />}
+        Checked against the article: {parts.join(" · ")}
+      </summary>
+      {notes.length > 0 ? (
+        <ul className="mt-2 grid gap-1.5 pb-1 text-basalt/80">
+          {notes.map((n, i) => (
+            <li key={i}><span className="font-semibold text-basalt">{n.kind}:</span> {n.text}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1 pb-1 text-basalt/70">Every detail matched the article's own words.</p>
+      )}
+    </details>
+  );
+}
 
 function editProblem(e: NewsEdit): string | null {
   if (e.title.trim().length < 5) return "Add a headline.";
   if (!/^https:\/\//.test(e.sourceUrl.trim())) return "Add the source link (https://…).";
   if (!e.summary.trim()) return "Add a short summary.";
+  if (e.keyPoints.filter((k) => k.trim()).length > 8) return "Keep it to 8 key points at most.";
   return null;
 }
 
@@ -143,7 +195,21 @@ function NewsTab() {
           </button>
         </div>
       </div>
-      <p className="text-sm text-basalt/70">Every Monday and Thursday Aha AI reads your sources (see Sources) and adds stories here to check. Nothing appears on the site until you publish it. Check the source before publishing.</p>
+      <p className="text-sm text-basalt/70">Every Monday and Thursday Aha AI reads your sources (see Sources), writes each story from its article and checks every detail against it. Stories land here to check — nothing appears on the site until you publish it. A story whose article can't be opened is left out.</p>
+      {items && status !== "rejected" && items.some((n) => !n.verifiedAt) && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl bg-apricot-soft px-4 py-3 text-sm">
+          <span className="min-w-0 flex-1">{items.filter((n) => !n.verifiedAt).length} {status === "published" ? "published " : ""}stor{items.filter((n) => !n.verifiedAt).length === 1 ? "y was" : "ies were"} written before detailed, checked digests.</span>
+          <button
+            type="button"
+            onClick={async () => {
+              if (await startRewrite(items.filter((n) => !n.verifiedAt).map((n) => n.id), status === "published")) load();
+            }}
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-basalt px-4 font-semibold text-paper"
+          >
+            <Sparkles className="h-4 w-4" /> Rewrite {items.filter((n) => !n.verifiedAt).length === 1 ? "it" : "them"}
+          </button>
+        </div>
+      )}
       {adding && (
         <NewsEditor
           initial={EMPTY_EDIT}
@@ -206,10 +272,16 @@ function NewsItemRow({ item, onChanged }: { item: CommunityNewsItem; onChanged: 
       </div>
       <p className="text-base font-extrabold leading-snug">{item.title}</p>
       <p className="text-sm leading-relaxed text-basalt/80">{item.summary}</p>
+      {item.keyPoints.length > 0 && (
+        <ul className="list-disc space-y-1 pl-5 text-sm leading-relaxed text-basalt/80">
+          {item.keyPoints.map((k, i) => <li key={i}>{k}</li>)}
+        </ul>
+      )}
       {item.forYou && <p className="text-sm leading-relaxed"><span className="font-bold">For you:</span> {item.forYou}</p>}
       <a href={item.sourceUrl} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 text-sm font-semibold text-basalt underline-offset-2 hover:underline">
         {sourceLabel(item)} <ExternalLink className="h-3.5 w-3.5" />
       </a>
+      {item.status !== "rejected" && <CheckSummary item={item} />}
       <div className="mt-1 flex flex-wrap gap-2">
         {item.status !== "published" && (
           <button type="button" onClick={() => save(toEdit(item), "published").catch((e) => toast(userMessage(e, "Couldn't publish.")))} className="min-h-10 rounded-full bg-apricot hover:bg-apricot/90 px-4 text-sm font-bold text-white">
@@ -219,6 +291,17 @@ function NewsItemRow({ item, onChanged }: { item: CommunityNewsItem; onChanged: 
         <button type="button" onClick={() => setEditing(true)} className="min-h-10 rounded-full border border-basalt/20 px-4 text-sm font-semibold">
           Edit
         </button>
+        {item.status !== "rejected" && (
+          <button
+            type="button"
+            onClick={async () => {
+              if (await startRewrite([item.id], item.status === "published")) onChanged();
+            }}
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-basalt/20 px-4 text-sm font-semibold"
+          >
+            <Sparkles className="h-4 w-4" /> {item.verifiedAt ? "Rewrite & check again" : "Write detailed version"}
+          </button>
+        )}
         {item.status === "draft" && (
           <button type="button" onClick={() => save(toEdit(item), "rejected").catch((e) => toast(userMessage(e, "Couldn't reject.")))} className="min-h-10 rounded-full border border-basalt/20 px-4 text-sm font-semibold text-basalt/70">
             Reject
@@ -291,8 +374,12 @@ function NewsEditor({ initial, title, onCancel, actions }: { initial: NewsEdit; 
         <textarea rows={3} maxLength={900} value={e.summary} onChange={(ev) => set("summary", ev.target.value)} className={area} />
       </label>
       <label className="grid gap-1 text-sm font-semibold">
-        What it means for you <span className="font-normal text-basalt/70">one practical line for hosts</span>
-        <textarea rows={2} maxLength={400} value={e.forYou} onChange={(ev) => set("forYou", ev.target.value)} className={area} />
+        Key points <span className="font-normal text-basalt/70">one fact per line — who, what changes, dates, numbers (3–6)</span>
+        <textarea rows={5} value={e.keyPoints.join("\n")} onChange={(ev) => set("keyPoints", ev.target.value.split("\n"))} className={area} />
+      </label>
+      <label className="grid gap-1 text-sm font-semibold">
+        What it means for you <span className="font-normal text-basalt/70">1–2 practical sentences for hosts</span>
+        <textarea rows={2} maxLength={600} value={e.forYou} onChange={(ev) => set("forYou", ev.target.value)} className={area} />
       </label>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="grid gap-1 text-sm font-semibold">

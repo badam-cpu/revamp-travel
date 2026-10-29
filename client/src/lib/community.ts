@@ -101,10 +101,13 @@ export interface NewsEdit {
   title: string;
   summary: string;
   forYou: string;
+  keyPoints: string[];
   sourceUrl: string;
   sourceName: string;
   storyDate: string | null;
 }
+
+const cleanPoints = (p: string[]) => p.map((x) => x.replace(/^\s*[-•*]\s*/, "").trim()).filter(Boolean).slice(0, 8);
 
 export async function adminSaveNews(id: string, edit: NewsEdit, status?: "draft" | "published" | "rejected"): Promise<void> {
   const { data: auth } = await supabase.auth.getUser();
@@ -113,6 +116,7 @@ export async function adminSaveNews(id: string, edit: NewsEdit, status?: "draft"
     title: edit.title.trim(),
     summary: edit.summary.trim(),
     for_you: edit.forYou.trim(),
+    key_points: cleanPoints(edit.keyPoints),
     source_url: edit.sourceUrl.trim(),
     source_name: edit.sourceName.trim(),
     story_date: edit.storyDate || null,
@@ -134,6 +138,7 @@ export async function adminAddNews(edit: NewsEdit, slug: string): Promise<void> 
     title: edit.title.trim(),
     summary: edit.summary.trim(),
     for_you: edit.forYou.trim(),
+    key_points: cleanPoints(edit.keyPoints),
     source_url: edit.sourceUrl.trim(),
     source_name: edit.sourceName.trim(),
     story_date: edit.storyDate || null,
@@ -156,6 +161,16 @@ export async function adminFindNews(): Promise<void> {
   const res = await fetch("/api/admin-community/find-news", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: "{}" });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(body?.error || "Couldn't start the search. Please try again.");
+}
+
+/** "Write detailed version": Aha AI rewrites these stories from their articles and checks them (background). */
+export async function adminRewriteNews(ids: string[]): Promise<void> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  const res = await fetch("/api/admin-community/rewrite", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ ids }) });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(body?.error || "Couldn't start the rewrite. Please try again.");
 }
 
 export async function adminListMeetups(): Promise<(CommunityMeetup & { seats: number })[]> {

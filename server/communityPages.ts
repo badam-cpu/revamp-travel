@@ -123,7 +123,7 @@ function renderHome(origin: string, d: Awaited<ReturnType<typeof communityData>>
 function renderNewsIndex(origin: string, news: CommunityNewsItem[]): string {
   return shell({
     title: "News for hosts in Armenia — revamp community",
-    description: "Travel to Armenia, short-term rentals, booking-site changes, rules and taxes — what changed and what it means for hosts.",
+    description: "Travel to Armenia, short-term rentals, OTA news, rules and taxes — what changed and what it means for hosts.",
     canonical: `${origin}/news`,
     origin,
     body: `<h1>News &amp; updates</h1>${news.map(newsItemHtml).join("\n") || "<p>New stories every week.</p>"}`,
@@ -138,7 +138,7 @@ function renderNewsArticle(origin: string, n: CommunityNewsItem): string {
     canonical: `${origin}/news/${n.slug}`,
     origin,
     type: "article",
-    body: `<article><p>${esc(newsCategoryLabel(n.category))} · ${esc(formatNewsDate(n.storyDate ?? n.publishedAt))}</p><h1>${esc(n.title)}</h1><p>${esc(n.summary)}</p>${n.forYou ? `<h2>What it means for you</h2><p>${esc(n.forYou)}</p>` : ""}<p>Source: <a href="${esc(n.sourceUrl)}" rel="nofollow noopener">${esc(sourceLabel(n))}</a></p><p>Summarised by Aha AI, checked by the Revamp team.</p></article><p><a href="/news">All news</a></p>`,
+    body: `<article><p>${esc(newsCategoryLabel(n.category))} · ${esc(formatNewsDate(n.storyDate ?? n.publishedAt))}</p><h1>${esc(n.title)}</h1><p>${esc(n.summary)}</p>${n.keyPoints.length ? `<h2>The details</h2><ul>${n.keyPoints.map((k) => `<li>${esc(k)}</li>`).join("")}</ul>` : ""}${n.forYou ? `<h2>What it means for you</h2><p>${esc(n.forYou)}</p>` : ""}<p>Source: <a href="${esc(n.sourceUrl)}" rel="nofollow noopener">${esc(sourceLabel(n))}</a></p><p>${n.verifiedAt ? "Written by Aha AI from the source article, with each detail checked against it, then reviewed by the Revamp team." : "Summarised by Aha AI, checked by the Revamp team."}</p></article><p><a href="/news">All news</a></p>`,
     jsonLd: [
       {
         "@context": "https://schema.org",
@@ -226,7 +226,7 @@ export async function communityLlmsTxt(origin: string): Promise<string> {
     "",
     "## Pages",
     `- [Home](${origin}/)`,
-    `- [News for hosts](${origin}/news): weekly news on travel to Armenia, short-term rentals, booking sites, rules and taxes — each with the source linked`,
+    `- [News for hosts](${origin}/news): weekly news on travel to Armenia, short-term rentals, OTA news, rules and taxes — each with the source linked`,
     `- [Guides](${origin}/guides)`,
     `- [Host on Revamp](${VACATIONS_ORIGIN}/host)`,
     "",
