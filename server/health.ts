@@ -35,6 +35,7 @@ export interface CronHealth {
   detail: string | null;
   stale: boolean;
   maxAgeMinutes: number;
+  every: string;
   neverRecorded: boolean;
 }
 
@@ -94,6 +95,7 @@ export async function collectHealth(admin: SupabaseClient): Promise<AdminHealth>
       detail: (row?.detail as string) ?? null,
       stale,
       maxAgeMinutes: spec.maxAgeMinutes,
+      every: spec.every,
       neverRecorded: !row,
     };
   });

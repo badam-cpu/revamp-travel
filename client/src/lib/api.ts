@@ -243,6 +243,8 @@ export interface AdminHealth {
     detail: string | null;
     stale: boolean;
     maxAgeMinutes: number;
+    /** The real schedule in words, e.g. "runs every 20 minutes". */
+    every?: string;
     neverRecorded: boolean;
   }[];
   calendars: {

@@ -258,6 +258,32 @@ export interface AhaFaqInput {
  * question the facts can't answer is left out, never guessed. The host edits and
  * approves every item before anything is shown.
  */
+/**
+ * The guest-FAQ writer and its fact-check run on Claude Haiku 5.5 (2026-10-29:
+ * ~10x cheaper than Haiku 4.5 and better at sticking to the facts). Thinking is
+ * off — it would count against the small max_tokens. If the model is rejected
+ * (400/404) the same request runs on Haiku 4.5. FAQ_MODEL overrides.
+ */
+const FAQ_FALLBACK = "claude-haiku-4-5";
+async function faqMessage(anthropic: Anthropic, params: Omit<Anthropic.MessageCreateParamsNonStreaming, "model">): Promise<Anthropic.Message> {
+  const primary = process.env.FAQ_MODEL || "claude-haiku-5-5";
+  const run = (model: string) =>
+    anthropic.messages.create({
+      ...params,
+      model,
+      // The installed SDK predates the thinking field, hence the cast.
+      ...(model === FAQ_FALLBACK ? {} : ({ thinking: { type: "disabled" } } as object)),
+    } as Anthropic.MessageCreateParamsNonStreaming);
+  try {
+    return await run(primary);
+  } catch (err) {
+    const status = (err as { status?: number })?.status;
+    if (primary === FAQ_FALLBACK || (status !== 400 && status !== 404)) throw err;
+    console.error(`[aha-faq] ${primary} rejected (${status}) — using ${FAQ_FALLBACK}`);
+    return run(FAQ_FALLBACK);
+  }
+}
+
 export async function generateListingFaq(input: AhaFaqInput): Promise<{ q: string; a: string }[] | null> {
   const anthropic = getClient();
   if (!anthropic) return null;
@@ -278,8 +304,7 @@ Return ONLY JSON: {"items": [{"q": "...", "a": "..."}]}`;
   ].join("\n");
   let response: Anthropic.Message;
   try {
-    response = await anthropic.messages.create({
-      model: process.env.SUPPORT_MODEL || "claude-haiku-4-5",
+    response = await faqMessage(anthropic, {
       max_tokens: 1800,
       system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }] as unknown as Anthropic.MessageCreateParams["system"],
       messages: [{ role: "user", content: msg }],
@@ -323,8 +348,7 @@ Return ONLY JSON: {"supported": [list of the numbers that pass]}`;
   const msg = `Listing facts:\n${facts.map((f) => `- ${f}`).join("\n")}\n\nFAQ:\n${items.map((it, i) => `${i + 1}. Q: ${it.q}\n   A: ${it.a}`).join("\n")}`;
   let response: Anthropic.Message;
   try {
-    response = await anthropic.messages.create({
-      model: process.env.SUPPORT_MODEL || "claude-haiku-4-5",
+    response = await faqMessage(anthropic, {
       max_tokens: 300,
       system,
       messages: [{ role: "user", content: msg }],

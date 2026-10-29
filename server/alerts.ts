@@ -36,6 +36,8 @@ export interface CronJobSpec {
   label: string;
   /** Alert if the last SUCCESS is older than this many minutes. */
   maxAgeMinutes: number;
+  /** The real schedule in words, for Admin → Health (keep in sync with the function's cron). */
+  every: string;
 }
 
 /**
@@ -45,18 +47,18 @@ export interface CronJobSpec {
  */
 export const CRON_REGISTRY: CronJobSpec[] = [
   // Schedule: hourly → alert if no success in ~3h (several missed runs).
-  { job: "refresh-ical", label: "iCal availability refresh", maxAgeMinutes: 180 },
+  { job: "refresh-ical", label: "iCal availability refresh", maxAgeMinutes: 180, every: "runs every hour" },
   // Schedule: */10 * * * * → should run constantly; 60 min means several misses.
-  { job: "reconcile-bookings", label: "Booking & payment reconcile", maxAgeMinutes: 60 },
+  { job: "reconcile-bookings", label: "Booking & payment reconcile", maxAgeMinutes: 60, every: "runs every 10 minutes" },
   // Schedule: 1st + 15th of the month (events-sync → events-sync-background) —
   // the longest gap is the 15th → next 1st (≤ 17 days) → alert after 18 days.
-  { job: "events-sync", label: "Upcoming events discovery (AI, twice a month)", maxAgeMinutes: 18 * 24 * 60 },
+  { job: "events-sync", label: "Upcoming events discovery (AI, twice a month)", maxAgeMinutes: 18 * 24 * 60, every: "runs on the 1st and 15th" },
   // Schedule: @weekly (events-upkeep → events-sync-background "upkeep") → alert after ~8 days.
-  { job: "events-upkeep", label: "Upcoming events re-check (weekly)", maxAgeMinutes: 8 * 24 * 60 },
+  { job: "events-upkeep", label: "Upcoming events re-check (weekly)", maxAgeMinutes: 8 * 24 * 60, every: "runs weekly" },
   // Schedule: */20 * * * * (faq-auto) → alert if no success in ~3h.
-  { job: "faq-auto", label: "Automatic guest FAQ (Aha AI)", maxAgeMinutes: 180 },
+  { job: "faq-auto", label: "Automatic guest FAQ (Aha AI)", maxAgeMinutes: 180, every: "runs every 20 minutes" },
   // Schedule: */5 * * * * (inbox-ai) → alert if no success in ~1h.
-  { job: "inbox-ai", label: "Aha AI automatic inbox answers", maxAgeMinutes: 60 },
+  { job: "inbox-ai", label: "Aha AI automatic inbox answers", maxAgeMinutes: 60, every: "runs every 5 minutes" },
 ];
 
 /** Re-send a down-alert for the same job at most once per this window. */

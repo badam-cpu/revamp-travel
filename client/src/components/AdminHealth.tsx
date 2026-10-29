@@ -30,6 +30,7 @@ function relTime(iso: string | null): string {
   return `${days}d ago`;
 }
 
+/** Fallback only — each job now carries its real schedule (`every`) from the server. */
 function everyLabel(maxAgeMinutes: number): string {
   // The watchdog threshold is generous (≈ one extra cycle); describe the cadence loosely.
   if (maxAgeMinutes <= 60) return "runs every few minutes";
@@ -149,7 +150,7 @@ export function AdminHealth() {
                       <p className="font-semibold">{c.label}</p>
                       <Pill tone={tone}>{label}</Pill>
                     </div>
-                    <p className="mt-1 font-mono text-[11px] text-basalt/40">{c.job} · {everyLabel(c.maxAgeMinutes)}</p>
+                    <p className="mt-1 font-mono text-[11px] text-basalt/40">{c.job} · {c.every ?? everyLabel(c.maxAgeMinutes)}</p>
                     <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-basalt/60">
                       <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> Last run: {relTime(c.lastRunAt)}</span>
                       <span>Last success: {relTime(c.lastSuccessAt)}</span>
