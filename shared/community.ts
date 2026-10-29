@@ -15,7 +15,7 @@ export const COMMUNITY_ORIGIN = "https://revamp.community";
  * own (Admin → Community → "Find news now" still works, to fill the site
  * before launch). Flip to true at launch.
  */
-export const COMMUNITY_LIVE = false;
+export const COMMUNITY_LIVE = true;
 export const VACATIONS_ORIGIN = "https://revampvacations.com";
 
 export type NewsCategory = "travel" | "rentals" | "booking_sites" | "rules";

@@ -172,7 +172,7 @@ export function SiteFooter({ minimal = false, wide = false }: { minimal?: boolea
   return (
     <footer className="relative overflow-hidden bg-basalt text-paper">
       <div className="pointer-events-none absolute -bottom-24 right-0 text-[19rem] font-bold leading-none tracking-[-0.12em] text-white/[0.035]">{isStay ? "revampstay." : <Wordmark title={null} className="h-[0.69em]" />}</div>
-      <div className={cn("container grid gap-x-8 gap-y-4 py-14 sm:grid-cols-2 sm:gap-y-10 lg:py-16", COMMUNITY_LIVE && !isStay ? "lg:grid-cols-7" : "lg:grid-cols-6")}>
+      <div className={cn("container grid gap-x-8 gap-y-4 py-14 sm:grid-cols-2 sm:gap-y-10 lg:py-16", COMMUNITY_LIVE && !isStay ? "lg:grid-cols-6 xl:grid-cols-7" : "lg:grid-cols-6")}>
         <div className="pb-6 sm:col-span-2 sm:pb-0">
           <BrandMark light />
           {isStay ? (
