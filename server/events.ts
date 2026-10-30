@@ -378,7 +378,7 @@ const sourceImages = new Map<string, string>();
 const imgKey = (url: string, title: string) => `${url}\n${title}`;
 
 /** Site-wide placeholders some pages use as og:image — never an event picture. */
-const GENERIC_IMG = /(default|logo|placeholder|og[_-]?image|ogp|favicon|share[_-]?image|social)/i;
+export const GENERIC_IMG = /(default|logo|placeholder|og[_-]?image|ogp|favicon|share[_-]?image|social)/i;
 
 const decodeEntities = (s: string) =>
   s.replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ");

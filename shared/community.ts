@@ -27,6 +27,11 @@ export const NEWS_CATEGORIES: { key: NewsCategory; label: string; searchHint: st
   { key: "rules", label: "Rules & taxes", searchHint: "rules, registration, licensing and tax for tourism, rentals and guest houses in Armenia" },
 ];
 
+/** Revamp's own art for a topic — shown when a story has no photo, or its photo won't load. */
+export function newsArt(category: string): string {
+  return `/images/community/news-${NEWS_CATEGORIES.some((c) => c.key === category) ? category : "rentals"}.svg`;
+}
+
 export function newsCategoryLabel(key: string): string {
   return NEWS_CATEGORIES.find((c) => c.key === key)?.label ?? key;
 }
@@ -42,6 +47,9 @@ export interface CommunityNewsItem {
   keyPoints: string[];
   sourceUrl: string;
   sourceName: string;
+  /** The story's main photo (the source's link-preview picture, or one an admin set); null → topic art (0129). */
+  imageUrl: string | null;
+  imageCredit: string;
   /** Free-to-read reports of the same story the digest was also written from (paywalled original, 0128). */
   extraSources: { url: string; name: string }[];
   storyDate: string | null;
@@ -100,6 +108,8 @@ export function mapNewsRow(r: any): CommunityNewsItem {
     keyPoints: Array.isArray(r.key_points) ? r.key_points.filter((x: unknown) => typeof x === "string" && x.trim()) : [],
     sourceUrl: r.source_url,
     sourceName: r.source_name ?? "",
+    imageUrl: r.image_url ?? null,
+    imageCredit: r.image_credit ?? "",
     extraSources: Array.isArray(r.extra_sources) ? r.extra_sources.filter((x: any) => x && typeof x.url === "string" && /^https:\/\//.test(x.url)).map((x: any) => ({ url: x.url, name: typeof x.name === "string" && x.name ? x.name : x.url })) : [],
     storyDate: r.story_date ?? null,
     verifiedAt: r.verified_at ?? null,
@@ -127,7 +137,7 @@ export function mapGuideRow(r: any): CommunityGuide {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-export const NEWS_COLS = "id, slug, category, title, summary, for_you, key_points, source_url, source_name, extra_sources, story_date, verified_at, checks, status, origin, published_at, created_at";
+export const NEWS_COLS = "id, slug, category, title, summary, for_you, key_points, source_url, source_name, image_url, image_credit, extra_sources, story_date, verified_at, checks, status, origin, published_at, created_at";
 export const MEETUP_COLS = "id, title, description, starts_at, venue, city, online, status";
 export const GUIDE_COLS = "slug, category, title, excerpt, body, published_at";
 

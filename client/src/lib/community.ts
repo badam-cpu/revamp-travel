@@ -105,6 +105,8 @@ export interface NewsEdit {
   sourceUrl: string;
   sourceName: string;
   storyDate: string | null;
+  imageUrl: string | null;
+  imageCredit: string;
 }
 
 const cleanPoints = (p: string[]) => p.map((x) => x.replace(/^\s*[-•*]\s*/, "").trim()).filter(Boolean).slice(0, 8);
@@ -120,6 +122,8 @@ export async function adminSaveNews(id: string, edit: NewsEdit, status?: "draft"
     source_url: edit.sourceUrl.trim(),
     source_name: edit.sourceName.trim(),
     story_date: edit.storyDate || null,
+    image_url: edit.imageUrl?.trim() || null,
+    image_credit: edit.imageUrl?.trim() ? edit.imageCredit.trim() : "",
   };
   if (status) {
     row.status = status;
@@ -142,6 +146,8 @@ export async function adminAddNews(edit: NewsEdit, slug: string): Promise<void> 
     source_url: edit.sourceUrl.trim(),
     source_name: edit.sourceName.trim(),
     story_date: edit.storyDate || null,
+    image_url: edit.imageUrl?.trim() || null,
+    image_credit: edit.imageUrl?.trim() ? edit.imageCredit.trim() : "",
     status: "draft",
     origin: "admin",
     reviewed_by: auth.user?.id ?? null,
@@ -161,6 +167,16 @@ export async function adminFindNews(): Promise<void> {
   const res = await fetch("/api/admin-community/find-news", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: "{}" });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(body?.error || "Couldn't start the search. Please try again.");
+}
+
+/** "Find photos": source pictures for stories that have none (background; no text or status change). */
+export async function adminFindPhotos(): Promise<void> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  const res = await fetch("/api/admin-community/find-photos", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: "{}" });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(body?.error || "Couldn't start looking for photos. Please try again.");
 }
 
 /** "Write detailed version": Aha AI rewrites these stories from their articles and checks them (background). */

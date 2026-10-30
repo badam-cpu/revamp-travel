@@ -10,7 +10,7 @@ import { Link, useParams } from "wouter";
 import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { getPublishedNews, listPublishedNews } from "@/lib/community";
-import { NEWS_CATEGORIES, formatNewsDate, newsCategoryLabel, sourceLabel, type CommunityNewsItem, type NewsCategory } from "@shared/community";
+import { COMMUNITY_ORIGIN, NEWS_CATEGORIES, formatNewsDate, newsArt, newsCategoryLabel, sourceLabel, type CommunityNewsItem, type NewsCategory } from "@shared/community";
 import { communityNoindex } from "./communityNav";
 
 const PAGE = 20;
@@ -19,7 +19,7 @@ export function NewsFilter({ value, onChange }: { value: NewsCategory | null; on
   const chip = (active: boolean) =>
     `inline-flex h-11 shrink-0 items-center rounded-full px-4 text-[15px] font-semibold transition-colors ${active ? "bg-basalt text-paper" : "border border-basalt/15 bg-paper text-basalt hover:border-basalt/40"}`;
   return (
-    <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Filter news">
+    <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Filter news">
       <button type="button" aria-pressed={value === null} onClick={() => onChange(null)} className={chip(value === null)}>
         All
       </button>
@@ -43,50 +43,107 @@ function SourceLink({ item, onDark = false }: { item: CommunityNewsItem; onDark?
   );
 }
 
+/**
+ * A story's main photo, or Revamp's art for its topic when it has none or the
+ * photo won't load (some sites refuse pictures shown elsewhere). The photo is
+ * the source's, so its credit is always shown with it.
+ */
+function NewsPicture({ item, className, alt = "" }: { item: CommunityNewsItem; className: string; alt?: string }) {
+  const [failed, setFailed] = useState(false);
+  const photo = item.imageUrl && !failed ? item.imageUrl : null;
+  const credit = photo ? item.imageCredit.trim() : "";
+  return (
+    <figure className={`relative overflow-hidden bg-basalt/[0.05] ${className}`}>
+      <img
+        src={photo ?? newsArt(item.category)}
+        alt={photo ? alt : ""}
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
+        className="h-full w-full object-cover"
+      />
+      {credit && (
+        <figcaption className="absolute bottom-2 right-2 max-w-[90%] truncate rounded-full bg-basalt/75 px-2.5 py-0.5 text-xs font-medium text-paper">
+          Image: {credit}
+        </figcaption>
+      )}
+    </figure>
+  );
+}
+
+/** Topic · date · source, the one small line every story shows. */
+function NewsMeta({ item, source = false }: { item: CommunityNewsItem; source?: boolean }) {
+  return (
+    <p className="flex flex-wrap gap-x-2 text-sm font-semibold text-basalt/70">
+      <span>{newsCategoryLabel(item.category)}</span>
+      <span aria-hidden="true">·</span>
+      <span>{formatNewsDate(item.storyDate ?? item.publishedAt)}</span>
+      {source && (
+        <>
+          <span aria-hidden="true">·</span>
+          <span>{sourceLabel(item)}</span>
+        </>
+      )}
+    </p>
+  );
+}
+
 /** The large dark card for the newest story. */
 export function LeadNewsCard({ item }: { item: CommunityNewsItem }) {
   return (
-    <article className="flex flex-col gap-4 rounded-[28px] bg-basalt p-6 text-paper sm:p-9">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-bold">
-        <span className="rounded-full bg-apricot px-3 py-1.5 text-white">{newsCategoryLabel(item.category)}</span>
-        <span className="text-paper/65">{formatNewsDate(item.storyDate ?? item.publishedAt)}</span>
-      </div>
-      <h3 className="font-display text-[1.65rem] font-extrabold leading-tight sm:text-[2rem]">
-        <Link href={`/news/${item.slug}`} className="hover:underline hover:decoration-apricot hover:underline-offset-4">{item.title}</Link>
-      </h3>
-      <p className="text-[17px] leading-relaxed text-paper/80">{item.summary}</p>
-      {item.forYou && (
-        <div className="rounded-[18px] border border-white/15 px-5 py-4">
-          <p className="text-sm font-extrabold text-apricot">What it means for you</p>
-          <p className="mt-1 text-base leading-relaxed">{item.forYou}</p>
+    <article className="flex flex-col overflow-hidden rounded-[28px] bg-basalt text-paper">
+      <NewsPicture item={item} className="aspect-[16/9]" />
+      <div className="flex flex-1 flex-col gap-4 p-6 sm:p-8">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-bold">
+          <span className="rounded-full bg-apricot px-3 py-1.5 text-white">{newsCategoryLabel(item.category)}</span>
+          <span className="text-paper/65">{formatNewsDate(item.storyDate ?? item.publishedAt)}</span>
         </div>
-      )}
-      <div className="mt-auto flex flex-wrap justify-between gap-3 pt-2 text-sm">
-        <SourceLink item={item} onDark />
-        <span className="text-paper/55">Summarised by Aha AI · checked by the Revamp team</span>
+        <h3 className="font-display text-[1.65rem] font-extrabold leading-tight sm:text-[2rem]">
+          <Link href={`/news/${item.slug}`} className="hover:underline hover:decoration-apricot hover:underline-offset-4">{item.title}</Link>
+        </h3>
+        <p className="text-[17px] leading-relaxed text-paper/80">{item.summary}</p>
+        {item.forYou && (
+          <div className="rounded-[18px] border border-white/15 px-5 py-4">
+            <p className="text-sm font-extrabold text-apricot">What it means for you</p>
+            <p className="mt-1 text-base leading-relaxed">{item.forYou}</p>
+          </div>
+        )}
+        <div className="mt-auto flex flex-wrap justify-between gap-3 pt-2 text-sm">
+          <SourceLink item={item} onDark />
+          <span className="text-paper/55">Summarised by Aha AI · checked by the Revamp team</span>
+        </div>
       </div>
     </article>
   );
 }
 
-/** One row in a news list. */
+/** One story on the news page: photo, headline, short summary. The whole card opens it. */
+function NewsCard({ item }: { item: CommunityNewsItem }) {
+  return (
+    <article className="group relative flex flex-col overflow-hidden rounded-[20px] border border-basalt/12 bg-paper transition-colors hover:border-basalt/30">
+      <NewsPicture item={item} className="aspect-[16/10]" />
+      <div className="flex flex-1 flex-col gap-2 p-5">
+        <NewsMeta item={item} />
+        <h2 className="text-[1.3rem] font-extrabold leading-snug">
+          <Link href={`/news/${item.slug}`} className="after:absolute after:inset-0 group-hover:text-apricot">{item.title}</Link>
+        </h2>
+        <p className="line-clamp-3 text-base leading-relaxed text-basalt/75">{item.summary || item.forYou}</p>
+        <p className="mt-auto pt-1 text-sm text-basalt/70">{sourceLabel(item)}</p>
+      </div>
+    </article>
+  );
+}
+
+/** One story in the short list beside the lead card on the home page. */
 export function NewsRow({ item }: { item: CommunityNewsItem }) {
   return (
-    <article className="flex flex-col gap-2 border-t border-basalt/10 py-5">
-      <p className="flex flex-wrap gap-x-3 text-sm font-bold text-basalt/70">
-        <span>{newsCategoryLabel(item.category)}</span>
-        <span aria-hidden="true">·</span>
-        <span>{formatNewsDate(item.storyDate ?? item.publishedAt)}</span>
-      </p>
+    <article className="group relative flex flex-col gap-1.5 border-t border-basalt/10 py-5">
+      <NewsMeta item={item} source />
       <h3 className="text-xl font-extrabold leading-snug">
-        <Link href={`/news/${item.slug}`} className="hover:text-apricot">{item.title}</Link>
+        <Link href={`/news/${item.slug}`} className="after:absolute after:inset-0 group-hover:text-apricot">{item.title}</Link>
       </h3>
-      {item.forYou ? (
-        <p className="text-[15px] leading-relaxed text-basalt/70"><span className="font-bold text-basalt">For you:</span> {item.forYou}</p>
-      ) : (
-        <p className="text-[15px] leading-relaxed text-basalt/70">{item.summary}</p>
-      )}
-      <p className="text-sm"><SourceLink item={item} /></p>
+      <p className="line-clamp-2 text-base leading-relaxed text-basalt/75">{item.summary || item.forYou}</p>
     </article>
   );
 }
@@ -145,14 +202,14 @@ export default function CommunityNews() {
       {failed ? (
         <p className="rounded-2xl bg-apricot-soft p-6 text-base">The news didn't load. Please refresh the page in a moment.</p>
       ) : items === null ? (
-        <div className="space-y-4" aria-busy="true">
-          {[0, 1, 2].map((i) => <div key={i} className="h-28 animate-pulse rounded-2xl bg-basalt/[0.05]" />)}
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true">
+          {[0, 1, 2].map((i) => <div key={i} className="aspect-[16/10] animate-pulse rounded-[20px] bg-basalt/[0.05]" />)}
         </div>
       ) : items.length === 0 ? (
         <p className="rounded-2xl bg-apricot-soft p-6 text-base">No stories here yet. New ones are added every week.</p>
       ) : (
-        <div className="grid gap-x-10 lg:grid-cols-2">
-          {items.map((n) => <NewsRow key={n.id} item={n} />)}
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {items.map((n) => <NewsCard key={n.id} item={n} />)}
         </div>
       )}
       {more && (
@@ -188,7 +245,7 @@ export function CommunityNewsArticle() {
     canonicalPath: `/news/${slug}`,
     noindex: communityNoindex() || item === null,
     jsonLd: item
-      ? { "@context": "https://schema.org", "@type": "NewsArticle", headline: item.title, description: item.summary, ...(item.storyDate ? { datePublished: item.storyDate } : {}), isBasedOn: item.extraSources.length ? [item.sourceUrl, ...item.extraSources.map((x) => x.url)] : item.sourceUrl, publisher: { "@type": "Organization", name: "Revamp Hospitality LLC" } }
+      ? { "@context": "https://schema.org", "@type": "NewsArticle", headline: item.title, description: item.summary, ...(item.storyDate ? { datePublished: item.storyDate } : {}), image: item.imageUrl ?? `${COMMUNITY_ORIGIN}${newsArt(item.category)}`, isBasedOn: item.extraSources.length ? [item.sourceUrl, ...item.extraSources.map((x) => x.url)] : item.sourceUrl, publisher: { "@type": "Organization", name: "Revamp Hospitality LLC" } }
       : undefined,
   });
 
@@ -216,12 +273,13 @@ export function CommunityNewsArticle() {
           </p>
           <h1 className="font-display text-[2rem] font-extrabold leading-tight tracking-tight sm:text-[2.6rem]">{item.title}</h1>
           <p className="text-lg leading-relaxed text-basalt/85">{item.summary}</p>
+          <NewsPicture item={item} alt={item.title} className="aspect-[16/9] rounded-[20px]" />
           {item.keyPoints.length > 0 && (
             <div>
               <h2 className="text-lg font-extrabold">The details</h2>
               <ul className="mt-2 space-y-2">
                 {item.keyPoints.map((k, i) => (
-                  <li key={i} className="flex gap-3 text-base leading-relaxed text-basalt/85">
+                  <li key={i} className="flex gap-3 text-[17px] leading-relaxed text-basalt/85">
                     <span aria-hidden="true" className="mt-[0.6em] h-1.5 w-1.5 shrink-0 rounded-full bg-apricot" />
                     <span>{k}</span>
                   </li>

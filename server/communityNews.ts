@@ -45,11 +45,18 @@
  * checks the digest against all readable texts. Those reports are stored in
  * `extra_sources` and shown as "Also reported by". The original stays the
  * story's main source link.
+ *
+ * Main photo (0129, user's choice 2026-10-30, knowing the copyright risk): the
+ * picture the source page itself offers as its link preview (og:image), else
+ * that of an open report, credited and shown from its own address — never
+ * copied to our storage. Site-wide placeholders and a picture shared by
+ * different stories are skipped; those stories show Revamp's topic art. An
+ * admin can replace or remove any photo.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { NEWS_CATEGORIES, newsSlug, type NewsCategory, type NewsChecks } from "../shared/community.js";
-import { parseEventsJson, titleOverlap } from "./events.js";
+import { GENERIC_IMG, pageImage, parseEventsJson, sharedImages, titleOverlap } from "./events.js";
 import { assertSafeUrl } from "./urlPrefill.js";
 import { resolveAdminEmails } from "./alerts.js";
 import { sendCommunityNewsAlert } from "./email.js";
@@ -79,6 +86,8 @@ export interface FoundNews {
   key_points?: string[];
   /** Other free-to-read reports the digest was also written from (paywalled original). */
   extra_sources?: NewsSourceLink[];
+  image_url?: string | null;
+  image_credit?: string;
   /** The publisher's full text from its feed (content:encoded), when it has one. */
   article?: string;
 }
@@ -478,6 +487,12 @@ export function articleFromHtml(html: string, title = ""): Article {
   return done(""); // nothing on the page is about this story
 }
 
+/** A page's link-preview picture, unless it's clearly a site-wide placeholder (pure — exported for tests). */
+export function storyPhoto(html: string, pageUrl: string): string | null {
+  const image = pageImage(html, pageUrl);
+  return image && !GENERIC_IMG.test(image) && !/\.svg(\?|$)/i.test(image) ? image : null;
+}
+
 /**
  * The article behind a story: the page itself, else the publisher's full feed
  * text. `partial` = behind a paywall or only its opening is readable, so open
@@ -485,15 +500,17 @@ export function articleFromHtml(html: string, title = ""): Article {
  */
 async function readArticle(
   item: Pick<FoundNews, "source_url" | "article" | "title">,
-): Promise<{ article: Article | null; problem: string | null; partial: boolean; original: Article | null }> {
+): Promise<{ article: Article | null; problem: string | null; partial: boolean; original: Article | null; image: string | null }> {
   let problem = "the article page couldn't be opened";
   let page: Article | null = null;
+  let image: string | null = null;
   try {
     const r = await fetchText(item.source_url);
     if (r.status === 401 || r.status === 403 || r.status === 429) problem = "the site doesn't let automated readers open the article";
     else if (r.status === 404 || r.status === 410) problem = "the article page no longer exists";
     else if (r.ok) {
       page = articleFromHtml(r.text, item.title);
+      image = storyPhoto(r.text, r.url || item.source_url);
       if (page.text.length < ARTICLE_MIN_CHARS) problem = page.paywalled ? "the article is behind a paywall" : "the story's text couldn't be found on the article page (paywall or app-only page)";
     }
   } catch (e) {
@@ -503,9 +520,9 @@ async function readArticle(
   // The fuller of the two readable texts.
   const best: Article | null =
     feed.length > (page?.text.length ?? 0) ? { text: feed, published: page?.published ?? null, paywalled: false, siteName: page?.siteName ?? "", headline: page?.headline ?? "" } : page && page.text.length >= ARTICLE_MIN_CHARS ? page : null;
-  if (!best) return { article: null, problem, partial: true, original: page };
+  if (!best) return { article: null, problem, partial: true, original: page, image };
   const partial = (best.paywalled && best.text !== feed) || best.text.length < ARTICLE_FULL_CHARS;
-  return { article: best, problem: null, partial, original: page };
+  return { article: best, problem: null, partial, original: page, image };
 }
 
 export interface NewsSourceLink {
@@ -515,6 +532,7 @@ export interface NewsSourceLink {
 export interface OpenReport extends NewsSourceLink {
   text: string;
   published: string | null;
+  image: string | null;
 }
 
 /** Do two pages carry the same text (a wire story or press release republished)? Pure — exported for tests. */
@@ -544,7 +562,7 @@ export async function vetOpenReport(url: string, item: Pick<FoundNews, "title" |
       const lede = original.text.split("\n").find((l) => l.length >= 80);
       if ((lede && quoteInArticle(lede.slice(0, 160), a.text)) || sameText(a.text, original.text)) return null;
     }
-    return { url: page.url || url, name: a.siteName || hostOf(url), text: a.text, published: a.published };
+    return { url: page.url || url, name: a.siteName || hostOf(url), text: a.text, published: a.published, image: storyPhoto(page.text, page.url || url) };
   } catch {
     return null;
   }
@@ -675,7 +693,7 @@ export interface DigestOptions {
  * short write-up (used only as a hint of what the story is).
  */
 export async function digestStory(client: Anthropic, item: FoundNews, today: string, opts: DigestOptions = {}): Promise<DigestResult> {
-  const { article, problem, partial, original } = await readArticle(item);
+  const { article, problem, partial, original, image } = await readArticle(item);
 
   // Paywalled, blocked or only the opening readable → look for open reports of the same story.
   let reports: OpenReport[] = [];
@@ -790,6 +808,8 @@ Reply with ONLY a JSON object (no prose, no markdown):
   const category = NEWS_CATEGORIES.some((c) => c.key === draft.category) ? (draft.category as NewsCategory) : item.category;
   const modelDate = typeof draft.published === "string" && /^\d{4}-\d{2}-\d{2}$/.test(draft.published) ? draft.published : null;
   const published = article?.published ?? (modelDate && modelDate <= today ? modelDate : null);
+  const reportWithPhoto = reports.find((r) => r.image);
+  const photo = image ? { url: image, credit: origName } : reportWithPhoto ? { url: reportWithPhoto.image!, credit: reportWithPhoto.name } : null;
   return {
     ok: true,
     relevant: draft.relevant !== false,
@@ -805,6 +825,8 @@ Reply with ONLY a JSON object (no prose, no markdown):
       for_you: final.for_you,
       story_date: published ?? item.story_date,
       extra_sources: reports.map((r) => ({ url: r.url, name: r.name })),
+      image_url: photo?.url ?? null,
+      image_credit: photo?.credit ?? "",
     },
   };
 }
@@ -910,6 +932,8 @@ export async function findCommunityNews(admin: SupabaseClient, now = new Date())
       return { a, d: { ok: false, problem: "the digest failed" } as DigestResult };
     }
   });
+  // A picture on two different stories is the site's banner, not this story's photo.
+  const sharedPhotos = sharedImages(digests.map(({ d }) => ({ title: d.ok ? d.news.title : "", image: d.ok ? d.news.image_url : null })));
   let stored = 0;
   let skipped = 0;
   const titles: string[] = [];
@@ -929,6 +953,8 @@ export async function findCommunityNews(admin: SupabaseClient, now = new Date())
       for_you: n.for_you,
       key_points: n.key_points ?? [],
       extra_sources: n.extra_sources ?? [],
+      image_url: n.image_url && !sharedPhotos.has(n.image_url) ? n.image_url : null,
+      image_credit: n.image_url && !sharedPhotos.has(n.image_url) ? (n.image_credit ?? "") : "",
       source_url: n.source_url,
       source_name: n.source_name,
       story_date: n.story_date,
@@ -992,6 +1018,7 @@ export async function rewriteStories(admin: SupabaseClient, ids: string[], now =
         for_you: n.for_you,
         key_points: n.key_points ?? [],
         extra_sources: n.extra_sources ?? [],
+        ...(n.image_url ? { image_url: n.image_url, image_credit: n.image_credit ?? "" } : {}),
         story_date: d.published ?? r.story_date,
         verified_at: new Date().toISOString(),
         checks: d.checks,
@@ -1004,6 +1031,43 @@ export async function rewriteStories(admin: SupabaseClient, ids: string[], now =
     } else rewritten++;
   });
   return { rewritten, failed };
+}
+
+/**
+ * Admin → News → "Find photos": give stories that have none their source's
+ * picture, without touching their text or status (no model calls). Each page
+ * is opened once; a blocked source falls back to the story's open reports.
+ */
+export async function findStoryPhotos(admin: SupabaseClient): Promise<{ checked: number; found: number }> {
+  const { data } = await admin
+    .from("community_news")
+    .select("id, title, source_url, source_name, extra_sources")
+    .is("image_url", null)
+    .in("status", ["draft", "published"])
+    .order("created_at", { ascending: false })
+    .limit(40);
+  const rows = (data ?? []) as { id: string; title: string; source_url: string; source_name: string; extra_sources: NewsSourceLink[] | null }[];
+  const found = await inBatches(rows, 5, async (r) => {
+    for (const s of [{ url: r.source_url, name: r.source_name || hostOf(r.source_url) }, ...(r.extra_sources ?? [])]) {
+      try {
+        const page = await fetchText(s.url);
+        const image = page.ok ? storyPhoto(page.text, page.url || s.url) : null;
+        if (image) return { id: r.id, title: r.title, image, credit: s.name };
+      } catch {
+        /* next source */
+      }
+    }
+    return { id: r.id, title: r.title, image: null, credit: "" };
+  });
+  const shared = sharedImages(found);
+  let saved = 0;
+  for (const f of found) {
+    if (!f.image || shared.has(f.image)) continue;
+    const { error } = await admin.from("community_news").update({ image_url: f.image, image_credit: f.credit.slice(0, 120) }).eq("id", f.id);
+    if (error) console.error("[community-news] photo", f.id, error.message);
+    else saved++;
+  }
+  return { checked: rows.length, found: saved };
 }
 
 /** "5 new stories to check" — email every admin, and Telegram admins who linked a chat. Best-effort. */

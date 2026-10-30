@@ -12,8 +12,10 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, CalendarDays, Download, ExternalLink, Library, Loader2, Newspaper, Plus, RefreshCw, Search, Settings, ShieldCheck, Sparkles, Users } from "lucide-react";
+import { AlertTriangle, CalendarDays, Download, ExternalLink, ImageIcon, Library, Loader2, Newspaper, Plus, RefreshCw, Search, Settings, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { useAuth } from "@/contexts/AuthContext";
+import { uploadCampaignImage } from "@/lib/campaignImage";
 import { userMessage } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
@@ -21,6 +23,7 @@ import {
   adminDeleteMeetup,
   adminDeleteNews,
   adminFindNews,
+  adminFindPhotos,
   adminRewriteNews,
   adminListMeetups,
   adminListMembers,
@@ -41,7 +44,7 @@ import {
   type MeetupInput,
   type NewsEdit,
 } from "@/lib/community";
-import { COMMUNITY_ORIGIN, HOSTS_OPTIONS, NEWS_CATEGORIES, formatMeetupWhen, formatNewsDate, meetupPlace, newsCategoryLabel, newsSlug, sourceLabel, type CommunityMeetup, type CommunityNewsItem, type NewsCategory } from "@shared/community";
+import { COMMUNITY_ORIGIN, HOSTS_OPTIONS, NEWS_CATEGORIES, formatMeetupWhen, formatNewsDate, meetupPlace, newsArt, newsCategoryLabel, newsSlug, sourceLabel, type CommunityMeetup, type CommunityNewsItem, type NewsCategory } from "@shared/community";
 
 type Tab = "news" | "sources" | "meetups" | "members" | "settings";
 
@@ -86,8 +89,8 @@ export function AdminCommunity() {
 
 /* ── News ─────────────────────────────────────────────────────────────── */
 
-const EMPTY_EDIT: NewsEdit = { category: "booking_sites", title: "", summary: "", forYou: "", keyPoints: [], sourceUrl: "", sourceName: "", storyDate: null };
-const toEdit = (n: CommunityNewsItem): NewsEdit => ({ category: n.category, title: n.title, summary: n.summary, forYou: n.forYou, keyPoints: n.keyPoints, sourceUrl: n.sourceUrl, sourceName: n.sourceName, storyDate: n.storyDate });
+const EMPTY_EDIT: NewsEdit = { category: "booking_sites", title: "", summary: "", forYou: "", keyPoints: [], sourceUrl: "", sourceName: "", storyDate: null, imageUrl: null, imageCredit: "" };
+const toEdit = (n: CommunityNewsItem): NewsEdit => ({ category: n.category, title: n.title, summary: n.summary, forYou: n.forYou, keyPoints: n.keyPoints, sourceUrl: n.sourceUrl, sourceName: n.sourceName, storyDate: n.storyDate, imageUrl: n.imageUrl, imageCredit: n.imageCredit });
 
 /** Start "Write detailed version" for some stories, with the toast either way. */
 async function startRewrite(ids: string[], wasPublished: boolean): Promise<boolean> {
@@ -143,6 +146,7 @@ function editProblem(e: NewsEdit): string | null {
   if (!/^https:\/\//.test(e.sourceUrl.trim())) return "Add the source link (https://…).";
   if (!e.summary.trim()) return "Add a short summary.";
   if (e.keyPoints.filter((k) => k.trim()).length > 8) return "Keep it to 8 key points at most.";
+  if (e.imageUrl?.trim() && !/^https:\/\//.test(e.imageUrl.trim())) return "The photo link needs to start with https://.";
   return null;
 }
 
@@ -151,6 +155,7 @@ function NewsTab() {
   const [items, setItems] = useState<CommunityNewsItem[] | null>(null);
   const [adding, setAdding] = useState(false);
   const [finding, setFinding] = useState(false);
+  const [findingPhotos, setFindingPhotos] = useState(false);
 
   const load = useCallback(() => {
     setItems(null);
@@ -176,6 +181,18 @@ function NewsTab() {
     }
   };
 
+  const findPhotos = async () => {
+    setFindingPhotos(true);
+    try {
+      await adminFindPhotos();
+      toast("Looking for photos on the source pages. Refresh this page in a minute. Text and status don't change.");
+    } catch (e) {
+      toast(userMessage(e, "Couldn't start looking for photos."));
+    } finally {
+      setFindingPhotos(false);
+    }
+  };
+
   return (
     <div className="grid gap-5">
       <div className="flex flex-wrap items-center gap-2">
@@ -198,6 +215,14 @@ function NewsTab() {
         </div>
       </div>
       <p className="text-sm text-basalt/70">Every Monday and Thursday Aha AI reads your sources (see Sources), writes each story from its article and checks every detail against it. Stories land here to check — nothing appears on the site until you publish it. A story whose article can't be opened is left out.</p>
+      {items && status !== "rejected" && items.some((n) => !n.imageUrl) && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-basalt/12 px-4 py-3 text-sm">
+          <span className="min-w-0 flex-1">{items.filter((n) => !n.imageUrl).length} {items.filter((n) => !n.imageUrl).length === 1 ? "story shows" : "stories show"} Revamp art because there's no photo yet.</span>
+          <button type="button" onClick={findPhotos} disabled={findingPhotos} className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-basalt/20 px-4 font-semibold disabled:opacity-60">
+            {findingPhotos ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />} Find photos
+          </button>
+        </div>
+      )}
       {items && status !== "rejected" && items.some((n) => !n.verifiedAt) && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl bg-apricot-soft px-4 py-3 text-sm">
           <span className="min-w-0 flex-1">{items.filter((n) => !n.verifiedAt).length} {status === "published" ? "published " : ""}stor{items.filter((n) => !n.verifiedAt).length === 1 ? "y was" : "ies were"} written before detailed, checked digests.</span>
@@ -273,6 +298,10 @@ function NewsItemRow({ item, onChanged }: { item: CommunityNewsItem; onChanged: 
         <span className="rounded-full bg-basalt/[0.06] px-2 py-0.5 text-basalt/70">{item.origin === "ai" ? "Found by Aha AI" : "Added by the team"}</span>
       </div>
       <p className="text-base font-extrabold leading-snug">{item.title}</p>
+      <div className="flex items-center gap-3">
+        <img src={item.imageUrl ?? newsArt(item.category)} alt="" referrerPolicy="no-referrer" onError={(ev) => { ev.currentTarget.src = newsArt(item.category); }} className="h-16 w-24 shrink-0 rounded-lg object-cover" />
+        <p className="min-w-0 text-xs text-basalt/70">{item.imageUrl ? (item.imageCredit ? `Photo credit: ${item.imageCredit}` : "Your own photo") : "Revamp art (no photo yet)"}</p>
+      </div>
       <p className="text-sm leading-relaxed text-basalt/80">{item.summary}</p>
       {item.keyPoints.length > 0 && (
         <ul className="list-disc space-y-1 pl-5 text-sm leading-relaxed text-basalt/80">
@@ -352,7 +381,22 @@ function NewsItemRow({ item, onChanged }: { item: CommunityNewsItem; onChanged: 
 function NewsEditor({ initial, title, onCancel, actions }: { initial: NewsEdit; title: string; onCancel: () => void; actions: { label: string; run: (e: NewsEdit) => Promise<void>; quiet?: boolean }[] }) {
   const [e, setE] = useState<NewsEdit>(initial);
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const { user } = useAuth();
   const set = <K extends keyof NewsEdit>(k: K, v: NewsEdit[K]) => setE((p) => ({ ...p, [k]: v }));
+  const upload = async (file: File | undefined) => {
+    if (!file || !user) return;
+    setUploading(true);
+    try {
+      const img = await uploadCampaignImage(file, user.id);
+      setE((p) => ({ ...p, imageUrl: img.url, imageCredit: "" }));
+    } catch (err) {
+      console.error(err);
+      toast(userMessage(err, "Couldn't upload that photo."));
+    } finally {
+      setUploading(false);
+    }
+  };
   const go = async (run: (e: NewsEdit) => Promise<void>) => {
     const problem = editProblem(e);
     if (problem) return toast(problem);
@@ -396,6 +440,31 @@ function NewsEditor({ initial, title, onCancel, actions }: { initial: NewsEdit; 
         What it means for you <span className="font-normal text-basalt/70">1–2 practical sentences for hosts</span>
         <textarea rows={2} maxLength={600} value={e.forYou} onChange={(ev) => set("forYou", ev.target.value)} className={area} />
       </label>
+      <div className="grid gap-2">
+        <p className="text-sm font-semibold">Main photo <span className="font-normal text-basalt/70">the source's picture, your own, or Revamp art if empty</span></p>
+        <div className="flex flex-wrap items-center gap-3">
+          <img src={e.imageUrl?.trim() || newsArt(e.category)} alt="" referrerPolicy="no-referrer" className="h-20 w-32 rounded-lg object-cover" />
+          <label className="inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-full border border-basalt/20 px-4 text-sm font-semibold focus-within:border-apricot">
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />} Upload my own
+            <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={uploading} onChange={(ev) => { void upload(ev.target.files?.[0]); ev.target.value = ""; }} />
+          </label>
+          {e.imageUrl && (
+            <button type="button" onClick={() => setE((p) => ({ ...p, imageUrl: null, imageCredit: "" }))} className="min-h-10 rounded-full px-3 text-sm font-semibold text-basalt/70">
+              Remove photo
+            </button>
+          )}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1 text-sm font-semibold">
+            Photo link
+            <input type="url" value={e.imageUrl ?? ""} onChange={(ev) => set("imageUrl", ev.target.value || null)} placeholder="https://…" className={field} />
+          </label>
+          <label className="grid gap-1 text-sm font-semibold">
+            Photo credit
+            <input value={e.imageCredit} maxLength={120} onChange={(ev) => set("imageCredit", ev.target.value)} placeholder="e.g. Skift" className={field} />
+          </label>
+        </div>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="grid gap-1 text-sm font-semibold">
           Source link

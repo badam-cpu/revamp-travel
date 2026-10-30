@@ -6,10 +6,11 @@
  * both send the derived token; anything else is ignored. Records a heartbeat.
  * With `x-community-mode: rewrite` and a JSON body {ids} it instead rewrites
  * those stories from their articles (Admin → "Write detailed version") — no
- * search, no heartbeat.
+ * search, no heartbeat. With `x-community-mode: photos` it only looks for
+ * pictures for stories that have none (no model calls).
  */
 import { supabaseAdmin, adminConfigured } from "../../server/supabaseAdmin.js";
-import { communityNewsToken, findCommunityNews, rewriteStories } from "../../server/communityNews.js";
+import { communityNewsToken, findCommunityNews, findStoryPhotos, rewriteStories } from "../../server/communityNews.js";
 import { recordCronRun, checkAndAlertStaleCrons } from "../../server/alerts.js";
 
 const JOB = "community-news";
@@ -23,6 +24,14 @@ export default async (req: Request): Promise<void> => {
   if (!adminConfigured()) return;
   const admin = supabaseAdmin();
   if (!admin) return;
+  if (req.headers.get("x-community-mode") === "photos") {
+    try {
+      console.log("[community-news] photos", JSON.stringify(await findStoryPhotos(admin)));
+    } catch (e) {
+      console.error("[community-news] photos failed", e);
+    }
+    return;
+  }
   if (req.headers.get("x-community-mode") === "rewrite") {
     try {
       const body = (await req.json().catch(() => ({}))) as { ids?: unknown };

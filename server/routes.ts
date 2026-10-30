@@ -1651,6 +1651,25 @@ export function registerApiRoutes(app: Express) {
     }
   });
 
+  // Admin → Community → News → "Find photos": source pictures for stories that
+  // have none. No model calls and no change to text or status.
+  app.post("/api/admin-community/find-photos", async (req: Request, res: Response) => {
+    const admin = await requireAdminCaller(req, res);
+    if (!admin) return;
+    if (rateLimited(communityRewriteHits, "photos", 10, 60 * 60_000)) return res.status(429).json({ error: "Photos were searched a lot this hour — please try again a bit later." });
+    const token = await communityNewsToken();
+    const base = process.env.URL || process.env.DEPLOY_PRIME_URL;
+    if (!token || !base) return res.status(503).json({ error: "The photo finder isn't configured on this server." });
+    try {
+      const r = await fetch(`${base}/.netlify/functions/community-news-background`, { method: "POST", headers: { "x-community-token": token, "x-community-mode": "photos" } });
+      if (r.status >= 400) throw new Error(`background ${r.status}`);
+      res.json({ started: true });
+    } catch (e) {
+      console.error("[admin-community/find-photos]", e);
+      res.status(502).json({ error: "Couldn't start looking for photos. Please try again." });
+    }
+  });
+
   // Admin → Community → Sources: find (or re-check) a source's news feed now.
   app.post("/api/admin-community/check-source", async (req: Request, res: Response) => {
     const admin = await requireAdminCaller(req, res);
