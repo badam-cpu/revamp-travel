@@ -19,6 +19,8 @@ export const COMMUNITY_LIVE = true;
 export const VACATIONS_ORIGIN = "https://revampvacations.com";
 
 export type NewsCategory = "travel" | "rentals" | "booking_sites" | "rules";
+/** English first; Armenian is the option at /hy (migration 0131). */
+export type CommunityLang = "en" | "hy";
 
 export const NEWS_CATEGORIES: { key: NewsCategory; label: string; searchHint: string }[] = [
   { key: "travel", label: "Travel To Armenia", searchHint: "tourism to Armenia: flights to Yerevan, visas and entry rules, visitor numbers, big events, roads and border crossings" },
@@ -58,6 +60,14 @@ export interface CommunityNewsItem {
   checks: NewsChecks;
   /** When it was posted to the Telegram channel; null = not posted (0130). */
   telegramPostedAt: string | null;
+  /** Armenian version (0131): Aha AI's translation, shown only once an admin approves it. */
+  titleHy: string;
+  summaryHy: string;
+  keyPointsHy: string[];
+  forYouHy: string;
+  hyStatus: "none" | "draft" | "approved";
+  /** What the translation checks flagged for the admin, or why it failed. */
+  hyNotes: string[];
   status: "draft" | "published" | "rejected";
   origin: "ai" | "admin";
   publishedAt: string | null;
@@ -87,6 +97,12 @@ export interface CommunityMeetup {
   city: string;
   online: boolean;
   status: "draft" | "published" | "cancelled";
+  titleHy: string;
+  descriptionHy: string;
+  venueHy: string;
+  cityHy: string;
+  hyStatus: "none" | "draft" | "approved";
+  hyNotes: string[];
 }
 
 export interface CommunityGuide {
@@ -96,6 +112,10 @@ export interface CommunityGuide {
   excerpt: string;
   body: string;
   publishedAt: string | null;
+  titleHy: string;
+  excerptHy: string;
+  bodyHy: string;
+  hyStatus: "none" | "draft" | "approved";
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -117,6 +137,12 @@ export function mapNewsRow(r: any): CommunityNewsItem {
     verifiedAt: r.verified_at ?? null,
     checks: r.checks && typeof r.checks === "object" ? r.checks : {},
     telegramPostedAt: r.telegram_posted_at ?? null,
+    titleHy: r.title_hy ?? "",
+    summaryHy: r.summary_hy ?? "",
+    keyPointsHy: Array.isArray(r.key_points_hy) ? r.key_points_hy.filter((x: unknown) => typeof x === "string" && x.trim()) : [],
+    forYouHy: r.for_you_hy ?? "",
+    hyStatus: r.hy_status === "draft" || r.hy_status === "approved" ? r.hy_status : "none",
+    hyNotes: Array.isArray(r.hy_notes) ? r.hy_notes.filter((x: unknown) => typeof x === "string") : [],
     status: r.status,
     origin: r.origin ?? "ai",
     publishedAt: r.published_at ?? null,
@@ -133,16 +159,33 @@ export function mapMeetupRow(r: any): CommunityMeetup {
     city: r.city ?? "Yerevan",
     online: !!r.online,
     status: r.status,
+    titleHy: r.title_hy ?? "",
+    descriptionHy: r.description_hy ?? "",
+    venueHy: r.venue_hy ?? "",
+    cityHy: r.city_hy ?? "",
+    hyStatus: r.hy_status === "draft" || r.hy_status === "approved" ? r.hy_status : "none",
+    hyNotes: Array.isArray(r.hy_notes) ? r.hy_notes.filter((x: unknown) => typeof x === "string") : [],
   };
 }
 export function mapGuideRow(r: any): CommunityGuide {
-  return { slug: r.slug, category: r.category, title: r.title, excerpt: r.excerpt ?? "", body: r.body ?? "", publishedAt: r.published_at ?? null };
+  return {
+    slug: r.slug,
+    category: r.category,
+    title: r.title,
+    excerpt: r.excerpt ?? "",
+    body: r.body ?? "",
+    publishedAt: r.published_at ?? null,
+    titleHy: r.title_hy ?? "",
+    excerptHy: r.excerpt_hy ?? "",
+    bodyHy: r.body_hy ?? "",
+    hyStatus: r.hy_status === "draft" || r.hy_status === "approved" ? r.hy_status : "none",
+  };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-export const NEWS_COLS = "id, slug, category, title, summary, for_you, key_points, source_url, source_name, image_url, image_credit, extra_sources, story_date, verified_at, checks, telegram_posted_at, status, origin, published_at, created_at";
-export const MEETUP_COLS = "id, title, description, starts_at, venue, city, online, status";
-export const GUIDE_COLS = "slug, category, title, excerpt, body, published_at";
+export const NEWS_COLS = "id, slug, category, title, summary, for_you, key_points, source_url, source_name, image_url, image_credit, extra_sources, story_date, verified_at, checks, telegram_posted_at, title_hy, summary_hy, key_points_hy, for_you_hy, hy_status, hy_notes, status, origin, published_at, created_at";
+export const MEETUP_COLS = "id, title, description, starts_at, venue, city, online, status, title_hy, description_hy, venue_hy, city_hy, hy_status, hy_notes";
+export const GUIDE_COLS = "slug, category, title, excerpt, body, published_at, title_hy, excerpt_hy, body_hy, hy_status";
 
 /** Partner Hub category labels (hub_articles.category), for public guides. */
 export const GUIDE_CATEGORY_LABELS: Record<string, string> = {
@@ -152,27 +195,50 @@ export const GUIDE_CATEGORY_LABELS: Record<string, string> = {
   local_news: "Local news",
 };
 
-/** "12 Nov 2026" (dates are calendar days — read as UTC so they never shift). */
-export function formatNewsDate(iso: string | null | undefined): string {
+/** Written out rather than left to the browser, so Armenian dates read the same everywhere. */
+const HY_MONTHS = ["հունվարի", "փետրվարի", "մարտի", "ապրիլի", "մայիսի", "հունիսի", "հուլիսի", "օգոստոսի", "սեպտեմբերի", "հոկտեմբերի", "նոյեմբերի", "դեկտեմբերի"];
+const HY_DAYS = ["Կիր", "Երկ", "Երք", "Չրք", "Հնգ", "Ուրբ", "Շբթ"];
+
+/** "12 Nov 2026" / "2026 թ. նոյեմբերի 12" (dates are calendar days — read as UTC so they never shift). */
+export function formatNewsDate(iso: string | null | undefined, lang: CommunityLang = "en"): string {
   if (!iso) return "";
   const d = new Date(iso.length === 10 ? `${iso}T00:00:00Z` : iso);
   if (Number.isNaN(d.getTime())) return "";
+  if (lang === "hy") return `${d.getUTCFullYear()} թ. ${HY_MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 }
 
-/** Meetup time in Armenia: "Thu 12 Nov · 19:00". */
-export function formatMeetupWhen(iso: string): { day: string; time: string } {
+/** Meetup time in Armenia: "Thu 12 Nov · 19:00" / "Հնգ, նոյեմբերի 12 · 19:00". */
+export function formatMeetupWhen(iso: string, lang: CommunityLang = "en"): { day: string; time: string } {
   const d = new Date(iso);
-  return {
-    day: d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Asia/Yerevan" }),
-    time: d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Yerevan" }),
-  };
+  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Yerevan" });
+  if (lang === "hy") {
+    const y = new Date(d.getTime() + 4 * 3_600_000); // Armenia is UTC+4 all year
+    return { day: `${HY_DAYS[y.getUTCDay()]}, ${HY_MONTHS[y.getUTCMonth()]} ${y.getUTCDate()}`, time };
+  }
+  return { day: d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Asia/Yerevan" }), time };
 }
 
-export function meetupPlace(m: Pick<CommunityMeetup, "venue" | "city" | "online">): string {
+/** A story as a language shows it: the approved Armenian text, or the English. */
+export function localizeNews(item: CommunityNewsItem, lang: CommunityLang): CommunityNewsItem {
+  if (lang !== "hy" || item.hyStatus !== "approved") return item;
+  return { ...item, title: item.titleHy || item.title, summary: item.summaryHy || item.summary, keyPoints: item.keyPointsHy.length ? item.keyPointsHy : item.keyPoints, forYou: item.forYouHy || item.forYou };
+}
+
+export function meetupPlace(m: Pick<CommunityMeetup, "venue" | "city" | "online">, lang: CommunityLang = "en"): string {
   const where = [m.venue, m.city].filter(Boolean).join(", ");
-  if (where && m.online) return `${where} · also online`;
-  return where || (m.online ? "Online" : "");
+  if (where && m.online) return `${where} · ${lang === "hy" ? "նաև առցանց" : "also online"}`;
+  return where || (m.online ? (lang === "hy" ? "Առցանց" : "Online") : "");
+}
+
+/** A guide or meetup as a language shows it: the approved Armenian, or the English. */
+export function localizeGuide(g: CommunityGuide, lang: CommunityLang): CommunityGuide {
+  if (lang !== "hy" || g.hyStatus !== "approved") return g;
+  return { ...g, title: g.titleHy || g.title, excerpt: g.excerptHy || g.excerpt, body: g.bodyHy || g.body };
+}
+export function localizeMeetup(m: CommunityMeetup, lang: CommunityLang): CommunityMeetup {
+  if (lang !== "hy" || m.hyStatus !== "approved") return m;
+  return { ...m, title: m.titleHy || m.title, description: m.descriptionHy || m.description, venue: m.venueHy || m.venue, city: m.cityHy || m.city };
 }
 
 /** The source's site name for display when none was given: "skift.com". */

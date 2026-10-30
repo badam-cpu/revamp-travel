@@ -5,6 +5,10 @@
  *    Each AI story is written from its article and checked against it (0127);
  *    the row shows what that check found. "Write detailed version" rewrites
  *    older or edited stories the same way (they go back to "To check").
+ *    Aha AI also translates each story into Armenian (0131); "Armenian to
+ *    review" lists them and the side-by-side editor approves them.
+ *  - Site text: every line of the site in both languages (edits win over the
+ *    built-in text), guides and meetups in Armenian, and the glossary Aha AI uses.
  *  - Meetups: add / edit / cancel, with saved seats.
  *  - Members: who joined (email, what they host, seats), CSV download.
  *  - Settings: the Telegram channel link.
@@ -12,7 +16,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, CalendarDays, Download, ExternalLink, ImageIcon, Library, Loader2, Newspaper, Plus, RefreshCw, Search, Send, Settings, ShieldCheck, Sparkles, Users } from "lucide-react";
+import { AlertTriangle, CalendarDays, Download, ExternalLink, ImageIcon, Languages, Library, Loader2, Newspaper, Plus, RefreshCw, Search, Send, Settings, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { useAuth } from "@/contexts/AuthContext";
 import { uploadCampaignImage } from "@/lib/campaignImage";
@@ -24,6 +28,13 @@ import {
   adminDeleteNews,
   adminFindNews,
   adminFindPhotos,
+  adminGetSiteText,
+  adminListGuidesForHy,
+  adminListMeetupsForHy,
+  adminSaveArmenian,
+  adminSaveHyFields,
+  adminSaveSiteText,
+  adminTranslateNews,
   adminPostNewsToChannel,
   adminRewriteNews,
   adminListMeetups,
@@ -43,11 +54,14 @@ import {
   type NewsSourceRow,
   type CommunityMemberRow,
   type MeetupInput,
+  type ArmenianEdit,
+  type HyReviewItem,
   type NewsEdit,
 } from "@/lib/community";
+import { DEFAULT_HY_GLOSSARY, TEXT_EN, TEXT_HY } from "@shared/communityText";
 import { COMMUNITY_ORIGIN, HOSTS_OPTIONS, NEWS_CATEGORIES, formatMeetupWhen, formatNewsDate, meetupPlace, newsArt, newsCategoryLabel, newsSlug, sourceLabel, type CommunityMeetup, type CommunityNewsItem, type NewsCategory } from "@shared/community";
 
-type Tab = "news" | "sources" | "meetups" | "members" | "settings";
+type Tab = "news" | "armenian" | "sources" | "meetups" | "members" | "settings";
 
 const field = "h-11 w-full rounded-lg border border-basalt/20 bg-paper px-3 text-base outline-none focus:border-apricot sm:text-sm";
 const area = "w-full rounded-lg border border-basalt/20 bg-paper px-3 py-2 text-base outline-none focus:border-apricot sm:text-sm";
@@ -69,6 +83,7 @@ export function AdminCommunity() {
       <div className="mb-6 flex flex-wrap gap-2">
         {([
           { k: "news", label: "News", icon: Newspaper },
+          { k: "armenian", label: "Site text", icon: Languages },
           { k: "sources", label: "Sources", icon: Library },
           { k: "meetups", label: "Meetups", icon: CalendarDays },
           { k: "members", label: "Members", icon: Users },
@@ -80,6 +95,7 @@ export function AdminCommunity() {
         ))}
       </div>
       {tab === "news" && <NewsTab />}
+      {tab === "armenian" && <ArmenianTab />}
       {tab === "sources" && <SourcesTab />}
       {tab === "meetups" && <MeetupsTab />}
       {tab === "members" && <MembersTab />}
@@ -152,7 +168,7 @@ function editProblem(e: NewsEdit): string | null {
 }
 
 function NewsTab() {
-  const [status, setStatus] = useState<"draft" | "published" | "rejected">("draft");
+  const [status, setStatus] = useState<"draft" | "hy_review" | "published" | "rejected">("draft");
   const [items, setItems] = useState<CommunityNewsItem[] | null>(null);
   const [adding, setAdding] = useState(false);
   const [finding, setFinding] = useState(false);
@@ -182,6 +198,15 @@ function NewsTab() {
     }
   };
 
+  const translateAll = async () => {
+    try {
+      await adminTranslateNews();
+      toast("Aha AI is translating. Stories show under 'Armenian to review' in a few minutes.");
+    } catch (e) {
+      toast(userMessage(e, "Couldn't start the translation."));
+    }
+  };
+
   const findPhotos = async () => {
     setFindingPhotos(true);
     try {
@@ -199,6 +224,7 @@ function NewsTab() {
       <div className="flex flex-wrap items-center gap-2">
         {([
           ["draft", "To check"],
+          ["hy_review", "Armenian to review"],
           ["published", "Published"],
           ["rejected", "Rejected"],
         ] as const).map(([k, label]) => (
@@ -216,6 +242,14 @@ function NewsTab() {
         </div>
       </div>
       <p className="text-sm text-basalt/70">Every Monday and Thursday Aha AI reads your sources (see Sources), writes each story from its article and checks every detail against it. Stories land here to check — nothing appears on the site until you publish it. A story whose article can't be opened is left out.</p>
+      {items && status !== "rejected" && items.some((n) => n.hyStatus === "none") && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-basalt/12 px-4 py-3 text-sm">
+          <span className="min-w-0 flex-1">{items.filter((n) => n.hyStatus === "none").length} {items.filter((n) => n.hyStatus === "none").length === 1 ? "story has" : "stories have"} no Armenian version yet.</span>
+          <button type="button" onClick={translateAll} className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-basalt/20 px-4 font-semibold">
+            <Languages className="h-4 w-4" /> Translate with Aha AI
+          </button>
+        </div>
+      )}
       {items && status !== "rejected" && items.some((n) => !n.imageUrl) && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-basalt/12 px-4 py-3 text-sm">
           <span className="min-w-0 flex-1">{items.filter((n) => !n.imageUrl).length} {items.filter((n) => !n.imageUrl).length === 1 ? "story shows" : "stories show"} Revamp art because there's no photo yet.</span>
@@ -261,7 +295,7 @@ function NewsTab() {
         <div className="grid place-items-center py-16 text-basalt/50"><Loader2 className="h-5 w-5 animate-spin" /></div>
       ) : items.length === 0 ? (
         <p className="rounded-xl border border-dashed border-basalt/20 p-6 text-sm text-basalt/70">
-          {status === "draft" ? "Nothing to check right now. Use 'Find news now', or wait for Monday or Thursday's search." : status === "published" ? "Nothing published yet." : "Nothing rejected."}
+          {status === "draft" ? "Nothing to check right now. Use 'Find news now', or wait for Monday or Thursday's search." : status === "hy_review" ? "No Armenian waiting for review." : status === "published" ? "Nothing published yet." : "Nothing rejected."}
         </p>
       ) : (
         <ul className="grid gap-3">
@@ -279,8 +313,11 @@ function NewsItemRow({ item, onChanged }: { item: CommunityNewsItem; onChanged: 
     const r = await adminPostNewsToChannel(item.id);
     return r.posted ? "Posted to Telegram." : "Already on Telegram.";
   };
+  const [reviewingHy, setReviewingHy] = useState(false);
   const save = async (edit: NewsEdit, status?: "draft" | "published" | "rejected") => {
-    await adminSaveNews(item.id, edit, status);
+    const before = toEdit(item);
+    const englishChanged = edit.title !== before.title || edit.summary !== before.summary || edit.forYou !== before.forYou || edit.keyPoints.join("\n") !== before.keyPoints.join("\n");
+    await adminSaveNews(item.id, edit, status, { hyStale: englishChanged && item.hyStatus !== "none" });
     if (status === "published") {
       // The story is live either way; a Telegram problem must not read as a failed publish.
       try {
@@ -314,12 +351,22 @@ function NewsItemRow({ item, onChanged }: { item: CommunityNewsItem; onChanged: 
       </li>
     );
   }
+  if (reviewingHy) {
+    return (
+      <li>
+        <ArmenianEditor item={item} onCancel={() => setReviewingHy(false)} onDone={() => { setReviewingHy(false); onChanged(); }} />
+      </li>
+    );
+  }
   return (
     <li className="grid gap-2 rounded-xl border border-basalt/12 bg-paper p-4">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-bold">
         <span className="uppercase tracking-[0.08em] text-apricot">{newsCategoryLabel(item.category)}</span>
         <span className="text-basalt/70">{formatNewsDate(item.storyDate)}</span>
         <span className="rounded-full bg-basalt/[0.06] px-2 py-0.5 text-basalt/70">{item.origin === "ai" ? "Found by Aha AI" : "Added by the team"}</span>
+        <span className={cn("rounded-full px-2 py-0.5", item.hyStatus === "draft" ? "bg-apricot-soft text-basalt" : "bg-basalt/[0.06] text-basalt/70")}>
+          {item.hyStatus === "approved" ? "Armenian approved" : item.hyStatus === "draft" ? "Armenian to review" : "No Armenian yet"}
+        </span>
       </div>
       <p className="text-base font-extrabold leading-snug">{item.title}</p>
       <div className="flex items-center gap-3">
@@ -374,6 +421,27 @@ function NewsItemRow({ item, onChanged }: { item: CommunityNewsItem; onChanged: 
         {item.status === "draft" && (
           <button type="button" onClick={() => save(toEdit(item), "rejected").catch((e) => toast(userMessage(e, "Couldn't reject.")))} className="min-h-10 rounded-full border border-basalt/20 px-4 text-sm font-semibold text-basalt/70">
             Reject
+          </button>
+        )}
+        {item.status !== "rejected" && item.hyStatus !== "none" && (
+          <button type="button" onClick={() => setReviewingHy(true)} className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-basalt/20 px-4 text-sm font-semibold">
+            <Languages className="h-4 w-4" /> {item.hyStatus === "draft" ? "Review Armenian" : "Edit Armenian"}
+          </button>
+        )}
+        {item.status !== "rejected" && item.hyStatus === "none" && (
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await adminTranslateNews([item.id]);
+                toast("Aha AI is translating. It shows under 'Armenian to review' in a minute or two.");
+              } catch (e) {
+                toast(userMessage(e, "Couldn't start the translation."));
+              }
+            }}
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-basalt/20 px-4 text-sm font-semibold"
+          >
+            <Languages className="h-4 w-4" /> Translate to Armenian
           </button>
         )}
         {item.status === "published" && !item.telegramPostedAt && (
@@ -516,6 +584,365 @@ function NewsEditor({ initial, title, onCancel, actions }: { initial: NewsEdit; 
         </button>
       </div>
     </div>
+  );
+}
+
+/** Review Aha AI's Armenian beside the English; approving puts it on the Armenian site. */
+function ArmenianEditor({ item, onCancel, onDone }: { item: CommunityNewsItem; onCancel: () => void; onDone: () => void }) {
+  const [e, setE] = useState<ArmenianEdit>({ title: item.titleHy, summary: item.summaryHy, keyPoints: item.keyPointsHy, forYou: item.forYouHy });
+  const [busy, setBusy] = useState(false);
+  const set = <K extends keyof ArmenianEdit>(k: K, v: ArmenianEdit[K]) => setE((p) => ({ ...p, [k]: v }));
+  const run = async (status: "draft" | "approved", message: string) => {
+    if (status === "approved" && (e.title.trim().length < 5 || !e.summary.trim())) return toast("Add the Armenian headline and summary first.");
+    setBusy(true);
+    try {
+      await adminSaveArmenian(item.id, e, status);
+      toast(message);
+      onDone();
+    } catch (err) {
+      console.error(err);
+      toast(userMessage(err, "Couldn't save the Armenian."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const again = async () => {
+    if (!window.confirm("Replace this Armenian with a new translation from Aha AI? Your edits here will be lost.")) return;
+    setBusy(true);
+    try {
+      await adminTranslateNews([item.id]);
+      toast("Aha AI is translating again. Refresh 'Armenian to review' in a minute or two.");
+      onDone();
+    } catch (err) {
+      toast(userMessage(err, "Couldn't start the translation."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const row = (label: string, english: string, input: React.ReactNode) => (
+    <div className="grid gap-2 lg:grid-cols-2 lg:gap-4">
+      <div className="grid content-start gap-1 text-sm">
+        <p className="font-semibold">{label} <span className="font-normal text-basalt/70">English</span></p>
+        <p className="whitespace-pre-line rounded-lg bg-basalt/[0.04] px-3 py-2 leading-relaxed text-basalt/80">{english || "—"}</p>
+      </div>
+      <label className="grid content-start gap-1 text-sm font-semibold" lang="hy">
+        <span>{label} <span className="font-normal text-basalt/70">Armenian</span></span>
+        {input}
+      </label>
+    </div>
+  );
+  return (
+    <div className="grid gap-4 rounded-xl border border-apricot/40 bg-paper p-4">
+      <p className="font-extrabold">Review the Armenian</p>
+      {item.hyNotes.length > 0 && (
+        <ul className="grid gap-1 rounded-lg bg-apricot-soft px-3 py-2 text-sm">
+          {item.hyNotes.map((n, i) => (
+            <li key={i} className="flex items-start gap-1.5"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-apricot" /> {n}</li>
+          ))}
+        </ul>
+      )}
+      {row("Headline", item.title, <input value={e.title} maxLength={240} onChange={(ev) => set("title", ev.target.value)} className={field} />)}
+      {row("Summary", item.summary, <textarea rows={5} maxLength={1400} value={e.summary} onChange={(ev) => set("summary", ev.target.value)} className={area} />)}
+      {row("Key points", item.keyPoints.join("\n"), <textarea rows={7} value={e.keyPoints.join("\n")} onChange={(ev) => set("keyPoints", ev.target.value.split("\n"))} className={area} />)}
+      {row("What it means for you", item.forYou, <textarea rows={4} maxLength={900} value={e.forYou} onChange={(ev) => set("forYou", ev.target.value)} className={area} />)}
+      <div className="flex flex-wrap gap-2">
+        <button type="button" disabled={busy} onClick={() => run("approved", item.status === "published" ? "Approved. It's on the Armenian site." : "Approved. It shows on the Armenian site once the story is published.")} className="min-h-10 rounded-full bg-apricot px-4 text-sm font-bold text-white hover:bg-apricot/90 disabled:opacity-60">
+          Approve
+        </button>
+        <button type="button" disabled={busy} onClick={() => run("draft", item.hyStatus === "approved" ? "Saved, and taken off the Armenian site until you approve it." : "Saved.")} className="min-h-10 rounded-full border border-basalt/20 px-4 text-sm font-bold disabled:opacity-60">
+          {item.hyStatus === "approved" ? "Save and unapprove" : "Save for later"}
+        </button>
+        <button type="button" disabled={busy} onClick={again} className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-basalt/20 px-4 text-sm font-semibold disabled:opacity-60">
+          <Languages className="h-4 w-4" /> Translate again
+        </button>
+        <button type="button" onClick={onCancel} className="min-h-10 rounded-full px-4 text-sm font-semibold text-basalt/70">
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Site text: every line, guides and meetups in Armenian, glossary ───── */
+
+const TEXT_GROUPS: { prefix: string; label: string }[] = [
+  { prefix: "hero|nav|cta", label: "Header and hero" },
+  { prefix: "find|offer", label: "What you'll find" },
+  { prefix: "news|cat", label: "News" },
+  { prefix: "guides|guidecat", label: "Guides" },
+  { prefix: "meetup|meetups", label: "Meetups" },
+  { prefix: "tools|tool", label: "Revamp tools" },
+  { prefix: "standards|standard", label: "Member standards" },
+  { prefix: "faq", label: "Questions" },
+  { prefix: "join|hosts", label: "Join form" },
+  { prefix: "footer|notFound", label: "Footer and error page" },
+  { prefix: "meta", label: "Search results" },
+];
+
+const fits = (s: string) => Math.max(1, Math.ceil(s.length / 48));
+
+type TextPart = "text" | "guides" | "meetups" | "glossary";
+
+function ArmenianTab() {
+  const [part, setPart] = useState<TextPart>("text");
+  return (
+    <div className="grid gap-6">
+      <div className="flex flex-wrap gap-2">
+        {([
+          ["text", "All site text"],
+          ["guides", "Guides"],
+          ["meetups", "Meetups"],
+          ["glossary", "Armenian glossary"],
+        ] as const).map(([k, label]) => (
+          <button key={k} type="button" onClick={() => setPart(k)} className={pill(part === k)}>{label}</button>
+        ))}
+      </div>
+      {part === "text" && <SiteTextPart />}
+      {part === "guides" && <HyReviewPart kind="guides" />}
+      {part === "meetups" && <HyReviewPart kind="meetups" />}
+      {part === "glossary" && <GlossaryPart />}
+    </div>
+  );
+}
+
+function SiteTextPart() {
+  const [hy, setHy] = useState<Record<string, string> | null>(null);
+  const [en, setEn] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [group, setGroup] = useState(0);
+  useEffect(() => {
+    adminGetSiteText()
+      .then((s) => {
+        setHy(s.hy);
+        setEn(s.en);
+      })
+      .catch((e) => {
+        console.error(e);
+        toast("Couldn't load the site text. Has migration 0131 been run?");
+        setHy({});
+      });
+  }, []);
+  if (!hy) return <div className="grid place-items-center py-16 text-basalt/50"><Loader2 className="h-5 w-5 animate-spin" /></div>;
+  const keys = Object.keys(TEXT_HY).filter((k) => new RegExp(`^(${TEXT_GROUPS[group].prefix})\\.`).test(k));
+  const save = async () => {
+    setBusy(true);
+    try {
+      await adminSaveSiteText({
+        hy: Object.fromEntries(Object.entries(hy).filter(([k, v]) => v.trim() && v !== TEXT_HY[k])),
+        en: Object.fromEntries(Object.entries(en).filter(([k, v]) => v.trim() && v !== TEXT_EN[k])),
+      });
+      toast("Saved. Visitors see your wording straight away.");
+    } catch (e) {
+      console.error(e);
+      toast(userMessage(e, "Couldn't save."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="grid gap-3">
+      <p className="text-sm text-basalt/70">Every line of revamp.community, in both languages. Edit either side and press Save. Clear a field and save to go back to the built-in text. The slogan and the logo can't be changed here.</p>
+      <div className="flex flex-wrap gap-2">
+        {TEXT_GROUPS.map((g, i) => (
+          <button key={g.label} type="button" onClick={() => setGroup(i)} className={pill(group === i)}>{g.label}</button>
+        ))}
+      </div>
+      <ul className="grid gap-3">
+        {keys.map((k) => {
+          const enValue = en[k] ?? TEXT_EN[k] ?? "";
+          const hyValue = hy[k] ?? TEXT_HY[k] ?? "";
+          return (
+            <li key={k} className="grid gap-2 rounded-xl border border-basalt/12 p-3 lg:grid-cols-2 lg:gap-4">
+              <label className="grid gap-1 text-xs font-semibold text-basalt/70">
+                English
+                <textarea rows={fits(enValue)} value={enValue} onChange={(e) => setEn((p) => ({ ...p, [k]: e.target.value }))} className={area} />
+              </label>
+              <label className="grid gap-1 text-xs font-semibold text-basalt/70" lang="hy">
+                Armenian
+                <textarea rows={fits(hyValue)} value={hyValue} onChange={(e) => setHy((p) => ({ ...p, [k]: e.target.value }))} className={area} />
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+      <button type="button" disabled={busy} onClick={save} className="sticky bottom-3 min-h-10 justify-self-start rounded-full bg-apricot px-5 text-sm font-bold text-white hover:bg-apricot/90 disabled:opacity-60">
+        Save site text
+      </button>
+    </section>
+  );
+}
+
+/** Guides and meetups: Aha AI writes the Armenian, the admin edits and approves it. */
+function HyReviewPart({ kind }: { kind: "guides" | "meetups" }) {
+  const [items, setItems] = useState<HyReviewItem[] | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  const load = useCallback(() => {
+    setItems(null);
+    (kind === "guides" ? adminListGuidesForHy() : adminListMeetupsForHy())
+      .then(setItems)
+      .catch((e) => {
+        console.error(e);
+        toast("Couldn't load these. Has migration 0131 been run?");
+        setItems([]);
+      });
+  }, [kind]);
+  useEffect(load, [load]);
+  const translate = async (ids?: string[]) => {
+    try {
+      await adminTranslateNews(ids, kind);
+      toast("Aha AI is writing the Armenian. Refresh this page in a minute or two.");
+    } catch (e) {
+      toast(userMessage(e, "Couldn't start the translation."));
+    }
+  };
+  if (!items) return <div className="grid place-items-center py-16 text-basalt/50"><Loader2 className="h-5 w-5 animate-spin" /></div>;
+  if (!items.length) {
+    return <p className="rounded-xl border border-dashed border-basalt/20 p-6 text-sm text-basalt/70">{kind === "guides" ? "No guides on the site yet. In Partner Hub, tick \"Also show on revamp.community\" on an article." : "No meetups yet. Add one under Meetups."}</p>;
+  }
+  const missing = items.filter((i) => i.hyStatus === "none");
+  return (
+    <section className="grid gap-3">
+      {missing.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-basalt/12 px-4 py-3 text-sm">
+          <span className="min-w-0 flex-1">{missing.length} {missing.length === 1 ? "has" : "have"} no Armenian yet.</span>
+          <button type="button" onClick={() => translate()} className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-basalt/20 px-4 font-semibold">
+            <Languages className="h-4 w-4" /> Translate with Aha AI
+          </button>
+        </div>
+      )}
+      <ul className="grid gap-3">
+        {items.map((item) =>
+          open === item.id ? (
+            <li key={item.id}>
+              <HyFieldsEditor kind={kind} item={item} onCancel={() => setOpen(null)} onAgain={() => { void translate([item.id]); setOpen(null); }} onDone={() => { setOpen(null); load(); }} />
+            </li>
+          ) : (
+            <li key={item.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-basalt/12 p-4">
+              <div className="min-w-0 flex-1">
+                <p className="font-extrabold leading-snug">{item.label}</p>
+                <p className="text-sm text-basalt/70">{item.hyStatus === "approved" ? "Armenian approved" : item.hyStatus === "draft" ? "Armenian to review" : "No Armenian yet"}</p>
+              </div>
+              {item.hyStatus === "none" ? (
+                <button type="button" onClick={() => translate([item.id])} className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-basalt/20 px-4 text-sm font-semibold">
+                  <Languages className="h-4 w-4" /> Translate
+                </button>
+              ) : null}
+              <button type="button" onClick={() => setOpen(item.id)} className="min-h-10 rounded-full border border-basalt/20 px-4 text-sm font-semibold">
+                {item.hyStatus === "draft" ? "Review Armenian" : item.hyStatus === "approved" ? "Edit Armenian" : "Write it myself"}
+              </button>
+            </li>
+          ),
+        )}
+      </ul>
+    </section>
+  );
+}
+
+function HyFieldsEditor({ kind, item, onCancel, onAgain, onDone }: { kind: "guides" | "meetups"; item: HyReviewItem; onCancel: () => void; onAgain: () => void; onDone: () => void }) {
+  const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(item.fields.map((f) => [f.key, f.hy])));
+  const [busy, setBusy] = useState(false);
+  const run = async (status: "draft" | "approved", message: string) => {
+    if (status === "approved" && !values.title?.trim()) return toast("Add the Armenian title first.");
+    setBusy(true);
+    try {
+      await adminSaveHyFields(kind, item.id, values, status);
+      toast(message);
+      onDone();
+    } catch (e) {
+      console.error(e);
+      toast(userMessage(e, "Couldn't save the Armenian."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="grid gap-4 rounded-xl border border-apricot/40 bg-paper p-4">
+      <p className="font-extrabold">{item.label}</p>
+      {item.hyNotes.length > 0 && (
+        <ul className="grid gap-1 rounded-lg bg-apricot-soft px-3 py-2 text-sm">
+          {item.hyNotes.map((n, i) => (
+            <li key={i} className="flex items-start gap-1.5"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-apricot" /> {n}</li>
+          ))}
+        </ul>
+      )}
+      {item.fields.map((f) => (
+        <div key={f.key} className="grid gap-2 lg:grid-cols-2 lg:gap-4">
+          <div className="grid content-start gap-1 text-sm">
+            <p className="font-semibold">{f.label} <span className="font-normal text-basalt/70">English</span></p>
+            <p className="max-h-80 overflow-y-auto whitespace-pre-line rounded-lg bg-basalt/[0.04] px-3 py-2 leading-relaxed text-basalt/80">{f.en || "—"}</p>
+          </div>
+          <label className="grid content-start gap-1 text-sm font-semibold" lang="hy">
+            <span>{f.label} <span className="font-normal text-basalt/70">Armenian</span></span>
+            {f.long ? (
+              <textarea rows={Math.min(16, Math.max(3, fits(values[f.key] ?? "")))} value={values[f.key] ?? ""} onChange={(e) => setValues((p) => ({ ...p, [f.key]: e.target.value }))} className={area} />
+            ) : (
+              <input value={values[f.key] ?? ""} onChange={(e) => setValues((p) => ({ ...p, [f.key]: e.target.value }))} className={field} />
+            )}
+          </label>
+        </div>
+      ))}
+      <div className="flex flex-wrap gap-2">
+        <button type="button" disabled={busy} onClick={() => run("approved", "Approved. It shows on the Armenian site.")} className="min-h-10 rounded-full bg-apricot px-4 text-sm font-bold text-white hover:bg-apricot/90 disabled:opacity-60">Approve</button>
+        <button type="button" disabled={busy} onClick={() => run("draft", "Saved. It stays off the Armenian site until you approve it.")} className="min-h-10 rounded-full border border-basalt/20 px-4 text-sm font-bold disabled:opacity-60">Save for later</button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            if (window.confirm("Replace this Armenian with a new version from Aha AI? Your edits here will be lost.")) onAgain();
+          }}
+          className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-basalt/20 px-4 text-sm font-semibold disabled:opacity-60"
+        >
+          <Languages className="h-4 w-4" /> Translate again
+        </button>
+        <button type="button" onClick={onCancel} className="min-h-10 rounded-full px-4 text-sm font-semibold text-basalt/70">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+function GlossaryPart() {
+  const [glossary, setGlossary] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    adminGetSiteText()
+      .then((s) => setGlossary(s.glossary))
+      .catch((e) => {
+        console.error(e);
+        setGlossary("");
+      });
+  }, []);
+  if (glossary === null) return <div className="grid place-items-center py-16 text-basalt/50"><Loader2 className="h-5 w-5 animate-spin" /></div>;
+  return (
+    <section className="grid gap-3">
+      <p className="text-sm text-basalt/70">Your approved terms, one per line as <span className="font-semibold">English = Armenian</span>. Aha AI uses them in every translation, and yours win over the built-in terms.</p>
+      <label className="grid gap-1 text-sm font-semibold">
+        Your terms
+        <textarea lang="hy" rows={8} maxLength={8000} value={glossary} onChange={(e) => setGlossary(e.target.value)} placeholder="cleaning fee = մաքրման վճար" className={area} />
+      </label>
+      <details className="rounded-lg bg-basalt/[0.04] px-3 py-2 text-sm">
+        <summary className="min-h-8 cursor-pointer font-semibold">Built-in terms</summary>
+        <p className="mt-1 whitespace-pre-line pb-1 text-basalt/80">{DEFAULT_HY_GLOSSARY}</p>
+      </details>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            await adminSaveSiteText({ glossary: glossary.trim() });
+            toast("Glossary saved. New translations will use it.");
+          } catch (e) {
+            console.error(e);
+            toast(userMessage(e, "Couldn't save."));
+          } finally {
+            setBusy(false);
+          }
+        }}
+        className="min-h-10 justify-self-start rounded-full bg-apricot px-4 text-sm font-bold text-white hover:bg-apricot/90 disabled:opacity-60"
+      >
+        Save glossary
+      </button>
+    </section>
   );
 }
 

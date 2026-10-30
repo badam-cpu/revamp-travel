@@ -52,10 +52,19 @@
  * copied to our storage. Site-wide placeholders and a picture shared by
  * different stories are skipped; those stories show Revamp's topic art. An
  * admin can replace or remove any photo.
+ *
+ * Armenian (0131, user: English first, Aha AI translates, the admin reviews and
+ * edits): translateStories turns a story's checked English into Armenian in two
+ * passes, a translator and a strict editor, using the glossary (DEFAULT_HY_GLOSSARY
+ * + the admin's terms). The server then confirms every number survived. The
+ * result waits as hy_status 'draft'; nothing shows on the Armenian site until an
+ * admin approves it. Translating runs after a news run as its own background
+ * call, so it has its own time limit.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { COMMUNITY_ORIGIN, NEWS_CATEGORIES, newsSlug, type NewsCategory, type NewsChecks } from "../shared/community.js";
+import { DEFAULT_HY_GLOSSARY } from "../shared/communityText.js";
 import { GENERIC_IMG, pageImage, parseEventsJson, sharedImages, titleOverlap } from "./events.js";
 import { assertSafeUrl } from "./urlPrefill.js";
 import { resolveAdminEmails } from "./alerts.js";
@@ -1019,6 +1028,13 @@ export async function rewriteStories(admin: SupabaseClient, ids: string[], now =
         key_points: n.key_points ?? [],
         extra_sources: n.extra_sources ?? [],
         ...(n.image_url ? { image_url: n.image_url, image_credit: n.image_credit ?? "" } : {}),
+        // The English is new, so the old Armenian no longer applies.
+        title_hy: "",
+        summary_hy: "",
+        key_points_hy: [],
+        for_you_hy: "",
+        hy_status: "none",
+        hy_notes: [],
         story_date: d.published ?? r.story_date,
         verified_at: new Date().toISOString(),
         checks: d.checks,
@@ -1068,6 +1084,257 @@ export async function findStoryPhotos(admin: SupabaseClient): Promise<{ checked:
     else saved++;
   }
   return { checked: rows.length, found: saved };
+}
+
+/* ── Armenian (0131) ───────────────────────────────────────────────────── */
+
+export interface ArmenianStory {
+  title: string;
+  summary: string;
+  key_points: string[];
+  for_you: string;
+}
+
+const hyModel = () => process.env.COMMUNITY_NEWS_HY_MODEL || "claude-opus-5-5";
+
+/** Armenian letters' share of a text's letters (pure — exported for tests). */
+export function armenianShare(s: string): number {
+  const letters = s.match(/[A-Za-z\u0400-\u04ff\u0531-\u0587]/g) ?? [];
+  if (!letters.length) return 0;
+  return letters.filter((c) => /[\u0531-\u0587]/.test(c)).length / letters.length;
+}
+
+/** What the server can check itself: every number kept, every point kept, really Armenian (pure — exported for tests). */
+export function armenianProblems(en: ArmenianStory, hy: ArmenianStory): string[] {
+  const out: string[] = [];
+  const pairs: [string, string, string][] = [
+    ["headline", en.title, hy.title],
+    ["summary", en.summary, hy.summary],
+    ["what it means for you", en.for_you, hy.for_you],
+    ...en.key_points.map((k, i) => [`key point ${i + 1}`, k, hy.key_points[i] ?? ""] as [string, string, string]),
+  ];
+  for (const [label, a, b] of pairs) {
+    const lost = missingNumbers(a, b);
+    if (lost.length) out.push(`Check the ${label}: the English has ${lost.join(", ")}, which isn't in the Armenian.`);
+  }
+  if (hy.key_points.length !== en.key_points.length) out.push(`The English has ${en.key_points.length} key points and the Armenian has ${hy.key_points.length}.`);
+  return out;
+}
+
+async function askHy(client: Anthropic, prompt: string, maxTokens: number): Promise<Record<string, unknown> | null> {
+  const call = async (m: string) => {
+    const msg = await client.messages.create({ model: m, max_tokens: maxTokens, messages: [{ role: "user", content: prompt }] });
+    return parseJsonObject(
+      msg.content
+        .filter((b) => b.type === "text")
+        .map((b) => (b as { text: string }).text)
+        .join("\n"),
+    );
+  };
+  try {
+    return await call(hyModel());
+  } catch (e) {
+    if (hyModel() === model()) throw e;
+    console.error("[community-news] Armenian model failed, using the news model", e instanceof Error ? e.message : e);
+    return call(model());
+  }
+}
+
+const HY_RULES = `- This is rewriting, not translating. Read the English, understand it, then write it the way a senior Armenian business journalist would explain it to a colleague. A reader must never sense an English original behind it. Restructure freely: merge or split sentences, change the order, start from what matters most to the reader.
+- Plain, confident, professional Eastern Armenian in reformed spelling. Short sentences and active verbs, with the action in a real verb. Address the reader with the formal "դուք". Armenian punctuation (։ ՝ , « » and the question mark on the stressed vowel).
+- Avoid machine-translation habits: English word order; strings of nouns; "հանդիսանում է"; "կատարել" + noun where a plain verb exists; "իրականացնել" for everyday actions; "տրամադրել" where "տալ" will do; "հնարավորություն է ընձեռում"; passive voice where a person acts; repeating the subject as "այն" or "դա" in every sentence; a literal "for you", "in order to" or "in terms of".
+- Natural Armenian beats a closer match to the English. For example, not "Airbnb-ը ներկայացրել է նոր հնարավորություն, որը թույլ է տալիս հյուրընկալողներին իրականացնել վճարումների կառավարում", but "Airbnb-ում հյուրընկալողներն այժմ կարող են իրենք կառավարել վճարումները".
+- Keep the facts exactly: same meaning and scope, nothing added, nothing left out, every number, amount and date. Write dates the Armenian way (հոկտեմբերի 22).
+- Keep company, product and website names in Latin letters with Armenian endings after a hyphen (Airbnb-ում, Booking.com-ի). Never mention Revamp.`;
+
+const hyOf = (v: unknown): ArmenianStory => {
+  const o = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
+  return { title: clean(o.title, 240), summary: clean(o.summary, 1400), key_points: asStrings(o.key_points, 8, 500), for_you: clean(o.for_you, 900) };
+};
+
+/** Translate one story and have it edited; the admin gets whatever couldn't be settled as notes. */
+export async function translateStory(client: Anthropic, en: ArmenianStory, glossary: string): Promise<{ hy: ArmenianStory; notes: string[] } | { failed: string }> {
+  const terms = `GLOSSARY (use these terms exactly; later lines win over earlier ones):\n${glossary}`;
+  const source = JSON.stringify(en, null, 1);
+  const first = await askHy(
+    client,
+    `You are a senior Armenian business journalist writing for people in Armenia who rent out apartments and guest houses or run tours and activities.
+
+Write this news story in Armenian for them.
+${HY_RULES}
+
+${terms}
+
+ENGLISH:
+${source}
+
+Reply with ONLY a JSON object (no prose, no markdown) with the same keys: {"title": string, "summary": string, "key_points": string[], "for_you": string}`,
+    4000,
+  );
+  if (!first) return { failed: "Aha AI couldn't translate this story." };
+  const draft = hyOf(first);
+  const review = await askHy(
+    client,
+    `You are the chief editor of an Armenian business publication, known for rejecting anything that sounds translated. Below are an English news story and an Armenian draft.
+
+Read the Armenian aloud in your head, sentence by sentence. Rewrite every sentence an Armenian journalist would not have written that way, even if it is correct. Then fix wrong meaning or scope, missing or added facts, changed numbers or dates, grammar and case endings, spelling, punctuation and terms that break the glossary.
+${HY_RULES}
+
+${terms}
+
+ENGLISH:
+${source}
+
+ARMENIAN:
+${JSON.stringify(draft, null, 1)}
+
+Reply with ONLY a JSON object (no prose, no markdown):
+{"corrected": {"title": string, "summary": string, "key_points": string[], "for_you": string}, "questions": string[]}
+"questions": in English, anything a human editor should still decide (an unclear term, a name with no settled Armenian form). Empty if none.`,
+    5000,
+  );
+  const hy = review ? hyOf(review.corrected) : draft;
+  const final = hy.title && hy.summary ? hy : draft;
+  if (armenianShare(`${final.title} ${final.summary}`) < 0.6) return { failed: "The translation didn't come back in Armenian." };
+  const questions = review && Array.isArray(review.questions) ? asStrings(review.questions, 6, 300) : [];
+  return { hy: final, notes: [...(review ? [] : ["The editing pass didn't finish, so check this one closely."]), ...armenianProblems(en, final), ...questions] };
+}
+
+/** The same two passes for guides and meetups: any { field: text }, Markdown kept (the admin reviews the result). */
+export async function translateFields(client: Anthropic, en: Record<string, string>, glossary: string, what: string): Promise<{ hy: Record<string, string>; notes: string[] } | { failed: string }> {
+  const terms = `GLOSSARY (use these terms exactly; later lines win over earlier ones):\n${glossary}`;
+  const keys = Object.keys(en).filter((k) => en[k].trim());
+  const source = JSON.stringify(Object.fromEntries(keys.map((k) => [k, en[k]])), null, 1);
+  const shape = `{${keys.map((k) => `"${k}": string`).join(", ")}}`;
+  const first = await askHy(
+    client,
+    `You are a senior Armenian editor writing for people in Armenia who rent out apartments and guest houses or run tours and activities.
+
+Write this ${what} in Armenian for them.
+${HY_RULES}
+- Keep any Markdown formatting (headings, lists, bold, links) exactly where it belongs. Leave a street address or venue name in its usual form.
+
+${terms}
+
+ENGLISH:
+${source}
+
+Reply with ONLY a JSON object (no prose, no markdown fence) with the same keys: ${shape}`,
+    6000,
+  );
+  if (!first) return { failed: "Aha AI couldn't write this in Armenian." };
+  const review = await askHy(
+    client,
+    `You are the chief editor of an Armenian business publication, known for rejecting anything that sounds translated. Below are an English ${what} and an Armenian draft.
+
+Rewrite every sentence an Armenian writer would not have written that way, even if it is correct. Then fix wrong meaning, missing facts, numbers, grammar, spelling, punctuation and glossary terms. Keep Markdown formatting.
+${HY_RULES}
+
+${terms}
+
+ENGLISH:
+${source}
+
+ARMENIAN:
+${JSON.stringify(first, null, 1)}
+
+Reply with ONLY a JSON object (no prose, no markdown fence):
+{"corrected": ${shape}, "questions": string[]}
+"questions": in English, anything a human editor should still decide. Empty if none.`,
+    7000,
+  );
+  const pick = (o: unknown) => Object.fromEntries(keys.map((k) => [k, typeof (o as Record<string, unknown> | null)?.[k] === "string" ? String((o as Record<string, unknown>)[k]).trim() : ""]));
+  const reviewed = review ? pick(review.corrected) : null;
+  const hy = reviewed && keys.every((k) => reviewed[k]) ? reviewed : pick(first);
+  if (armenianShare(Object.values(hy).join(" ")) < 0.5) return { failed: "The text didn't come back in Armenian." };
+  const notes = keys.flatMap((k) => {
+    const lost = missingNumbers(en[k], hy[k]);
+    return lost.length ? [`Check the ${k}: the English has ${lost.join(", ")}, which isn't in the Armenian.`] : [];
+  });
+  return { hy, notes: [...(review ? [] : ["The editing pass didn't finish, so check this one closely."]), ...notes, ...(review && Array.isArray(review.questions) ? asStrings(review.questions, 6, 300) : [])] };
+}
+
+async function hyGlossary(admin: SupabaseClient): Promise<string> {
+  const { data } = await admin.from("community_settings").select("hy_glossary").eq("id", 1).maybeSingle();
+  return [DEFAULT_HY_GLOSSARY, (data as { hy_glossary?: string } | null)?.hy_glossary ?? ""].filter(Boolean).join("\n");
+}
+
+/** Armenian for guides shown on the site, or meetups: the given ones, else everything without Armenian. */
+export async function translateOthers(admin: SupabaseClient, kind: "guides" | "meetups", ids: string[] = []): Promise<{ translated: number; failed: number }> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
+  const client = new Anthropic({ apiKey });
+  const table = kind === "guides" ? "hub_articles" : "community_meetups";
+  const fields = kind === "guides" ? ["title", "excerpt", "body"] : ["title", "description", "venue", "city"];
+  let q = admin.from(table).select(`id, ${fields.join(", ")}`);
+  if (kind === "guides") q = q.eq("public", true);
+  const { data } = await (ids.length ? q.in("id", ids.slice(0, 20)) : q.eq("hy_status", "none")).limit(20);
+  const rows = (data ?? []) as unknown as ({ id: string } & Record<string, string | null>)[];
+  const glossary = await hyGlossary(admin);
+  let translated = 0;
+  let failed = 0;
+  await inBatches(rows, 3, async (r) => {
+    const en = Object.fromEntries(fields.map((f) => [f, r[f] ?? ""]));
+    let result: Awaited<ReturnType<typeof translateFields>>;
+    try {
+      result = await translateFields(client, en, glossary, kind === "guides" ? "practical guide" : "meetup announcement");
+    } catch (e) {
+      console.error("[community-news] translate", kind, r.id, e);
+      result = { failed: "The translation failed. Please try again." };
+    }
+    if ("failed" in result) {
+      failed++;
+      await admin.from(table).update({ hy_notes: [result.failed] }).eq("id", r.id);
+      return;
+    }
+    const row = Object.fromEntries(fields.map((f) => [`${f}_hy`, result.hy[f] ?? ""]));
+    const { error } = await admin.from(table).update({ ...row, hy_status: "draft", hy_notes: result.notes }).eq("id", r.id);
+    if (error) {
+      failed++;
+      console.error("[community-news] translate save", kind, r.id, error.message);
+    } else translated++;
+  });
+  return { translated, failed };
+}
+
+/**
+ * Translate stories for review: the given ones (Translate again replaces what's
+ * there), else every story without Armenian. Approved Armenian is only replaced
+ * when an admin asks for that story by id.
+ */
+export async function translateStories(admin: SupabaseClient, ids: string[] = []): Promise<{ translated: number; failed: number }> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
+  const client = new Anthropic({ apiKey });
+  const q = admin.from("community_news").select("id, title, summary, key_points, for_you").neq("status", "rejected");
+  const { data } = await (ids.length ? q.in("id", ids.slice(0, 20)) : q.eq("hy_status", "none")).order("created_at", { ascending: false }).limit(20);
+  const rows = (data ?? []) as (Omit<ArmenianStory, "key_points"> & { id: string; key_points: string[] | null })[];
+  const glossary = await hyGlossary(admin);
+  let translated = 0;
+  let failed = 0;
+  await inBatches(rows, 3, async (r) => {
+    let result: Awaited<ReturnType<typeof translateStory>>;
+    try {
+      result = await translateStory(client, { title: r.title, summary: r.summary, key_points: r.key_points ?? [], for_you: r.for_you }, glossary);
+    } catch (e) {
+      console.error("[community-news] translate", r.id, e);
+      result = { failed: "The translation failed. Please try again." };
+    }
+    if ("failed" in result) {
+      failed++;
+      await admin.from("community_news").update({ hy_notes: [result.failed] }).eq("id", r.id);
+      return;
+    }
+    const { error } = await admin
+      .from("community_news")
+      .update({ title_hy: result.hy.title, summary_hy: result.hy.summary, key_points_hy: result.hy.key_points, for_you_hy: result.hy.for_you, hy_status: "draft", hy_notes: result.notes, hy_approved_at: null, hy_approved_by: null })
+      .eq("id", r.id);
+    if (error) {
+      failed++;
+      console.error("[community-news] translate save", r.id, error.message);
+    } else translated++;
+  });
+  return { translated, failed };
 }
 
 /* ── Telegram channel (0130) ───────────────────────────────────────────── */

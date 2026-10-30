@@ -1670,6 +1670,30 @@ export function registerApiRoutes(app: Express) {
     }
   });
 
+  // Admin → Community → News: Aha AI translates stories into Armenian for review
+  // (the given ids, else every story without Armenian). Paid model calls.
+  app.post("/api/admin-community/translate", async (req: Request, res: Response) => {
+    const admin = await requireAdminCaller(req, res);
+    if (!admin) return;
+    const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).filter((x: unknown): x is string => typeof x === "string" && /^[0-9a-f-]{36}$/i.test(x)).slice(0, 20);
+    if (rateLimited(communityRewriteHits, "translate", 30, 60 * 60_000)) return res.status(429).json({ error: "That's a lot of translations for one hour — please try again a bit later." });
+    const token = await communityNewsToken();
+    const base = process.env.URL || process.env.DEPLOY_PRIME_URL;
+    if (!token || !base) return res.status(503).json({ error: "The translator isn't configured on this server." });
+    try {
+      const r = await fetch(`${base}/.netlify/functions/community-news-background`, {
+        method: "POST",
+        headers: { "x-community-token": token, "x-community-mode": "translate", "content-type": "application/json" },
+        body: JSON.stringify({ ids, kind: req.body?.kind === "guides" || req.body?.kind === "meetups" ? req.body.kind : "news" }),
+      });
+      if (r.status >= 400) throw new Error(`background ${r.status}`);
+      res.json({ started: true });
+    } catch (e) {
+      console.error("[admin-community/translate]", e);
+      res.status(502).json({ error: "Couldn't start the translation. Please try again." });
+    }
+  });
+
   // Publishing a story posts it to the Telegram channel; also "Post to Telegram"
   // for a story published earlier. Posted once only (see postStoryToChannel).
   app.post("/api/admin-community/post-to-channel", async (req: Request, res: Response) => {

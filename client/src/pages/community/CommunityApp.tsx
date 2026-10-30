@@ -4,14 +4,19 @@
  * renders this instead of the travel site when useSite() === "community".
  * Off its own host (`?site=community` preview) every page is noindex.
  * Crawlers get the server-rendered twin in server/communityPages.ts.
+ *
+ * English at /, Armenian at /hy (migration 0131): the whole site runs inside a
+ * wouter Router with base "/hy", so every in-site link stays in its language;
+ * the header's switch uses "~/…" to step outside the base.
  */
 import { lazy, Suspense, useEffect, useState } from "react";
-import { Link, Route, Switch, useLocation } from "wouter";
+import { Link, Route, Router, Switch, useLocation } from "wouter";
 import { ArrowUpRight, Menu, X } from "lucide-react";
 import { CommunityLockup } from "@/components/BrandMark";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
-import { COMMUNITY_DESCRIPTION, VACATIONS_ORIGIN } from "@shared/community";
+import { VACATIONS_ORIGIN } from "@shared/community";
 import { useGoToSection } from "./communityNav";
+import { CommunityLangProvider, langPath, useCommunityLang } from "./communityLang";
 
 const CommunityHome = lazy(() => import("./CommunityHome"));
 const CommunityNews = lazy(() => import("./CommunityNews"));
@@ -20,52 +25,67 @@ const CommunityGuides = lazy(() => import("./CommunityGuides"));
 const CommunityGuide = lazy(() => import("./CommunityGuides").then((m) => ({ default: m.CommunityGuide })));
 
 const NAV: { label: string; href?: string; section?: string }[] = [
-  { label: "News", href: "/news" },
-  { label: "Guides", href: "/guides" },
-  { label: "Meetups", section: "meetups" },
-  { label: "Refer a host", section: "refer" },
+  { label: "nav.news", href: "/news" },
+  { label: "nav.guides", href: "/guides" },
+  { label: "nav.meetups", section: "meetups" },
+  { label: "nav.refer", section: "refer" },
 ];
 
+/** Switch to the other language on the same page. */
+function LangSwitch({ className }: { className: string }) {
+  const { lang, t } = useCommunityLang();
+  const [location] = useLocation();
+  const target = lang === "hy" ? location : langPath("hy", location);
+  return (
+    <Link href={`~${target}`} className={className} lang={lang === "hy" ? "en" : "hy"} aria-label={t("nav.switch")}>
+      <span className="sm:hidden">{t("nav.switchShort")}</span>
+      <span className="hidden sm:inline">{t("nav.switch")}</span>
+    </Link>
+  );
+}
+
 function CommunityHeader() {
+  const { t } = useCommunityLang();
   const goTo = useGoToSection();
   const [open, setOpen] = useState(false);
   const [location] = useLocation();
   useEffect(() => setOpen(false), [location]);
-  const linkClass = "inline-flex min-h-11 items-center text-[15px] font-semibold text-basalt hover:text-apricot";
+  const linkClass = "inline-flex min-h-11 items-center whitespace-nowrap text-[15px] font-semibold text-basalt hover:text-apricot";
   const items = NAV.map((n) =>
     n.href ? (
       <Link key={n.label} href={n.href} className={linkClass}>
-        {n.label}
+        {t(n.label)}
       </Link>
     ) : (
       <button key={n.label} type="button" onClick={() => { setOpen(false); goTo(n.section!); }} className={linkClass}>
-        {n.label}
+        {t(n.label)}
       </button>
     ),
   );
   return (
     <header className="sticky top-0 z-40 border-b border-basalt/10 bg-paper/95 backdrop-blur">
-      <div className="mx-auto flex max-w-[1240px] items-center gap-6 px-4 py-3 sm:px-6">
-        <Link href="/" className="rounded-md text-apricot focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-apricot" aria-label="revamp community home">
-          <CommunityLockup title={null} className="h-6 sm:h-7" />
+      <div className="mx-auto flex max-w-[1240px] items-center gap-2 px-4 py-3 sm:gap-6 sm:px-6">
+        <Link href="/" className="shrink-0 rounded-md text-apricot focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-apricot" aria-label={t("nav.home")}>
+          <CommunityLockup title={null} className="h-5 sm:h-7" />
         </Link>
-        <nav aria-label="Main" className="ml-4 hidden flex-1 items-center gap-7 md:flex">
+        <nav aria-label="Main" className="ml-4 hidden min-w-0 flex-1 items-center gap-7 lg:flex">
           {items}
         </nav>
-        <div className="ml-auto flex items-center gap-2">
-          <button type="button" onClick={() => goTo("join")} className="hidden h-11 items-center rounded-full bg-basalt px-5 text-[15px] font-bold text-paper hover:bg-basalt/90 sm:inline-flex">
-            Join the community
+        <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
+          <LangSwitch className="inline-flex h-11 items-center rounded-full px-1.5 text-[15px] font-semibold text-basalt hover:text-apricot sm:px-3" />
+          <button type="button" onClick={() => goTo("join")} className="hidden h-11 items-center whitespace-nowrap rounded-full bg-basalt px-5 text-[15px] font-bold text-paper hover:bg-basalt/90 sm:inline-flex">
+            {t("cta.join")}
           </button>
-          <button type="button" onClick={() => setOpen((o) => !o)} className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-basalt/15 md:hidden" aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open}>
+          <button type="button" onClick={() => setOpen((o) => !o)} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-basalt/15 lg:hidden" aria-label={t(open ? "nav.closeMenu" : "nav.openMenu")} aria-expanded={open}>
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
       </div>
       {open && (
-        <nav aria-label="Main" className="flex flex-col border-t border-basalt/10 px-4 pb-4 md:hidden">
+        <nav aria-label="Main" className="flex flex-col border-t border-basalt/10 px-4 pb-4 lg:hidden">
           {items}
           <button type="button" onClick={() => { setOpen(false); goTo("join"); }} className="mt-2 inline-flex h-12 items-center justify-center rounded-full bg-basalt text-base font-bold text-paper">
-            Join the community
+            {t("cta.join")}
           </button>
         </nav>
       )}
@@ -74,28 +94,29 @@ function CommunityHeader() {
 }
 
 function CommunityFooter() {
+  const { t } = useCommunityLang();
   return (
     <footer className="bg-basalt text-paper">
       <div className="mx-auto grid max-w-[1240px] gap-8 px-4 py-12 sm:px-6 md:grid-cols-[1.4fr_1fr_1fr]">
         <div>
           <CommunityLockup title="revamp community" className="h-7 text-paper" />
-          <p className="mt-5 max-w-sm text-sm leading-6 text-paper/65">{COMMUNITY_DESCRIPTION}</p>
+          <p className="mt-5 max-w-sm text-sm leading-6 text-paper/65">{t("meta.description")}</p>
         </div>
         <nav aria-label="Community" className="flex flex-col items-start text-sm">
-          <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-apricot">Community</p>
-          <Link href="/news" className="inline-flex min-h-11 items-center text-paper/75 hover:text-white">News for hosts</Link>
-          <Link href="/guides" className="inline-flex min-h-11 items-center text-paper/75 hover:text-white">Guides</Link>
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-apricot">{t("footer.community")}</p>
+          <Link href="/news" className="inline-flex min-h-11 items-center text-paper/75 hover:text-white">{t("footer.newsForHosts")}</Link>
+          <Link href="/guides" className="inline-flex min-h-11 items-center text-paper/75 hover:text-white">{t("nav.guides")}</Link>
           <a href="mailto:hello@revampvacations.com" className="inline-flex min-h-11 items-center text-paper/75 hover:text-white">hello@revampvacations.com</a>
         </nav>
         <nav aria-label="Revamp" className="flex flex-col items-start text-sm">
           <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-apricot">Revamp</p>
-          <a href={`${VACATIONS_ORIGIN}/host`} className="inline-flex items-center gap-1 min-h-11 text-paper/75 hover:text-white">Host on Revamp <ArrowUpRight className="h-3 w-3" /></a>
+          <a href={`${VACATIONS_ORIGIN}/host`} className="inline-flex items-center gap-1 min-h-11 text-paper/75 hover:text-white">{t("footer.hostOnRevamp")} <ArrowUpRight className="h-3 w-3" /></a>
           <a href={VACATIONS_ORIGIN} className="inline-flex items-center gap-1 min-h-11 text-paper/75 hover:text-white">revampvacations.com <ArrowUpRight className="h-3 w-3" /></a>
-          <a href={`${VACATIONS_ORIGIN}/privacy#community`} className="inline-flex items-center gap-1 min-h-11 text-paper/75 hover:text-white">Privacy policy <ArrowUpRight className="h-3 w-3" /></a>
+          <a href={`${VACATIONS_ORIGIN}/privacy#community`} className="inline-flex items-center gap-1 min-h-11 text-paper/75 hover:text-white">{t("footer.privacy")} <ArrowUpRight className="h-3 w-3" /></a>
         </nav>
       </div>
       <div className="border-t border-white/10">
-        <p className="mx-auto max-w-[1240px] px-4 py-5 text-xs text-paper/50 sm:px-6">© 2026 Revamp Hospitality LLC · Yerevan, Armenia</p>
+        <p className="mx-auto max-w-[1240px] px-4 py-5 text-xs text-paper/50 sm:px-6">{t("footer.copyright")}</p>
       </div>
     </footer>
   );
@@ -110,21 +131,41 @@ function ToVacations({ path }: { path: string }) {
 }
 
 function CommunityNotFound() {
-  useDocumentMeta({ title: "Page not found — revamp community", description: COMMUNITY_DESCRIPTION, canonicalPath: "/", noindex: true });
+  const { t, path } = useCommunityLang();
+  useDocumentMeta({ title: t("meta.notFoundTitle"), description: t("meta.description"), canonicalPath: path("/"), noindex: true });
   return (
     <section className="mx-auto max-w-[880px] px-4 py-24 text-center sm:px-6">
-      <h1 className="font-display text-4xl font-extrabold tracking-tight">We couldn't find that page.</h1>
-      <p className="mt-4 text-lg text-basalt/70">It may have moved. The latest news and guides are on the home page.</p>
-      <Link href="/" className="mt-8 inline-flex h-12 items-center rounded-full bg-basalt px-6 font-bold text-paper">Back to revamp community</Link>
+      <h1 className="font-display text-4xl font-extrabold tracking-tight">{t("notFound.title")}</h1>
+      <p className="mt-4 text-lg text-basalt/70">{t("notFound.body")}</p>
+      <Link href="/" className="mt-8 inline-flex h-12 items-center rounded-full bg-basalt px-6 font-bold text-paper">{t("notFound.back")}</Link>
     </section>
   );
 }
 
-export default function CommunityApp() {
+function CommunitySite() {
+  const { lang, t } = useCommunityLang();
+  const [location] = useLocation();
+  // The language of the page + links between the two versions, for browsers and search engines.
+  useEffect(() => {
+    document.documentElement.lang = lang;
+    const set = (hreflang: string, href: string) => {
+      let el = document.head.querySelector<HTMLLinkElement>(`link[rel="alternate"][hreflang="${hreflang}"]`);
+      if (!el) {
+        el = document.createElement("link");
+        el.rel = "alternate";
+        el.hreflang = hreflang;
+        document.head.appendChild(el);
+      }
+      el.href = href;
+    };
+    set("en", `${window.location.origin}${location}`);
+    set("hy", `${window.location.origin}${langPath("hy", location)}`);
+    set("x-default", `${window.location.origin}${location}`);
+  }, [lang, location]);
   return (
     <div className="community-site flex min-h-screen flex-col bg-paper font-sans text-basalt">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-3 focus:z-50 focus:rounded-full focus:bg-basalt focus:px-5 focus:py-3 focus:text-[15px] focus:font-bold focus:text-paper">
-        Skip to content
+        {t("nav.skip")}
       </a>
       <CommunityHeader />
       <main id="main" className="flex-1 scroll-mt-20">
@@ -143,5 +184,17 @@ export default function CommunityApp() {
       </main>
       <CommunityFooter />
     </div>
+  );
+}
+
+export default function CommunityApp() {
+  const [location] = useLocation();
+  const lang = location === "/hy" || location.startsWith("/hy/") ? "hy" : "en";
+  return (
+    <CommunityLangProvider lang={lang}>
+      <Router base={lang === "hy" ? "/hy" : ""}>
+        <CommunitySite />
+      </Router>
+    </CommunityLangProvider>
   );
 }

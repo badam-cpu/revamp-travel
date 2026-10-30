@@ -13,29 +13,36 @@ import {
   NEWS_COLS,
   mapGuideRow,
   mapMeetupRow,
+  localizeGuide,
+  localizeMeetup,
+  localizeNews,
   mapNewsRow,
   type CommunityGuide,
+  type CommunityLang,
   type CommunityMeetup,
   type CommunityNewsItem,
   type NewsCategory,
 } from "@shared/community";
 
-export async function listPublishedNews(opts: { category?: NewsCategory | null; limit?: number; offset?: number } = {}): Promise<CommunityNewsItem[]> {
+/** The Armenian site lists only stories whose Armenian an admin has approved. */
+export async function listPublishedNews(opts: { category?: NewsCategory | null; limit?: number; offset?: number; lang?: CommunityLang } = {}): Promise<CommunityNewsItem[]> {
+  const lang = opts.lang ?? "en";
   let q = supabase.from("community_news").select(NEWS_COLS).eq("status", "published").order("published_at", { ascending: false });
   if (opts.category) q = q.eq("category", opts.category);
+  if (lang === "hy") q = q.eq("hy_status", "approved");
   const from = opts.offset ?? 0;
   const { data, error } = await q.range(from, from + (opts.limit ?? 20) - 1);
   if (error) throw error;
-  return (data ?? []).map(mapNewsRow);
+  return (data ?? []).map((r) => localizeNews(mapNewsRow(r), lang));
 }
 
-export async function getPublishedNews(slug: string): Promise<CommunityNewsItem | null> {
+export async function getPublishedNews(slug: string, lang: CommunityLang = "en"): Promise<CommunityNewsItem | null> {
   const { data, error } = await supabase.from("community_news").select(NEWS_COLS).eq("slug", slug).eq("status", "published").maybeSingle();
   if (error) throw error;
-  return data ? mapNewsRow(data) : null;
+  return data ? localizeNews(mapNewsRow(data), lang) : null;
 }
 
-export async function listPublicGuides(limit = 50): Promise<CommunityGuide[]> {
+export async function listPublicGuides(limit = 50, lang: CommunityLang = "en"): Promise<CommunityGuide[]> {
   const { data, error } = await supabase
     .from("hub_articles")
     .select(GUIDE_COLS)
@@ -45,16 +52,16 @@ export async function listPublicGuides(limit = 50): Promise<CommunityGuide[]> {
     .order("published_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
-  return (data ?? []).map(mapGuideRow);
+  return (data ?? []).map((r) => localizeGuide(mapGuideRow(r), lang));
 }
 
-export async function getPublicGuide(slug: string): Promise<CommunityGuide | null> {
+export async function getPublicGuide(slug: string, lang: CommunityLang = "en"): Promise<CommunityGuide | null> {
   const { data, error } = await supabase.from("hub_articles").select(GUIDE_COLS).eq("slug", slug).eq("status", "published").eq("public", true).maybeSingle();
   if (error) throw error;
-  return data ? mapGuideRow(data) : null;
+  return data ? localizeGuide(mapGuideRow(data), lang) : null;
 }
 
-export async function listUpcomingMeetups(limit = 6): Promise<CommunityMeetup[]> {
+export async function listUpcomingMeetups(limit = 6, lang: CommunityLang = "en"): Promise<CommunityMeetup[]> {
   const { data, error } = await supabase
     .from("community_meetups")
     .select(MEETUP_COLS)
@@ -63,12 +70,20 @@ export async function listUpcomingMeetups(limit = 6): Promise<CommunityMeetup[]>
     .order("starts_at")
     .limit(limit);
   if (error) throw error;
-  return (data ?? []).map(mapMeetupRow);
+  return (data ?? []).map((r) => localizeMeetup(mapMeetupRow(r), lang));
 }
 
 export async function getCommunityTelegramUrl(): Promise<string | null> {
   const { data } = await supabase.from("community_settings").select("telegram_url").eq("id", 1).maybeSingle();
   return (data as { telegram_url: string | null } | null)?.telegram_url ?? null;
+}
+
+/** The admin's edits to the site text in a language ({ key: text }). */
+export async function getTextEdits(lang: CommunityLang): Promise<Record<string, string>> {
+  const col = lang === "hy" ? "hy_text" : "en_text";
+  const { data } = await supabase.from("community_settings").select(col).eq("id", 1).maybeSingle();
+  const v = (data as unknown as Record<string, unknown> | null)?.[col];
+  return v && typeof v === "object" ? (v as Record<string, string>) : {};
 }
 
 export async function joinCommunity(input: { email: string; name?: string; hosts: string; meetupId?: string }): Promise<{ ok: true; seat: boolean }> {
@@ -85,11 +100,9 @@ export async function joinCommunity(input: { email: string; name?: string; hosts
 
 /* ── Admin (RLS: admins only) ─────────────────────────────────────────── */
 
-export async function adminListNews(status: "draft" | "published" | "rejected"): Promise<CommunityNewsItem[]> {
-  const { data, error } = await supabase
-    .from("community_news")
-    .select(NEWS_COLS)
-    .eq("status", status)
+export async function adminListNews(status: "draft" | "published" | "rejected" | "hy_review"): Promise<CommunityNewsItem[]> {
+  const q = supabase.from("community_news").select(NEWS_COLS);
+  const { data, error } = await (status === "hy_review" ? q.eq("hy_status", "draft").neq("status", "rejected") : q.eq("status", status))
     .order(status === "published" ? "published_at" : "created_at", { ascending: false })
     .limit(200);
   if (error) throw error;
@@ -111,7 +124,7 @@ export interface NewsEdit {
 
 const cleanPoints = (p: string[]) => p.map((x) => x.replace(/^\s*[-•*]\s*/, "").trim()).filter(Boolean).slice(0, 8);
 
-export async function adminSaveNews(id: string, edit: NewsEdit, status?: "draft" | "published" | "rejected"): Promise<void> {
+export async function adminSaveNews(id: string, edit: NewsEdit, status?: "draft" | "published" | "rejected", opts: { hyStale?: boolean } = {}): Promise<void> {
   const { data: auth } = await supabase.auth.getUser();
   const row: Record<string, unknown> = {
     category: edit.category,
@@ -125,12 +138,123 @@ export async function adminSaveNews(id: string, edit: NewsEdit, status?: "draft"
     image_url: edit.imageUrl?.trim() || null,
     image_credit: edit.imageUrl?.trim() ? edit.imageCredit.trim() : "",
   };
+  // The English changed: the Armenian no longer matches, so it goes back to review.
+  if (opts.hyStale) {
+    row.hy_status = "draft";
+    row.hy_notes = ["The English was edited after this was translated. Update the Armenian, or use Translate again."];
+  }
   if (status) {
     row.status = status;
     row.reviewed_by = auth.user?.id ?? null;
     if (status === "published") row.published_at = new Date().toISOString();
   }
   const { error } = await supabase.from("community_news").update(row).eq("id", id);
+  if (error) throw error;
+}
+
+export interface ArmenianEdit {
+  title: string;
+  summary: string;
+  keyPoints: string[];
+  forYou: string;
+}
+
+/** Save the admin's Armenian; `approved` puts it on the Armenian site (once the story is published too). */
+export async function adminSaveArmenian(id: string, edit: ArmenianEdit, hyStatus: "draft" | "approved"): Promise<void> {
+  const { data: auth } = await supabase.auth.getUser();
+  const { error } = await supabase
+    .from("community_news")
+    .update({
+      title_hy: edit.title.trim(),
+      summary_hy: edit.summary.trim(),
+      key_points_hy: cleanPoints(edit.keyPoints),
+      for_you_hy: edit.forYou.trim(),
+      hy_status: hyStatus,
+      ...(hyStatus === "approved" ? { hy_notes: [], hy_approved_at: new Date().toISOString(), hy_approved_by: auth.user?.id ?? null } : {}),
+    })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+/** Aha AI translates these stories, or every story without Armenian, for review (background). */
+export async function adminTranslateNews(ids?: string[], kind: "news" | "guides" | "meetups" = "news"): Promise<void> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  const res = await fetch("/api/admin-community/translate", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ ids: ids ?? [], kind }) });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(body?.error || "Couldn't start the translation. Please try again.");
+}
+
+export async function adminGetSiteText(): Promise<{ glossary: string; hy: Record<string, string>; en: Record<string, string> }> {
+  const { data, error } = await supabase.from("community_settings").select("hy_glossary, hy_text, en_text").eq("id", 1).maybeSingle();
+  if (error) throw error;
+  const r = data as { hy_glossary?: string; hy_text?: Record<string, string>; en_text?: Record<string, string> } | null;
+  return { glossary: r?.hy_glossary ?? "", hy: r?.hy_text ?? {}, en: r?.en_text ?? {} };
+}
+
+export async function adminSaveSiteText(patch: { glossary?: string; hy?: Record<string, string>; en?: Record<string, string> }): Promise<void> {
+  const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (patch.glossary !== undefined) row.hy_glossary = patch.glossary;
+  if (patch.hy !== undefined) row.hy_text = patch.hy;
+  if (patch.en !== undefined) row.en_text = patch.en;
+  const { error } = await supabase.from("community_settings").update(row).eq("id", 1);
+  if (error) throw error;
+}
+
+/** One guide or meetup to review in Armenian: its English + Armenian fields, by field name. */
+export interface HyReviewItem {
+  id: string;
+  label: string;
+  fields: { key: string; label: string; en: string; hy: string; long?: boolean }[];
+  hyStatus: "none" | "draft" | "approved";
+  hyNotes: string[];
+}
+
+export async function adminListGuidesForHy(): Promise<HyReviewItem[]> {
+  const { data, error } = await supabase
+    .from("hub_articles")
+    .select("id, title, excerpt, body, title_hy, excerpt_hy, body_hy, hy_status, hy_notes")
+    .eq("public", true)
+    .order("published_at", { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  return ((data ?? []) as unknown as Record<string, string & string[]>[]).map((r) => ({
+    id: r.id,
+    label: r.title,
+    hyStatus: (r.hy_status || "none") as HyReviewItem["hyStatus"],
+    hyNotes: Array.isArray(r.hy_notes) ? r.hy_notes : [],
+    fields: [
+      { key: "title", label: "Title", en: r.title, hy: r.title_hy ?? "" },
+      { key: "excerpt", label: "Short description", en: r.excerpt ?? "", hy: r.excerpt_hy ?? "", long: true },
+      { key: "body", label: "Article", en: r.body ?? "", hy: r.body_hy ?? "", long: true },
+    ],
+  }));
+}
+
+export async function adminListMeetupsForHy(): Promise<HyReviewItem[]> {
+  const { data, error } = await supabase.from("community_meetups").select(MEETUP_COLS).order("starts_at", { ascending: false }).limit(100);
+  if (error) throw error;
+  return (data ?? []).map(mapMeetupRow).map((m) => ({
+    id: m.id,
+    label: m.title,
+    hyStatus: m.hyStatus,
+    hyNotes: m.hyNotes,
+    fields: [
+      { key: "title", label: "Title", en: m.title, hy: m.titleHy },
+      { key: "description", label: "Description", en: m.description, hy: m.descriptionHy, long: true },
+      { key: "venue", label: "Venue", en: m.venue, hy: m.venueHy },
+      { key: "city", label: "City", en: m.city, hy: m.cityHy },
+    ],
+  }));
+}
+
+/** Save an admin's Armenian for a guide or meetup; `approved` shows it on the Armenian site. */
+export async function adminSaveHyFields(kind: "guides" | "meetups", id: string, values: Record<string, string>, hyStatus: "draft" | "approved"): Promise<void> {
+  const row: Record<string, unknown> = Object.fromEntries(Object.entries(values).map(([k, v]) => [`${k}_hy`, v.trim()]));
+  row.hy_status = hyStatus;
+  if (hyStatus === "approved") row.hy_notes = [];
+  const { error } = await supabase.from(kind === "guides" ? "hub_articles" : "community_meetups").update(row).eq("id", id);
   if (error) throw error;
 }
 
