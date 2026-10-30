@@ -7,7 +7,7 @@
  *    older or edited stories the same way (they go back to "To check").
  *  - Meetups: add / edit / cancel, with saved seats.
  *  - Members: who joined (email, what they host, seats), CSV download.
- *  - Settings: the hosts' Telegram group link.
+ *  - Settings: the Telegram channel link.
  * Writes are admin-RLS (news, meetups, settings); members are read-only here.
  */
 import { useCallback, useEffect, useState } from "react";
@@ -710,11 +710,11 @@ function SettingsTab() {
   };
   const save = async () => {
     const v = (url ?? "").trim();
-    if (v && !/^https:\/\/(t\.me|telegram\.me)\//.test(v)) return toast("Use a Telegram invite link (https://t.me/…).");
+    if (v && !/^https:\/\/(t\.me|telegram\.me)\//.test(v)) return toast("Use a Telegram link (https://t.me/…).");
     setBusy(true);
     try {
       await adminSaveTelegramUrl(v || null);
-      toast(v ? "Saved. The site shows 'Join the hosts' group on Telegram'." : "Removed. The Telegram button is hidden.");
+      toast(v ? "Saved. The site shows 'Follow on Telegram'." : "Removed. The Telegram button is hidden.");
     } catch (e) {
       toast(userMessage(e, "Couldn't save."));
     } finally {
@@ -725,7 +725,7 @@ function SettingsTab() {
   return (
     <div className="grid max-w-xl gap-3">
       <label className="grid gap-1 text-sm font-semibold">
-        Hosts' Telegram group <span className="font-normal text-basalt/70">Invite link. Shown on the site and in the welcome email. Leave empty to hide it.</span>
+        Telegram channel <span className="font-normal text-basalt/70">Link (https://t.me/…). Shown on the site and in the welcome email. Leave empty to hide it.</span>
         <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://t.me/+…" className={field} />
       </label>
       <button type="button" disabled={busy} onClick={save} className="min-h-10 self-start rounded-full bg-apricot hover:bg-apricot/90 px-5 text-sm font-bold text-white disabled:opacity-60">Save</button>

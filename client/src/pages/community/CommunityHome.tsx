@@ -357,7 +357,7 @@ function JoinBand({ meetups, seatFor, onSeatFor, telegramUrl }: { meetups: Commu
         <p className="max-w-md text-lg leading-relaxed text-paper/75">Join with your email. We'll send meetup invitations and new guides — a few times a month at most.</p>
         {telegramUrl && (
           <a href={telegramUrl} target="_blank" rel="noopener noreferrer" className="inline-flex h-12 items-center gap-2 self-start rounded-full border-[1.5px] border-paper px-5 text-base font-bold hover:bg-paper hover:text-basalt">
-            <MessageCircle className="h-5 w-5" aria-hidden="true" /> Hosts' group on Telegram
+            <MessageCircle className="h-5 w-5" aria-hidden="true" /> Follow on Telegram
           </a>
         )}
       </div>

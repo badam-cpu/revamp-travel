@@ -854,7 +854,7 @@ export function sendCommunityWelcome(to: string, opts: { meetup?: { title: strin
        </div>`
     : "";
   const telegram = opts.telegramUrl
-    ? `<p style="font-size:14px;line-height:1.6;margin:0 0 14px;color:#3f3b36;">Questions between meetups? <a href="${esc(opts.telegramUrl)}" style="color:#212121;font-weight:700;">Join the hosts' group on Telegram</a>.</p>`
+    ? `<p style="font-size:14px;line-height:1.6;margin:0 0 14px;color:#3f3b36;">News between meetups? <a href="${esc(opts.telegramUrl)}" style="color:#212121;font-weight:700;">Follow revamp community on Telegram</a>.</p>`
     : "";
   const html = shell(
     opts.meetup ? "See you at the meetup" : "Welcome to revamp community",
