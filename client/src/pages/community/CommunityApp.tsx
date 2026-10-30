@@ -11,8 +11,9 @@
  */
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Link, Route, Router, Switch, useLocation } from "wouter";
-import { ArrowUpRight, Menu, X } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Menu, X } from "lucide-react";
 import { CommunityLockup } from "@/components/BrandMark";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 import { LANG_NAMES, VACATIONS_ORIGIN } from "@shared/community";
 import { useGoToSection } from "./communityNav";
@@ -31,56 +32,36 @@ const NAV: { label: string; href?: string; section?: string }[] = [
   { label: "nav.refer", section: "refer" },
 ];
 
-/** Drawn as SVG: flag emoji show up as plain letters on Windows. */
-function FlagArmenia() {
-  return (
-    <svg viewBox="0 0 3 2" aria-hidden="true" className="h-full w-full">
-      <path fill="#D90012" d="M0 0h3v.67H0z" />
-      <path fill="#0033A0" d="M0 .67h3v.67H0z" />
-      <path fill="#F2A800" d="M0 1.33h3V2H0z" />
-    </svg>
-  );
-}
+const LANGS = [
+  { code: "hy", short: "ՀԱՅ" },
+  { code: "en", short: "ENG" },
+] as const;
 
-function FlagUk() {
-  return (
-    <svg viewBox="0 0 60 30" preserveAspectRatio="xMidYMid slice" aria-hidden="true" className="h-full w-full">
-      <clipPath id="community-flag-uk"><path d="M30 15h30v15zv15H0zH0V0zV0h30z" /></clipPath>
-      <path fill="#012169" d="M0 0v30h60V0z" />
-      <path stroke="#fff" strokeWidth="6" d="m0 0 60 30m0-30L0 30" />
-      <path stroke="#C8102E" strokeWidth="4" clipPath="url(#community-flag-uk)" d="m0 0 60 30m0-30L0 30" />
-      <path stroke="#fff" strokeWidth="10" d="M30 0v30M0 15h60" />
-      <path stroke="#C8102E" strokeWidth="6" d="M30 0v30M0 15h60" />
-    </svg>
-  );
-}
-
-/** Both languages as flags, same page; the current one is highlighted. */
+/** Language dropdown: same page in the other language. */
 function LangSwitch() {
   const { lang } = useCommunityLang();
-  const [location] = useLocation();
-    const flags = [
-    { code: "hy", href: langPath("hy", location), Flag: FlagArmenia },
-    { code: "en", href: location, Flag: FlagUk },
-  ] as const;
+  const [location, navigate] = useLocation();
   return (
-    <div className="flex items-center">
-      {flags.map(({ code, href, Flag }) => (
-        <Link
-          key={code}
-          href={`~${href}`}
-          lang={code}
-          aria-label={LANG_NAMES[code]}
-          aria-current={code === lang ? "true" : undefined}
-          title={LANG_NAMES[code]}
-          className="group inline-flex h-11 w-9 items-center justify-center rounded-md focus-visible:outline-2 focus-visible:outline-apricot sm:w-10"
-        >
-          <span className={`block h-5 w-7 overflow-hidden rounded-[4px] ring-offset-2 ring-offset-paper transition-opacity ${code === lang ? "ring-2 ring-apricot" : "opacity-55 ring-1 ring-basalt/15 group-hover:opacity-100"}`}>
-            <Flag />
-          </span>
-        </Link>
-      ))}
-    </div>
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger aria-label={LANG_NAMES[lang]} className="group inline-flex h-11 items-center gap-0.5 rounded-full px-1.5 text-[15px] font-semibold text-basalt hover:text-apricot data-[state=open]:text-apricot sm:px-2.5">
+        {LANGS.find((l) => l.code === lang)!.short}
+        <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" aria-hidden="true" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[5.5rem] rounded-xl border-basalt/10 bg-paper p-1 font-sans text-basalt shadow-sm">
+        {LANGS.map(({ code, short }) => (
+          <DropdownMenuItem
+            key={code}
+            lang={code}
+            aria-label={LANG_NAMES[code]}
+            aria-current={code === lang ? "true" : undefined}
+            onSelect={() => navigate(`~${code === "hy" ? langPath("hy", location) : location}`)}
+            className={`min-h-10 cursor-pointer justify-center rounded-lg px-3 text-[15px] font-semibold focus:bg-basalt/5 ${code === lang ? "text-apricot focus:text-apricot" : "text-basalt focus:text-basalt"}`}
+          >
+            {short}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
