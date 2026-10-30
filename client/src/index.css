@@ -370,3 +370,7 @@
   outline: 2px solid var(--color-apricot);
   outline-offset: 3px;
 }
+/* The language button sits between two 44px controls: a ring outside it would look taller than they are. */
+.community-site .community-lang:focus-visible {
+  outline-offset: -2px;
+}

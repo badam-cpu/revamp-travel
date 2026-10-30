@@ -9,7 +9,7 @@
  * wouter Router with base "/hy", so every in-site link stays in its language;
  * the header's switch uses "~/…" to step outside the base.
  */
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, Route, Router, Switch, useLocation } from "wouter";
 import { ArrowUpRight, ChevronDown, Menu, X } from "lucide-react";
 import { CommunityLockup } from "@/components/BrandMark";
@@ -41,13 +41,23 @@ const LANGS = [
 function LangSwitch() {
   const { lang } = useCommunityLang();
   const [location, navigate] = useLocation();
+  // Focus returns to the button only for keyboard users; after a click it would light up the focus ring.
+  const usedKeyboard = useRef(false);
   return (
     <DropdownMenu modal={false}>
-      <DropdownMenuTrigger aria-label={LANG_NAMES[lang]} className="group inline-flex h-11 items-center gap-0.5 rounded-full px-1.5 text-[15px] font-semibold text-basalt hover:text-apricot data-[state=open]:text-apricot sm:px-2.5">
+      <DropdownMenuTrigger aria-label={LANG_NAMES[lang]} className="community-lang group inline-flex h-11 items-center gap-0.5 rounded-full px-1.5 text-[15px] font-semibold text-basalt hover:text-apricot data-[state=open]:text-apricot sm:px-2.5">
         {LANGS.find((l) => l.code === lang)!.short}
         <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" aria-hidden="true" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[5.5rem] rounded-xl border-basalt/10 bg-paper p-1 font-sans text-basalt shadow-sm">
+      <DropdownMenuContent
+        align="end"
+        onKeyDown={() => { usedKeyboard.current = true; }}
+        onCloseAutoFocus={(e) => {
+          if (!usedKeyboard.current) e.preventDefault();
+          usedKeyboard.current = false;
+        }}
+        className="min-w-[5.5rem] rounded-xl border-basalt/10 bg-paper p-1 font-sans text-basalt shadow-sm"
+      >
         {LANGS.map(({ code, short }) => (
           <DropdownMenuItem
             key={code}
