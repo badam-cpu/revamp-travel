@@ -21,10 +21,10 @@ export const VACATIONS_ORIGIN = "https://revampvacations.com";
 export type NewsCategory = "travel" | "rentals" | "booking_sites" | "rules";
 
 export const NEWS_CATEGORIES: { key: NewsCategory; label: string; searchHint: string }[] = [
-  { key: "travel", label: "Travel to Armenia", searchHint: "tourism to Armenia: flights to Yerevan, visas and entry rules, visitor numbers, big events, roads and border crossings" },
-  { key: "rentals", label: "Short-term rentals", searchHint: "the short-term rental and holiday-home industry: guest trends, pricing, hosting practice, regulation in other countries that hosts follow" },
-  { key: "booking_sites", label: "OTA news", searchHint: "changes on Airbnb, Booking.com, Expedia/Vrbo, GetYourGuide, Viator, Tripadvisor that affect hosts and tour operators: fees, policies, search ranking, payouts, new features" },
-  { key: "rules", label: "Rules & taxes", searchHint: "rules, registration, licensing and tax for tourism, rentals and guest houses in Armenia" },
+  { key: "travel", label: "Travel To Armenia", searchHint: "tourism to Armenia: flights to Yerevan, visas and entry rules, visitor numbers, big events, roads and border crossings" },
+  { key: "rentals", label: "Short-Term Rentals", searchHint: "the short-term rental and holiday-home industry: guest trends, pricing, hosting practice, regulation in other countries that hosts follow" },
+  { key: "booking_sites", label: "OTA News", searchHint: "changes on Airbnb, Booking.com, Expedia/Vrbo, GetYourGuide, Viator, Tripadvisor that affect hosts and tour operators: fees, policies, search ranking, payouts, new features" },
+  { key: "rules", label: "Rules & Local Regulations", searchHint: "rules, registration, licensing and tax for tourism, rentals and guest houses in Armenia" },
 ];
 
 /** Revamp's own art for a topic — shown when a story has no photo, or its photo won't load. */

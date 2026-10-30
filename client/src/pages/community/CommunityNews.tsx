@@ -156,7 +156,7 @@ export default function CommunityNews() {
 
   useDocumentMeta({
     title: "News for hosts in Armenia — revamp community",
-    description: "Travel to Armenia, short-term rentals, OTA news, rules and taxes — what changed and what it means for hosts.",
+    description: "Travel to Armenia, short-term rentals, OTA news, rules and local regulations — what changed and what it means for hosts.",
     canonicalPath: "/news",
     noindex: communityNoindex(),
   });

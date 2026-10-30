@@ -124,7 +124,7 @@ function renderHome(origin: string, d: Awaited<ReturnType<typeof communityData>>
 function renderNewsIndex(origin: string, news: CommunityNewsItem[]): string {
   return shell({
     title: "News for hosts in Armenia — revamp community",
-    description: "Travel to Armenia, short-term rentals, OTA news, rules and taxes — what changed and what it means for hosts.",
+    description: "Travel to Armenia, short-term rentals, OTA news, rules and local regulations — what changed and what it means for hosts.",
     canonical: `${origin}/news`,
     origin,
     body: `<h1>News &amp; updates</h1>${news.map(newsItemHtml).join("\n") || "<p>New stories every week.</p>"}`,
@@ -228,7 +228,7 @@ export async function communityLlmsTxt(origin: string): Promise<string> {
     "",
     "## Pages",
     `- [Home](${origin}/)`,
-    `- [News for hosts](${origin}/news): weekly news on travel to Armenia, short-term rentals, OTA news, rules and taxes — each with the source linked`,
+    `- [News for hosts](${origin}/news): weekly news on travel to Armenia, short-term rentals, OTA news, rules and local regulations — each with the source linked`,
     `- [Guides](${origin}/guides)`,
     `- [Host on Revamp](${VACATIONS_ORIGIN}/host)`,
     "",
