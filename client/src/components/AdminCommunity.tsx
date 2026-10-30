@@ -1199,7 +1199,7 @@ function SettingsTab() {
 
 /* ── Sources (0126) ───────────────────────────────────────────────────── */
 
-const EMPTY_SOURCE = { groupLabel: "", name: "", siteUrl: "", feedUrl: "", active: true };
+const EMPTY_SOURCE = { groupLabel: "", name: "", siteUrl: "", feedUrl: "", active: true, paywalled: false };
 
 function feedLabel(s: NewsSourceRow): { text: string; tone: string } {
   if (s.feedUrl && s.feedStatus === "ok") return { text: s.lastItemAt ? `Feed · last post ${formatNewsDate(s.lastItemAt)}` : "Feed", tone: "bg-emerald-50 text-emerald-800" };
@@ -1256,7 +1256,7 @@ function SourcesTab() {
           <Plus className="h-4 w-4" /> Add a source
         </button>
       </div>
-      <p className="text-sm text-basalt/70">Aha AI reads sources with a news feed directly (free, and every link is real). Sites without one, or that block automated readers, are covered by a web search limited to those sites. Pause a source to leave it out.</p>
+      <p className="text-sm text-basalt/70">Aha AI reads sources with a news feed directly (free, and every link is real). Sites without one, or that block automated readers, are covered by a web search limited to those sites. Sites behind a paywall come last, so a free report of a story always wins. Pause a source to leave it out.</p>
       {editing && <SourceEditor existing={editing === "new" ? null : editing} groups={groups} onDone={() => { setEditing(null); load(); }} />}
       {rows.length === 0 ? (
         <p className="rounded-xl border border-dashed border-basalt/20 p-6 text-sm text-basalt/70">No sources yet. Add the sites you trust.</p>
@@ -1274,6 +1274,7 @@ function SourcesTab() {
                       <a href={s.siteUrl} target="_blank" rel="noreferrer noopener" className="inline-flex max-w-full items-center gap-1 truncate text-xs text-basalt/70 hover:underline">{s.siteUrl.replace(/^https:\/\/(www\.)?/, "")} <ExternalLink className="h-3 w-3 shrink-0" /></a>
                     </div>
                     <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", f.tone)} title={s.lastError ?? undefined}>{s.active ? f.text : "Paused"}</span>
+                    {s.paywalled && <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">Paywall</span>}
                     <button type="button" onClick={() => check(s)} disabled={checking === s.id} className="inline-flex min-h-10 items-center gap-1 rounded-full border border-basalt/20 px-3 text-sm font-semibold disabled:opacity-60" aria-label={`Check ${s.name} for a feed`}>
                       <RefreshCw className={cn("h-3.5 w-3.5", checking === s.id && "animate-spin")} /> Check
                     </button>
@@ -1291,7 +1292,7 @@ function SourcesTab() {
 }
 
 function SourceEditor({ existing, groups, onDone }: { existing: NewsSourceRow | null; groups: string[]; onDone: () => void }) {
-  const [s, setS] = useState(() => (existing ? { groupLabel: existing.groupLabel, name: existing.name, siteUrl: existing.siteUrl, feedUrl: existing.feedUrl ?? "", active: existing.active } : EMPTY_SOURCE));
+  const [s, setS] = useState(() => (existing ? { groupLabel: existing.groupLabel, name: existing.name, siteUrl: existing.siteUrl, feedUrl: existing.feedUrl ?? "", active: existing.active, paywalled: existing.paywalled } : EMPTY_SOURCE));
   const [busy, setBusy] = useState(false);
   const set = <K extends keyof typeof EMPTY_SOURCE>(k: K, v: (typeof EMPTY_SOURCE)[K]) => setS((p) => ({ ...p, [k]: v }));
   const save = async () => {
@@ -1339,6 +1340,13 @@ function SourceEditor({ existing, groups, onDone }: { existing: NewsSourceRow | 
       <label className="grid gap-1 text-sm font-semibold">
         News feed (RSS) <span className="font-normal text-basalt/70">optional — leave empty and use Check to find it</span>
         <input type="url" value={s.feedUrl} onChange={(e) => set("feedUrl", e.target.value)} placeholder="https://…/feed/" className={field} />
+      </label>
+      <label className="flex items-start gap-3 rounded-xl border border-basalt/12 p-3 text-sm">
+        <input type="checkbox" checked={s.paywalled} onChange={(e) => set("paywalled", e.target.checked)} className="mt-0.5 h-5 w-5 accent-apricot" />
+        <span>
+          <span className="font-semibold">Behind a paywall</span>
+          <span className="mt-0.5 block text-basalt/70">Aha AI uses free sites first and this one only for news they don't report. It ticks this itself when it meets a paywall on the site.</span>
+        </span>
       </label>
       <div className="flex flex-wrap gap-2">
         <button type="button" disabled={busy} onClick={save} className="min-h-10 rounded-full bg-apricot hover:bg-apricot/90 px-4 text-sm font-bold text-white disabled:opacity-60">Save</button>

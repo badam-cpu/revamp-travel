@@ -408,17 +408,18 @@ export interface NewsSourceRow {
   lastItemAt: string | null;
   lastError: string | null;
   active: boolean;
+  paywalled: boolean;
   sort: number;
 }
 
 export async function adminListSources(): Promise<NewsSourceRow[]> {
   const { data, error } = await supabase
     .from("community_news_sources")
-    .select("id, group_label, name, site_url, feed_url, feed_status, last_item_at, last_error, active, sort")
+    .select("id, group_label, name, site_url, feed_url, feed_status, last_item_at, last_error, active, paywalled, sort")
     .order("sort")
     .order("name");
   if (error) throw error;
-  return ((data ?? []) as { id: string; group_label: string; name: string; site_url: string; feed_url: string | null; feed_status: NewsSourceRow["feedStatus"]; last_item_at: string | null; last_error: string | null; active: boolean; sort: number }[]).map((r) => ({
+  return ((data ?? []) as { id: string; group_label: string; name: string; site_url: string; feed_url: string | null; feed_status: NewsSourceRow["feedStatus"]; last_item_at: string | null; last_error: string | null; active: boolean; paywalled: boolean; sort: number }[]).map((r) => ({
     id: r.id,
     groupLabel: r.group_label,
     name: r.name,
@@ -428,12 +429,13 @@ export async function adminListSources(): Promise<NewsSourceRow[]> {
     lastItemAt: r.last_item_at,
     lastError: r.last_error,
     active: r.active,
+    paywalled: r.paywalled,
     sort: r.sort,
   }));
 }
 
-export async function adminSaveSource(id: string | null, s: { groupLabel: string; name: string; siteUrl: string; feedUrl: string | null; active: boolean; sort?: number }): Promise<void> {
-  const row: Record<string, unknown> = { group_label: s.groupLabel.trim(), name: s.name.trim(), site_url: s.siteUrl.trim(), active: s.active };
+export async function adminSaveSource(id: string | null, s: { groupLabel: string; name: string; siteUrl: string; feedUrl: string | null; active: boolean; paywalled: boolean; sort?: number }): Promise<void> {
+  const row: Record<string, unknown> = { group_label: s.groupLabel.trim(), name: s.name.trim(), site_url: s.siteUrl.trim(), active: s.active, paywalled: s.paywalled };
   // A typed feed is trusted as-is; clearing it lets the next run look for one again.
   row.feed_url = s.feedUrl?.trim() || null;
   row.feed_status = s.feedUrl?.trim() ? "ok" : "unchecked";

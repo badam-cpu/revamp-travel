@@ -46,6 +46,11 @@
  * `extra_sources` and shown as "Also reported by". The original stays the
  * story's main source link.
  *
+ * Free sources first (0132, user, 2026-10-30): a source marked `paywalled` stays
+ * on the list but goes last (`freeFirst`), so a free report wins a tie for the
+ * same story and the run's story limit. A run marks a source when an article of
+ * its shows paywall markup; admins can change it in Sources.
+ *
  * Main photo (0129, user's choice 2026-10-30, knowing the copyright risk): the
  * picture the source page itself offers as its link preview (og:image), else
  * that of an open report, credited and shown from its own address — never
@@ -109,6 +114,7 @@ export interface NewsSource {
   feed_status: "unchecked" | "ok" | "none" | "error";
   feed_checked_at: string | null;
   active: boolean;
+  paywalled: boolean;
 }
 
 interface FeedItem {
@@ -119,6 +125,8 @@ interface FeedItem {
   /** Full post text when the feed carries it (content:encoded / Atom content). */
   full: string;
   source: string;
+  /** From a source behind a paywall. */
+  paid?: boolean;
 }
 
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
@@ -277,7 +285,7 @@ async function readFeeds(admin: SupabaseClient, sources: NewsSource[], since: st
           if (!r.ok || !looksLikeFeed(r.text)) throw new Error(`feed answered ${r.status}`);
           const all = parseFeed(r.text, s.name);
           const recent = all.filter((x) => x.date >= since).slice(0, FEED_ITEMS_PER_SOURCE);
-          items.push(...recent);
+          items.push(...recent.map((x) => ({ ...x, paid: s.paywalled })));
           const newest = all.reduce<string | null>((m, x) => (!m || x.date > m ? x.date : m), null);
           await admin.from("community_news_sources").update({ feed_status: "ok", last_error: null, ...(newest ? { last_item_at: `${newest}T00:00:00Z` } : {}) }).eq("id", s.id);
         } catch (e) {
@@ -302,10 +310,10 @@ const WRITING_RULES = `Write title, summary and for_you in plain English, in YOU
 /** Claude picks the posts that matter to hosts in Armenia and writes them up (no tools; links come from the feeds). */
 async function writeFromFeeds(client: Anthropic, items: FeedItem[], today: string): Promise<FoundNews[]> {
   if (!items.length) return [];
-  const list = items.map((x, i) => `[${i}] ${x.date} · ${x.source} · ${x.title}${x.text ? ` — ${x.text.slice(0, 280)}` : ""}`).join("\n");
+  const list = items.map((x, i) => `[${i}] ${x.date} · ${x.source}${x.paid ? " (paywalled)" : ""} · ${x.title}${x.text ? ` — ${x.text.slice(0, 280)}` : ""}`).join("\n");
   const prompt = `Today is ${today}. You help run a community for people who host short-term rentals (apartments, guest houses, small hotels), tours and experiences in Armenia.
 
-Below are recent posts from trusted industry sources. Pick the ones those hosts would genuinely want to know about: changes on booking sites, rules and taxes, guest and demand trends, pricing, operations and technology that applies to small hosts, and anything about travel to Armenia or the region. Skip press releases about single hotels or chains, funding rounds, executive moves, webinars, sponsored posts and opinion pieces. Pick at most 10; if two posts cover the same news, pick one.
+Below are recent posts from trusted industry sources. Pick the ones those hosts would genuinely want to know about: changes on booking sites, rules and taxes, guest and demand trends, pricing, operations and technology that applies to small hosts, and anything about travel to Armenia or the region. Skip press releases about single hotels or chains, funding rounds, executive moves, webinars, sponsored posts and opinion pieces. Pick at most 10; if two posts cover the same news, pick one. Readers can't open posts marked (paywalled), so always prefer a free post, and pick a paywalled one only for news no free post covers.
 
 ${WRITING_RULES}
 
@@ -330,6 +338,14 @@ Reply with ONLY a JSON array (no prose, no markdown) of objects:
   return out;
 }
 
+/**
+ * Free-to-read first, order otherwise kept (pure — exported for tests). The
+ * order decides which report of a story survives and what makes the run's limit.
+ */
+export function freeFirst<T>(items: T[], isPaid: (x: T) => boolean): T[] {
+  return [...items.filter((x) => !isPaid(x)), ...items.filter(isPaid)];
+}
+
 /** Web search (optionally limited to some sites); returns candidates + the URLs search really returned. */
 async function searchNews(
   client: Anthropic,
@@ -346,7 +362,7 @@ ${NEWS_CATEGORIES.map((c) => `- "${c.key}": ${c.searchHint}`).join("\n")}
 
 Rules:
 - Only real, dated news from that window. Skip opinion pieces, ads, listicles, rumours and anything without a clear date.
-- source_url must be a page from your search results that reports the story. Never invent or guess a URL.
+- source_url must be a page from your search results that reports the story. Never invent or guess a URL. If several pages report it, use one that is free to read.
 ${WRITING_RULES}
 
 When you are done searching, reply with ONLY a JSON array (no prose, no markdown) of objects:
@@ -694,6 +710,8 @@ export interface DigestOptions {
   trustedHosts?: Set<string>;
   /** Shared per-run budget of open-report searches (left is decremented). */
   searchBudget?: { left: number };
+  /** Filled with the hosts whose article page showed a paywall. */
+  paywallSeen?: Set<string>;
 }
 
 /**
@@ -703,6 +721,7 @@ export interface DigestOptions {
  */
 export async function digestStory(client: Anthropic, item: FoundNews, today: string, opts: DigestOptions = {}): Promise<DigestResult> {
   const { article, problem, partial, original, image } = await readArticle(item);
+  if (original?.paywalled) opts.paywallSeen?.add(hostOf(item.source_url));
 
   // Paywalled, blocked or only the opening readable → look for open reports of the same story.
   let reports: OpenReport[] = [];
@@ -868,11 +887,13 @@ export async function findCommunityNews(admin: SupabaseClient, now = new Date())
   const since = isoDay(new Date(now.getTime() - NEWS_MAX_AGE_DAYS * 86_400_000));
 
   const [{ data: srcRows }, { data: settings }] = await Promise.all([
-    admin.from("community_news_sources").select("id, name, site_url, feed_url, feed_status, feed_checked_at, active").eq("active", true).order("sort"),
+    admin.from("community_news_sources").select("id, name, site_url, feed_url, feed_status, feed_checked_at, active, paywalled").eq("active", true).order("sort"),
     admin.from("community_settings").select("news_wider_search").eq("id", 1).maybeSingle(),
   ]);
   const sources = (srcRows ?? []) as NewsSource[];
   const wider = (settings as { news_wider_search?: boolean } | null)?.news_wider_search ?? true;
+  const paidHosts = new Set(sources.filter((s) => s.paywalled).map((s) => hostOf(s.site_url)).filter(Boolean));
+  const paidNote = paidHosts.size ? ` These sites are behind a paywall, so use them only for news no free site reports: ${Array.from(paidHosts).join(", ")}.` : "";
 
   const candidates: FoundNews[] = [];
   const evidence = new Set<string>();
@@ -888,13 +909,13 @@ export async function findCommunityNews(admin: SupabaseClient, now = new Date())
   }
 
   // 2. Sources without a feed: search only those sites.
-  const domains = Array.from(new Set(noFeed.map((s) => hostOf(s.site_url)).filter(Boolean))).slice(0, 25);
+  const domains = Array.from(new Set(freeFirst(noFeed, (s) => s.paywalled).map((s) => hostOf(s.site_url)).filter(Boolean))).slice(0, 25);
   if (domains.length) {
     try {
       const r = await searchNews(client, today, since, {
         budget: Math.max(1, Number(process.env.COMMUNITY_NEWS_SOURCE_SEARCHES || 5)),
         allowedDomains: domains,
-        focus: "Search only the trusted sites you are given — their newsrooms, blogs and news sections.",
+        focus: `Search only the trusted sites you are given — their newsrooms, blogs and news sections.${paidNote}`,
       });
       searches += r.searches;
       r.hitUrls.forEach((u) => evidence.add(u));
@@ -909,8 +930,7 @@ export async function findCommunityNews(admin: SupabaseClient, now = new Date())
     try {
       const r = await searchNews(client, today, since, {
         budget: Math.max(1, Number(process.env.COMMUNITY_NEWS_SEARCHES || 5)),
-        focus:
-          "Our trusted industry sources are read separately, so focus on what they miss: travel to Armenia (flights to Yerevan, visas and entry, visitor numbers, big events, roads and borders), Armenian rules, registration and tax for tourism and rentals, and major changes on booking sites. Use English, Russian and Armenian; prefer official sources and Armenian news agencies.",
+        focus: `Our trusted industry sources are read separately, so focus on what they miss: travel to Armenia (flights to Yerevan, visas and entry, visitor numbers, big events, roads and borders), Armenian rules, registration and tax for tourism and rentals, and major changes on booking sites. Use English, Russian and Armenian; prefer official sources and Armenian news agencies.${paidNote}`,
       });
       searches += r.searches;
       r.hitUrls.forEach((u) => evidence.add(u));
@@ -920,7 +940,7 @@ export async function findCommunityNews(admin: SupabaseClient, now = new Date())
     }
   }
 
-  const accepted = acceptNews(candidates, evidence, today, since);
+  const accepted = acceptNews(freeFirst(candidates, (c) => paidHosts.has(hostOf(c.source_url))), evidence, today, since);
 
   // Skip what we already have (any status — a rejected story stays rejected).
   const { data: recent } = await admin
@@ -932,7 +952,8 @@ export async function findCommunityNews(admin: SupabaseClient, now = new Date())
   const fresh = accepted.filter((a) => !have.some((h) => normUrl(h.source_url) === normUrl(a.source_url) || titleOverlap(h.title, a.title) >= 0.7));
 
   // Write each from its article (or open reports of it) and check it; only what checks out becomes a draft.
-  const digestOpts: DigestOptions = { trustedHosts: new Set(sources.map((x) => hostOf(x.site_url)).filter(Boolean)), searchBudget: { left: OPEN_REPORT_SEARCHES_PER_RUN } };
+  const paywallSeen = new Set<string>();
+  const digestOpts: DigestOptions = { trustedHosts: new Set(sources.map((x) => hostOf(x.site_url)).filter(Boolean)), searchBudget: { left: OPEN_REPORT_SEARCHES_PER_RUN }, paywallSeen };
   const digests = await inBatches(fresh, 4, async (a) => {
     try {
       return { a, d: await digestStory(client, a, today, digestOpts) };
@@ -941,6 +962,9 @@ export async function findCommunityNews(admin: SupabaseClient, now = new Date())
       return { a, d: { ok: false, problem: "the digest failed" } as DigestResult };
     }
   });
+  // A paywall met on the way: that source goes last from the next run on.
+  const newlyPaid = sources.filter((s) => !s.paywalled && paywallSeen.has(hostOf(s.site_url))).map((s) => s.id);
+  if (newlyPaid.length) await admin.from("community_news_sources").update({ paywalled: true }).in("id", newlyPaid);
   // A picture on two different stories is the site's banner, not this story's photo.
   const sharedPhotos = sharedImages(digests.map(({ d }) => ({ title: d.ok ? d.news.title : "", image: d.ok ? d.news.image_url : null })));
   let stored = 0;
