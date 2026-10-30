@@ -21,6 +21,8 @@ export const VACATIONS_ORIGIN = "https://revampvacations.com";
 export type NewsCategory = "travel" | "rentals" | "booking_sites" | "rules";
 /** English first; Armenian is the option at /hy (migration 0131). */
 export type CommunityLang = "en" | "hy";
+/** Each language in its own script; fixed, so not part of the editable site text. */
+export const LANG_NAMES: Record<CommunityLang, string> = { en: "English", hy: "Հայերեն" };
 
 export const NEWS_CATEGORIES: { key: NewsCategory; label: string; searchHint: string }[] = [
   { key: "travel", label: "Travel To Armenia", searchHint: "tourism to Armenia: flights to Yerevan, visas and entry rules, visitor numbers, big events, roads and border crossings" },

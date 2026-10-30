@@ -14,7 +14,7 @@ import { Link, Route, Router, Switch, useLocation } from "wouter";
 import { ArrowUpRight, Menu, X } from "lucide-react";
 import { CommunityLockup } from "@/components/BrandMark";
 import { useDocumentMeta } from "@/hooks/useDocumentMeta";
-import { VACATIONS_ORIGIN } from "@shared/community";
+import { LANG_NAMES, VACATIONS_ORIGIN } from "@shared/community";
 import { useGoToSection } from "./communityNav";
 import { CommunityLangProvider, langPath, useCommunityLang } from "./communityLang";
 
@@ -31,16 +31,56 @@ const NAV: { label: string; href?: string; section?: string }[] = [
   { label: "nav.refer", section: "refer" },
 ];
 
-/** Switch to the other language on the same page. */
-function LangSwitch({ className }: { className: string }) {
-  const { lang, t } = useCommunityLang();
-  const [location] = useLocation();
-  const target = lang === "hy" ? location : langPath("hy", location);
+/** Drawn as SVG: flag emoji show up as plain letters on Windows. */
+function FlagArmenia() {
   return (
-    <Link href={`~${target}`} className={className} lang={lang === "hy" ? "en" : "hy"} aria-label={t("nav.switch")}>
-      <span className="sm:hidden">{t("nav.switchShort")}</span>
-      <span className="hidden sm:inline">{t("nav.switch")}</span>
-    </Link>
+    <svg viewBox="0 0 3 2" aria-hidden="true" className="h-full w-full">
+      <path fill="#D90012" d="M0 0h3v.67H0z" />
+      <path fill="#0033A0" d="M0 .67h3v.67H0z" />
+      <path fill="#F2A800" d="M0 1.33h3V2H0z" />
+    </svg>
+  );
+}
+
+function FlagUk() {
+  return (
+    <svg viewBox="0 0 60 30" preserveAspectRatio="xMidYMid slice" aria-hidden="true" className="h-full w-full">
+      <clipPath id="community-flag-uk"><path d="M30 15h30v15zv15H0zH0V0zV0h30z" /></clipPath>
+      <path fill="#012169" d="M0 0v30h60V0z" />
+      <path stroke="#fff" strokeWidth="6" d="m0 0 60 30m0-30L0 30" />
+      <path stroke="#C8102E" strokeWidth="4" clipPath="url(#community-flag-uk)" d="m0 0 60 30m0-30L0 30" />
+      <path stroke="#fff" strokeWidth="10" d="M30 0v30M0 15h60" />
+      <path stroke="#C8102E" strokeWidth="6" d="M30 0v30M0 15h60" />
+    </svg>
+  );
+}
+
+/** Both languages as flags, same page; the current one is highlighted. */
+function LangSwitch() {
+  const { lang } = useCommunityLang();
+  const [location] = useLocation();
+    const flags = [
+    { code: "hy", href: langPath("hy", location), Flag: FlagArmenia },
+    { code: "en", href: location, Flag: FlagUk },
+  ] as const;
+  return (
+    <div className="flex items-center">
+      {flags.map(({ code, href, Flag }) => (
+        <Link
+          key={code}
+          href={`~${href}`}
+          lang={code}
+          aria-label={LANG_NAMES[code]}
+          aria-current={code === lang ? "true" : undefined}
+          title={LANG_NAMES[code]}
+          className="group inline-flex h-11 w-9 items-center justify-center rounded-md focus-visible:outline-2 focus-visible:outline-apricot sm:w-10"
+        >
+          <span className={`block h-5 w-7 overflow-hidden rounded-[4px] ring-offset-2 ring-offset-paper transition-opacity ${code === lang ? "ring-2 ring-apricot" : "opacity-55 ring-1 ring-basalt/15 group-hover:opacity-100"}`}>
+            <Flag />
+          </span>
+        </Link>
+      ))}
+    </div>
   );
 }
 
@@ -66,23 +106,23 @@ function CommunityHeader() {
     <header className="sticky top-0 z-40 border-b border-basalt/10 bg-paper/95 backdrop-blur">
       <div className="mx-auto flex max-w-[1240px] items-center gap-2 px-4 py-3 sm:gap-6 sm:px-6">
         <Link href="/" className="shrink-0 rounded-md text-apricot focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-apricot" aria-label={t("nav.home")}>
-          <CommunityLockup title={null} className="h-5 sm:h-7" />
+          <CommunityLockup title={null} className="h-4 min-[360px]:h-5 sm:h-7" />
         </Link>
-        <nav aria-label="Main" className="ml-4 hidden min-w-0 flex-1 items-center gap-7 lg:flex">
+        <nav aria-label="Main" className="ml-4 hidden min-w-0 flex-1 items-center gap-7 xl:flex">
           {items}
         </nav>
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
-          <LangSwitch className="inline-flex h-11 items-center rounded-full px-1.5 text-[15px] font-semibold text-basalt hover:text-apricot sm:px-3" />
-          <button type="button" onClick={() => goTo("join")} className="hidden h-11 items-center whitespace-nowrap rounded-full bg-basalt px-5 text-[15px] font-bold text-paper hover:bg-basalt/90 sm:inline-flex">
+          <LangSwitch />
+          <button type="button" onClick={() => goTo("join")} className="hidden h-11 items-center whitespace-nowrap rounded-full bg-basalt px-5 text-[15px] font-bold text-paper hover:bg-basalt/90 md:inline-flex">
             {t("cta.join")}
           </button>
-          <button type="button" onClick={() => setOpen((o) => !o)} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-basalt/15 lg:hidden" aria-label={t(open ? "nav.closeMenu" : "nav.openMenu")} aria-expanded={open}>
+          <button type="button" onClick={() => setOpen((o) => !o)} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-basalt/15 xl:hidden" aria-label={t(open ? "nav.closeMenu" : "nav.openMenu")} aria-expanded={open}>
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
       </div>
       {open && (
-        <nav aria-label="Main" className="flex flex-col border-t border-basalt/10 px-4 pb-4 lg:hidden">
+        <nav aria-label="Main" className="flex flex-col border-t border-basalt/10 px-4 pb-4 xl:hidden">
           {items}
           <button type="button" onClick={() => { setOpen(false); goTo("join"); }} className="mt-2 inline-flex h-12 items-center justify-center rounded-full bg-basalt text-base font-bold text-paper">
             {t("cta.join")}

@@ -35,6 +35,7 @@ import {
   type CommunityMeetup,
   type CommunityLang,
   type CommunityNewsItem,
+  LANG_NAMES,
 } from "../shared/community.js";
 
 function esc(input: string): string {
@@ -111,7 +112,7 @@ ${(opts.jsonLd ?? []).map(jsonLd).join("\n")}
 <body>
 <header>
 <a href="${p("/")}">${communityLockupSvg("#F15822", 32)}</a>
-<nav aria-label="Main"><a href="${p("/news")}">${esc(t("nav.news"))}</a> · <a href="${p("/guides")}">${esc(t("nav.guides"))}</a> · <a href="${p("/")}#meetups">${esc(t("nav.meetups"))}</a> · <a href="${p("/")}#join">${esc(t("cta.join"))}</a> · <a href="${VACATIONS_ORIGIN}/host">${esc(t("footer.hostOnRevamp"))}</a> · <a href="${lang === "hy" ? esc(opts.path) : esc(opts.path === "/" ? "/hy" : `/hy${opts.path}`)}" lang="${lang === "hy" ? "en" : "hy"}">${esc(t("nav.switch"))}</a></nav>
+<nav aria-label="Main"><a href="${p("/news")}">${esc(t("nav.news"))}</a> · <a href="${p("/guides")}">${esc(t("nav.guides"))}</a> · <a href="${p("/")}#meetups">${esc(t("nav.meetups"))}</a> · <a href="${p("/")}#join">${esc(t("cta.join"))}</a> · <a href="${VACATIONS_ORIGIN}/host">${esc(t("footer.hostOnRevamp"))}</a> · <a href="${lang === "hy" ? esc(opts.path) : esc(opts.path === "/" ? "/hy" : `/hy${opts.path}`)}" lang="${lang === "hy" ? "en" : "hy"}">${LANG_NAMES[lang === "hy" ? "en" : "hy"]}</a></nav>
 </header>
 <main>
 ${opts.body}
