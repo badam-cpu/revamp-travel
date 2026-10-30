@@ -56,6 +56,8 @@ export interface CommunityNewsItem {
   /** When Aha AI last checked the text against the article (0127). */
   verifiedAt: string | null;
   checks: NewsChecks;
+  /** When it was posted to the Telegram channel; null = not posted (0130). */
+  telegramPostedAt: string | null;
   status: "draft" | "published" | "rejected";
   origin: "ai" | "admin";
   publishedAt: string | null;
@@ -114,6 +116,7 @@ export function mapNewsRow(r: any): CommunityNewsItem {
     storyDate: r.story_date ?? null,
     verifiedAt: r.verified_at ?? null,
     checks: r.checks && typeof r.checks === "object" ? r.checks : {},
+    telegramPostedAt: r.telegram_posted_at ?? null,
     status: r.status,
     origin: r.origin ?? "ai",
     publishedAt: r.published_at ?? null,
@@ -137,7 +140,7 @@ export function mapGuideRow(r: any): CommunityGuide {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-export const NEWS_COLS = "id, slug, category, title, summary, for_you, key_points, source_url, source_name, image_url, image_credit, extra_sources, story_date, verified_at, checks, status, origin, published_at, created_at";
+export const NEWS_COLS = "id, slug, category, title, summary, for_you, key_points, source_url, source_name, image_url, image_credit, extra_sources, story_date, verified_at, checks, telegram_posted_at, status, origin, published_at, created_at";
 export const MEETUP_COLS = "id, title, description, starts_at, venue, city, online, status";
 export const GUIDE_COLS = "slug, category, title, excerpt, body, published_at";
 

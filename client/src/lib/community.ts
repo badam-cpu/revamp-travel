@@ -169,6 +169,17 @@ export async function adminFindNews(): Promise<void> {
   if (!res.ok) throw new ApiError(body?.error || "Couldn't start the search. Please try again.");
 }
 
+/** Post a published story to the Telegram channel (once only — the server guards it). */
+export async function adminPostNewsToChannel(id: string): Promise<{ posted: boolean; already?: boolean }> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new ApiError("Sign in.");
+  const res = await fetch("/api/admin-community/post-to-channel", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(body?.error || "Couldn't post to Telegram. Please try again.");
+  return body;
+}
+
 /** "Find photos": source pictures for stories that have none (background; no text or status change). */
 export async function adminFindPhotos(): Promise<void> {
   const { data } = await supabase.auth.getSession();

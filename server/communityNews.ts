@@ -55,12 +55,12 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
-import { NEWS_CATEGORIES, newsSlug, type NewsCategory, type NewsChecks } from "../shared/community.js";
+import { COMMUNITY_ORIGIN, NEWS_CATEGORIES, newsSlug, type NewsCategory, type NewsChecks } from "../shared/community.js";
 import { GENERIC_IMG, pageImage, parseEventsJson, sharedImages, titleOverlap } from "./events.js";
 import { assertSafeUrl } from "./urlPrefill.js";
 import { resolveAdminEmails } from "./alerts.js";
 import { sendCommunityNewsAlert } from "./email.js";
-import { sendTelegram } from "./telegram.js";
+import { sendTelegram, sendTelegramPhoto } from "./telegram.js";
 
 const NEWS_MAX_AGE_DAYS = 21;
 const MAX_ITEMS_PER_RUN = 12;
@@ -1068,6 +1068,86 @@ export async function findStoryPhotos(admin: SupabaseClient): Promise<{ checked:
     else saved++;
   }
   return { checked: rows.length, found: saved };
+}
+
+/* ── Telegram channel (0130) ───────────────────────────────────────────── */
+
+const TG_CAPTION_MAX = 1024;
+const tgEsc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** "@revampcommunity" from https://t.me/revampcommunity; null for an invite link or anything else (pure — exported for tests). */
+export function channelChatId(url: string | null | undefined): string | null {
+  const m = (url ?? "").trim().match(/^https:\/\/(?:t|telegram)\.me\/(?:s\/)?([A-Za-z][A-Za-z0-9_]{3,})\/?$/);
+  return m ? `@${m[1]}` : null;
+}
+
+export interface ChannelStory {
+  slug: string;
+  title: string;
+  summary: string;
+  for_you: string;
+  source_name: string;
+  source_url: string;
+  image_url: string | null;
+  image_credit: string;
+}
+
+/** The post: headline, summary, what it means for hosts, source and photo credit, plus a link to the story (pure — exported for tests). */
+export function channelPost(n: ChannelStory): { text: string; url: string } {
+  const source = n.source_name.trim() || hostOf(n.source_url);
+  const credit = n.image_url && n.image_credit.trim() ? ` · Image: ${tgEsc(n.image_credit.trim())}` : "";
+  const text = [
+    `<b>${tgEsc(n.title)}</b>`,
+    n.summary.trim() ? tgEsc(n.summary.trim()) : "",
+    n.for_you.trim() ? `<b>What it means for you:</b> ${tgEsc(n.for_you.trim())}` : "",
+    `Source: ${tgEsc(source)}${credit}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  return { text, url: `${COMMUNITY_ORIGIN}/news/${n.slug}?utm_source=telegram&utm_medium=channel&utm_campaign=community_news` };
+}
+
+export type ChannelResult = { posted: true } | { posted: false; already?: boolean; error?: string };
+
+/**
+ * Post a published story to the channel, once. The story is claimed first
+ * (telegram_posted_at) so a double click or re-publish can't post it twice,
+ * and released if Telegram refuses, so the admin can try again.
+ */
+export async function postStoryToChannel(admin: SupabaseClient, id: string): Promise<ChannelResult> {
+  const { data: settings } = await admin.from("community_settings").select("telegram_url").eq("id", 1).maybeSingle();
+  const chat = channelChatId((settings as { telegram_url?: string | null } | null)?.telegram_url);
+  if (!chat) return { posted: false, error: "Add the public channel link (https://t.me/…) in Community → Settings first." };
+  const { data: claimed } = await admin
+    .from("community_news")
+    .update({ telegram_posted_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("status", "published")
+    .is("telegram_posted_at", null)
+    .select("slug, title, summary, for_you, source_name, source_url, image_url, image_credit")
+    .maybeSingle();
+  if (!claimed) return { posted: false, already: true };
+  const story = claimed as ChannelStory;
+  const { text, url } = channelPost(story);
+  const buttons = [{ text: "Read the full story", url }];
+  let sent = false;
+  let reason = "";
+  // A photo with its caption when it fits and Telegram can fetch the picture; otherwise the full text.
+  if (story.image_url && text.length <= TG_CAPTION_MAX) {
+    const r = await sendTelegramPhoto(chat, story.image_url, text, { html: true, buttons });
+    sent = r.sent;
+    if (!r.sent) reason = r.reason ?? "";
+  }
+  if (!sent) {
+    const r = await sendTelegram(chat, text, { html: true, buttons, ...(story.image_url ? { previewUrl: story.image_url } : {}) });
+    sent = r.sent;
+    if (!r.sent) reason = r.reason ?? reason;
+  }
+  if (sent) return { posted: true };
+  await admin.from("community_news").update({ telegram_posted_at: null }).eq("id", id);
+  console.error("[community-news] channel post", chat, reason);
+  if (reason === "not_configured") return { posted: false, error: "The Telegram bot isn't set up on the server." };
+  return { posted: false, error: "Telegram refused the post. Check the bot is an admin of the channel and can post messages." };
 }
 
 /** "5 new stories to check" — email every admin, and Telegram admins who linked a chat. Best-effort. */

@@ -64,7 +64,7 @@ import { handleTelegramUpdate, alertOperatorTelegram } from "./telegramBot.js";
 import { splitContact, storeHeldContacts, contactFor, setConversationGuestEmail, conversationGuestEmail } from "./guestContacts.js";
 import { loadTourContext, canEditTour, classifyTourPhotos, saveTour, tourAiConfigured } from "./tours.js";
 import { sendItinerary, sendCancellation, sendSupportAlert, sendNewMessage, sendOperatorBookingRequest, sendGuestRequestReceived, sendGuestBookingApproved, sendGuestBookingDeclined, sendPaymentLink, sendJourneyEmail, sendCommunityWelcome, type BookingEmailInfo } from "./email.js";
-import { communityNewsToken, discoverFeed } from "./communityNews.js";
+import { communityNewsToken, discoverFeed, postStoryToChannel } from "./communityNews.js";
 import { formatMeetupWhen, meetupPlace } from "../shared/community.js";
 import { notifyBooking } from "./notify.js";
 import { telegramConfigured, telegramConnectLink, telegramBotUsername, setTelegramWebhook, sendTelegram } from "./telegram.js";
@@ -1667,6 +1667,24 @@ export function registerApiRoutes(app: Express) {
     } catch (e) {
       console.error("[admin-community/find-photos]", e);
       res.status(502).json({ error: "Couldn't start looking for photos. Please try again." });
+    }
+  });
+
+  // Publishing a story posts it to the Telegram channel; also "Post to Telegram"
+  // for a story published earlier. Posted once only (see postStoryToChannel).
+  app.post("/api/admin-community/post-to-channel", async (req: Request, res: Response) => {
+    const admin = await requireAdminCaller(req, res);
+    if (!admin) return;
+    const id = typeof req.body?.id === "string" ? req.body.id : "";
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ error: "Choose a story to post." });
+    if (rateLimited(communityRewriteHits, "channel", 60, 60 * 60_000)) return res.status(429).json({ error: "That's a lot of posts for one hour — please try again a bit later." });
+    try {
+      const r = await postStoryToChannel(admin, id);
+      if (!r.posted && r.error) return res.status(502).json({ error: r.error });
+      res.json(r);
+    } catch (e) {
+      console.error("[admin-community/post-to-channel]", e);
+      res.status(502).json({ error: "Couldn't post to Telegram. Please try again." });
     }
   });
 

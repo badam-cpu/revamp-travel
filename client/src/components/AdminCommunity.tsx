@@ -12,7 +12,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, CalendarDays, Download, ExternalLink, ImageIcon, Library, Loader2, Newspaper, Plus, RefreshCw, Search, Settings, ShieldCheck, Sparkles, Users } from "lucide-react";
+import { AlertTriangle, CalendarDays, Download, ExternalLink, ImageIcon, Library, Loader2, Newspaper, Plus, RefreshCw, Search, Send, Settings, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { useAuth } from "@/contexts/AuthContext";
 import { uploadCampaignImage } from "@/lib/campaignImage";
@@ -24,6 +24,7 @@ import {
   adminDeleteNews,
   adminFindNews,
   adminFindPhotos,
+  adminPostNewsToChannel,
   adminRewriteNews,
   adminListMeetups,
   adminListMembers,
@@ -273,11 +274,34 @@ function NewsTab() {
 
 function NewsItemRow({ item, onChanged }: { item: CommunityNewsItem; onChanged: () => void }) {
   const [editing, setEditing] = useState(false);
+  const [posting, setPosting] = useState(false);
+  const toChannel = async (): Promise<string> => {
+    const r = await adminPostNewsToChannel(item.id);
+    return r.posted ? "Posted to Telegram." : "Already on Telegram.";
+  };
   const save = async (edit: NewsEdit, status?: "draft" | "published" | "rejected") => {
     await adminSaveNews(item.id, edit, status);
-    toast(status === "published" ? "Published on revamp.community." : status === "rejected" ? "Rejected." : status === "draft" ? "Moved back to 'To check'." : "Saved.");
+    if (status === "published") {
+      // The story is live either way; a Telegram problem must not read as a failed publish.
+      try {
+        toast(`Published on revamp.community. ${await toChannel()}`);
+      } catch (e) {
+        toast(`Published on revamp.community, but not on Telegram. ${userMessage(e, "Try 'Post to Telegram'.")}`);
+      }
+    } else toast(status === "rejected" ? "Rejected." : status === "draft" ? "Moved back to 'To check'." : "Saved.");
     setEditing(false);
     onChanged();
+  };
+  const postNow = async () => {
+    setPosting(true);
+    try {
+      toast(await toChannel());
+      onChanged();
+    } catch (e) {
+      toast(userMessage(e, "Couldn't post to Telegram."));
+    } finally {
+      setPosting(false);
+    }
   };
   if (editing) {
     const actions =
@@ -326,6 +350,7 @@ function NewsItemRow({ item, onChanged }: { item: CommunityNewsItem; onChanged: 
         </p>
       )}
       {item.status !== "rejected" && <CheckSummary item={item} />}
+      {item.telegramPostedAt && <p className="text-sm text-basalt/70">Posted to Telegram on {formatNewsDate(item.telegramPostedAt)}.</p>}
       <div className="mt-1 flex flex-wrap gap-2">
         {item.status !== "published" && (
           <button type="button" onClick={() => save(toEdit(item), "published").catch((e) => toast(userMessage(e, "Couldn't publish.")))} className="min-h-10 rounded-full bg-apricot hover:bg-apricot/90 px-4 text-sm font-bold text-white">
@@ -349,6 +374,11 @@ function NewsItemRow({ item, onChanged }: { item: CommunityNewsItem; onChanged: 
         {item.status === "draft" && (
           <button type="button" onClick={() => save(toEdit(item), "rejected").catch((e) => toast(userMessage(e, "Couldn't reject.")))} className="min-h-10 rounded-full border border-basalt/20 px-4 text-sm font-semibold text-basalt/70">
             Reject
+          </button>
+        )}
+        {item.status === "published" && !item.telegramPostedAt && (
+          <button type="button" onClick={postNow} disabled={posting} className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-basalt/20 px-4 text-sm font-semibold disabled:opacity-60">
+            {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Post to Telegram
           </button>
         )}
         {item.status === "published" && (
@@ -725,7 +755,7 @@ function SettingsTab() {
   return (
     <div className="grid max-w-xl gap-3">
       <label className="grid gap-1 text-sm font-semibold">
-        Telegram channel <span className="font-normal text-basalt/70">Link (https://t.me/…). Shown on the site and in the welcome email. Leave empty to hide it.</span>
+        Telegram channel <span className="font-normal text-basalt/70">Public link (https://t.me/…). Shown on the site and in the welcome email; published stories are posted here. Leave empty to hide it and stop posting.</span>
         <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://t.me/+…" className={field} />
       </label>
       <button type="button" disabled={busy} onClick={save} className="min-h-10 self-start rounded-full bg-apricot hover:bg-apricot/90 px-5 text-sm font-bold text-white disabled:opacity-60">Save</button>
