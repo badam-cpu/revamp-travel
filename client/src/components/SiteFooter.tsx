@@ -26,7 +26,7 @@ const FOOTER_EXPLORE: [string, string][] = [
 ];
 const FOOTER_PLAN: [string, string][] = [
   ["/plan", "Plan with Aha AI"],
-  ["/ai", "Plan in AI Assistants"],
+  ["/ai", "Plan in AI assistants"],
   ["/guide", "Travel guide"],
   ["/events", "Events in Armenia"],
   ["/gift-cards", "Gift cards"],
