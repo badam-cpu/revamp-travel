@@ -156,7 +156,7 @@ export default function CommunityHome() {
                 <Link href={o.href} className="mt-auto inline-flex min-h-11 items-center gap-1.5 text-[15px] font-bold hover:text-apricot">{t(`offer.${o.key}.cta`)} <ArrowRight className="h-4 w-4" /></Link>
               );
               return (
-                <div key={o.key} id={o.key === "refer" ? "refer" : undefined} className="flex flex-col gap-3 rounded-[24px] bg-paper p-6 sm:p-7">
+                <div key={o.key} id={o.key === "refer" ? "refer" : undefined} className="flex scroll-mt-20 flex-col gap-3 rounded-[24px] bg-paper p-6 sm:p-7">
                   <Icon className="h-8 w-8 text-apricot" strokeWidth={1.8} aria-hidden="true" />
                   <h3 className="text-[1.35rem] font-extrabold">{t(`offer.${o.key}.title`)}</h3>
                   <p className="text-base leading-relaxed text-basalt/75">{t(`offer.${o.key}.body`)}</p>
