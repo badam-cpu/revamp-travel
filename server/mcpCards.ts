@@ -47,7 +47,7 @@ export function cardsToolMeta(invoking: string, invoked: string) {
   };
 }
 
-export function registerCardsResource(server: McpServer): void {
+export function registerCardsResource(server: McpServer, chatgpt: boolean): void {
   const domains = [SITE(), storageOrigin(), "https://fonts.googleapis.com", "https://fonts.gstatic.com"].filter((d): d is string => !!d);
   server.registerResource(
     "revamp-cards",
@@ -62,8 +62,10 @@ export function registerCardsResource(server: McpServer): void {
           _meta: {
             ui: { prefersBorder: false, csp: { resourceDomains: domains, connectDomains: [] } },
             // ChatGPT reads this so it doesn't re-describe (and re-illustrate) what the card shows.
-            "openai/widgetDescription":
-              "Shows Revamp listings as cards with each listing's own photo, dates, availability, all-in price and link. The user already sees these details, so don't repeat them or add images — pictures found on the web show other properties.",
+            ...(chatgpt && {
+              "openai/widgetDescription":
+                "Shows Revamp listings as cards with each listing's own photo, dates, availability, all-in price and link. The user already sees these details, so don't repeat them or add images — pictures found on the web show other properties.",
+            }),
           },
         },
       ],

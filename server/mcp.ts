@@ -78,8 +78,9 @@ function detail(l: PublicListing) {
 
 const TEXT = (data: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] });
 /** Text for the model + the same data as structuredContent for our result cards (server/mcpCards.ts). */
-// Hosts (ChatGPT) like to decorate an answer with images from a web search — those show
-// other properties. Say so in the result itself, next to the data the model reads.
+// ChatGPT likes to decorate an answer with images from a web search — those show other
+// properties. Say so in the result itself, next to the data the model reads. Not on /mcp:
+// Claude's directory doesn't allow text that tells the model how to behave.
 const CARD_NOTE =
   "The user already sees this as Revamp cards with each listing's own photo, price and link. Keep your reply short and don't add images from the web — they show other properties, not these listings.";
 // The model gets the facts it needs to answer (title, place, price, availability, link) but
@@ -92,10 +93,10 @@ function forModel(data: Record<string, unknown>): Record<string, unknown> {
     results: (data.results as Record<string, unknown>[]).map(({ description: _d, tags: _t, ...rest }) => rest),
   };
 }
-const CARDS = (data: Record<string, unknown>) => {
+const CARDS = (data: Record<string, unknown>, chatgpt: boolean) => {
   const slim = forModel(data);
   return {
-    content: [{ type: "text" as const, text: CARD_NOTE }, ...TEXT(slim).content],
+    content: [...(chatgpt ? [{ type: "text" as const, text: CARD_NOTE }] : []), ...TEXT(slim).content],
     structuredContent: slim,
     _meta: { "revamp/cards": data },
   };
@@ -135,16 +136,17 @@ export interface PublicServerOptions {
 
 export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
   const links = opts.links ?? "checkout";
+  const chatgpt = links === "listing";
   const server = new McpServer({ name: "revamp-vacations", version: "1.0.0" });
   // Our own result cards — so hosts show the listing's real photo, not a web image search's.
-  registerCardsResource(server);
+  registerCardsResource(server, chatgpt);
 
   server.registerTool(
     "search_listings",
     {
       title: "Search Revamp listings",
       description:
-        "Search Revamp Vacations' published listings in Armenia: places to stay, tours, experiences, restaurants (eat) and places to visit. Returns each match's slug, type, location, headline price in AMD, short description, page link, and the listing's own cover photo (image) — use that photo when showing the result. When the user gives dates, pass startDate (and endDate for stays) and guests: the search then returns only listings that are actually available for those dates, each with its exact all-in total (fees and tax included), cheapest first. For one listing's full price breakdown and terms, use get_quote.",
+        "Search Revamp Vacations' published listings in Armenia: places to stay, tours, experiences, restaurants (eat) and places to visit. Returns each match's slug, type, location, headline price in AMD, short description, page link, and the listing's own cover photo (image). When the user gives dates, pass startDate (and endDate for stays) and guests: the search then returns only listings that are actually available for those dates, each with its exact all-in total (fees and tax included), cheapest first.",
       annotations: READ_ONLY,
       _meta: cardsToolMeta("Searching Revamp…", "Revamp listings"),
       inputSchema: {
@@ -178,7 +180,7 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
         ;
       if (!startDate) {
         const results = matches.slice(0, limit ?? 10).map(summarize);
-        return CARDS({ kind: "listings", count: results.length, results });
+        return CARDS({ kind: "listings", count: results.length, results }, chatgpt);
       }
       // With dates: quote the matching bookable listings (same logic as get_quote)
       // and keep only the ones that are free, cheapest all-in total first. Hotels
@@ -216,7 +218,7 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
         count: results.length,
         results,
         note: results.length ? undefined : "Nothing matching is available for those dates on Revamp. Try other dates or a nearby area.",
-      });
+      }, chatgpt);
     },
   );
 
@@ -224,7 +226,7 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
     "get_listing",
     {
       title: "Get a Revamp listing",
-      description: "Fetch full details for one listing by its slug (from search_listings): description, amenities, highlights, facts, capacity, the host's answers to common guest questions (faq — use them to answer questions about this listing), the page link, and the listing's own photos (with captions) — use these photos when showing it.",
+      description: "Fetch full details for one listing by its slug (from search_listings): description, amenities, highlights, facts, capacity, the host's answers to common guest questions (faq), the page link, and the listing's own photos (with captions).",
       annotations: READ_ONLY,
       inputSchema: { slug: z.string().describe("The listing slug, e.g. 'forest-house-dilijan'.") },
     },
@@ -232,7 +234,7 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
       const catalog = await getPublishedCatalog();
       const l = catalog.find((x) => x.slug === slug);
       if (!l) return ERROR("No published listing with that slug.");
-      return { content: [{ type: "text" as const, text: PHOTO_NOTE }, ...TEXT(detail(l)).content] };
+      return { content: [...(chatgpt ? [{ type: "text" as const, text: PHOTO_NOTE }] : []), ...TEXT(detail(l)).content] };
     },
   );
 
@@ -254,7 +256,7 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
     async ({ slug, startDate, endDate, guests }) => {
       try {
         const q = await quoteListing(publicClient(), { slug, startDate, endDate, guests }, links);
-        return "error" in q ? ERROR(q.error) : CARDS({ kind: "quote", ...q });
+        return "error" in q ? ERROR(q.error) : CARDS({ kind: "quote", ...q }, chatgpt);
       } catch (err) {
         console.error("[mcp] get_quote", err);
         return ERROR("Couldn't get a quote right now. Please try again shortly.");
@@ -267,7 +269,7 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
     {
       title: "Check availability",
       description:
-        "Check whether a stay is available for a date range, or which time slots a tour or experience has on a date. Dates are YYYY-MM-DD; for stays endDate is the check-out day. Returns available (true/false, or null with a reason when it can't be confirmed here, e.g. hotels where a room type is chosen on the page). Use get_quote for the price.",
+        "Check whether a stay is available for a date range, or which time slots a tour or experience has on a date. Dates are YYYY-MM-DD; for stays endDate is the check-out day. Returns available (true/false, or null with a reason when it can't be confirmed here, e.g. hotels where a room type is chosen on the page). Prices aren't included.",
       annotations: READ_ONLY,
       inputSchema: {
         slug: z.string().describe("The listing slug."),
@@ -292,7 +294,7 @@ export function createPublicServer(opts: PublicServerOptions = {}): McpServer {
     "plan_trip",
     {
       title: "Plan an Armenia trip",
-      description: "Generate a suggested day-by-day Armenia itinerary using Revamp's published listings (stays, tours, experiences, restaurants). Returns a structured plan with listing links; it doesn't check dates or book anything — use get_quote for that.",
+      description: "Generate a suggested day-by-day Armenia itinerary using Revamp's published listings (stays, tours, experiences, restaurants). Returns a structured plan with listing links; it doesn't check dates or book anything.",
       annotations: { ...READ_ONLY, idempotentHint: false },
       inputSchema: {
         days: z.number().int().min(1).max(14).describe("Trip length in days."),
