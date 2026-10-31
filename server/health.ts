@@ -2,8 +2,8 @@
  * Admin health snapshot — the data behind /admin → Health. Aggregates the
  * "life-important" operational signals in one place so an admin can see at a
  * glance whether the site's moving parts are alive: the scheduled jobs (crons),
- * per-listing calendar (iCal) freshness, stuck payments, and which server
- * integrations are configured.
+ * per-listing calendar (iCal) freshness, stuck payments, whether voice calls can
+ * start, and which server integrations are configured.
  *
  * Read-only and admin-gated at the route (server/routes.ts). Integration status
  * is reported as BOOLEANS only — never a key value — so nothing secret leaks.
@@ -21,6 +21,7 @@ import { smsConfigured, whatsappConfigured, viberConfigured } from "./sms.js";
 import { telegramConfigured } from "./telegram.js";
 import { supportAiConfigured } from "./support.js";
 import { tripadvisorConfigured } from "./tripadvisor.js";
+import { checkVoice, type VoiceHealth } from "./voiceHealth.js";
 
 /** How long a connected listing calendar may go unsynced before we flag it. */
 const CAL_STALE_HOURS = 24;
@@ -55,6 +56,7 @@ export interface AdminHealth {
   crons: CronHealth[];
   calendars: { total: number; stale: number; errored: number; items: CalendarHealth[] };
   bookings: { pendingPayment: number; awaitingPayment: number };
+  voice: VoiceHealth;
   integrations: Record<string, boolean>;
 }
 
@@ -133,6 +135,8 @@ export async function collectHealth(admin: SupabaseClient): Promise<AdminHealth>
     .select("id", { count: "exact", head: true })
     .eq("status", "awaiting_payment");
 
+  const voice = await checkVoice(admin);
+
   const integrations: Record<string, boolean> = {
     payments_paylink: paylinkConfigured(),
     // Direct operator PayLink (0094): connecting is refused until this key exists.
@@ -159,6 +163,7 @@ export async function collectHealth(admin: SupabaseClient): Promise<AdminHealth>
     crons,
     calendars: { total: items.length, stale: items.filter((c) => c.stale).length, errored: items.filter((c) => c.error).length, items },
     bookings: { pendingPayment: pendingPayment ?? 0, awaitingPayment: awaitingPayment ?? 0 },
+    voice,
     integrations,
   };
 }

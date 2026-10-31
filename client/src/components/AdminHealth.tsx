@@ -1,7 +1,8 @@
 /**
  * /admin → Health. A single operational dashboard for the site's life-important
  * signals: scheduled jobs (crons), calendar (iCal) sync freshness, stuck
- * payments, and which server integrations are configured. Data comes from the
+ * payments, whether voice calls can start, and which server integrations are
+ * configured. Data comes from the
  * admin-gated GET /api/admin-health (server/health.ts) — read-only, no secrets.
  *
  * Built after a Netlify scheduler outage left calendars stale and payments
@@ -10,7 +11,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "wouter";
-import { Activity, AlertTriangle, Calendar, CheckCircle2, Clock, CreditCard, Plug, RefreshCw, XCircle } from "lucide-react";
+import { Activity, AlertTriangle, Calendar, CheckCircle2, Clock, CreditCard, Mic, Plug, RefreshCw, XCircle } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { fetchAdminHealth, type AdminHealth } from "@/lib/api";
@@ -71,6 +72,13 @@ const INTEGRATION_LABELS: Record<string, string> = {
 };
 const CORE_KEYS = ["payments_paylink", "email_resend", "supabase_service_role", "anthropic_ai", "alert_recipient_admin_email"];
 
+const VOICE_PILL: Record<AdminHealth["voice"]["status"], { tone: Tone; label: string }> = {
+  ok: { tone: "ok", label: "Working" },
+  warn: { tone: "warn", label: "Check" },
+  bad: { tone: "bad", label: "Not working" },
+  off: { tone: "idle", label: "Not set up" },
+};
+
 function cronTone(c: AdminHealth["crons"][number]): { tone: Tone; label: string } {
   // Never recorded a run, but not yet overdue (e.g. a 6-hourly job right after
   // monitoring was enabled) — neutral, not an alarm.
@@ -109,6 +117,7 @@ export function AdminHealth() {
         data.crons.some((c) => c.stale) && "a scheduled job",
         data.calendars.errored > 0 && "calendar errors",
         (data.bookings.pendingPayment > 0 || data.bookings.awaitingPayment > 0) && "unconfirmed payments",
+        data.voice.status === "bad" && "Aha AI voice calls",
       ].filter(Boolean)
     : [];
 
@@ -117,7 +126,7 @@ export function AdminHealth() {
       <PageHeader
         className="mb-0"
         title="System health"
-        sub={<>Live status of scheduled jobs, calendar syncs, payments and integrations. {data && <span className="text-basalt/40">Snapshot {relTime(data.time)}.</span>}</>}
+        sub={<>Live status of scheduled jobs, calendar syncs, payments, voice calls and integrations. {data && <span className="text-basalt/40">Snapshot {relTime(data.time)}.</span>}</>}
         actions={
           <Button type="button" variant="outline" size="sm" className="shrink-0 rounded-none border-basalt/15" disabled={loading} onClick={load}>
             <RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} /> Refresh
@@ -198,6 +207,17 @@ export function AdminHealth() {
             {(data.bookings.pendingPayment > 0 || data.bookings.awaitingPayment > 0) && (
               <p className="mt-1.5 text-xs text-basalt/50">Held bookings are confirmed by the reconcile cron. A healthy cron clears genuinely-paid ones within ~10 minutes; persistently stuck rows may need a manual check.</p>
             )}
+          </section>
+
+          {/* Voice */}
+          <section>
+            <h3 className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-basalt/45"><Mic className="h-3.5 w-3.5" /> Aha AI voice calls</h3>
+            <div className="flex flex-wrap gap-2">
+              <Pill tone={VOICE_PILL[data.voice.status].tone}>{VOICE_PILL[data.voice.status].label}</Pill>
+              {data.voice.callsToday !== null && <Pill tone="idle">{data.voice.callsToday} of {data.voice.dayLimit} today</Pill>}
+              {data.voice.callsThisMonth !== null && <Pill tone="idle">{data.voice.callsThisMonth} of {data.voice.monthLimit} this month</Pill>}
+            </div>
+            <p className={cn("mt-1.5 text-xs", data.voice.status === "bad" ? "text-red-700" : "text-basalt/50")}>{data.voice.detail}</p>
           </section>
 
           {/* Integrations */}

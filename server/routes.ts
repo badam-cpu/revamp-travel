@@ -14,6 +14,7 @@ import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { listPublishedForPlanner, verifyUser, userClient, getListingBusyRanges, getOperatorGooglePlaceId, pingDb, publicClient } from "./supabase.js";
 import { collectHealth } from "./health.js";
+import { voiceDay, voiceLimits } from "./voiceHealth.js";
 import { getReferralSummary, attachReferral, listAllReferrals, markReferralPaid, setReferralConfig } from "./referrals.js";
 import { handlePublicMcp, type PublicServerOptions } from "./mcp.js";
 import { handleAdminMcp } from "./mcpAdmin.js";
@@ -3802,12 +3803,13 @@ export function registerApiRoutes(app: Express) {
     }
     const admin = supabaseAdmin();
     if (admin && !team) {
-      const day = new Date(Date.now() + 4 * 3_600_000).toISOString().slice(0, 10);
+      const day = voiceDay();
+      const limits = voiceLimits();
       const { data, error } = await admin.rpc("claim_voice_call", {
         p_scope: scope,
         p_day: day,
-        p_day_limit: Number(process.env.VOICE_DAILY_CALLS) || 8,
-        p_month_limit: Number(process.env.VOICE_MONTHLY_CALLS) || 90,
+        p_day_limit: limits.day,
+        p_month_limit: limits.month,
       });
       if (error) {
         // Before 0121 runs the function doesn't exist yet — don't take Aha offline for that.
@@ -3844,12 +3846,13 @@ export function registerApiRoutes(app: Express) {
     const admin = supabaseAdmin();
     let available = true;
     if (admin) {
-      const day = new Date(Date.now() + 4 * 3_600_000).toISOString().slice(0, 10);
+      const day = voiceDay();
+      const limits = voiceLimits();
       const { data, error } = await admin.from("voice_call_days").select("day, calls").gte("day", `${day.slice(0, 7)}-01`).lte("day", day);
       if (!error && data) {
         const month = data.reduce((n, r) => n + (r.calls ?? 0), 0);
         const today = data.filter((r) => r.day === day).reduce((n, r) => n + (r.calls ?? 0), 0);
-        available = today < (Number(process.env.VOICE_DAILY_CALLS) || 8) && month < (Number(process.env.VOICE_MONTHLY_CALLS) || 90);
+        available = today < limits.day && month < limits.month;
       }
     }
     voiceStatusCache = { at: Date.now(), available };

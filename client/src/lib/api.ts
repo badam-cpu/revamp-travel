@@ -254,6 +254,14 @@ export interface AdminHealth {
     items: { id: string; title: string; type: string; lastSyncedAt: string | null; error: string | null; blockedRanges: number; stale: boolean }[];
   };
   bookings: { pendingPayment: number; awaitingPayment: number };
+  voice: {
+    status: "ok" | "warn" | "bad" | "off";
+    detail: string;
+    callsToday: number | null;
+    callsThisMonth: number | null;
+    dayLimit: number;
+    monthLimit: number;
+  };
   integrations: Record<string, boolean>;
 }
 
