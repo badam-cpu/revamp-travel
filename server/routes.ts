@@ -1394,7 +1394,7 @@ export function registerApiRoutes(app: Express) {
     if (Number.isFinite(minSecs) && minSecs > 0) q.set("call_duration_min_secs", String(Math.min(3600, Math.round(minSecs))));
     try {
       const r = await fetch(`https://api.elevenlabs.io/v1/convai/conversations?${q}`, { headers: { "xi-api-key": key } });
-      if (r.status === 401 || r.status === 403) return res.status(502).json({ error: "ElevenLabs refused the key — in ElevenLabs → API keys, give it read access to Agents (conversations), then reload." });
+      if (r.status === 401 || r.status === 403) return res.status(502).json({ error: "ElevenLabs refused the key — in ElevenLabs → API keys, give it write access to Agents (voice calls need write, not just read), then reload." });
       if (!r.ok) return res.status(502).json({ error: `ElevenLabs answered ${r.status}. Try again in a minute.` });
       const d = (await r.json()) as { conversations?: Record<string, unknown>[]; has_more?: boolean; next_cursor?: string | null };
       res.json({
@@ -3787,6 +3787,19 @@ export function registerApiRoutes(app: Express) {
     const ctx = scope === "listing" ? await voiceContext(client, slug, supabaseAdmin()) : null;
     if (scope === "listing" && !ctx) return res.status(404).json({ error: "Listing not found." });
 
+    // The signed link comes first: a call ElevenLabs refuses must not use up a guest call.
+    let signedUrl: string | undefined;
+    const key = process.env.ELEVENLABS_API_KEY;
+    if (key) {
+      try {
+        const r = await fetch(`https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(agentId)}`, { headers: { "xi-api-key": key } });
+        if (!r.ok) throw new Error(`signed url ${r.status}`);
+        signedUrl = ((await r.json()) as { signed_url?: string }).signed_url;
+      } catch (err) {
+        console.error("[voice-session] signed url", err);
+        return res.status(503).json({ error: "unavailable" });
+      }
+    }
     const admin = supabaseAdmin();
     if (admin && !team) {
       const day = new Date(Date.now() + 4 * 3_600_000).toISOString().slice(0, 10);
@@ -3808,18 +3821,6 @@ export function registerApiRoutes(app: Express) {
       }
     }
 
-    let signedUrl: string | undefined;
-    const key = process.env.ELEVENLABS_API_KEY;
-    if (key) {
-      try {
-        const r = await fetch(`https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(agentId)}`, { headers: { "xi-api-key": key } });
-        if (!r.ok) throw new Error(`signed url ${r.status}`);
-        signedUrl = ((await r.json()) as { signed_url?: string }).signed_url;
-      } catch (err) {
-        console.error("[voice-session] signed url", err);
-        return res.status(503).json({ error: "unavailable" });
-      }
-    }
     res.json({
       ...(signedUrl ? { signedUrl } : { agentId }),
       maxSeconds: MAX_CALL_SECONDS,
